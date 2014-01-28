@@ -1,0 +1,15 @@
+language: cpp
+
+compiler:
+  - g++
+
+before_install:
+  - sudo apt-get install -q libboost1.48-dev libboost-system1.48-dev libboost-program-options1.48-dev
+
+install:
+  - autoreconf -ivf
+  - ./configure
+  - make
+
+script:
+  - exit 0
