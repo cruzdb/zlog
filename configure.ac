@@ -2,6 +2,7 @@ AC_PREREQ(2.59)
 
 AC_INIT([zlog], [0.0.1], [noahwatkins@gmail.com])
 
+AM_PROG_AR
 AC_PROG_LIBTOOL
 AC_PROG_CXX
 AC_LANG([C++])

@@ -12,11 +12,13 @@ libtool
 ltmain.sh
 missing
 m4
+ar-lib
 
 Makefile
 Makefile.in
 .dirstamp
 .deps
 *.o
+*.a
 
 src/zlog-seqr
