@@ -18,7 +18,14 @@ Makefile
 Makefile.in
 .dirstamp
 .deps
+.libs
 *.o
 *.a
+*.la
+*.lo
 
 src/zlog-seqr
+*.pb.cc
+*.pb.h
+
+src/test_libzlog

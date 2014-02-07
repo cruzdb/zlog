@@ -1,0 +1,7 @@
+package zlog;
+
+option optimize_for = SPEED;
+
+message MetaLog {
+    required uint32 stripe_size = 1;
+}
