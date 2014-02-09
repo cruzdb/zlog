@@ -1,7 +1,6 @@
 #include <errno.h>
 #include <sstream>
 #include <string>
-#include <glog/logging.h>
 #include <rados/librados.hpp>
 #include "zlog.pb.h"
 #include "libzlog.h"
@@ -11,9 +10,9 @@
  */
 template<typename T>
 void pack_msg(ceph::bufferlist& bl, T& m) {
-  CHECK(m.IsInitialized());
+  assert(m.IsInitialized());
   char buf[m.ByteSize()];
-  CHECK(m.SerializeToArray(buf, sizeof(buf)));
+  assert(m.SerializeToArray(buf, sizeof(buf)));
   bl.append(buf, sizeof(buf));
 }
 
@@ -23,11 +22,11 @@ void pack_msg(ceph::bufferlist& bl, T& m) {
 template<typename T>
 bool unpack_msg(T& m, ceph::bufferlist& bl) {
   if (!m.ParseFromArray(bl.c_str(), bl.length())) {
-    LOG(ERROR) << "unpack_msg: could not parse message";
+    std::cerr << "unpack_msg: could not parse message" << std::endl;
     return false;
   }
   if (!m.IsInitialized()) {
-    LOG(ERROR) << "unpack_msg: message is uninitialized";
+    std::cerr << "unpack_msg: message is uninitialized" << std::endl;
     return false;
   }
   return true;
@@ -46,12 +45,12 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
     int stripe_size, Log **log)
 {
   if (stripe_size <= 0) {
-    LOG(ERROR) << "Invalid stripe size (" << stripe_size << " <= 0)";
+    std::cerr << "Invalid stripe size (" << stripe_size << " <= 0)" << std::endl;
     return -EINVAL;
   }
 
   if (name.length() == 0) {
-    LOG(ERROR) << "Invalid log name (empty string)";
+    std::cerr << "Invalid log name (empty string)" << std::endl;
     return -EINVAL;
   }
 
@@ -69,8 +68,8 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   std::string metalog_oid = metalog_oid_from_name(name);
   int ret = ioctx.operate(metalog_oid, &op);
   if (ret) {
-    LOG(ERROR) << "Failed to create log " << name << " ret "
-      << ret << " (" << strerror(-ret) << ")";
+    std::cerr << "Failed to create log " << name << " ret "
+      << ret << " (" << strerror(-ret) << ")" << std::endl;
     return ret;
   }
 

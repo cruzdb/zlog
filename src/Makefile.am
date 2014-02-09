@@ -20,7 +20,7 @@ libzlogproto_la_LIBADD = $(PROTOBUF_LIBS)
 
 lib_LTLIBRARIES += libzlog.la
 libzlog_la_SOURCES = libzlog.cc libzlog.h
-libzlog_la_LIBADD = libzlogproto.la -lglog -lrados
+libzlog_la_LIBADD = libzlogproto.la -lrados
 
 include seqr/Makefile.am
 
