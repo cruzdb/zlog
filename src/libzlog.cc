@@ -42,7 +42,7 @@ static std::string metalog_oid_from_name(const std::string& name)
 namespace zlog {
 
 int Log::Create(librados::IoCtx& ioctx, const std::string& name,
-    int stripe_size, Log **log)
+    int stripe_size, Log& log)
 {
   if (stripe_size <= 0) {
     std::cerr << "Invalid stripe size (" << stripe_size << " <= 0)" << std::endl;
@@ -73,14 +73,41 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
     return ret;
   }
 
-  Log *new_log = new Log();
+  log.ioctx_ = &ioctx;
+  log.name_ = name;
+  log.metalog_oid_ = metalog_oid;
+  log.stripe_size_ = stripe_size;
 
-  new_log->ioctx_ = &ioctx;
-  new_log->name_ = name;
-  new_log->metalog_oid_ = metalog_oid;
-  new_log->stripe_size_ = stripe_size;
+  return 0;
+}
 
-  *log = new_log;
+int Log::Open(librados::IoCtx& ioctx, const std::string& name, Log& log)
+{
+  if (name.length() == 0) {
+    std::cerr << "Invalid log name (empty string)" << std::endl;
+    return -EINVAL;
+  }
+
+  std::string metalog_oid = metalog_oid_from_name(name);
+
+  ceph::bufferlist bl;
+  int ret = ioctx.read(metalog_oid, bl, 0, 0);
+  if (ret < 0) {
+    std::cerr << "failed to read object " << metalog_oid << " ret "
+      << ret << std::endl;
+    return ret;
+  }
+
+  zlog::MetaLog config;
+  if (!unpack_msg<zlog::MetaLog>(config, bl)) {
+    std::cerr << "failed to parse configuration" << std::endl;
+    return -EIO;
+  }
+
+  log.ioctx_ = &ioctx;
+  log.name_ = name;
+  log.metalog_oid_ = metalog_oid;
+  log.stripe_size_ = config.stripe_size();
 
   return 0;
 }

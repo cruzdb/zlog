@@ -82,22 +82,45 @@ TEST(LibZlog, Create) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::Log *log;
+  zlog::Log log;
 
-  int ret = zlog::Log::Create(ioctx, "mylog", 0, &log);
+  int ret = zlog::Log::Create(ioctx, "mylog", 0, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Create(ioctx, "mylog", -1, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", -1, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Create(ioctx, "", 5, &log);
+  ret = zlog::Log::Create(ioctx, "", 5, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Create(ioctx, "mylog", 5, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", 5, log);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog::Log::Create(ioctx, "mylog", 5, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", 5, log);
   ASSERT_EQ(ret, -EEXIST);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlog, Open) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::Log log;
+
+  int ret = zlog::Log::Open(ioctx, "", log);
+  ASSERT_EQ(ret, -EINVAL);
+
+  ret = zlog::Log::Open(ioctx, "dne", log);
+  ASSERT_EQ(ret, -ENOENT);
+
+  ret = zlog::Log::Create(ioctx, "mylog", 5, log);
+  ASSERT_EQ(ret, 0);
+  ret = zlog::Log::Open(ioctx, "mylog", log);
+  ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
