@@ -100,6 +100,10 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   if (ret)
     return ret;
 
+  ret = log.Seal(log.epoch_);
+  if (ret)
+    return ret;
+
   return 0;
 }
 
@@ -274,6 +278,34 @@ int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
     assert(ret == zlog::CLS_ZLOG_READ_ONLY);
   }
   assert(0);
+}
+
+int Log::Fill(uint64_t position)
+{
+  for (;;) {
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_fill(op, epoch_, position);
+
+    std::string oid = position_to_oid(position);
+    int ret = ioctx_->operate(oid, &op);
+    if (ret < 0) {
+      std::cerr << "fill: failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK)
+      return 0;
+
+    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    return -EROFS;
+  }
 }
 
 }

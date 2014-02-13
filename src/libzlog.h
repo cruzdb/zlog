@@ -35,9 +35,14 @@ class Log {
   int CheckTail(uint64_t *pposition, bool increment);
 
   /*
-   *
+   * Append data to the log and return its position.
    */
   int Append(ceph::bufferlist& data, uint64_t *pposition);
+
+  /*
+   * Mark a position as unused.
+   */
+  int Fill(uint64_t position);
 
   /*
    * Create a new log.
