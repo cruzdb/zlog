@@ -42,6 +42,13 @@ std::string Log::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
+std::string Log::position_to_oid(uint64_t position)
+{
+  // round-robin striping
+  int slot = position % stripe_size_;
+  return slot_to_oid(slot);
+}
+
 std::string Log::slot_to_oid(int slot)
 {
   std::stringstream ss;
@@ -90,6 +97,10 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   log.seqr = seqr;
 
   ret = log.RefreshProjection();
+  if (ret)
+    return ret;
+
+  ret = log.Seal(log.epoch_);
   if (ret)
     return ret;
 
@@ -229,6 +240,102 @@ int Log::CheckTail(uint64_t *pposition, bool increment)
       continue;
     }
     return ret;
+  }
+  assert(0);
+}
+
+int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
+{
+  for (;;) {
+    uint64_t position;
+    int ret = CheckTail(&position, true);
+    if (ret)
+      return ret;
+
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_write(op, epoch_, position, data);
+
+    std::string oid = position_to_oid(position);
+    ret = ioctx_->operate(oid, &op);
+    if (ret < 0) {
+      std::cerr << "append: failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK) {
+      if (pposition)
+        *pposition = position;
+      return 0;
+    }
+
+    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+  }
+  assert(0);
+}
+
+int Log::Fill(uint64_t position)
+{
+  for (;;) {
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_fill(op, epoch_, position);
+
+    std::string oid = position_to_oid(position);
+    int ret = ioctx_->operate(oid, &op);
+    if (ret < 0) {
+      std::cerr << "fill: failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK)
+      return 0;
+
+    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    return -EROFS;
+  }
+}
+
+int Log::Read(uint64_t position, ceph::bufferlist& bl)
+{
+  for (;;) {
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_read(op, epoch_, position);
+
+    std::string oid = position_to_oid(position);
+    int ret = ioctx_->operate(oid, &op, &bl);
+    if (ret < 0) {
+      std::cerr << "read failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK)
+      return 0;
+    else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN)
+      return -ENODEV;
+    else if (ret == zlog::CLS_ZLOG_INVALIDATED)
+      return -EFAULT;
+    else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    } else {
+      std::cerr << "unknown reply";
+      assert(0);
+    }
   }
   assert(0);
 }

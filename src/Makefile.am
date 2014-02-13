@@ -35,7 +35,7 @@ libgtest_a_CPPFLAGS = -Igtest/include -Igtest
 GTEST_CXXFLAGS = -I$(top_srcdir)/src/gtest/include
 GTEST_LDADD = $(top_builddir)/src/libgtest.a -lpthread
 
-bin_PROGRAMS += test_libzlog
-test_libzlog_SOURCES = test_libzlog.cc
-test_libzlog_CXXFLAGS = $(GTEST_CXXFLAGS)
-test_libzlog_LDADD = libzlog.la $(GTEST_LDADD) $(BOOST_SYSTEM_LIBS)
+bin_PROGRAMS += test
+test_SOURCES = test.cc
+test_CXXFLAGS = $(GTEST_CXXFLAGS)
+test_LDADD = libzlog.la $(GTEST_LDADD) $(BOOST_SYSTEM_LIBS)

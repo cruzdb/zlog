@@ -28,4 +28,4 @@ src/zlog-seqr
 *.pb.cc
 *.pb.h
 
-src/test_libzlog
+src/test
