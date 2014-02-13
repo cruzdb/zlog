@@ -253,7 +253,7 @@ int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
 
     std::string oid = position_to_oid(position);
     ret = ioctx_->operate(oid, &op);
-    if (ret) {
+    if (ret < 0) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
     }
