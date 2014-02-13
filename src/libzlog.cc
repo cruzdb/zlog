@@ -308,4 +308,36 @@ int Log::Fill(uint64_t position)
   }
 }
 
+int Log::Read(uint64_t position, ceph::bufferlist& bl)
+{
+  for (;;) {
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_read(op, epoch_, position);
+
+    std::string oid = position_to_oid(position);
+    int ret = ioctx_->operate(oid, &op, &bl);
+    if (ret < 0) {
+      std::cerr << "read failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK)
+      return 0;
+    else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN)
+      return -ENODEV;
+    else if (ret == zlog::CLS_ZLOG_INVALIDATED)
+      return -EFAULT;
+    else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    } else {
+      std::cerr << "unknown reply";
+      assert(0);
+    }
+  }
+  assert(0);
+}
+
 }
