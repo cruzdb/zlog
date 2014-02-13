@@ -18,6 +18,7 @@ BOOST_ASIO
 BOOST_BIND
 BOOST_SYSTEM
 BOOST_PROGRAM_OPTIONS
+BOOST_THREADS
 
 PKG_CHECK_MODULES(PROTOBUF, protobuf >= 2.4.0)
 AC_SUBST(PROTOBUF_LIBS)
@@ -30,9 +31,6 @@ AS_IF([test "x${PROTOC}" == "x"],
 
 AC_CHECK_LIB([rados], [rados_version],, [AC_MSG_FAILURE([librados not found])])
 AC_CHECK_HEADER([rados/librados.hpp],, [AC_MSG_FAILURE([librados.hpp not found])])
-
-AC_CHECK_HEADER([glog/logging.h],, [AC_MSG_FAILURE([glog/logging.h not found])])
-AC_CHECK_LIB([glog], [_ZN6google10LogMessage4FailEv],, [AC_MSG_FAILURE([libglog not found])])
 
 AC_CONFIG_FILES([
   Makefile

@@ -82,22 +82,79 @@ TEST(LibZlog, Create) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::Log *log;
+  zlog::Log log;
 
-  int ret = zlog::Log::Create(ioctx, "mylog", 0, &log);
+  int ret = zlog::Log::Create(ioctx, "mylog", 0, NULL, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Create(ioctx, "mylog", -1, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", -1, NULL, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Create(ioctx, "", 5, &log);
+  ret = zlog::Log::Create(ioctx, "", 5, NULL, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Create(ioctx, "mylog", 5, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog::Log::Create(ioctx, "mylog", 5, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
   ASSERT_EQ(ret, -EEXIST);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlog, Open) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::Log log;
+
+  int ret = zlog::Log::Open(ioctx, "", NULL, log);
+  ASSERT_EQ(ret, -EINVAL);
+
+  ret = zlog::Log::Open(ioctx, "dne", NULL, log);
+  ASSERT_EQ(ret, -ENOENT);
+
+  ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
+  ASSERT_EQ(ret, 0);
+  ret = zlog::Log::Open(ioctx, "mylog", NULL, log);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlog, CheckTail) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::SeqrClient client("localhost", "5678");
+  ASSERT_NO_THROW(client.Connect());
+
+  zlog::Log log;
+  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  ASSERT_EQ(ret, 0);
+
+  uint64_t pos;
+  ret = log.CheckTail(&pos, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)0);
+
+  ret = log.CheckTail(&pos, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)0);
+
+  ret = log.CheckTail(&pos, true);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)1);
+
+  ret = log.CheckTail(&pos, true);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)2);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }

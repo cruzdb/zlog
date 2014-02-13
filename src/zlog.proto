@@ -1,7 +1,24 @@
-package zlog;
+package zlog_proto;
 
 option optimize_for = SPEED;
 
 message MetaLog {
     required uint32 stripe_size = 1;
+}
+
+message MSeqRequest {
+    required uint64 epoch = 1;
+    required string pool = 2;
+    required string name = 3;
+    required bool next = 4;
+}
+
+message MSeqReply {
+    enum Status {
+        OK = 0;
+        INIT_LOG = 1;
+        STALE_EPOCH = 2;
+    }
+    required uint64 position = 1;
+    optional Status status = 2 [default = OK];
 }

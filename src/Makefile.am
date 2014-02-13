@@ -18,11 +18,13 @@ libzlogproto_la_SOURCES = zlog.pb.cc zlog.pb.h
 libzlogproto_la_CXXFLAGS = $(PROTOBUF_CFLAGS)
 libzlogproto_la_LIBADD = $(PROTOBUF_LIBS)
 
+include seqr/Makefile.am
+
 lib_LTLIBRARIES += libzlog.la
 libzlog_la_SOURCES = libzlog.cc libzlog.h
-libzlog_la_LIBADD = libzlogproto.la -lglog -lrados
-
-include seqr/Makefile.am
+libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS)
+libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS)
+libzlog_la_LIBADD = libseqr.la -lcls_zlog_client $(BOOST_SYSTEM_LIBS)
 
 ### Tests
 
@@ -36,4 +38,4 @@ GTEST_LDADD = $(top_builddir)/src/libgtest.a -lpthread
 bin_PROGRAMS += test_libzlog
 test_libzlog_SOURCES = test_libzlog.cc
 test_libzlog_CXXFLAGS = $(GTEST_CXXFLAGS)
-test_libzlog_LDADD = $(GTEST_LDADD) libzlog.la -lrados
+test_libzlog_LDADD = libzlog.la $(GTEST_LDADD) $(BOOST_SYSTEM_LIBS)
