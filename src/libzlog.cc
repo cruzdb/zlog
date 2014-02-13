@@ -42,6 +42,13 @@ std::string Log::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
+std::string Log::position_to_oid(uint64_t position)
+{
+  // round-robin striping
+  int slot = position % stripe_size_;
+  return slot_to_oid(slot);
+}
+
 std::string Log::slot_to_oid(int slot)
 {
   std::stringstream ss;
@@ -229,6 +236,42 @@ int Log::CheckTail(uint64_t *pposition, bool increment)
       continue;
     }
     return ret;
+  }
+  assert(0);
+}
+
+int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
+{
+  for (;;) {
+    uint64_t position;
+    int ret = CheckTail(&position, true);
+    if (ret)
+      return ret;
+
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_write(op, epoch_, position, data);
+
+    std::string oid = position_to_oid(position);
+    ret = ioctx_->operate(oid, &op);
+    if (ret) {
+      std::cerr << "append: failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK) {
+      if (pposition)
+        *pposition = position;
+      return 0;
+    }
+
+    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
   }
   assert(0);
 }

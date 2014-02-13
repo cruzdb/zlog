@@ -35,6 +35,11 @@ class Log {
   int CheckTail(uint64_t *pposition, bool increment);
 
   /*
+   *
+   */
+  int Append(ceph::bufferlist& data, uint64_t *pposition);
+
+  /*
    * Create a new log.
    */
   static int Create(librados::IoCtx& ioctx, const std::string& name,
@@ -54,6 +59,7 @@ class Log {
 
   static std::string metalog_oid_from_name(const std::string& name);
   std::string slot_to_oid(int i);
+  std::string position_to_oid(uint64_t position);
 
   librados::IoCtx *ioctx_;
   std::string pool_;

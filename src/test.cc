@@ -158,3 +158,36 @@ TEST(LibZlog, CheckTail) {
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
+
+TEST(LibZlog, Append) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::SeqrClient client("localhost", "5678");
+  ASSERT_NO_THROW(client.Connect());
+
+  zlog::Log log;
+  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  ASSERT_EQ(ret, 0);
+
+  uint64_t last = 0;
+  for (int i = 0; i < 100; i++) {
+    uint64_t pos;
+    ceph::bufferlist bl;
+    ret = log.Append(bl, &pos);
+    ASSERT_EQ(ret, 0);
+
+    ASSERT_GT(pos, last);
+    last = pos;
+
+    uint64_t tail;
+    ret = log.CheckTail(&tail, false);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(pos, tail);
+  }
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
