@@ -1,7 +1,7 @@
 #ifndef LIBZLOG_ZLOG_H
 #define LIBZLOG_ZLOG_H
 #include <rados/librados.hpp>
-#include "seqr/libseqr.h"
+#include "libseqr.h"
 
 namespace zlog {
 

@@ -1,6 +1,6 @@
 #include <boost/asio.hpp>
 #include "libseqr.h"
-#include "../zlog.pb.h"
+#include "zlog.pb.h"
 
 namespace zlog {
 
