@@ -375,6 +375,7 @@ class Server {
         boost::asio::ip::tcp::endpoint(
           boost::asio::ip::tcp::v4(), port))
   {
+    acceptor_.set_option(boost::asio::ip::tcp::no_delay(true));
     start_accept();
   }
 
