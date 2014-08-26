@@ -61,6 +61,20 @@ class Log {
   static int Open(librados::IoCtx& ioctx, const std::string& name,
       SeqrClient *seqr, Log& log);
 
+  /*
+   * Open an existing log or create it if it doesn't exist.
+   */
+  static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
+      int stripe_size, SeqrClient *seqr, Log& log) {
+    int ret = Open(ioctx, name, seqr, log);
+    if (ret != -ENOENT)
+      return ret;
+    ret = Create(ioctx, name, stripe_size, seqr, log);
+    if (ret == 0)
+      return Open(ioctx, name, seqr, log);
+    return ret;
+  }
+
  private:
   Log(const Log& rhs);
   Log& operator=(const Log& rhs);
