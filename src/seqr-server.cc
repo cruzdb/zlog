@@ -10,6 +10,16 @@
 
 namespace po = boost::program_options;
 
+static uint64_t get_time(void)
+{
+  struct timespec ts;
+  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  assert(ret == 0);
+  uint64_t nsec = ((uint64_t)ts.tv_sec) * ((uint64_t)1000000000);
+  nsec += ts.tv_nsec;
+  return nsec;
+}
+
 class Sequence {
  public:
   Sequence() : seq_(0) {}
@@ -31,6 +41,7 @@ class LogManager {
  public:
   LogManager() {
     thread_ = boost::thread(&LogManager::Run, this);
+    bench_thread_ = boost::thread(&LogManager::BenchMonitor, this);
   }
 
   /*
@@ -145,6 +156,60 @@ class LogManager {
     cond_.notify_one();
   }
 
+  /*
+   * Monitors the performance of the sequencer.
+   *
+   * It looks at all the sequence states and then computes how many sequences
+   * were handed out over a period of time.
+   *
+   * FIXME: Note that this currently doesn't take into account new logs that
+   * are registered during the sleep period.
+   */
+  void BenchMonitor() {
+    for (;;) {
+      uint64_t start_ns;
+      uint64_t start_seq;
+
+      // starting state of all the current sequences
+      {
+        boost::unique_lock<boost::mutex> g(lock_);
+
+        start_ns = get_time();
+        start_seq = 0;
+
+        std::map<std::pair<std::string, std::string>, LogManager::Log >::iterator it;
+        for (it = logs_.begin(); it != logs_.end(); it++) {
+          start_seq += it->second.seq.read();
+        }
+      }
+
+      sleep(60);
+
+      uint64_t end_ns;
+      uint64_t end_seq;
+      int num_logs;
+
+      // ending state of all the current sequences
+      {
+        boost::unique_lock<boost::mutex> g(lock_);
+
+        end_ns = get_time();
+        end_seq = 0;
+        num_logs = logs_.size();
+
+        std::map<std::pair<std::string, std::string>, LogManager::Log >::iterator it;
+        for (it = logs_.begin(); it != logs_.end(); it++) {
+          end_seq += it->second.seq.read();
+        }
+      }
+
+      uint64_t elapsed_ns = end_ns - start_ns;
+      uint64_t total_seqs = end_seq - start_seq;
+      uint64_t rate = (total_seqs * 1000000000ULL) / elapsed_ns;
+      std::cout << "seqr rate = " << rate << " seqs/sec" << std::endl;
+    }
+  }
+
   void Run() {
     for (;;) {
       std::string pool, name;
@@ -182,6 +247,7 @@ class LogManager {
   }
 
   boost::thread thread_;
+  boost::thread bench_thread_;
   boost::mutex lock_;
   boost::condition_variable cond_;
   std::map<std::pair<std::string, std::string>, LogManager::Log > logs_;
