@@ -21,16 +21,21 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   req.set_next(next);
   req.set_pool(pool);
 
-  // serialize
+  // serialize header and protobuf message
   uint32_t msg_size = req.ByteSize();
-  assert(msg_size < sizeof(buffer));
+  uint32_t be_msg_size = htonl(msg_size);
+  uint32_t total_msg_size = msg_size + sizeof(be_msg_size);
+  assert(total_msg_size <= sizeof(buffer));
+
+  // add header
+  memcpy(buffer, &be_msg_size, sizeof(be_msg_size));
+
+  // add protobuf msg
   assert(req.IsInitialized());
-  assert(req.SerializeToArray(buffer, sizeof(buffer)));
+  assert(req.SerializeToArray(buffer + sizeof(be_msg_size), msg_size));
 
   // send
-  uint32_t be_msg_size = htonl(msg_size);
-  boost::asio::write(socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
-  boost::asio::write(socket_, boost::asio::buffer(buffer, msg_size));
+  boost::asio::write(socket_, boost::asio::buffer(buffer, total_msg_size));
 
   // get reply
   boost::asio::read(socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
