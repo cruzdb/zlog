@@ -93,6 +93,7 @@ TEST(LibZlog, Create) {
   ret = zlog::Log::Create(ioctx, "", 5, NULL, log);
   ASSERT_EQ(ret, -EINVAL);
 
+  // TODO: creating a log with NULL seqclient should be an error
   ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
   ASSERT_EQ(ret, 0);
 
