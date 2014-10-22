@@ -32,6 +32,16 @@ AS_IF([test "x${PROTOC}" == "x"],
 AC_CHECK_LIB([rados], [rados_version],, [AC_MSG_FAILURE([librados not found])])
 AC_CHECK_HEADER([rados/librados.hpp],, [AC_MSG_FAILURE([librados.hpp not found])])
 
+AC_LANG([C++])
+SAVED_LDFLAGS=$LDFLAGS
+LDFLAGS="$LDFLAGS -lcls_zlog_client"
+AC_LINK_IFELSE([
+  AC_LANG_PROGRAM(
+    [#include <cls_zlog_client.h>],
+    [void (*p)(librados::ObjectWriteOperation&, uint64_t); p = zlog::cls_zlog_seal;])
+  ], [], [AC_MSG_FAILURE([libcls_zlog_client not found])]) 
+LDFLAGS=$SAVED_LDFLAGS
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile

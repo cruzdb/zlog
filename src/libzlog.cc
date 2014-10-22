@@ -2,7 +2,7 @@
 #include <sstream>
 #include <string>
 #include <rados/librados.hpp>
-#include <rados/cls_zlog_client.h>
+#include <cls_zlog_client.h>
 #include "libzlog.h"
 #include "zlog.pb.h"
 
