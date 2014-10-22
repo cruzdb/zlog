@@ -9,7 +9,7 @@
 
 namespace po = boost::program_options;
 
-void client_thread(zlog::Log *log)
+void client_thread(zlog::Log *log, bool check_tail)
 {
   // buffer with random bytes
   char buf[4096];
@@ -20,15 +20,14 @@ void client_thread(zlog::Log *log)
   close(fd);
 
   for (;;) {
-    ceph::bufferlist bl;
-    bl.append(buf);
-
     uint64_t pos;
-#if 1
-    ret = log->Append(bl, &pos);
-#else
-    ret = log->CheckTail(&pos, true);
-#endif
+    if (check_tail) {
+      ret = log->CheckTail(&pos, true);
+    } else {
+      ceph::bufferlist bl;
+      bl.append(buf);
+      ret = log->Append(bl, &pos);
+    }
     assert(ret == 0);
   }
 }
@@ -40,6 +39,7 @@ int main(int argc, char **argv)
   std::string pool;
   std::string port;
   std::string logname_req;
+  bool check_tail;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -49,6 +49,7 @@ int main(int argc, char **argv)
     ("width", po::value<int>(&width)->required(), "Stripe width")
     ("threads", po::value<int>(&num_threads)->required(), "Number of threads")
     ("logname", po::value<std::string>(&logname_req)->default_value(""), "Log name")
+    ("checktail", po::value<bool>(&check_tail)->default_value(false), "Only check tail")
   ;
 
   po::variables_map vm;
@@ -85,7 +86,7 @@ int main(int argc, char **argv)
     zlog::Log *log = new zlog::Log();
     ret = zlog::Log::OpenOrCreate(ioctx, logname.str(), width, client, *log);
     assert(ret == 0);
-    boost::thread *t = new boost::thread(client_thread, log);
+    boost::thread *t = new boost::thread(client_thread, log, check_tail);
     threads.add_thread(t);
   }
 
