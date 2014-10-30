@@ -5,6 +5,8 @@ Zlog is a strongly consistent shared log designed to run on top of Ceph.
 Specifically, it is an implementation of the CORFU protocol adapted for RADOS,
 the distributed object storage system that powers Ceph.
 
+The design of zlog is explained in detail here http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html
+
 ## Example
 
 First create a connection to the sequencer service:
