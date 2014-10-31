@@ -57,13 +57,23 @@ make
 * protobuf-devel
 * librados2
 * ceph-devel
-* cls_zlog_client (see note)
+* libcls_zlog_client
 
-Note that the `cls_zlog_client` dependency is a little annoying to resolve. It
-is built as a shared library in the zlog Ceph tree branch
-(http://github.com/noahdesu/ceph/tree/cls_zlog). In short time we will make
-this simpler by using Google protocol buffers for the library allowing us to
-compile this project without the dependency on this library.
+The `libcls_zlog_client` dependency is currently a hassle to resolve because
+the library is built in the `zlog` branch of the Ceph tree. The `zlog` branch
+is located at http://github.com/noahdesu/ceph/tree/cls_zlog and building this
+tree will automatically build the `libcls_zlog_client` library.
+
+Once the library is built the `libcls_zlog_client` header will be located at
+`src/cls/zlog/` and the shared library will be located at `src/.libs`. Either
+reference these paths directly or copy the libraries to a new directory. In
+either case, set `CPPFLAGS` and `LDFLAGS` before configuring and the depenency
+should be resolved correctly.
+
+**A nice enhancement would be to use Protocol Buffers to implement the
+message encoding in `libcls_zlog_client`. This would allow us to have a
+dependency on Protocol Buffers when building the `zlog` Ceph branch but would
+eliminate the above process for resolving the client library dependency.**
 
 ## References
 
