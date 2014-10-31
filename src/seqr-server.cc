@@ -97,6 +97,7 @@ class LogManager {
     }
 
     rados.conf_read_file(NULL);
+    rados.conf_parse_env(NULL);
 
     ret = rados.connect();
     if (ret) {
