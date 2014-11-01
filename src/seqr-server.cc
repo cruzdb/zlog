@@ -1,5 +1,7 @@
 #include <cstdlib>
 #include <iostream>
+#include <vector>
+#include <boost/shared_ptr.hpp>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
@@ -370,14 +372,30 @@ class Session {
 
 class Server {
  public:
-  Server(boost::asio::io_service& io_service, short port)
-    : io_service_(io_service),
-    acceptor_(io_service,
+  Server(short port, std::size_t nthreads)
+    : acceptor_(io_service_,
         boost::asio::ip::tcp::endpoint(
-          boost::asio::ip::tcp::v4(), port))
+          boost::asio::ip::tcp::v4(), port)),
+      nthreads_(nthreads)
   {
     acceptor_.set_option(boost::asio::ip::tcp::no_delay(true));
     start_accept();
+  }
+
+  void run() {
+    std::vector<boost::shared_ptr<boost::thread> > threads;
+    for (std::size_t i = 0; i < nthreads_; i++) {
+      boost::shared_ptr<boost::thread> thread(new boost::thread(
+            boost::bind(&boost::asio::io_service::run, &io_service_)));
+      threads.push_back(thread);
+    }
+
+    for (std::size_t i = 0; i < threads.size(); ++i)
+      threads[i]->join();
+  }
+
+  void notify_fork(boost::asio::io_service::fork_event event) {
+    io_service_.notify_fork(event);
   }
 
  private:
@@ -397,18 +415,21 @@ class Server {
     start_accept();
   }
 
-  boost::asio::io_service& io_service_;
+  boost::asio::io_service io_service_;
   boost::asio::ip::tcp::acceptor acceptor_;
+  std::size_t nthreads_;
 };
 
 int main(int argc, char* argv[])
 {
   int port;
   std::string host;
+  int nthreads;
 
   po::options_description desc("Allowed options");
   desc.add_options()
     ("port", po::value<int>(&port)->required(), "Server port")
+    ("nthreads", po::value<int>(&nthreads)->default_value(1), "Num threads")
     ("daemon,d", "Run in background")
   ;
 
@@ -416,11 +437,13 @@ int main(int argc, char* argv[])
   po::store(po::parse_command_line(argc, argv, desc), vm);
   po::notify(vm);
 
-  boost::asio::io_service io_service;
-  Server s(io_service, port);
+  if (nthreads <= 0 || nthreads > 64)
+    nthreads = 1;
+
+  Server s(port, nthreads);
 
   if (vm.count("daemon")) {
-    io_service.notify_fork(boost::asio::io_service::fork_prepare);
+    s.notify_fork(boost::asio::io_service::fork_prepare);
 
     pid_t pid = fork();
     if (pid < 0) {
@@ -442,12 +465,12 @@ int main(int argc, char* argv[])
     close(1);
     close(2);
 
-    io_service.notify_fork(boost::asio::io_service::fork_child);
+    s.notify_fork(boost::asio::io_service::fork_child);
   }
 
   log_mgr = new LogManager();
 
-  io_service.run();
+  s.run();
 
   return 0;
 }
