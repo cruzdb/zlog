@@ -12,6 +12,8 @@
 
 namespace po = boost::program_options;
 
+static int report_sec;
+
 static uint64_t get_time(void)
 {
   struct timespec ts;
@@ -43,7 +45,8 @@ class LogManager {
  public:
   LogManager() {
     thread_ = boost::thread(&LogManager::Run, this);
-    bench_thread_ = boost::thread(&LogManager::BenchMonitor, this);
+    if (report_sec > 0)
+      bench_thread_ = boost::thread(&LogManager::BenchMonitor, this);
   }
 
   /*
@@ -186,7 +189,8 @@ class LogManager {
         }
       }
 
-      sleep(60);
+      assert(report_sec > 0);
+      sleep(report_sec);
 
       uint64_t end_ns;
       uint64_t end_seq;
@@ -430,6 +434,7 @@ int main(int argc, char* argv[])
   desc.add_options()
     ("port", po::value<int>(&port)->required(), "Server port")
     ("nthreads", po::value<int>(&nthreads)->default_value(1), "Num threads")
+    ("report-sec", po::value<int>(&report_sec)->default_value(0), "Time between rate reports")
     ("daemon,d", "Run in background")
   ;
 
