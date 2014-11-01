@@ -1,6 +1,6 @@
 AC_PREREQ(2.59)
 
-AC_INIT([zlog], [0.0.1], [noahwatkins@gmail.com])
+AC_INIT([zlog], [0.1.0], [noahwatkins@gmail.com])
 
 AM_PROG_AR
 AC_PROG_LIBTOOL
