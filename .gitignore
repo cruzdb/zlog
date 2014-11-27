@@ -30,3 +30,4 @@ src/zlog-seqr
 *.pb.h
 
 src/test
+src/zstate-test
