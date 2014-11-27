@@ -32,12 +32,12 @@ class Log {
   /*
    * Find and optionally increment the current tail position.
    */
-  int CheckTail(uint64_t *pposition, bool increment);
+  int CheckTail(uint64_t *pposition, bool increment = false);
 
   /*
    * Append data to the log and return its position.
    */
-  int Append(ceph::bufferlist& data, uint64_t *pposition);
+  int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
 
   /*
    * Mark a position as unused.
