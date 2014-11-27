@@ -1,6 +1,5 @@
-#include <glog/logging.h>
 #include <rados/buffer.h>
-#include "../contrail/contrail.h"
+#include "../libzlog.h"
 #include "skytype.h"
 
 using namespace skytype;
@@ -25,8 +24,6 @@ int SkyObject::query_helper()
   if (ret)
     return ret;
 
-  VLOG(1) << "query_helper: curpos " << position_ << " tail " << tail;
-
   while (position_ <= tail) {
     ceph::bufferlist bl;
     ret = log_.Read(position_, bl);
@@ -34,17 +31,16 @@ int SkyObject::query_helper()
       case 0:
         apply(bl.c_str());
         break;
-      case contrail::Log::NOT_WRITTEN:
+      case -ENODEV:
         ret = log_.Fill(position_);
-        if (ret == contrail::Log::READ_ONLY)
+        if (ret == -EROFS)
           continue; // try again
         else if (ret)
           return ret;
         break;
-      case contrail::Log::INVALIDATED:
+      case -EFAULT:
         break;
       default:
-        LOG(FATAL) << "unexpected return value ret " << ret;
         assert(0);
     }
     position_++;

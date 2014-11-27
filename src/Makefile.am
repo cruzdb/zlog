@@ -40,6 +40,10 @@ libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS)
 libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS)
 libzlog_la_LIBADD = libseqr.la -lcls_zlog_client $(BOOST_SYSTEM_LIBS)
 
+lib_LTLIBRARIES += libzstate.la
+libzstate_la_SOURCES = zstate/skytype.cc
+libzstate_la_LIBADD = libzlog.la
+
 ### Tests
 
 noinst_LIBRARIES += libgtest.a
@@ -53,3 +57,8 @@ bin_PROGRAMS += test
 test_SOURCES = test.cc
 test_CXXFLAGS = $(GTEST_CXXFLAGS)
 test_LDADD = libzlog.la $(GTEST_LDADD) $(BOOST_SYSTEM_LIBS)
+
+bin_PROGRAMS += zstate-test
+zstate_test_SOURCES = zstate/test.cc
+zstate_test_CXXFLAGS = $(GTEST_CXXFLAGS)
+zstate_test_LDADD = libzlog.la libzstate.la $(GTEST_LDADD) $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS)

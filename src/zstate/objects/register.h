@@ -2,12 +2,12 @@
 #define SKYTYPE_REGISTER_H
 
 #include <errno.h>
-#include "contrail/contrail.h"
-#include "skytype/skytype.h"
+#include "libzlog.h"
+#include "zstate/skytype.h"
 
 class Register : private skytype::SkyObject {
   public:
-    Register(contrail::Log& log) : SkyObject(log), state_(0) {}
+    Register(zlog::Log& log) : SkyObject(log), state_(0) {}
 
     int read(int *value) {
       int ret = query_helper();
