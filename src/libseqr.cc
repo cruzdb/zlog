@@ -9,7 +9,7 @@ void SeqrClient::Connect() {
   boost::asio::ip::tcp::resolver::query query(
       boost::asio::ip::tcp::v4(), host_.c_str(), port_);
   boost::asio::ip::tcp::resolver::iterator iterator = resolver.resolve(query);
-  boost::asio::connect(socket_, iterator);
+  socket_.connect(*iterator);
 }
 
 int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,

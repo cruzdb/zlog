@@ -398,10 +398,6 @@ class Server {
       threads[i]->join();
   }
 
-  void notify_fork(boost::asio::io_service::fork_event event) {
-    io_service_.notify_fork(event);
-  }
-
  private:
   void start_accept() {
     Session* new_session = new Session(io_service_);
@@ -445,11 +441,9 @@ int main(int argc, char* argv[])
   if (nthreads <= 0 || nthreads > 64)
     nthreads = 1;
 
-  Server s(port, nthreads);
+  Server *s;
 
   if (vm.count("daemon")) {
-    s.notify_fork(boost::asio::io_service::fork_prepare);
-
     pid_t pid = fork();
     if (pid < 0) {
       exit(EXIT_FAILURE);
@@ -458,6 +452,8 @@ int main(int argc, char* argv[])
     if (pid > 0) {
       exit(EXIT_SUCCESS);
     }
+
+    s = new Server(port, nthreads);
 
     pid_t sid = setsid();
     if (sid < 0) {
@@ -469,13 +465,13 @@ int main(int argc, char* argv[])
     close(0);
     close(1);
     close(2);
-
-    s.notify_fork(boost::asio::io_service::fork_child);
+  } else {
+    s = new Server(port, nthreads);
   }
 
   log_mgr = new LogManager();
 
-  s.run();
+  s->run();
 
   return 0;
 }
