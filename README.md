@@ -103,6 +103,16 @@ Next configure and build the tree:
 make -j4
 ```
 
+Note that while you can build the entire Ceph tree, it is possible to only
+build the `cls_zlog` components. This is very useful because building the
+entire Ceph tree can take a significant amount of time:
+
+```
+cd src
+make libcls_zlog.la
+make libcls_zlog_client.la
+```
+
 That's it. Next we'll grab the `cls_zlog` artifacts and install them.
 
 ### Installing cls_zlog
