@@ -46,7 +46,7 @@ log.Read(pos, bl_out);
 assert(bl_in == bl_out);
 ```
 
-## Building
+## Build and Install
 
 ```bash
 autoreconf -ivf
@@ -61,23 +61,88 @@ make
 * protobuf-devel
 * librados2
 * ceph-devel
-* libcls_zlog_client
+* cls_zlog (see below)
 
-The `libcls_zlog_client` dependency is currently a hassle to resolve because
-the library is built in the `zlog` branch of the Ceph tree. The `zlog` branch
-is located at http://github.com/noahdesu/ceph/tree/cls_zlog and building this
-tree will automatically build the `libcls_zlog_client` library.
+### Building cls_zlog
 
-Once the library is built the `libcls_zlog_client` header will be located at
-`src/cls/zlog/` and the shared library will be located at `src/.libs`. Either
-reference these paths directly or copy the libraries to a new directory. In
-either case, set `CPPFLAGS` and `LDFLAGS` before configuring and the depenency
-should be resolved correctly.
+The current object interface in RADOS is incapable of expressing the access
+methods required for an efficient implementation of the CORFU protocol (the
+good news is this will likely change in the future).  However, RADOS
+supports custom object interfaces through pluggable C++ modules which `zlog`
+uses to add the necessary interfaces. The custom interface is referred to as
+`cls_zlog` and it is implemented as two components: (1) a loadable RADOS
+plugin that injects new behavior into the storage system, and (2) a
+lightweight client library that hides the custom object interface
+communication protocol. These two dependencies are currently maintained in the
+`cls_zlog` Ceph branch located at
+https://github.com/noahdesu/ceph/tree/cls_zlog. Building this branch will
+produce both the RADOS server plugin and the client library.
 
-**A nice enhancement would be to use Protocol Buffers to implement the
-message encoding in `libcls_zlog_client`. This would allow us to have a
-dependency on Protocol Buffers when building the `zlog` Ceph branch but would
-eliminate the above process for resolving the client library dependency.**
+If you are already familiar with building Ceph from source, then the
+`cls_zlog` branch can be built without any additional dependencies, and it is
+configured to automatically produce the `cls_zlog` shared libraries without
+any special options. If you are not familiar with the process there is
+documentation located at http://ceph.com/docs/master/install/build-ceph/. In
+general, the process for building the `cls_zlog` dependency looks like this:
+
+First clone the `zlog` Ceph repository and checkout the `cls_zlog` branch:
+
+```
+git clone --recursive https://github.com/noahdesu/ceph.git
+cd ceph
+git checkout cls_zlog
+```
+
+Next configure and build the tree:
+
+```
+./install-deps.sh
+./autogen.sh
+./configure
+make -j4
+```
+
+That's it. Next we'll grab the `cls_zlog` artifacts and install them.
+
+### Installing cls_zlog
+
+Building the `zlog` project depends on the `cls_zlog` client library that we
+just built above. We'll grab this dependency from the Ceph tree we just built
+above and tell `./configure` about them using `CPPFLAGS` and `LDFLAGS`:
+
+```
+mkdir libcls_zlog_client
+cp /path/to/ceph/src/.libs/libcls_zlog_client* libcls_zlog_client
+cp /path/to/ceph/src/cls/zlog/cls_zlog_client.h libcls_zlog_client
+CPPFLAGS=-Ilibcls_zlog_client LDFLAGS=-Llibcls_zlog_client ./configure
+make
+```
+
+You'll likely need to also export `LD_LIBRARY_PATH` to point at the location
+where the `cls_zlog` client library was saved (e.g. the `libcls_zlog_client`
+        directory we created in the snippet above). That's it for the `zlog`
+client. Next we need to make sure the `cls_zlog` plugin is installed in Ceph.
+
+If you just want to test `zlog` and don't want to use a full Ceph cluster, you
+can use the Ceph developer mode to quickly start a Ceph cluster on a single
+node from the source tree that you just built. See
+http://ceph.com/docs/v0.86/dev/quick_guide/ for more information. In this case
+you only need to install the `cls_zlog` client as the mini Ceph cluster will
+automatically pick up the plugin when run from the source tree.
+
+Installing the `cls_zlog` plugin is slightly more involved. For each OSD node
+in your Ceph cluster there is a directory from which object interface plugins
+are automatically loaded. Typically this is `/usr/lib/rados-classes/` or
+`/usr/lib64/rados-classes/`. This directory will already exist if you have a
+standard Ceph installation. Copy the `cls_zlog` plugin from the source tree we
+built above into this directory on all Ceph OSD nodes:
+
+```
+cp /path/to/ceph/src/.libs/libcls_zlog.so* /usr/lib/rados-classes/
+```
+
+Once the plugin has been copied to a server the OSD processes on that node
+should be restarted.
 
 ## References
 
