@@ -13,6 +13,8 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
+AX_CXX_COMPILE_STDCXX_11([],[mandatory])
+
 BOOST_REQUIRE([1.46])
 BOOST_ASIO
 BOOST_BIND
