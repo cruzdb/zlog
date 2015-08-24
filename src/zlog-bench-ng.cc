@@ -10,23 +10,41 @@
 namespace po = boost::program_options;
 
 struct AioState {
+  zlog::Log *log;
+  ceph::bufferlist bl;
   zlog::Log::AioCompletion *c;
   uint64_t position;
 };
 
 static std::condition_variable io_cond;
 static std::mutex io_lock;
-std::atomic<uint64_t> outstanding_ios;
+static std::atomic<uint64_t> outstanding_ios;
 
 static void safe_cb(librados::completion_t cb, void *arg)
 {
   AioState *s = (AioState*)arg;
   assert(s->c->get_return_value() == 0);
   std::cout << s->position << std::endl;
+  uint64_t position = s->position;
+  ceph::bufferlist bl = s->bl;
+  zlog::Log *log = s->log;
   outstanding_ios--;
   s->c->release();
   delete s;
   io_cond.notify_one();
+
+#if 0
+  ceph::bufferlist bl2;
+  int ret = log->Read(position, bl2);
+  assert(ret == 0);
+  assert(bl == bl2);
+  int sum1 = 0, sum2 = 0;
+  for (unsigned i = 0; i < bl.length(); i++) {
+    sum1 += (int)bl[i];
+    sum2 += (int)bl2[i];
+  }
+  assert(sum1 == sum2);
+#endif
 }
 
 class FakeSeqrClient : public zlog::SeqrClient {
@@ -70,8 +88,18 @@ class FakeSeqrClient : public zlog::SeqrClient {
       return -ERANGE;
 
     if (next) {
+#if 0
+      if (seq_ > 100 && seq_ % 10 == 0) {
+        *position = seq_ / 2;
+        seq_++;
+      } else {
+        uint64_t tail = seq_.fetch_add(1); // returns previous value
+        *position = tail + 1;
+      }
+#else
       uint64_t tail = seq_.fetch_add(1); // returns previous value
       *position = tail + 1;
+#endif
     } else
       *position = seq_.load();
 
@@ -146,10 +174,20 @@ int main(int argc, char **argv)
   outstanding_ios = 0;
   for (;;) {
     while (outstanding_ios < qdepth) {
+
       AioState *state = new AioState;
+
+      char buf[4096];
+      for (unsigned i = 0; i < sizeof(buf); i++) {
+        buf[i] = (char)rand();
+      }
+
+      state->bl.append(buf, sizeof(buf));
+      state->log = &log;
+
       state->c = zlog::Log::aio_create_completion(state, safe_cb);
       assert(state->c);
-      ret = log.AioAppend(state->c, bl, &state->position);
+      ret = log.AioAppend(state->c, state->bl, &state->position);
       assert(ret == 0);
       outstanding_ios++;
     }
