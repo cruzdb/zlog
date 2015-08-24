@@ -30,6 +30,12 @@ zlog_seqr_bench_CPPFLAGS = $(BOOST_CPPFLAGS)
 zlog_seqr_bench_LDFLAGS = $(BOOST_THREAD_LDFLAGS) $(BOOST_SYSTEM_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LDFLAGS)
 zlog_seqr_bench_LDADD = libseqr.la libzlog.la $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
 
+bin_PROGRAMS += zlog-bench-ng
+zlog_bench_ng_SOURCES = zlog-bench-ng.cc
+zlog_bench_ng_CPPFLAGS = $(BOOST_CPPFLAGS)
+zlog_bench_ng_LDFLAGS = $(BOOST_THREAD_LDFLAGS) $(BOOST_SYSTEM_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LDFLAGS)
+zlog_bench_ng_LDADD = libseqr.la libzlog.la $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
+
 noinst_LTLIBRARIES += libseqr.la
 libseqr_la_SOURCES = libseqr.cc libseqr.h
 libseqr_la_LIBADD = libzlogproto.la
