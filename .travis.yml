@@ -1,7 +1,8 @@
 language: cpp
 
 compiler:
-  - g++
+  - gcc
+  - clang
 
 before_install:
   - sudo apt-get update
@@ -20,7 +21,7 @@ before_install:
   - cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
   - chmod 600 ~/.ssh/authorized_keys
   - sudo pip install ceph-deploy
-  - ceph-deploy install --dev next `hostname`
+  - ceph-deploy install --dev master `hostname`
   - ceph-deploy pkg --install librados-dev `hostname`
   - sudo cp /tmp/ceph/src/.libs/libcls_zlog.so* /usr/lib/rados-classes/
   - bash ci/micro-osd.sh /tmp/micro-ceph
@@ -38,3 +39,16 @@ script:
   - export LD_LIBRARY_PATH=/tmp/ceph/src/.libs:$LD_LIBRARY_PATH
   - ./zlog-seqr --port 5678 --daemon
   - ./test
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - gcc-4.8
+      - g++-4.8
+      - clang
+
+sudo: required 
+services:   
+  - docker
