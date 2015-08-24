@@ -10,6 +10,8 @@
 
 namespace po = boost::program_options;
 
+//#define VERIFY_IOS
+
 struct AioState {
   zlog::Log *log;
   ceph::bufferlist bl;
@@ -25,18 +27,20 @@ static std::atomic<uint64_t> ios_completed;
 static void safe_cb(librados::completion_t cb, void *arg)
 {
   AioState *s = (AioState*)arg;
+
+  ios_completed++;
+  outstanding_ios--;
+  io_cond.notify_one();
+
   assert(s->c->get_return_value() == 0);
-  //std::cout << s->position << std::endl;
   uint64_t position = s->position;
   ceph::bufferlist bl = s->bl;
   zlog::Log *log = s->log;
-  outstanding_ios--;
-  ios_completed++;
+
   s->c->release();
   delete s;
-  io_cond.notify_one();
 
-#if 0
+#ifdef VERIFY_IOS
   ceph::bufferlist bl2;
   int ret = log->Read(position, bl2);
   assert(ret == 0);
@@ -91,7 +95,7 @@ class FakeSeqrClient : public zlog::SeqrClient {
       return -ERANGE;
 
     if (next) {
-#if 0
+#ifdef VERIFY_IOS
       if (seq_ > 100 && seq_ % 10 == 0) {
         *position = seq_ / 2;
         seq_++;
@@ -121,6 +125,7 @@ int main(int argc, char **argv)
   std::string pool;
   std::string logname_req;
   int qdepth;
+  int iosize;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -128,6 +133,7 @@ int main(int argc, char **argv)
     ("logname", po::value<std::string>(&logname_req)->default_value(""), "Log name")
     ("width", po::value<int>(&width)->required(), "Width")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
+    ("iosize", po::value<int>(&iosize)->default_value(0), "IO Size")
   ;
 
   po::variables_map vm;
@@ -150,19 +156,23 @@ int main(int argc, char **argv)
   assert(ret == 0);
 
   // build a log name
-  std::stringstream logname;
-  if (logname_req.size())
-    logname << logname_req;
-  else {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    logname << uuid;
+  std::string logname;
+  {
+    std::stringstream ss;
+    if (logname_req.size())
+      ss << logname_req;
+    else {
+      boost::uuids::uuid uuid = boost::uuids::random_generator()();
+      ss << uuid;
+    }
+    ss << ".log";
+    logname = ss.str();
   }
-  logname << ".log";
 
   // setup log instance
   zlog::Log log;
-  FakeSeqrClient client(logname.str());
-  ret = zlog::Log::OpenOrCreate(ioctx, logname.str(), width, &client, log);
+  FakeSeqrClient client(logname);
+  ret = zlog::Log::OpenOrCreate(ioctx, logname, width, &client, log);
   client.Init(ioctx);
   assert(ret == 0);
 
@@ -177,15 +187,17 @@ int main(int argc, char **argv)
   ios_completed = 0;
   outstanding_ios = 0;
 
+  char iobuf[iosize];
+
   auto start = std::chrono::steady_clock::now();
   for (;;) {
-
+    uint64_t ios_completed_end = ios_completed;
     auto end = std::chrono::steady_clock::now();
-    auto diff = end - start;
-    auto diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
-    if (diff_ms > 5000) {
-      auto ios_per_ms = (double)ios_completed / (double)diff_ms;
-      auto ios_per_sec = ios_per_ms * 1000;
+    std::chrono::duration<double> diff = std::chrono::duration_cast<
+      std::chrono::duration<double>>(end - start);
+    double secs = diff.count();
+    if (secs > 5) {
+      double ios_per_sec = (double)ios_completed_end / secs;
       std::cout << ios_per_sec << std::endl;
       ios_completed = 0;
       start = std::chrono::steady_clock::now();
@@ -195,12 +207,11 @@ int main(int argc, char **argv)
 
       AioState *state = new AioState;
 
-      char buf[4096];
-      for (unsigned i = 0; i < sizeof(buf); i++) {
-        buf[i] = (char)rand();
+      for (unsigned i = 0; i < iosize; i++) {
+        iobuf[i] = (char)rand();
       }
 
-      state->bl.append(buf, sizeof(buf));
+      state->bl.append(iobuf, iosize);
       state->log = &log;
 
       state->c = zlog::Log::aio_create_completion(state, safe_cb);
