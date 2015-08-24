@@ -9,6 +9,20 @@ class Log {
  public:
   Log() {}
 
+  struct AioCompletionImpl;
+
+  class AioCompletion {
+   public:
+    typedef void *completion_t;
+    typedef void (*callback_t)(completion_t cb, void *arg);
+    AioCompletion(AioCompletionImpl *pc) : pc(pc) {}
+    void set_callback(void *arg, callback_t cb);
+    void wait_for_complete();
+    int get_return_value();
+    void release();
+    void *pc;
+  };
+
   /*
    * Set a new projection.
    */
@@ -38,6 +52,12 @@ class Log {
    * Append data to the log and return its position.
    */
   int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
+
+  /*
+   * Append data asynchronously to the log and return its position.
+   */
+  int AioAppend(AioCompletion *c, ceph::bufferlist& data,
+      uint64_t *pposition = NULL);
 
   /*
    * Mark a position as unused.
@@ -75,6 +95,10 @@ class Log {
     return ret;
   }
 
+  static AioCompletion *aio_create_completion();
+  static AioCompletion *aio_create_completion(void *arg,
+      zlog::Log::AioCompletion::callback_t cb);
+
  private:
   Log(const Log& rhs);
   Log& operator=(const Log& rhs);
@@ -92,6 +116,8 @@ class Log {
   int stripe_size_;
   SeqrClient *seqr;
   uint64_t epoch_;
+
+  friend void zlog::aio_safe_cb(librados::completion_t cb, void *arg);
 };
 
 }
