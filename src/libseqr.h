@@ -10,9 +10,9 @@ class SeqrClient {
     socket_(io_service_), host_(host), port_(port)
   {}
 
-  void Connect();
+  virtual void Connect();
 
-  int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch, const std::string& pool,
       const std::string& name, uint64_t *position, bool next);
 
  private:
