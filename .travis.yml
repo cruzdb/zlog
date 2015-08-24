@@ -1,9 +1,11 @@
 language: cpp
 
 compiler:
-  - g++
+  - gcc
+  - clang
 
 before_install:
+  - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi
   - sudo apt-get update
   - pushd /tmp
   - git clone --recursive https://github.com/noahdesu/ceph.git
@@ -20,7 +22,7 @@ before_install:
   - cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
   - chmod 600 ~/.ssh/authorized_keys
   - sudo pip install ceph-deploy
-  - ceph-deploy install --dev next `hostname`
+  - ceph-deploy install --release hammer  `hostname`
   - ceph-deploy pkg --install librados-dev `hostname`
   - sudo cp /tmp/ceph/src/.libs/libcls_zlog.so* /usr/lib/rados-classes/
   - bash ci/micro-osd.sh /tmp/micro-ceph
@@ -29,6 +31,7 @@ before_install:
   - sudo apt-get install libprotobuf-dev protobuf-compiler
   
 install:
+  - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi
   - autoreconf -ivf
   - CPPFLAGS=-I/tmp/ceph/src/cls/zlog LDFLAGS=-L/tmp/ceph/src/.libs ./configure
   - make
@@ -38,3 +41,12 @@ script:
   - export LD_LIBRARY_PATH=/tmp/ceph/src/.libs:$LD_LIBRARY_PATH
   - ./zlog-seqr --port 5678 --daemon
   - ./test
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - gcc-4.8
+      - g++-4.8
+      - clang
