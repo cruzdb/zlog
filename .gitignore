@@ -25,6 +25,7 @@ Makefile.in
 *.lo
 
 src/zlog-seqr-bench
+src/zlog-bench-ng
 src/zlog-seqr
 *.pb.cc
 *.pb.h
