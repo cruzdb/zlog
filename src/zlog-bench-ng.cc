@@ -4,6 +4,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/program_options.hpp>
 #include <condition_variable>
+#include <chrono>
 #include <rados/librados.hpp>
 #include "libzlog.h"
 
@@ -19,16 +20,18 @@ struct AioState {
 static std::condition_variable io_cond;
 static std::mutex io_lock;
 static std::atomic<uint64_t> outstanding_ios;
+static std::atomic<uint64_t> ios_completed;
 
 static void safe_cb(librados::completion_t cb, void *arg)
 {
   AioState *s = (AioState*)arg;
   assert(s->c->get_return_value() == 0);
-  std::cout << s->position << std::endl;
+  //std::cout << s->position << std::endl;
   uint64_t position = s->position;
   ceph::bufferlist bl = s->bl;
   zlog::Log *log = s->log;
   outstanding_ios--;
+  ios_completed++;
   s->c->release();
   delete s;
   io_cond.notify_one();
@@ -171,8 +174,23 @@ int main(int argc, char **argv)
 
   std::unique_lock<std::mutex> lock(io_lock);
 
+  ios_completed = 0;
   outstanding_ios = 0;
+
+  auto start = std::chrono::steady_clock::now();
   for (;;) {
+
+    auto end = std::chrono::steady_clock::now();
+    auto diff = end - start;
+    auto diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+    if (diff_ms > 5000) {
+      auto ios_per_ms = (double)ios_completed / (double)diff_ms;
+      auto ios_per_sec = ios_per_ms * 1000;
+      std::cout << ios_per_sec << std::endl;
+      ios_completed = 0;
+      start = std::chrono::steady_clock::now();
+    }
+
     while (outstanding_ios < qdepth) {
 
       AioState *state = new AioState;
