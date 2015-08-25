@@ -60,6 +60,12 @@ class Log {
       uint64_t *pposition = NULL);
 
   /*
+   * Read data asynchronously from the log.
+   */
+  int AioRead(uint64_t position, AioCompletion *c,
+      ceph::bufferlist *bpl);
+
+  /*
    * Mark a position as unused.
    */
   int Fill(uint64_t position);
