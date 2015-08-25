@@ -1,11 +1,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-#include <boost/shared_ptr.hpp>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
-#include <boost/thread/thread.hpp>
+#include <condition_variable>
+#include <thread>
 #include <rados/librados.hpp>
 #include "libzlog.h"
 #include "zlog.pb.h"
@@ -44,9 +44,9 @@ class Sequence {
 class LogManager {
  public:
   LogManager() {
-    thread_ = boost::thread(&LogManager::Run, this);
+    thread_ = std::thread(&LogManager::Run, this);
     if (report_sec > 0)
-      bench_thread_ = boost::thread(&LogManager::BenchMonitor, this);
+      bench_thread_ = std::thread(&LogManager::BenchMonitor, this);
   }
 
   /*
@@ -55,7 +55,7 @@ class LogManager {
   uint64_t ReadSequence(const std::string& pool, const std::string& name,
       uint64_t epoch, bool increment, uint64_t *seq) {
 
-    boost::unique_lock<boost::mutex> g(lock_);
+    std::unique_lock<std::mutex> g(lock_);
 
     std::map<std::pair<std::string, std::string>, Log>::iterator it =
       logs_.find(std::make_pair(pool, name));
@@ -178,7 +178,7 @@ class LogManager {
 
       // starting state of all the current sequences
       {
-        boost::unique_lock<boost::mutex> g(lock_);
+        std::unique_lock<std::mutex> g(lock_);
 
         start_ns = get_time();
         start_seq = 0;
@@ -198,7 +198,7 @@ class LogManager {
 
       // ending state of all the current sequences
       {
-        boost::unique_lock<boost::mutex> g(lock_);
+        std::unique_lock<std::mutex> g(lock_);
 
         end_ns = get_time();
         end_seq = 0;
@@ -222,7 +222,7 @@ class LogManager {
       std::string pool, name;
 
       {
-        boost::unique_lock<boost::mutex> g(lock_);
+        std::unique_lock<std::mutex> g(lock_);
         while (pending_logs_.empty())
           cond_.wait(g);
         std::set<std::pair<std::string, std::string> >::iterator it =
@@ -235,14 +235,14 @@ class LogManager {
       uint64_t position, epoch;
       int ret = InitLog(pool, name, &epoch, &position);
       if (ret) {
-        boost::unique_lock<boost::mutex> g(lock_);
+        std::unique_lock<std::mutex> g(lock_);
         pending_logs_.erase(std::make_pair(pool, name));
         std::cerr << "failed to init log" << std::endl;
         continue;
       }
 
       {
-        boost::unique_lock<boost::mutex> g(lock_);
+        std::unique_lock<std::mutex> g(lock_);
         std::pair<std::string, std::string> key = std::make_pair(pool, name);
         assert(pending_logs_.count(key) == 1);
         pending_logs_.erase(key);
@@ -253,10 +253,10 @@ class LogManager {
     }
   }
 
-  boost::thread thread_;
-  boost::thread bench_thread_;
-  boost::mutex lock_;
-  boost::condition_variable cond_;
+  std::thread thread_;
+  std::thread bench_thread_;
+  std::mutex lock_;
+  std::condition_variable cond_;
   std::map<std::pair<std::string, std::string>, LogManager::Log > logs_;
   std::set<std::pair<std::string, std::string> > pending_logs_;
 };
@@ -387,15 +387,14 @@ class Server {
   }
 
   void run() {
-    std::vector<boost::shared_ptr<boost::thread> > threads;
+    std::vector<std::thread> threads;
     for (std::size_t i = 0; i < nthreads_; i++) {
-      boost::shared_ptr<boost::thread> thread(new boost::thread(
-            boost::bind(&boost::asio::io_service::run, &io_service_)));
-      threads.push_back(thread);
+      std::thread thread([&]{ io_service_.run(); });
+      threads.push_back(std::move(thread));
     }
 
     for (std::size_t i = 0; i < threads.size(); ++i)
-      threads[i]->join();
+      threads[i].join();
   }
 
  private:

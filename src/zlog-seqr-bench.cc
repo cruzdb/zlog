@@ -3,7 +3,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/program_options.hpp>
-#include <boost/thread/thread.hpp>
+#include <thread>
 #include <rados/librados.hpp>
 #include "libzlog.h"
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
   }
   logname << ".log";
 
-  boost::thread_group threads;
+  std::vector<std::thread> threads;
 
   for (int i = 0; i < num_threads; i++) {
     zlog::SeqrClient *client = new zlog::SeqrClient(server.c_str(), port.c_str());
@@ -86,11 +86,12 @@ int main(int argc, char **argv)
     zlog::Log *log = new zlog::Log();
     ret = zlog::Log::OpenOrCreate(ioctx, logname.str(), width, client, *log);
     assert(ret == 0);
-    boost::thread *t = new boost::thread(client_thread, log, check_tail);
-    threads.add_thread(t);
+    std::thread t(client_thread, log, check_tail);
+    threads.push_back(std::move(t));
   }
 
-  threads.join_all();
+  for (auto it = threads.begin(); it != threads.end(); it++)
+    it->join();
 
   return 0;
 }

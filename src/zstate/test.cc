@@ -4,7 +4,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/thread/thread.hpp>
+#include <thread>
 #include <rados/librados.hpp>
 #include <gtest/gtest.h>
 #include "../../zstate/objects/register.h"
@@ -122,13 +122,14 @@ TEST(Register, MultiThreaded) {
   zlog::Log log;
   get_log(ioctx, log, log_name, &client);
 
-  boost::thread_group threads;
+  std::vector<std::thread> threads;
   for (int i = 0; i < 3; i++) {
-    boost::thread *t = new boost::thread(thrash_log, &rados, pool_name, log_name);
-    threads.add_thread(t);
+    std::thread t(thrash_log, &rados, pool_name, log_name);
+    threads.push_back(std::move(t));
   }
 
-  threads.join_all();
+  for (auto it = threads.begin(); it != threads.end(); it++)
+    it->join();
 
   Register reg(log);
 
