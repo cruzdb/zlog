@@ -10,11 +10,13 @@
 
 namespace po = boost::program_options;
 
-//#define VERIFY_IOS
+#define VERIFY_IOS
+#define SLOPPY_SEQ
 
 struct AioState {
   zlog::Log *log;
-  ceph::bufferlist bl;
+  ceph::bufferlist append_bl;
+  ceph::bufferlist read_bl;
   zlog::Log::AioCompletion *c;
   uint64_t position;
 };
@@ -24,33 +26,48 @@ static std::mutex io_lock;
 static std::atomic<uint64_t> outstanding_ios;
 static std::atomic<uint64_t> ios_completed;
 
-static void safe_cb(librados::completion_t cb, void *arg)
+#ifdef VERIFY_IOS
+static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
+    void *arg)
 {
   AioState *s = (AioState*)arg;
+
+  assert(s->c->get_return_value() == 0);
+  s->c->release();
+
+  assert(s->read_bl == s->append_bl);
+  int sum1 = 0, sum2 = 0;
+  for (unsigned i = 0; i < s->read_bl.length(); i++) {
+    sum1 += (int)s->read_bl[i];
+    sum2 += (int)s->append_bl[i];
+  }
+  assert(sum1 == sum2);
+
+  delete s;
+}
+#endif
+
+static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
+    void *arg)
+{
+  AioState *s = (AioState*)arg;
+  zlog::Log *log = s->log;
 
   ios_completed++;
   outstanding_ios--;
   io_cond.notify_one();
 
   assert(s->c->get_return_value() == 0);
-  uint64_t position = s->position;
-  ceph::bufferlist bl = s->bl;
-  zlog::Log *log = s->log;
-
   s->c->release();
-  delete s;
+  s->c = NULL;
 
 #ifdef VERIFY_IOS
-  ceph::bufferlist bl2;
-  int ret = log->Read(position, bl2);
+  assert(!(s->append_bl == s->read_bl));
+  s->c = zlog::Log::aio_create_completion(s, verify_append_cb);
+  int ret = log->AioRead(s->position, s->c, &s->read_bl);
   assert(ret == 0);
-  assert(bl == bl2);
-  int sum1 = 0, sum2 = 0;
-  for (unsigned i = 0; i < bl.length(); i++) {
-    sum1 += (int)bl[i];
-    sum2 += (int)bl2[i];
-  }
-  assert(sum1 == sum2);
+#else
+  delete s;
 #endif
 }
 
@@ -95,7 +112,7 @@ class FakeSeqrClient : public zlog::SeqrClient {
       return -ERANGE;
 
     if (next) {
-#ifdef VERIFY_IOS
+#ifdef SLOPPY_SEQ
       if (seq_ > 100 && seq_ % 10 == 0) {
         *position = seq_ / 2;
         seq_++;
@@ -211,12 +228,12 @@ int main(int argc, char **argv)
         iobuf[i] = (char)rand();
       }
 
-      state->bl.append(iobuf, iosize);
+      state->append_bl.append(iobuf, iosize);
       state->log = &log;
 
-      state->c = zlog::Log::aio_create_completion(state, safe_cb);
+      state->c = zlog::Log::aio_create_completion(state, handle_append_cb);
       assert(state->c);
-      ret = log.AioAppend(state->c, state->bl, &state->position);
+      ret = log.AioAppend(state->c, state->append_bl, &state->position);
       assert(ret == 0);
       outstanding_ios++;
     }
