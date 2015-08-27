@@ -62,7 +62,8 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
   s->c = NULL;
 
 #ifdef VERIFY_IOS
-  assert(!(s->append_bl == s->read_bl));
+  if (s->append_bl.length() > 0)
+    assert(!(s->append_bl == s->read_bl));
   s->c = zlog::Log::aio_create_completion(s, verify_append_cb);
   int ret = log->AioRead(s->position, s->c, &s->read_bl);
   assert(ret == 0);
