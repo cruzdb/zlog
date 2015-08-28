@@ -47,6 +47,50 @@ log.Read(pos, bl_out);
 assert(bl_in == bl_out);
 ```
 
+There is also support for asynchronous log operations. First create a new `Log::AioCompletion` object and then call `Log::AioAppend` to initiate the operation.
+
+```c++
+ceph::bufferlist bl; // data to append
+uint64_t position;
+Log::AioCompletion *c = Log::aio_create_completion();
+log.AioAppend(c, bl, &position);
+```
+
+Then you can wait on the append to complete and verify success.
+
+```c++
+c->wait_for_complete();
+assert(c->get_return_value() == 0); // success
+std::cout << position << std::endl;
+c->release(); // clean-up
+```
+
+Rather than waiting on the operation to complete, a callback can be specified when creating the completion object. We use an `AioState` object to keep track of the context. The callback, `aio_cb` is shown below.
+
+```c++
+struct AioState {
+  Log::AioCompletion *c;
+  uint64_t position;
+}
+
+AioState *s = new AioState;
+ceph::bufferlist bl; // data to append
+s->c = Log::aio_create_completion(s, aio_cb);
+log.AioAppend(c, bl, &s->position);
+```
+
+In the handler we print out the final position contained in the context and free up resources.
+
+```c++
+static void aio_cb(AioCompletion::completion_t cb, void *arg)
+{
+  AioState *s = (AioState*)arg;
+  std::cout << s->position << std::endl;
+  s->c->release();
+  delete s;
+}
+```
+
 ## Build and Install
 
 ```bash
