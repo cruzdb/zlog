@@ -5,6 +5,8 @@
 
 namespace zlog {
 
+extern void aio_safe_cb(librados::completion_t cb, void *arg);
+
 class Log {
  public:
   Log() {}
