@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <chrono>
 #include <atomic>
+#include <thread>
 #include <random>
 #include <rados/librados.hpp>
 #include "libzlog.h"
@@ -35,6 +36,35 @@ static std::atomic<uint64_t> latency_ms;
 static volatile int stop = 0;
 static void sigint_handler(int sig) {
   stop = 1;
+}
+
+static void report()
+{
+  while (!stop) {
+    auto start = std::chrono::steady_clock::now();
+    uint64_t ios_completed_start = ios_completed;
+    uint64_t latency_ms_start = latency_ms;
+
+    sleep(5);
+    if (stop)
+      break;
+
+    auto end = std::chrono::steady_clock::now();
+    uint64_t ios_completed_end = ios_completed;
+    uint64_t latency_ms_end = latency_ms;
+
+    auto diff = std::chrono::duration_cast<
+        std::chrono::duration<double>>(end - start);
+
+    double ios_per_sec = (double)(ios_completed_end - ios_completed_start) / diff.count();
+    double avg_ms_lat = (double)(latency_ms_end - latency_ms_start) /
+      (double)(ios_completed_end - ios_completed_start);
+
+    std::cout << "period: " << diff.count() <<
+      " total_iops: " << ios_completed_total <<
+      " iops: " << ios_per_sec <<
+      " avg_lat_ms: " << avg_ms_lat << std::endl;
+  }
 }
 
 #ifdef VERIFY_IOS
@@ -283,25 +313,9 @@ int main(int argc, char **argv)
 
   char iobuf[iosize];
 
-  auto start = std::chrono::steady_clock::now();
-  for (;;) {
-    uint64_t ios_completed_end = ios_completed;
-    uint64_t latency_ms_end = latency_ms;
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> diff = std::chrono::duration_cast<
-      std::chrono::duration<double>>(end - start);
-    double secs = diff.count();
-    if (secs > 5) {
-      double ios_per_sec = (double)ios_completed_end / secs;
-      double avg_ms_lat = (double)latency_ms_end / (double)ios_completed_end;
-      std::cout << "total_iops: " << ios_completed_total <<
-        " iops: " << ios_per_sec <<
-        " avg_lat_ms: " << avg_ms_lat << std::endl;
-      ios_completed = 0;
-      latency_ms = 0;
-      start = std::chrono::steady_clock::now();
-    }
+  std::thread reporting_thread(report);
 
+  for (;;) {
     while (outstanding_ios < qdepth) {
 
       AioState *state = new AioState;
@@ -345,6 +359,8 @@ int main(int argc, char **argv)
       break;
     sleep(1);
   }
+
+  reporting_thread.join();
 
   return 0;
 }
