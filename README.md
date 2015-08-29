@@ -65,7 +65,7 @@ std::cout << position << std::endl;
 c->release(); // clean-up
 ```
 
-Rather than waiting on the operation to complete, a callback can be specified when creating the completion object. We use an `AioState` object to keep track of the context. The callback, `aio_cb` is shown below.
+Rather than waiting on the operation to complete, a callback can be specified when creating the completion object. We use an `AioState` object to keep track of the context. The callback, `aio_cb`, is shown below.
 
 ```c++
 struct AioState {
