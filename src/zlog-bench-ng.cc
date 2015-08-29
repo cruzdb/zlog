@@ -20,12 +20,14 @@ struct AioState {
   ceph::bufferlist read_bl;
   zlog::Log::AioCompletion *c;
   uint64_t position;
+  std::chrono::time_point<std::chrono::steady_clock> submitted;
 };
 
 static std::condition_variable io_cond;
 static std::mutex io_lock;
 static std::atomic<uint64_t> outstanding_ios;
 static std::atomic<uint64_t> ios_completed;
+static std::atomic<uint64_t> latency_ms;
 
 #ifdef VERIFY_IOS
 static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
@@ -52,6 +54,7 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
     void *arg)
 {
   AioState *s = (AioState*)arg;
+  auto completed = std::chrono::steady_clock::now();
   zlog::Log *log = s->log;
 
   ios_completed++;
@@ -61,6 +64,10 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
   assert(s->c->get_return_value() == 0);
   s->c->release();
   s->c = NULL;
+
+  auto diff_ms = std::chrono::duration_cast<
+    std::chrono::milliseconds>(completed - s->submitted);
+  latency_ms += diff_ms.count();
 
 #ifdef VERIFY_IOS
   if (s->append_bl.length() > 0)
@@ -205,20 +212,25 @@ int main(int argc, char **argv)
 
   ios_completed = 0;
   outstanding_ios = 0;
+  latency_ms = 0;
 
   char iobuf[iosize];
 
   auto start = std::chrono::steady_clock::now();
   for (;;) {
     uint64_t ios_completed_end = ios_completed;
+    uint64_t latency_ms_end = latency_ms;
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> diff = std::chrono::duration_cast<
       std::chrono::duration<double>>(end - start);
     double secs = diff.count();
     if (secs > 5) {
       double ios_per_sec = (double)ios_completed_end / secs;
-      std::cout << ios_per_sec << std::endl;
+      double avg_ms_lat = (double)latency_ms_end / (double)ios_completed_end;
+      std::cout << "iops: " << ios_per_sec << 
+        " avg_lat_ms: " << avg_ms_lat << std::endl;
       ios_completed = 0;
+      latency_ms = 0;
       start = std::chrono::steady_clock::now();
     }
 
@@ -235,6 +247,7 @@ int main(int argc, char **argv)
 
       state->c = zlog::Log::aio_create_completion(state, handle_append_cb);
       assert(state->c);
+      state->submitted = std::chrono::steady_clock::now();
       ret = log.AioAppend(state->c, state->append_bl, &state->position);
       assert(ret == 0);
       outstanding_ios++;
