@@ -27,6 +27,7 @@ static std::condition_variable io_cond;
 static std::mutex io_lock;
 static std::atomic<uint64_t> outstanding_ios;
 static std::atomic<uint64_t> ios_completed;
+static std::atomic<uint64_t> ios_completed_total;
 static std::atomic<uint64_t> latency_ms;
 
 #ifdef VERIFY_IOS
@@ -58,6 +59,7 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
   zlog::Log *log = s->log;
 
   ios_completed++;
+  ios_completed_total++;
   outstanding_ios--;
   io_cond.notify_one();
 
@@ -211,6 +213,7 @@ int main(int argc, char **argv)
   std::unique_lock<std::mutex> lock(io_lock);
 
   ios_completed = 0;
+  ios_completed_total = 0;
   outstanding_ios = 0;
   latency_ms = 0;
 
@@ -227,7 +230,8 @@ int main(int argc, char **argv)
     if (secs > 5) {
       double ios_per_sec = (double)ios_completed_end / secs;
       double avg_ms_lat = (double)latency_ms_end / (double)ios_completed_end;
-      std::cout << "iops: " << ios_per_sec << 
+      std::cout << "total_iops: " << ios_completed_total <<
+        " iops: " << ios_per_sec <<
         " avg_lat_ms: " << avg_ms_lat << std::endl;
       ios_completed = 0;
       latency_ms = 0;
