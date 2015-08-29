@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <chrono>
 #include <atomic>
+#include <random>
 #include <rados/librados.hpp>
 #include "libzlog.h"
 
@@ -88,6 +89,34 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
 #endif
 }
 
+static void handle_read_cb(zlog::Log::AioCompletion::completion_t cb,
+    void *arg)
+{
+  AioState *s = (AioState*)arg;
+  auto completed = std::chrono::steady_clock::now();
+
+  ios_completed++;
+  ios_completed_total++;
+  outstanding_ios--;
+  io_cond.notify_one();
+
+  int op_rv = s->c->get_return_value();
+  if (op_rv) {
+    std::cout << op_rv << " " << s->position << std::endl;
+  }
+  assert(s->c->get_return_value() == 0);
+  assert(s->read_bl.length() > 0);
+
+  s->c->release();
+  s->c = NULL;
+
+  auto diff_ms = std::chrono::duration_cast<
+    std::chrono::milliseconds>(completed - s->submitted);
+  latency_ms += diff_ms.count();
+
+  delete s;
+}
+
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
   FakeSeqrClient(const std::string& name) :
@@ -160,6 +189,7 @@ int main(int argc, char **argv)
   std::string logname_req;
   int qdepth;
   int iosize;
+  bool read_mode;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -168,6 +198,7 @@ int main(int argc, char **argv)
     ("width", po::value<int>(&width)->required(), "Width")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
     ("iosize", po::value<int>(&iosize)->default_value(0), "IO Size")
+    ("read", po::value<bool>(&read_mode)->default_value(false), "Read mode")
   ;
 
   po::variables_map vm;
@@ -175,6 +206,9 @@ int main(int argc, char **argv)
   po::notify(vm);
 
   assert(qdepth > 0);
+
+  if (read_mode)
+    assert(logname_req.length());
 
   // connect to rados
   librados::Rados cluster;
@@ -218,6 +252,28 @@ int main(int argc, char **argv)
   ceph::bufferlist bl;
   log.Append(bl);
 
+  /*
+   * For read mode we look up the current tail and then issue random reads
+   * within the range of the log.
+   */
+  uint64_t tail = 0;
+  if (read_mode) {
+    ret = log.CheckTail(&tail, false);
+    assert(!ret);
+    // teardown/setup is sloppy, so we trim off a bit so we don't hit any
+    // unwritten entries.
+    std::cout << "read mode tail: " << tail << std::endl;
+    tail -= 50;
+    assert(tail > 0);
+  }
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  // skip the front of the log if there was some problems getting this setup
+  // and those entries were skipped or filled.
+  std::uniform_int_distribution<unsigned long long> dis(50, tail);
+  if (read_mode)
+    std::cout << "tail generation: " << dis.min() << " .. " << dis.max() << std::endl;
+
   std::unique_lock<std::mutex> lock(io_lock);
 
   ios_completed = 0;
@@ -250,18 +306,27 @@ int main(int argc, char **argv)
 
       AioState *state = new AioState;
 
-      for (unsigned i = 0; i < iosize; i++) {
-        iobuf[i] = (char)rand();
-      }
-
-      state->append_bl.append(iobuf, iosize);
       state->log = &log;
 
-      state->c = zlog::Log::aio_create_completion(state, handle_append_cb);
-      assert(state->c);
-      state->submitted = std::chrono::steady_clock::now();
-      ret = log.AioAppend(state->c, state->append_bl, &state->position);
-      assert(ret == 0);
+      if (read_mode) {
+        state->position = dis(gen);
+        state->c = zlog::Log::aio_create_completion(state, handle_read_cb);
+        assert(state->c);
+        state->submitted = std::chrono::steady_clock::now();
+        ret = log.AioRead(state->position, state->c, &state->read_bl);
+        assert(ret == 0);
+      } else {
+        state->c = zlog::Log::aio_create_completion(state, handle_append_cb);
+        assert(state->c);
+        for (unsigned i = 0; i < iosize; i++) {
+          iobuf[i] = (char)rand();
+        }
+        state->append_bl.append(iobuf, iosize);
+        state->submitted = std::chrono::steady_clock::now();
+        ret = log.AioAppend(state->c, state->append_bl, &state->position);
+        assert(ret == 0);
+      }
+
       outstanding_ios++;
     }
     io_cond.wait(lock, [&]{ return outstanding_ios < qdepth; });
