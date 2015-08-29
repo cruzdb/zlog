@@ -31,7 +31,7 @@ static std::mutex io_lock;
 static std::atomic<uint64_t> outstanding_ios;
 static std::atomic<uint64_t> ios_completed;
 static std::atomic<uint64_t> ios_completed_total;
-static std::atomic<uint64_t> latency_ms;
+static std::atomic<uint64_t> latency_us;
 
 static volatile int stop = 0;
 static void sigint_handler(int sig) {
@@ -43,7 +43,7 @@ static void report()
   while (!stop) {
     auto start = std::chrono::steady_clock::now();
     uint64_t ios_completed_start = ios_completed;
-    uint64_t latency_ms_start = latency_ms;
+    uint64_t latency_us_start = latency_us;
 
     sleep(5);
     if (stop)
@@ -51,14 +51,15 @@ static void report()
 
     auto end = std::chrono::steady_clock::now();
     uint64_t ios_completed_end = ios_completed;
-    uint64_t latency_ms_end = latency_ms;
+    uint64_t latency_us_end = latency_us;
 
     auto diff = std::chrono::duration_cast<
         std::chrono::duration<double>>(end - start);
 
     double ios_per_sec = (double)(ios_completed_end - ios_completed_start) / diff.count();
-    double avg_ms_lat = (double)(latency_ms_end - latency_ms_start) /
+    double avg_us_lat = (double)(latency_us_end - latency_us_start) /
       (double)(ios_completed_end - ios_completed_start);
+    double avg_ms_lat = avg_us_lat / (double)1000.0;
 
     std::cout << "period: " << diff.count() <<
       " total_iops: " << ios_completed_total <<
@@ -104,9 +105,9 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
   s->c->release();
   s->c = NULL;
 
-  auto diff_ms = std::chrono::duration_cast<
-    std::chrono::milliseconds>(completed - s->submitted);
-  latency_ms += diff_ms.count();
+  auto diff_us = std::chrono::duration_cast<
+    std::chrono::microseconds>(completed - s->submitted);
+  latency_us += diff_us.count();
 
 #ifdef VERIFY_IOS
   if (s->append_bl.length() > 0)
