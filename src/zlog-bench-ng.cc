@@ -4,6 +4,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/program_options.hpp>
 #include <condition_variable>
+#include <signal.h>
 #include <chrono>
 #include <atomic>
 #include <rados/librados.hpp>
@@ -29,6 +30,11 @@ static std::atomic<uint64_t> outstanding_ios;
 static std::atomic<uint64_t> ios_completed;
 static std::atomic<uint64_t> ios_completed_total;
 static std::atomic<uint64_t> latency_ms;
+
+static volatile int stop = 0;
+static void sigint_handler(int sig) {
+  stop = 1;
+}
 
 #ifdef VERIFY_IOS
 static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
@@ -183,6 +189,8 @@ int main(int argc, char **argv)
   ret = cluster.ioctx_create(pool.c_str(), ioctx);
   assert(ret == 0);
 
+  signal(SIGINT, sigint_handler);
+
   // build a log name
   std::string logname;
   {
@@ -257,6 +265,20 @@ int main(int argc, char **argv)
       outstanding_ios++;
     }
     io_cond.wait(lock, [&]{ return outstanding_ios < qdepth; });
+
+    if (stop)
+      break;
+  }
+
+  // draining the ios is useful for running the read workload because
+  // otherwise there is a section near the tail of the log that has unwritten
+  // entries that would otherwise need to be handled in some way when they
+  // were read.
+  while (1) {
+    std::cout << "draining ios: " << outstanding_ios << " remaining" << std::endl;
+    if (outstanding_ios == 0)
+      break;
+    sleep(1);
   }
 
   return 0;
