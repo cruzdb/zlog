@@ -11,8 +11,8 @@
 
 namespace po = boost::program_options;
 
-#define VERIFY_IOS
-#define SLOPPY_SEQ
+//#define VERIFY_IOS
+//#define SLOPPY_SEQ
 
 struct AioState {
   zlog::Log *log;
