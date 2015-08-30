@@ -6,6 +6,7 @@
 #include <boost/program_options.hpp>
 #include <condition_variable>
 #include <thread>
+#include <atomic>
 #include <rados/librados.hpp>
 #include "libzlog.h"
 #include "zlog.pb.h"
