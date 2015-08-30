@@ -26,19 +26,36 @@ static uint64_t get_time(void)
 
 class Sequence {
  public:
-  Sequence() : seq_(0) {}
-  Sequence(uint64_t seq) : seq_(seq) {}
+  Sequence(uint64_t seq, std::string pool,
+      std::string name, uint64_t epoch) :
+    seq_(seq), pool_(pool), name_(name),
+    epoch_(epoch)
+  {}
 
   uint64_t read() {
     return seq_;
   }
 
-  void inc() {
-    seq_++;
+  uint64_t next() {
+    uint64_t prev = seq_.fetch_add(1);
+    return prev + 1;
+  }
+
+  inline int match(const std::string& pool,
+      const std::string& name,
+      const uint64_t epoch) const {
+    if (pool != pool_ || name != name_)
+      return -EINVAL;
+    if (epoch < epoch_)
+      return -ERANGE;
+    return 0;
   }
 
  private:
-  uint64_t seq_;
+  std::atomic<uint64_t> seq_;
+  std::string pool_;
+  std::string name_;
+  uint64_t epoch_;
 };
 
 class LogManager {
@@ -53,7 +70,7 @@ class LogManager {
    * Read and optionally increment the log sequence number.
    */
   uint64_t ReadSequence(const std::string& pool, const std::string& name,
-      uint64_t epoch, bool increment, uint64_t *seq) {
+      uint64_t epoch, bool increment, uint64_t *seq, Sequence **cached_seq) {
 
     std::unique_lock<std::mutex> g(lock_);
 
@@ -69,9 +86,11 @@ class LogManager {
       return -ERANGE;
 
     if (increment)
-      it->second.seq.inc();
+      *seq = it->second.seq->next();
+    else
+      *seq = it->second.seq->read();
 
-    *seq = it->second.seq.read();
+    *cached_seq = it->second.seq;
 
     return 0;
   }
@@ -79,8 +98,12 @@ class LogManager {
  private:
   struct Log {
     Log() {}
-    Log(uint64_t pos, uint64_t epoch) : seq(pos), epoch(epoch) {}
-    Sequence seq;
+    Log(uint64_t pos, uint64_t epoch,
+        std::string pool, std::string name) :
+      seq(new Sequence(pos, pool, name, epoch)), epoch(epoch)
+    {}
+
+    Sequence *seq;
     uint64_t epoch;
   };
 
@@ -175,6 +198,7 @@ class LogManager {
     for (;;) {
       uint64_t start_ns;
       uint64_t start_seq;
+      uint64_t num_logs_start;
 
       // starting state of all the current sequences
       {
@@ -185,8 +209,10 @@ class LogManager {
 
         std::map<std::pair<std::string, std::string>, LogManager::Log >::iterator it;
         for (it = logs_.begin(); it != logs_.end(); it++) {
-          start_seq += it->second.seq.read();
+          start_seq += it->second.seq->read();
         }
+
+        num_logs_start = logs_.size();
       }
 
       assert(report_sec > 0);
@@ -206,14 +232,17 @@ class LogManager {
 
         std::map<std::pair<std::string, std::string>, LogManager::Log >::iterator it;
         for (it = logs_.begin(); it != logs_.end(); it++) {
-          end_seq += it->second.seq.read();
+          end_seq += it->second.seq->read();
         }
       }
 
       uint64_t elapsed_ns = end_ns - start_ns;
       uint64_t total_seqs = end_seq - start_seq;
       uint64_t rate = (total_seqs * 1000000000ULL) / elapsed_ns;
-      std::cout << "seqr rate = " << rate << " seqs/sec" << std::endl;
+      if (num_logs_start == num_logs)
+        std::cout << "seqr rate = " << rate << " seqs/sec" << std::endl;
+      else
+        std::cout << "seqr rate = " << rate << " seqs/sec (warn: log count change)" << std::endl;
     }
   }
 
@@ -247,7 +276,7 @@ class LogManager {
         assert(pending_logs_.count(key) == 1);
         pending_logs_.erase(key);
         assert(logs_.count(key) == 0);
-        Log log(position, epoch);
+        Log log(position, epoch, pool, name);
         logs_[key] = log;
       }
     }
@@ -267,7 +296,9 @@ class Session {
  public:
   Session(boost::asio::io_service& io_service)
     : socket_(io_service)
-  {}
+  {
+    cached_seq = NULL;
+  }
 
   boost::asio::ip::tcp::socket& socket() {
     return socket_;
@@ -327,8 +358,43 @@ class Session {
 
     uint64_t seq;
 
-    int ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
-        req_.epoch(), req_.next(), &seq);
+    /*
+     * Try to do a fast sequencer read. The basic idea is that for a
+     * particular session a client will likely be referencing the same log
+     * repeatedly.
+     *
+     * 1. if we haven't cached a sequencer then do a slow lookup which will
+     * search for it in an index and return a pointer to the sequencer object.
+     *
+     * 2. If we have a cached sequencer object then check to see if it is for
+     * the correct pool/name/epoch. If so, read directly.
+     *
+     * 3. Otherwise, do a slow lookup and update the cached sequencer.
+     *
+     * Important:
+     *  - This is currently safe because once a sequencer object is created
+     *  it is never modified. But for instance we might want to change a
+     *  configuraiton and update the epoch. We may also need to add a
+     *  generation number and reference counting to deal with logs that come
+     *  and go. Currently they are created and never deleted.
+     */
+    int ret;
+    if (cached_seq) {
+      ret = cached_seq->match(req_.pool(), req_.name(), req_.epoch());
+      if (!ret) {
+        if (req_.next())
+          seq = cached_seq->next();
+        else
+          seq = cached_seq->read();
+      } else {
+        ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
+            req_.epoch(), req_.next(), &seq, &cached_seq);
+      }
+    } else {
+      ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
+          req_.epoch(), req_.next(), &seq, &cached_seq);
+    }
+
     if (ret == -EAGAIN)
       reply_.set_status(zlog_proto::MSeqReply::INIT_LOG);
     else if (ret == -ERANGE)
@@ -372,6 +438,8 @@ class Session {
 
   zlog_proto::MSeqRequest req_;
   zlog_proto::MSeqReply reply_;
+
+  Sequence *cached_seq;
 };
 
 class Server {
