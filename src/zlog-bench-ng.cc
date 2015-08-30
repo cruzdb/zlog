@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <signal.h>
 #include <chrono>
+#include <fstream>
 #include <atomic>
 #include <thread>
 #include <random>
@@ -33,9 +34,26 @@ static std::atomic<uint64_t> ios_completed;
 static std::atomic<uint64_t> ios_completed_total;
 static std::atomic<uint64_t> latency_us;
 
+static uint64_t start_realtime_ns;
+static uint64_t start_monotonic_ns;
+static std::vector<std::pair<uint64_t, uint64_t>> latencies;
+
 static volatile int stop = 0;
 static void sigint_handler(int sig) {
   stop = 1;
+}
+
+static inline uint64_t __getns(clockid_t clock)
+{
+  struct timespec ts;
+  int ret = clock_gettime(clock, &ts);
+  assert(ret == 0);
+  return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
+}
+
+static inline uint64_t getns()
+{
+  return __getns(CLOCK_MONOTONIC);
 }
 
 static void report()
@@ -224,6 +242,8 @@ int main(int argc, char **argv)
   bool sync;
   std::string server;
   std::string port;
+  bool track_latency;
+  std::string outfile;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -236,6 +256,8 @@ int main(int argc, char **argv)
     ("sync", po::value<bool>(&sync)->default_value(false), "Sync mode")
     ("server", po::value<std::string>(&server)->required(), "Server host")
     ("port", po::value<std::string>(&port)->required(), "Server port")
+    ("latency", po::value<bool>(&track_latency)->default_value(false), "Track latencies")
+    ("outfile", po::value<std::string>(&outfile)->default_value(""), "Output file")
   ;
 
   po::variables_map vm;
@@ -328,19 +350,27 @@ int main(int argc, char **argv)
   outstanding_ios = 0;
   latency_us = 0;
 
+  if (track_latency)
+    latencies.reserve(1<<20);
+
   char iobuf[iosize];
 
   std::thread reporting_thread(report);
+
+  start_monotonic_ns = getns();
+  start_realtime_ns = __getns(CLOCK_REALTIME);
 
   if (sync) {
     std::cout << "sync mode: ignoring qdepth (qdepth=1)" << std::endl;
 
     while (!stop) {
-      auto start = std::chrono::steady_clock::now();
+      uint64_t start_ns, latency_ns;
       if (read_mode) {
         uint64_t pos = dis(gen);
         ceph::bufferlist bl;
+        start_ns = getns();
         int ret = log.Read(pos, bl);
+        latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(bl.length() > 0);
       } else {
@@ -350,15 +380,15 @@ int main(int argc, char **argv)
         uint64_t pos = 0;
         ceph::bufferlist bl;
         bl.append(iobuf, iosize);
+        start_ns = getns();
         int ret = log.Append(bl, &pos);
+        latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(pos > 0);
       }
-      auto end = std::chrono::steady_clock::now();
-      auto diff_us = std::chrono::duration_cast<
-        std::chrono::microseconds>(end - start);
-      latency_us += diff_us.count();
-      //std::cout << diff_us.count() << std::endl;
+      if (track_latency)
+        latencies.push_back(std::make_pair(start_ns, latency_ns));
+      latency_us += (latency_ns / 1000);
       ios_completed++;
       ios_completed_total++;
     }
@@ -408,6 +438,28 @@ int main(int argc, char **argv)
   }
 
   reporting_thread.join();
+
+  if (track_latency) {
+    if (outfile.length()) {
+      char hostname[1024];
+      int ret = gethostname(hostname, sizeof(hostname));
+      assert(ret == 0);
+      std::stringstream ss;
+      ss << outfile << "." << hostname << "." << getpid() << ".txt";
+      std::ofstream out;
+      out.open(ss.str(), std::ios::trunc);
+      out << "init: " << start_realtime_ns << " " << start_monotonic_ns << std::endl;
+      for (auto it = latencies.begin(); it != latencies.end(); it++) {
+        out << it->first << " " << it->second << std::endl;
+      }
+      out.close();
+    } else {
+      std::cout << "init: " << start_realtime_ns << " " << start_monotonic_ns << std::endl;
+      for (auto it = latencies.begin(); it != latencies.end(); it++) {
+        std::cout << it->first << " " << it->second << std::endl;
+      }
+    }
+  }
 
   return 0;
 }
