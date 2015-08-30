@@ -222,6 +222,8 @@ int main(int argc, char **argv)
   int iosize;
   bool read_mode;
   bool sync;
+  std::string server;
+  std::string port;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -232,6 +234,8 @@ int main(int argc, char **argv)
     ("iosize", po::value<int>(&iosize)->default_value(0), "IO Size")
     ("read", po::value<bool>(&read_mode)->default_value(false), "Read mode")
     ("sync", po::value<bool>(&sync)->default_value(false), "Sync mode")
+    ("server", po::value<std::string>(&server)->required(), "Server host")
+    ("port", po::value<std::string>(&port)->required(), "Server port")
   ;
 
   po::variables_map vm;
@@ -273,11 +277,21 @@ int main(int argc, char **argv)
   }
 
   // setup log instance
+  zlog::SeqrClient *client;
+  if (server.length()) {
+    client = new zlog::SeqrClient(server.c_str(), port.c_str());
+    client->Connect();
+  } else {
+    client = new FakeSeqrClient(logname);
+  }
   zlog::Log log;
-  FakeSeqrClient client(logname);
-  ret = zlog::Log::OpenOrCreate(ioctx, logname, width, &client, log);
-  client.Init(ioctx);
+  ret = zlog::Log::OpenOrCreate(ioctx, logname, width, client, log);
   assert(ret == 0);
+
+  if (server.length() == 0) {
+    FakeSeqrClient *c = static_cast<FakeSeqrClient*>(client);
+    c->Init(ioctx);
+  }
 
   // this is just a little hack that forces the epoch to be refreshed in the
   // log instance. otherwise when we blast out a bunch of async requests they
