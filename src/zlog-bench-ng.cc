@@ -244,6 +244,7 @@ int main(int argc, char **argv)
   std::string port;
   bool track_latency;
   std::string outfile;
+  bool testseqr;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -258,6 +259,7 @@ int main(int argc, char **argv)
     ("port", po::value<std::string>(&port)->required(), "Server port")
     ("latency", po::value<bool>(&track_latency)->default_value(false), "Track latencies")
     ("outfile", po::value<std::string>(&outfile)->default_value(""), "Output file")
+    ("testseqr", po::value<bool>(&testseqr)->default_value(false), "Measure seqr throughput")
   ;
 
   po::variables_map vm;
@@ -351,7 +353,7 @@ int main(int argc, char **argv)
   latency_us = 0;
 
   if (track_latency)
-    latencies.reserve(1<<20);
+    latencies.reserve(1<<22);
 
   char iobuf[iosize];
 
@@ -360,7 +362,21 @@ int main(int argc, char **argv)
   start_monotonic_ns = getns();
   start_realtime_ns = __getns(CLOCK_REALTIME);
 
-  if (sync) {
+  if (testseqr) {
+    std::cout << "seqr throughput mode" << std::endl;
+    while (!stop) {
+      uint64_t pos;
+      uint64_t start_ns = getns();
+      int ret = log.CheckTail(&pos, true);
+      uint64_t latency_ns = getns() - start_ns;
+      assert(ret == 0);
+      if (track_latency)
+        latencies.push_back(std::make_pair(start_ns, latency_ns));
+      latency_us += (latency_ns / 1000);
+      ios_completed++;
+      ios_completed_total++;
+    }
+  } else if (sync) {
     std::cout << "sync mode: ignoring qdepth (qdepth=1)" << std::endl;
 
     while (!stop) {
