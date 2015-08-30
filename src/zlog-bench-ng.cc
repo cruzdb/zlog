@@ -148,45 +148,6 @@ static void handle_read_cb(zlog::Log::AioCompletion::completion_t cb,
   delete s;
 }
 
-static void workload(zlog::Log *log, bool read_mode, uint64_t tail, size_t iosize)
-{
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<unsigned long long> dis(50, tail);
-  if (read_mode)
-    std::cout << "tail generation: " << dis.min() << " .. " << dis.max() << std::endl;
-
-  char iobuf[iosize];
-
-  while (!stop) {
-    auto start = std::chrono::steady_clock::now();
-    if (read_mode) {
-      uint64_t pos = dis(gen);
-      ceph::bufferlist bl;
-      int ret = log->Read(pos, bl);
-      assert(ret == 0);
-      assert(bl.length() > 0);
-    } else {
-      for (unsigned i = 0; i < iosize; i++) {
-        iobuf[i] = (char)rand();
-      }
-      uint64_t pos = 0;
-      ceph::bufferlist bl;
-      bl.append(iobuf, iosize);
-      int ret = log->Append(bl, &pos);
-      assert(ret == 0);
-      assert(pos > 0);
-    }
-    auto end = std::chrono::steady_clock::now();
-    auto diff_us = std::chrono::duration_cast<
-      std::chrono::microseconds>(end - start);
-    latency_us += diff_us.count();
-    //std::cout << diff_us.count() << std::endl;
-    ios_completed++;
-    ios_completed_total++;
-  }
-}
-
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
   FakeSeqrClient(const std::string& name) :
@@ -260,7 +221,7 @@ int main(int argc, char **argv)
   int qdepth;
   int iosize;
   bool read_mode;
-  bool threaded;
+  bool sync;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -270,7 +231,7 @@ int main(int argc, char **argv)
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
     ("iosize", po::value<int>(&iosize)->default_value(0), "IO Size")
     ("read", po::value<bool>(&read_mode)->default_value(false), "Read mode")
-    ("threaded", po::value<bool>(&threaded)->default_value(false), "Threaded mode")
+    ("sync", po::value<bool>(&sync)->default_value(false), "Sync mode")
   ;
 
   po::variables_map vm;
@@ -338,6 +299,13 @@ int main(int argc, char **argv)
     tail -= 50;
     assert(tail > 0);
   }
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  // skip the front of the log if there was some problems getting this setup
+  // and those entries were skipped or filled.
+  std::uniform_int_distribution<unsigned long long> dis(50, tail);
+  if (read_mode)
+    std::cout << "tail generation: " << dis.min() << " .. " << dis.max() << std::endl;
 
   std::unique_lock<std::mutex> lock(io_lock);
 
@@ -346,33 +314,46 @@ int main(int argc, char **argv)
   outstanding_ios = 0;
   latency_us = 0;
 
+  char iobuf[iosize];
+
   std::thread reporting_thread(report);
-  std::vector<std::thread> workload_threads;
 
-  if (threaded) {
-    std::cout << "threaded mode" << std::endl;
-    for (unsigned i = 0; i < qdepth; i++) {
-      std::thread t(workload, &log, read_mode, tail, iosize);
-      workload_threads.push_back(std::move(t));
+  if (sync) {
+    std::cout << "sync mode: ignoring qdepth (qdepth=1)" << std::endl;
+
+    while (!stop) {
+      auto start = std::chrono::steady_clock::now();
+      if (read_mode) {
+        uint64_t pos = dis(gen);
+        ceph::bufferlist bl;
+        int ret = log.Read(pos, bl);
+        assert(ret == 0);
+        assert(bl.length() > 0);
+      } else {
+        for (unsigned i = 0; i < iosize; i++) {
+          iobuf[i] = (char)rand();
+        }
+        uint64_t pos = 0;
+        ceph::bufferlist bl;
+        bl.append(iobuf, iosize);
+        int ret = log.Append(bl, &pos);
+        assert(ret == 0);
+        assert(pos > 0);
+      }
+      auto end = std::chrono::steady_clock::now();
+      auto diff_us = std::chrono::duration_cast<
+        std::chrono::microseconds>(end - start);
+      latency_us += diff_us.count();
+      //std::cout << diff_us.count() << std::endl;
+      ios_completed++;
+      ios_completed_total++;
     }
+
   } else {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    // skip the front of the log if there was some problems getting this setup
-    // and those entries were skipped or filled.
-    std::uniform_int_distribution<unsigned long long> dis(50, tail);
-    if (read_mode)
-      std::cout << "tail generation: " << dis.min() << " .. " << dis.max() << std::endl;
-
-    char iobuf[iosize];
-
     for (;;) {
       while (outstanding_ios < qdepth) {
-
         AioState *state = new AioState;
-
         state->log = &log;
-
         if (read_mode) {
           state->position = dis(gen);
           state->c = zlog::Log::aio_create_completion(state, handle_read_cb);
@@ -410,12 +391,6 @@ int main(int argc, char **argv)
         break;
       sleep(1);
     }
-  }
-
-
-  for (auto it = workload_threads.begin();
-       it != workload_threads.end(); it++) {
-    it->join();
   }
 
   reporting_thread.join();
