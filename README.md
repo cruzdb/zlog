@@ -8,7 +8,8 @@ the distributed object storage system that powers Ceph.
 
 More information:
 
-* Design: http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html
+* System Design: http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html
+* Asynchronous API Design: http://noahdesu.github.io/2015/09/04/zlog-async-api.html
 
 This project uses Semantic Versioning (http://semver.org/).
 
