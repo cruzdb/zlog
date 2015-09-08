@@ -166,10 +166,11 @@ just built above. We'll grab this dependency from the Ceph tree we just built
 above and tell `./configure` about them using `CPPFLAGS` and `LDFLAGS`:
 
 ```
-mkdir libcls_zlog_client
-cp /path/to/ceph/src/.libs/libcls_zlog_client* libcls_zlog_client
-cp /path/to/ceph/src/cls/zlog/cls_zlog_client.h libcls_zlog_client
-CPPFLAGS=-Ilibcls_zlog_client LDFLAGS=-Llibcls_zlog_client ./configure
+mkdir -p libcls_zlog_client/include/rados
+mkdir -p libcls_zlog_client/lib
+cp /path/to/ceph/src/.libs/libcls_zlog_client* libcls_zlog_client/lib
+cp /path/to/ceph/src/cls/zlog/cls_zlog_client.h libcls_zlog_client/include/rados
+CPPFLAGS=-Ilibcls_zlog_client/include LDFLAGS=-Llibcls_zlog_client/lib ./configure
 make
 ```
 

@@ -38,7 +38,7 @@ SAVED_LDFLAGS=$LDFLAGS
 LDFLAGS="$LDFLAGS -lcls_zlog_client"
 AC_LINK_IFELSE([
   AC_LANG_PROGRAM(
-    [#include <cls_zlog_client.h>],
+    [#include <rados/cls_zlog_client.h>],
     [void (*p)(librados::ObjectWriteOperation&, uint64_t); p = zlog::cls_zlog_seal;])
   ], [], [AC_MSG_FAILURE([libcls_zlog_client not found])]) 
 LDFLAGS=$SAVED_LDFLAGS

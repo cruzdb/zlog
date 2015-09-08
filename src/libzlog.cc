@@ -3,7 +3,7 @@
 #include <string>
 #include <condition_variable>
 #include <rados/librados.hpp>
-#include <cls_zlog_client.h>
+#include <rados/cls_zlog_client.h>
 #include "libzlog.h"
 #include "zlog.pb.h"
 
