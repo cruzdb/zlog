@@ -31,7 +31,9 @@ before_install:
   
 install:
   - autoreconf -ivf
-  - CPPFLAGS=-I/tmp/ceph/src/cls/zlog LDFLAGS=-L/tmp/ceph/src/.libs ./configure
+  - mkdir -p /tmp/install/rados/
+  - cp /tmp/ceph/src/cls/zlog/cls_zlog_client.h /tmp/install/rados
+  - CPPFLAGS=-I/tmp/install LDFLAGS=-L/tmp/ceph/src/.libs ./configure
   - make
 
 script:
