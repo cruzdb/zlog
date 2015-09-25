@@ -23,6 +23,7 @@ struct AioState {
   ceph::bufferlist append_bl;
   ceph::bufferlist read_bl;
   zlog::Log::AioCompletion *c;
+  librados::AioCompletion *rc; // used by append workload
   uint64_t position;
   std::chrono::time_point<std::chrono::steady_clock> submitted;
 };
@@ -138,6 +139,32 @@ static void handle_append_cb(zlog::Log::AioCompletion::completion_t cb,
 #endif
 }
 
+static void handle_bulk_append_cb(zlog::Log::AioCompletion::completion_t cb,
+    void *arg)
+{
+  AioState *s = (AioState*)arg;
+  auto completed = std::chrono::steady_clock::now();
+
+  ios_completed++;
+  ios_completed_total++;
+  outstanding_ios--;
+  io_cond.notify_one();
+
+  assert(s->rc->get_return_value() == 0);
+  s->rc->release();
+  s->rc = NULL;
+
+  auto diff_us = std::chrono::duration_cast<
+    std::chrono::microseconds>(completed - s->submitted);
+  latency_us += diff_us.count();
+
+#ifdef VERIFY_IOS
+  assert(0);
+#else
+  delete s;
+#endif
+}
+
 static void handle_read_cb(zlog::Log::AioCompletion::completion_t cb,
     void *arg)
 {
@@ -245,6 +272,7 @@ int main(int argc, char **argv)
   bool track_latency;
   std::string outfile;
   bool testseqr;
+  bool append;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -260,6 +288,7 @@ int main(int argc, char **argv)
     ("latency", po::value<bool>(&track_latency)->default_value(false), "Track latencies")
     ("outfile", po::value<std::string>(&outfile)->default_value(""), "Output file")
     ("testseqr", po::value<bool>(&testseqr)->default_value(false), "Measure seqr throughput")
+    ("append", po::value<bool>(&append)->default_value(false), "Append benchmark")
   ;
 
   po::variables_map vm;
@@ -298,6 +327,17 @@ int main(int argc, char **argv)
     }
     ss << ".log";
     logname = ss.str();
+  }
+
+  // the append workload creates @width number of objects and then does a blob
+  // append to the objects.
+  std::vector<std::string> append_oids;
+  if (append) {
+      for (size_t i = 0; i < width; i++) {
+          std::stringstream oid;
+          oid << logname << "." << i;
+          append_oids.push_back(oid.str());
+      }
   }
 
   // setup log instance
@@ -410,6 +450,8 @@ int main(int argc, char **argv)
     }
 
   } else {
+    size_t append_oid_cnt = append_oids.size();
+    size_t append_count = 0; // used to stripe ios in append mode
     for (;;) {
       while (outstanding_ios < qdepth) {
         AioState *state = new AioState;
@@ -421,6 +463,29 @@ int main(int argc, char **argv)
           state->submitted = std::chrono::steady_clock::now();
           ret = log.AioRead(state->position, state->c, &state->read_bl);
           assert(ret == 0);
+        } else if (append) {
+          // this is a simulation where we grab a sequence number and do an
+          // object append to simulate a mapping onto object data rather than
+          // omap.
+          uint64_t pos;
+          ret = log.CheckTail(&pos, true);
+          assert(ret == 0);
+
+          //
+          state->rc = librados::Rados::aio_create_completion(state, NULL, handle_bulk_append_cb);
+          assert(state->rc);
+          for (unsigned i = 0; i < iosize; i++) {
+            iobuf[i] = (char)rand();
+          }
+          state->append_bl.append(iobuf, iosize);
+          state->submitted = std::chrono::steady_clock::now();
+
+          //
+          ret = ioctx.aio_append(append_oids[append_count % append_oid_cnt],
+                  state->rc, state->append_bl, (size_t)iosize);
+          assert(ret == 0);
+
+          append_count++;
         } else {
           state->c = zlog::Log::aio_create_completion(state, handle_append_cb);
           assert(state->c);
