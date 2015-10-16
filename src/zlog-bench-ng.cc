@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <atomic>
 #include <thread>
 #include <random>
