@@ -7,11 +7,12 @@
 #include <signal.h>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <atomic>
 #include <thread>
 #include <random>
 #include <rados/librados.hpp>
-#include "libzlog.h"
+#include "libzlog.hpp"
 
 namespace po = boost::program_options;
 
