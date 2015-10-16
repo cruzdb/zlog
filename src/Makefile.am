@@ -46,6 +46,8 @@ libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS)
 libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS)
 libzlog_la_LIBADD = libseqr.la -lcls_zlog_client $(BOOST_SYSTEM_LIBS)
 
+include_HEADERS = libzlog.h libzlog.hpp
+
 lib_LTLIBRARIES += libzstate.la
 libzstate_la_SOURCES = zstate/skytype.cc
 libzstate_la_LIBADD = libzlog.la
