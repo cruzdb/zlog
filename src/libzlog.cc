@@ -6,6 +6,7 @@
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
+#include "libzlog.h"
 #include "zlog.pb.h"
 
 /*
@@ -669,4 +670,150 @@ int Log::Read(uint64_t position, ceph::bufferlist& bl)
   assert(0);
 }
 
+}
+
+struct zlog_log_ctx {
+  librados::IoCtx ioctx;
+  zlog::SeqrClient *seqr;
+  zlog::Log log;
+};
+
+extern "C" int zlog_destroy(zlog_log_t log)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  delete ctx->seqr;
+  delete ctx;
+  return 0;
+}
+
+/*
+ *
+ */
+extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
+    const char *host, const char *port,
+    zlog_log_t *log)
+{
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
+
+  ctx->seqr = new zlog::SeqrClient(host, port);
+  ctx->seqr->Connect();
+
+  int ret = zlog::Log::Open(ctx->ioctx, name,
+      ctx->seqr, ctx->log);
+  if (ret) {
+    delete ctx->seqr;
+    delete ctx;
+    return ret;
+  }
+
+  *log = ctx;
+
+  return 0;
+}
+
+/*
+ *
+ */
+extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
+    int stripe_size, const char *host, const char *port,
+    zlog_log_t *log)
+{
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
+
+  ctx->seqr = new zlog::SeqrClient(host, port);
+  ctx->seqr->Connect();
+
+  int ret = zlog::Log::Create(ctx->ioctx, name, stripe_size,
+      ctx->seqr, ctx->log);
+  if (ret) {
+    delete ctx->seqr;
+    delete ctx;
+    return ret;
+  }
+
+  *log = ctx;
+
+  return 0;
+}
+
+/*
+ *
+ */
+extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
+    int stripe_size, const char *host, const char *port,
+    zlog_log_t *log)
+{
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
+
+  ctx->seqr = new zlog::SeqrClient(host, port);
+  ctx->seqr->Connect();
+
+  int ret = zlog::Log::OpenOrCreate(ctx->ioctx, name, stripe_size,
+      ctx->seqr, ctx->log);
+  if (ret) {
+    delete ctx->seqr;
+    delete ctx;
+    return ret;
+  }
+
+  *log = ctx;
+
+  return 0;
+}
+
+/*
+ *
+ */
+extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition, int next)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  return ctx->log.CheckTail(pposition, next ? true : false);
+}
+
+/*
+ *
+ */
+extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
+    uint64_t *pposition)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  ceph::bufferlist bl;
+  bl.append((char*)data, len);
+  return ctx->log.Append(bl, pposition);
+}
+
+/*
+ *
+ */
+extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
+    size_t len)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  ceph::bufferlist bl;
+  ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
+  bl.push_back(bp);
+  int ret = ctx->log.Read(position, bl);
+  if (ret >= 0) {
+    if (bl.length() > len)
+      return -ERANGE;
+    if (bl.c_str() != data)
+      bl.copy(0, bl.length(), (char*)data);
+    ret = bl.length();
+  }
+  return ret;
+}
+
+/*
+ *
+ */
+extern "C" int zlog_fill(zlog_log_t log, uint64_t position)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  return ctx->log.Fill(position);
 }
