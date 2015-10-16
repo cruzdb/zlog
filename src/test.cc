@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <rados/librados.hpp>
 #include <gtest/gtest.h>
-#include "libzlog.h"
+#include "libzlog.hpp"
 
 /*
  * Helper function from ceph/src/test/librados/test.cc

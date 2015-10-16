@@ -1,10 +1,11 @@
-#include <errno.h>
+#include <cerrno>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <condition_variable>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
-#include "libzlog.h"
+#include "libzlog.hpp"
 #include "zlog.pb.h"
 
 /*
