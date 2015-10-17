@@ -15,6 +15,12 @@ More information:
 
 This project uses Semantic Versioning (http://semver.org/).
 
+## Language Bindings
+
+The base zlog project provides both C and C++ bindings.
+
+* Go: https://github.com/noahdesu/go-zlog
+
 ## Example
 
 First create a connection to the sequencer service:
