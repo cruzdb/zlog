@@ -247,6 +247,32 @@ int Log::CheckTail(uint64_t *pposition, bool increment)
   assert(0);
 }
 
+int Log::CheckTail(std::vector<uint64_t>& positions, size_t count)
+{
+  if (count <= 0 || count > 100)
+    return -EINVAL;
+
+  for (;;) {
+    std::vector<uint64_t> result;
+    int ret = seqr->CheckTail(epoch_, pool_, name_, result, count);
+    if (ret == -EAGAIN) {
+      std::cerr << "check tail ret -EAGAIN" << std::endl;
+      sleep(1);
+      continue;
+    } else if (ret == -ERANGE) {
+      std::cerr << "check tail ret -ERANGE" << std::endl;
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+    if (ret == 0)
+      positions.swap(result);
+    return ret;
+  }
+  assert(0);
+}
+
 enum AioType {
   ZLOG_AIO_APPEND,
   ZLOG_AIO_READ,
@@ -774,6 +800,24 @@ extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition, int next)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   return ctx->log.CheckTail(pposition, next ? true : false);
+}
+
+extern "C" int zlog_checktail_batch(zlog_log_t log, uint64_t *positions,
+    size_t count)
+{
+  if (count == 0)
+    return 0;
+
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+
+  std::vector<uint64_t> result;
+  int ret = ctx->log.CheckTail(result, count);
+  if (ret)
+    return ret;
+
+  std::copy(result.begin(), result.end(), positions);
+
+  return 0;
 }
 
 /*

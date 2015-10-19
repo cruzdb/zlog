@@ -42,6 +42,14 @@ class Sequence {
     return prev + 1;
   }
 
+  void next(std::vector<uint64_t>& positions, int count) {
+    assert(count > 0);
+    uint64_t prev = seq_.fetch_add(count);
+    for (uint64_t i = 1; i <= (uint64_t)count; i++) {
+      positions.push_back(prev + i);
+    }
+  }
+
   inline int match(const std::string& pool,
       const std::string& name,
       const uint64_t epoch) const {
@@ -71,7 +79,8 @@ class LogManager {
    * Read and optionally increment the log sequence number.
    */
   uint64_t ReadSequence(const std::string& pool, const std::string& name,
-      uint64_t epoch, bool increment, uint64_t *seq, Sequence **cached_seq) {
+      uint64_t epoch, bool increment, std::vector<uint64_t>& positions,
+      int count, Sequence **cached_seq) {
 
     std::unique_lock<std::mutex> g(lock_);
 
@@ -87,9 +96,12 @@ class LogManager {
       return -ERANGE;
 
     if (increment)
-      *seq = it->second.seq->next();
-    else
-      *seq = it->second.seq->read();
+      it->second.seq->next(positions, count);
+    else {
+      assert(count == 1);
+      uint64_t seq = it->second.seq->read();
+      positions.push_back(seq);
+    }
 
     *cached_seq = it->second.seq;
 
@@ -357,8 +369,6 @@ class Session {
 
     reply_.Clear();
 
-    uint64_t seq;
-
     /*
      * Try to do a fast sequencer read. The basic idea is that for a
      * particular session a client will likely be referencing the same log
@@ -380,20 +390,33 @@ class Session {
      *  and go. Currently they are created and never deleted.
      */
     int ret;
+    std::vector<uint64_t> positions;
+    assert(req_.count() > 0 && req_.count() < 100);
     if (cached_seq) {
       ret = cached_seq->match(req_.pool(), req_.name(), req_.epoch());
       if (!ret) {
-        if (req_.next())
-          seq = cached_seq->next();
-        else
-          seq = cached_seq->read();
+        if (req_.count() == 1) {
+          uint64_t seq;
+          if (req_.next())
+            seq = cached_seq->next();
+          else
+            seq = cached_seq->read();
+          positions.push_back(seq);
+        } else {
+          assert(req_.next());
+          cached_seq->next(positions, req_.count());
+        }
       } else {
+        if (req_.count() > 1)
+          assert(req_.next());
         ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
-            req_.epoch(), req_.next(), &seq, &cached_seq);
+            req_.epoch(), req_.next(), positions, req_.count(), &cached_seq);
       }
     } else {
+      if (req_.count() > 1)
+        assert(req_.next());
       ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
-          req_.epoch(), req_.next(), &seq, &cached_seq);
+          req_.epoch(), req_.next(), positions, req_.count(), &cached_seq);
     }
 
     if (ret == -EAGAIN)
@@ -403,7 +426,11 @@ class Session {
     else
       assert(!ret);
 
-    reply_.set_position(seq);
+    for (std::vector<uint64_t>::const_iterator it = positions.begin();
+         it != positions.end(); it++) {
+      uint64_t pos = *it;
+      reply_.add_position(pos);
+    }
 
     assert(reply_.IsInitialized());
 

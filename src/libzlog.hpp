@@ -51,6 +51,11 @@ class Log {
   int CheckTail(uint64_t *pposition, bool increment = false);
 
   /*
+   * Return a batch of positions.
+   */
+  int CheckTail(std::vector<uint64_t>& positions, size_t count);
+
+  /*
    * Append data to the log and return its position.
    */
   int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);

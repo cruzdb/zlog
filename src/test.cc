@@ -193,6 +193,54 @@ TEST(LibZlog, CheckTail) {
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
 
+TEST(LibZlog, CheckTailBatch) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::SeqrClient client("localhost", "5678");
+  ASSERT_NO_THROW(client.Connect());
+
+  zlog::Log log;
+  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  ASSERT_EQ(ret, 0);
+
+  uint64_t pos;
+  ret = log.CheckTail(&pos, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)0);
+
+  std::vector<uint64_t> result;
+  ret = log.CheckTail(result, 1);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(result[0], 1);
+
+  ret = log.CheckTail(result, 5);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(result[0], 2);
+  ASSERT_EQ(result[1], 3);
+  ASSERT_EQ(result[2], 4);
+  ASSERT_EQ(result[3], 5);
+  ASSERT_EQ(result[4], 6);
+
+  ret = log.CheckTail(&pos, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)6);
+
+  ret = log.CheckTail(&pos, true);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)7);
+
+  ret = log.CheckTail(result, 2);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(result[0], 8);
+  ASSERT_EQ(result[1], 9);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
 TEST(LibZlog, Append) {
   librados::Rados rados;
   librados::IoCtx ioctx;
@@ -513,6 +561,55 @@ TEST(LibZlogC, Read) {
   ASSERT_EQ(ret, sizeof(data2));
 
   ASSERT_TRUE(strcmp(data2, s) == 0);
+
+  ret = zlog_destroy(log);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlogC, CheckTailBatch) {
+  rados_t rados;
+  rados_ioctx_t ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ(0, create_one_pool_pp(pool_name, &rados));
+  ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
+
+  zlog_log_t log;
+  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ASSERT_EQ(ret, 0);
+
+  uint64_t pos;
+  ret = zlog_checktail(log, &pos, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)0);
+
+  uint64_t pos2[50];
+
+  ret = zlog_checktail_batch(log, pos2, 1);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos2[0], 1);
+
+  ret = zlog_checktail_batch(log, pos2, 5);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos2[0], 2);
+  ASSERT_EQ(pos2[1], 3);
+  ASSERT_EQ(pos2[2], 4);
+  ASSERT_EQ(pos2[3], 5);
+  ASSERT_EQ(pos2[4], 6);
+
+  ret = zlog_checktail(log, &pos, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)6);
+
+  ret = zlog_checktail(log, &pos, true);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (unsigned)7);
+
+  ret = zlog_checktail_batch(log, pos2, 2);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos2[0], 8);
+  ASSERT_EQ(pos2[1], 9);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);

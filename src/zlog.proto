@@ -11,6 +11,7 @@ message MSeqRequest {
     required string pool = 2;
     required string name = 3;
     required bool next = 4;
+    required uint32 count = 5;
 }
 
 message MSeqReply {
@@ -19,6 +20,6 @@ message MSeqReply {
         INIT_LOG = 1;
         STALE_EPOCH = 2;
     }
-    required uint64 position = 1;
+    repeated uint64 position = 1 [packed = true];
     optional Status status = 2 [default = OK];
 }
