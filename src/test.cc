@@ -308,6 +308,11 @@ TEST(LibZlog, MultiAppend) {
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(tail, (unsigned)1);
 
+  std::set<uint64_t> stream_ids_out;
+  ret = log.StreamMembership(stream_ids_out, 1);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(stream_ids, stream_ids_out);
+
   uint64_t pos;
   stream_ids.clear();
   stream_ids.insert(1);
@@ -318,6 +323,12 @@ TEST(LibZlog, MultiAppend) {
   ret = log.CheckTail(&tail, false);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, tail);
+  ASSERT_EQ(pos, (unsigned)2);
+
+  stream_ids_out.clear();
+  ret = log.StreamMembership(stream_ids_out, 2);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(stream_ids, stream_ids_out);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
