@@ -18,6 +18,11 @@ class SeqrClient {
   virtual int CheckTail(uint64_t epoch, const std::string& pool,
       const std::string& name, std::vector<uint64_t>& positions, size_t count);
 
+  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+      const std::string& name, const std::set<uint64_t>& stream_ids,
+      std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
+      uint64_t *position, bool next);
+
  private:
   boost::asio::io_service io_service_;
   boost::asio::ip::tcp::socket socket_;

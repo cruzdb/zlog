@@ -21,6 +21,20 @@ void pack_msg(ceph::bufferlist& bl, T& m) {
 }
 
 /*
+ * Pack a protobuf message into a bufferlist with a length header.
+ */
+template<typename T>
+void pack_msg_hdr(ceph::bufferlist& bl, T& m) {
+  assert(m.IsInitialized());
+  uint32_t buf_size = m.ByteSize();
+  char buf[buf_size];
+  assert(m.SerializeToArray(buf, buf_size));
+  uint32_t be_buf_size = htonl(buf_size);
+  bl.append((char*)&be_buf_size, sizeof(be_buf_size));
+  bl.append(buf, sizeof(buf));
+}
+
+/*
  * Unpack a protobuf message from a bufferlist.
  */
 template<typename T>
@@ -268,6 +282,29 @@ int Log::CheckTail(std::vector<uint64_t>& positions, size_t count)
     }
     if (ret == 0)
       positions.swap(result);
+    return ret;
+  }
+  assert(0);
+}
+
+int Log::CheckTail(const std::set<uint64_t>& stream_ids,
+    std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
+    uint64_t *pposition, bool increment)
+{
+  for (;;) {
+    int ret = seqr->CheckTail(epoch_, pool_, name_, stream_ids,
+        stream_backpointers, pposition, increment);
+    if (ret == -EAGAIN) {
+      std::cerr << "check tail ret -EAGAIN" << std::endl;
+      sleep(1);
+      continue;
+    } else if (ret == -ERANGE) {
+      std::cerr << "check tail ret -ERANGE" << std::endl;
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
     return ret;
   }
   assert(0);
@@ -606,6 +643,71 @@ int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
   assert(0);
 }
 
+int Log::MultiAppend(ceph::bufferlist& data,
+    const std::set<uint64_t>& stream_ids, uint64_t *pposition)
+{
+  for (;;) {
+    /*
+     * Get a new spot at the tail of the log and return a set of backpointers
+     * for the specified streams. The stream ids and backpointers are stored
+     * in the header of the entry being appeneded to the log.
+     */
+    uint64_t position;
+    std::map<uint64_t, std::vector<uint64_t>> stream_backpointers;
+    int ret = CheckTail(stream_ids, stream_backpointers, &position, true);
+    if (ret)
+      return ret;
+
+    assert(stream_ids.size() == stream_backpointers.size());
+
+    zlog_proto::EntryHeader hdr;
+    size_t index = 0;
+    for (std::set<uint64_t>::const_iterator it = stream_ids.begin();
+         it != stream_ids.end(); it++) {
+      uint64_t stream_id = *it;
+      const std::vector<uint64_t>& backpointers = stream_backpointers[index];
+      zlog_proto::StreamBackPointer *ptrs = hdr.add_stream_backpointers();
+      ptrs->set_id(stream_id);
+      for (std::vector<uint64_t>::const_iterator it2 = backpointers.begin();
+           it2 != backpointers.end(); it2++) {
+        uint64_t pos = *it2;
+        ptrs->add_backpointer(pos);
+      }
+      index++;
+    }
+
+    ceph::bufferlist bl;
+    pack_msg_hdr<zlog_proto::EntryHeader>(bl, hdr);
+    bl.append(data.c_str(), data.length());
+
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_write(op, epoch_, position, bl);
+
+    std::string oid = position_to_oid(position);
+    ret = ioctx_->operate(oid, &op);
+    if (ret < 0) {
+      std::cerr << "append: failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK) {
+      if (pposition)
+        *pposition = position;
+      return 0;
+    }
+
+    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+  }
+  assert(0);
+}
+
 int Log::Fill(uint64_t position)
 {
   for (;;) {
@@ -694,6 +796,43 @@ int Log::Read(uint64_t position, ceph::bufferlist& bl)
     }
   }
   assert(0);
+}
+
+int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+{
+  ceph::bufferlist bl;
+  int ret = Read(position, bl);
+  if (ret)
+    return ret;
+
+  if (bl.length() <= sizeof(uint32_t))
+    return -EINVAL;
+
+  const char *data = bl.c_str();
+
+  uint32_t hdr_len = ntohl(*((uint32_t*)data));
+  if (hdr_len > 512) // TODO something reasonable...?
+    return -EINVAL;
+
+  if ((sizeof(uint32_t) + hdr_len) > bl.length())
+    return -EINVAL;
+
+  zlog_proto::EntryHeader hdr;
+  if (!hdr.ParseFromArray(data + sizeof(uint32_t), hdr_len))
+    return -EINVAL;
+
+  if (!hdr.IsInitialized())
+    return -EINVAL;
+
+  std::set<uint64_t> ids;
+  for (int i = 0; i < hdr.stream_backpointers_size(); i++) {
+    const zlog_proto::StreamBackPointer& ptr = hdr.stream_backpointers(i);
+    ids.insert(ptr.id());
+  }
+
+  stream_ids.swap(ids);
+
+  return 0;
 }
 
 }
@@ -830,6 +969,20 @@ extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
   ceph::bufferlist bl;
   bl.append((char*)data, len);
   return ctx->log.Append(bl, pposition);
+}
+
+/*
+ *
+ */
+extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
+    size_t data_len, const uint64_t *stream_ids, size_t stream_ids_len,
+    uint64_t *pposition)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  std::set<uint64_t> ids(stream_ids, stream_ids + stream_ids_len);
+  ceph::bufferlist bl;
+  bl.append((char*)data, data_len);
+  return ctx->log.MultiAppend(bl, ids, pposition);
 }
 
 /*

@@ -53,6 +53,13 @@ int zlog_append(zlog_log_t log, const void *data, size_t len, uint64_t *ppositio
 /*
  *
  */
+int zlog_multiappend(zlog_log_t log, const void *data, size_t data_len,
+    const uint64_t *stream_ids, size_t stream_ids_len,
+    uint64_t *pposition);
+
+/*
+ *
+ */
 int zlog_read(zlog_log_t log, uint64_t position, void *data, size_t len);
 
 /*

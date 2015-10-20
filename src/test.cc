@@ -274,6 +274,54 @@ TEST(LibZlog, Append) {
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
 
+TEST(LibZlog, MultiAppend) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::SeqrClient client("localhost", "5678");
+  ASSERT_NO_THROW(client.Connect());
+
+  zlog::Log log;
+  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  std::set<uint64_t> stream_ids;
+
+  ret = log.MultiAppend(bl, stream_ids, NULL);
+  ASSERT_EQ(ret, -EINVAL);
+
+  uint64_t tail;
+  ret = log.CheckTail(&tail, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(tail, (unsigned)0);
+
+  stream_ids.clear();
+  stream_ids.insert(1);
+  ret = log.MultiAppend(bl, stream_ids, NULL);
+  ASSERT_EQ(ret, 0);
+
+  ret = log.CheckTail(&tail, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(tail, (unsigned)1);
+
+  uint64_t pos;
+  stream_ids.clear();
+  stream_ids.insert(1);
+  stream_ids.insert(2);
+  ret = log.MultiAppend(bl, stream_ids, &pos);
+  ASSERT_EQ(ret, 0);
+
+  ret = log.CheckTail(&tail, false);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, tail);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
 TEST(LibZlog, Fill) {
   librados::Rados rados;
   librados::IoCtx ioctx;

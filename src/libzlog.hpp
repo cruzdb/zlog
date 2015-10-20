@@ -61,6 +61,12 @@ class Log {
   int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
 
   /*
+   * Append data to multiple streams and return its position.
+   */
+  int MultiAppend(ceph::bufferlist& data,
+      const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
+
+  /*
    * Append data asynchronously to the log and return its position.
    */
   int AioAppend(AioCompletion *c, ceph::bufferlist& data,
@@ -112,11 +118,29 @@ class Log {
   static AioCompletion *aio_create_completion(void *arg,
       zlog::Log::AioCompletion::callback_t cb);
 
+  /*
+   * Return the stream membership for a log entry position.
+   */
+  int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
+
  private:
   Log(const Log& rhs);
   Log& operator=(const Log& rhs);
 
   int RefreshProjection();
+
+  /*
+   * When next == true
+   *   - position: new log tail
+   *   - stream_backpointers: back pointers for each stream in stream_ids
+   *
+   * When next == false
+   *   - position: current log tail
+   *   - stream_backpointers: back pointers for each stream in stream_ids
+   */
+  int CheckTail(const std::set<uint64_t>& stream_ids,
+      std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
+      uint64_t *position, bool next);
 
   static std::string metalog_oid_from_name(const std::string& name);
   std::string slot_to_oid(int i);
