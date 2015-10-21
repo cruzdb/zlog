@@ -38,7 +38,7 @@ class Log {
   /*
    * Find the maximum position written.
    */
-  int FindMaxPosition(uint64_t epoch, uint64_t *pposition);
+  int FindMaxPosition(uint64_t epoch, bool *pempty, uint64_t *pposition);
 
   /*
    * Seal all storage devices.
@@ -67,6 +67,31 @@ class Log {
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
 
   /*
+   *
+   */
+  class Stream {
+   public:
+    Stream() : impl(NULL) {}
+    int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
+    int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL);
+    int Reset();
+    int Sync();
+    uint64_t Id() const;
+
+    std::vector<uint64_t> History() const;
+
+   private:
+    friend class Log;
+    struct StreamImpl;
+    StreamImpl *impl;
+  };
+
+  /*
+   *
+   */
+  int OpenStream(uint64_t stream_id, Stream& stream);
+
+  /*
    * Append data asynchronously to the log and return its position.
    */
   int AioAppend(AioCompletion *c, ceph::bufferlist& data,
@@ -86,7 +111,7 @@ class Log {
   /*
    *
    */
-   int Read(uint64_t position, ceph::bufferlist& bl);
+  int Read(uint64_t position, ceph::bufferlist& bl);
 
   /*
    * Create a new log.
@@ -128,6 +153,9 @@ class Log {
   Log& operator=(const Log& rhs);
 
   int RefreshProjection();
+
+  int StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+      size_t *header_size = NULL);
 
   /*
    * When next == true

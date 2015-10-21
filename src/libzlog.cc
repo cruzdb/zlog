@@ -194,9 +194,10 @@ int Log::Seal(uint64_t epoch)
   return 0;
 }
 
-int Log::FindMaxPosition(uint64_t epoch, uint64_t *pposition)
+int Log::FindMaxPosition(uint64_t epoch, bool *pempty, uint64_t *pposition)
 {
-  uint64_t max_position = 0;
+  bool log_empty = true;
+  uint64_t max_position;
 
   for (int i = 0; i < stripe_size_; i++) {
     std::string oid = slot_to_oid(i);
@@ -216,11 +217,20 @@ int Log::FindMaxPosition(uint64_t epoch, uint64_t *pposition)
       return ret;
     }
 
-    if (op_ret == zlog::CLS_ZLOG_OK)
+    if (op_ret == zlog::CLS_ZLOG_OK) {
+      if (log_empty) {
+        max_position = this_pos;
+        log_empty = false;
+        continue;
+      }
       max_position = std::max(max_position, this_pos);
+    }
   }
 
-  *pposition =  max_position;
+  *pempty = log_empty;
+
+  if (!log_empty)
+    *pposition =  max_position;
 
   return 0;
 }
@@ -246,11 +256,11 @@ int Log::CheckTail(uint64_t *pposition, bool increment)
   for (;;) {
     int ret = seqr->CheckTail(epoch_, pool_, name_, pposition, increment);
     if (ret == -EAGAIN) {
-      std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
-      std::cerr << "check tail ret -ERANGE" << std::endl;
+      //std::cerr << "check tail ret -ERANGE" << std::endl;
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -270,11 +280,11 @@ int Log::CheckTail(std::vector<uint64_t>& positions, size_t count)
     std::vector<uint64_t> result;
     int ret = seqr->CheckTail(epoch_, pool_, name_, result, count);
     if (ret == -EAGAIN) {
-      std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
-      std::cerr << "check tail ret -ERANGE" << std::endl;
+      //std::cerr << "check tail ret -ERANGE" << std::endl;
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -295,11 +305,11 @@ int Log::CheckTail(const std::set<uint64_t>& stream_ids,
     int ret = seqr->CheckTail(epoch_, pool_, name_, stream_ids,
         stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
-      std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
-      std::cerr << "check tail ret -ERANGE" << std::endl;
+      //std::cerr << "check tail ret -ERANGE" << std::endl;
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -798,13 +808,9 @@ int Log::Read(uint64_t position, ceph::bufferlist& bl)
   assert(0);
 }
 
-int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+int Log::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+    size_t *header_size)
 {
-  ceph::bufferlist bl;
-  int ret = Read(position, bl);
-  if (ret)
-    return ret;
-
   if (bl.length() <= sizeof(uint32_t))
     return -EINVAL;
 
@@ -830,7 +836,248 @@ int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
     ids.insert(ptr.id());
   }
 
+  if (header_size)
+    *header_size = sizeof(uint32_t) + hdr_len;
+
   stream_ids.swap(ids);
+
+  return 0;
+}
+
+int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+{
+  ceph::bufferlist bl;
+  int ret = Read(position, bl);
+  if (ret)
+    return ret;
+
+  ret = StreamHeader(bl, stream_ids);
+
+  return ret;
+}
+
+struct Log::Stream::StreamImpl {
+  uint64_t stream_id;
+  Log *log;
+
+  std::set<uint64_t> pos;
+  std::set<uint64_t>::const_iterator prevpos;
+  std::set<uint64_t>::const_iterator curpos;
+};
+
+std::vector<uint64_t> Log::Stream::History() const
+{
+  Log::Stream::StreamImpl *impl = this->impl;
+
+  std::vector<uint64_t> ret;
+  for (auto it = impl->pos.cbegin(); it != impl->pos.cend(); it++)
+    ret.push_back(*it);
+  return ret;
+}
+
+int Log::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
+{
+  Log::Stream::StreamImpl *impl = this->impl;
+  std::set<uint64_t> stream_ids;
+  stream_ids.insert(impl->stream_id);
+  return impl->log->MultiAppend(data, stream_ids, pposition);
+}
+
+int Log::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
+{
+  Log::Stream::StreamImpl *impl = this->impl;
+
+  if (impl->curpos == impl->pos.cend())
+    return -EBADF;
+
+  assert(!impl->pos.empty());
+
+  uint64_t pos = *impl->curpos;
+
+  ceph::bufferlist bl_out;
+  int ret = impl->log->Read(pos, bl_out);
+  if (ret)
+    return ret;
+
+  size_t header_size;
+  std::set<uint64_t> stream_ids;
+  ret = impl->log->StreamHeader(bl_out, stream_ids, &header_size);
+  if (ret)
+    return -EIO;
+
+  assert(stream_ids.find(impl->stream_id) != stream_ids.end());
+
+  // FIXME: how to create this view more efficiently?
+  const char *data = bl_out.c_str();
+  bl.append(data + header_size, bl_out.length() - header_size);
+
+  if (pposition)
+    *pposition = pos;
+
+  impl->prevpos = impl->curpos;
+  impl->curpos++;
+
+  return 0;
+}
+
+int Log::Stream::Reset()
+{
+  Log::Stream::StreamImpl *impl = this->impl;
+  impl->curpos = impl->pos.cbegin();
+  return 0;
+}
+
+/*
+ * Optimizations:
+ *   - follow backpointers
+ */
+int Log::Stream::Sync()
+{
+  Log::Stream::StreamImpl *impl = this->impl;
+  const uint64_t stream_id = impl->stream_id;
+
+  /*
+   * First contact the sequencer to find out what log position corresponds to
+   * the tail of the stream, and then synchronize up to that position.
+   */
+  std::set<uint64_t> stream_ids;
+  stream_ids.insert(stream_id);
+
+  std::map<uint64_t, std::vector<uint64_t>> stream_backpointers;
+
+  int ret = impl->log->CheckTail(stream_ids, stream_backpointers, NULL, false);
+  if (ret)
+    return ret;
+
+  assert(stream_backpointers.size() == 1);
+  const std::vector<uint64_t>& backpointers = stream_backpointers.at(stream_id);
+
+  /*
+   * The tail of the stream is the maximum log position handed out by the
+   * sequencer for this particular stream. When the tail of a stream is
+   * incremented the position is placed onto the list of backpointers. Thus
+   * the max position in the backpointers set for a stream is the tail
+   * position of the stream.
+   *
+   * If the current set of backpointers is empty, then the stream is empty and
+   * there is nothing to do.
+   */
+  std::vector<uint64_t>::const_iterator bpit =
+    std::max_element(backpointers.begin(), backpointers.end());
+  if (bpit == backpointers.end()) {
+    assert(impl->pos.empty());
+    return 0;
+  }
+  uint64_t stream_tail = *bpit;
+
+  /*
+   * Avoid sync in log ranges that we've already processed by examining the
+   * maximum stream position that we know about. If our local stream history
+   * is empty then use the beginning of the log as the low point.
+   *
+   * we are going to search for stream entries between stream_tail (the last
+   * position handed out by the sequencer for this stream), and the largest
+   * stream position that we (the client) knows about. if we do not yet know
+   * about any stream positions then we'll search down until position zero.
+   */
+  bool has_known = false;
+  uint64_t known_stream_tail;
+  if (!impl->pos.empty()) {
+    auto it = impl->pos.crbegin();
+    assert(it != impl->pos.crend());
+    known_stream_tail = *it;
+    has_known = true;
+  }
+
+  assert(!has_known || known_stream_tail <= stream_tail);
+  if (has_known && known_stream_tail == stream_tail)
+    return 0;
+
+  std::set<uint64_t> updates;
+  for (;;) {
+    if (has_known && stream_tail == known_stream_tail)
+      break;
+    for (;;) {
+      std::set<uint64_t> stream_ids;
+      ret = impl->log->StreamMembership(stream_ids, stream_tail);
+      if (ret == 0) {
+        // save position if it belongs to this stream
+        if (stream_ids.find(stream_id) != stream_ids.end())
+          updates.insert(stream_tail);
+        break;
+      } else if (ret == -EINVAL) {
+        // skip non-stream entries
+        break;
+      } else if (ret == -EFAULT) {
+        // skip invalidated entries
+        break;
+      } else if (ret == -ENODEV) {
+        // fill entries unwritten entries
+        ret = impl->log->Fill(stream_tail);
+        if (ret == 0) {
+          // skip invalidated entries
+          break;
+        } else if (ret == -EROFS) {
+          // retry
+          continue;
+        } else
+          return ret;
+      } else
+        return ret;
+    }
+    if (!has_known && stream_tail == 0)
+      break;
+    stream_tail--;
+  }
+
+  if (updates.empty())
+    return 0;
+
+  impl->pos.insert(updates.begin(), updates.end());
+
+  if (impl->curpos == impl->pos.cend()) {
+    if (impl->prevpos == impl->pos.cend()) {
+      impl->curpos = impl->pos.cbegin();
+      assert(impl->curpos != impl->pos.cend());
+    } else {
+      impl->curpos = impl->prevpos;
+      impl->curpos++;
+      assert(impl->curpos != impl->pos.cend());
+    }
+  }
+
+  return 0;
+}
+
+uint64_t Log::Stream::Id() const
+{
+  Log::Stream::StreamImpl *impl = this->impl;
+  return impl->stream_id;
+}
+
+int Log::OpenStream(uint64_t stream_id, Stream& stream)
+{
+  assert(!stream.impl);
+
+  Log::Stream::StreamImpl *impl = new Log::Stream::StreamImpl;
+  impl->stream_id = stream_id;
+  impl->log = this;
+
+  /*
+   * Previous position always points to the last position in the stream that
+   * was successfully read, except on initialization when it points to the end
+   * of the stream.
+   */
+  impl->prevpos = impl->pos.cend();
+
+  /*
+   * Current position always points to the element that is the next to be
+   * read, or to the end of the stream if there are no [more] elements in the
+   * stream to be read.
+   */
+  impl->curpos = impl->pos.cbegin();
+
+  stream.impl = impl;
 
   return 0;
 }

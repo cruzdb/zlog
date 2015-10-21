@@ -122,7 +122,7 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
 int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
     const std::string& name, const std::set<uint64_t>& stream_ids,
     std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
-    uint64_t *position, bool next)
+    uint64_t *pposition, bool next)
 {
   if (stream_ids.size() == 0)
     return -EINVAL;
@@ -188,7 +188,8 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
 
     stream_backpointers.swap(result);
 
-    *position = reply.position(0);
+    if (pposition)
+      *pposition = reply.position(0);
   }
 
   return 0;

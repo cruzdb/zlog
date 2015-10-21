@@ -26,6 +26,12 @@ static uint64_t get_time(void)
   return nsec;
 }
 
+/*
+ * The sequence tracks the current sequence number. A read() returns the next
+ * tail value, that is, the value returned from the next call to next(). So,
+ * a read on an empty log will return 0 and the first sequence number returned
+ * will be 0 (whenever next is called).
+ */
 class Sequence {
  public:
   Sequence(uint64_t seq, std::string pool,
@@ -40,13 +46,13 @@ class Sequence {
 
   uint64_t next() {
     uint64_t prev = seq_.fetch_add(1);
-    return prev + 1;
+    return prev;
   }
 
   void next(std::vector<uint64_t>& positions, int count) {
     assert(count > 0);
     uint64_t prev = seq_.fetch_add(count);
-    for (uint64_t i = 1; i <= (uint64_t)count; i++) {
+    for (uint64_t i = 0; i < (uint64_t)count; i++) {
       positions.push_back(prev + i);
     }
   }
@@ -244,7 +250,7 @@ class LogManager {
    * these steps are completed successfully.
    */
   int InitLog(const std::string& pool, const std::string& name,
-      uint64_t *pepoch, uint64_t *pposition) {
+      uint64_t *pepoch, bool *pempty, uint64_t *pposition) {
 
     librados::Rados rados;
     int ret = rados.init(NULL);
@@ -290,15 +296,18 @@ class LogManager {
       return ret;
     }
 
+    bool log_empty;
     uint64_t position;
-    ret = log.FindMaxPosition(epoch, &position);
+    ret = log.FindMaxPosition(epoch, &log_empty, &position);
     if (ret) {
       std::cerr << "failed to find max position " << ret << std::endl;
       return ret;
     }
 
     *pepoch = epoch;
-    *pposition = position;
+    *pempty = log_empty;
+    if (!log_empty)
+      *pposition = position;
 
     ioctx.close();
     rados.shutdown();
@@ -390,8 +399,9 @@ class LogManager {
         name = it->second;
       }
 
+      bool log_empty;
       uint64_t position, epoch;
-      int ret = InitLog(pool, name, &epoch, &position);
+      int ret = InitLog(pool, name, &epoch, &log_empty, &position);
       if (ret) {
         std::unique_lock<std::mutex> g(lock_);
         pending_logs_.erase(std::make_pair(pool, name));
@@ -405,8 +415,13 @@ class LogManager {
         assert(pending_logs_.count(key) == 1);
         pending_logs_.erase(key);
         assert(logs_.count(key) == 0);
-        Log log(position, epoch, pool, name);
-        logs_[key] = log;
+        if (log_empty) {
+          Log log(0, epoch, pool, name);
+          logs_[key] = log;
+        } else {
+          Log log(position, epoch, pool, name);
+          logs_[key] = log;
+        }
       }
     }
   }
