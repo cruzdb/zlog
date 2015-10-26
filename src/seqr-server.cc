@@ -145,7 +145,7 @@ class Sequence {
       result.push_back(ptrs);
     }
 
-    *pposition = next();
+    *pposition = read();
     stream_backpointers.swap(result);
 
     return 0;
