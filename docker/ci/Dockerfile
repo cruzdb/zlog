@@ -26,15 +26,6 @@ RUN mkdir /src && cd /src && \
   cd .. && \
   make clean
 
-# install zlog
-RUN cd /src && \
-  apt-get install -y libprotobuf-dev protobuf-compiler && \
-  git clone https://github.com/noahdesu/zlog.git && \
-  cd zlog && \
-  autoreconf -ivf && \
-  ./configure && \
-  make
-
 ADD micro-osd.sh /src/micro-osd.sh
 ADD entrypoint.sh /entrypoint.sh
 
