@@ -147,12 +147,16 @@ class Log {
    * Return the stream membership for a log entry position.
    */
   int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
+  int StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position);
+  int Fill(uint64_t epoch, uint64_t position);
 
  private:
   Log(const Log& rhs);
   Log& operator=(const Log& rhs);
 
   int RefreshProjection();
+
+  int Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl);
 
   int StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
       size_t *header_size = NULL);

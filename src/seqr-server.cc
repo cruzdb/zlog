@@ -79,9 +79,9 @@ class Sequence {
       stream_index_t::const_iterator stream_it = streams_.find(stream_id);
       if (stream_it == streams_.end()) {
         /*
-         * FIXME: when an unknown stream is found it may not exist yet or it
-         * may not be intialized from the log. this will be replaced by
-         * returning -eagain and then queuing an initialization task.
+         * If a stream doesn't exist initialize an empty set of backpointers.
+         * How do we know a stream doesn't exist? During log initialization we
+         * setup all existing logs...
          */
         streams_[stream_id] = stream_backpointers_t();
 
@@ -129,9 +129,9 @@ class Sequence {
       stream_index_t::const_iterator stream_it = streams_.find(stream_id);
       if (stream_it == streams_.end()) {
         /*
-         * FIXME: when an unknown stream is found it may not exist yet or it
-         * may not be intialized from the log. this will be replaced by
-         * returning -eagain and then queuing an initialization task.
+         * If a stream doesn't exist initialize an empty set of backpointers.
+         * How do we know a stream doesn't exist? During log initialization we
+         * setup all existing logs...
          */
         streams_[stream_id] = stream_backpointers_t();
 
@@ -159,6 +159,10 @@ class Sequence {
     if (epoch < epoch_)
       return -ERANGE;
     return 0;
+  }
+
+  void set_streams(std::map<uint64_t, std::deque<uint64_t>>& ptrs) {
+    streams_.swap(ptrs);
   }
 
  private:
@@ -234,9 +238,12 @@ class LogManager {
   struct Log {
     Log() {}
     Log(uint64_t pos, uint64_t epoch,
-        std::string pool, std::string name) :
+        std::string pool, std::string name,
+        std::map<uint64_t, std::deque<uint64_t>>& ptrs) :
       seq(new Sequence(pos, pool, name, epoch)), epoch(epoch)
-    {}
+    {
+      seq->set_streams(ptrs);
+    }
 
     Sequence *seq;
     uint64_t epoch;
@@ -250,7 +257,8 @@ class LogManager {
    * these steps are completed successfully.
    */
   int InitLog(const std::string& pool, const std::string& name,
-      uint64_t *pepoch, bool *pempty, uint64_t *pposition) {
+      uint64_t *pepoch, bool *pempty, uint64_t *pposition,
+      std::map<uint64_t, std::deque<uint64_t>>& ptrs) {
 
     librados::Rados rados;
     int ret = rados.init(NULL);
@@ -302,6 +310,57 @@ class LogManager {
     if (ret) {
       std::cerr << "failed to find max position " << ret << std::endl;
       return ret;
+    }
+
+    /*
+     * This is very inefficient. Basically during log initialization we just
+     * scan the entire thing to initialize the streams. Right now we need
+     * something working and can bite the initialization cost and make things
+     * more dynamic and efficient during a later rewrite of the streaming
+     * interface.
+     */
+    if (!log_empty) {
+      assert(position > 0);
+      uint64_t tail = position;
+      std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
+      while (tail) {
+        for (;;) {
+          std::set<uint64_t> stream_ids;
+          ret = log.StreamMembership(epoch, stream_ids, tail);
+          if (ret == 0) {
+            for (auto it = stream_ids.begin(); it != stream_ids.end(); it++) {
+              auto it2 = ptrs_out.find(*it);
+              if (it2 == ptrs_out.end() || it2->second.size() < 10)
+                ptrs_out[*it].push_back(tail);
+            }
+            break;
+          } else if (ret == -EINVAL) {
+            // skip non-stream entries
+            break;
+          } else if (ret == -EFAULT) {
+            // skip invalidated entries
+            break;
+          } else if (ret == -ENODEV) {
+            // fill entries unwritten entries
+            ret = log.Fill(epoch, tail);
+            if (ret == 0) {
+              // skip invalidated entries
+              break;
+            } else if (ret == -EROFS) {
+              // retry
+              continue;
+            } else {
+              std::cerr << "error initialing log stream: fill" << std::endl;
+              return ret;
+            }
+          } else {
+            std::cerr << "error initialing log stream: stream membership" << std::endl;
+            return ret;
+          }
+        }
+        tail--;
+      }
+      ptrs.swap(ptrs_out);
     }
 
     *pepoch = epoch;
@@ -401,7 +460,8 @@ class LogManager {
 
       bool log_empty;
       uint64_t position, epoch;
-      int ret = InitLog(pool, name, &epoch, &log_empty, &position);
+      std::map<uint64_t, std::deque<uint64_t>> ptrs;
+      int ret = InitLog(pool, name, &epoch, &log_empty, &position, ptrs);
       if (ret) {
         std::unique_lock<std::mutex> g(lock_);
         pending_logs_.erase(std::make_pair(pool, name));
@@ -416,10 +476,10 @@ class LogManager {
         pending_logs_.erase(key);
         assert(logs_.count(key) == 0);
         if (log_empty) {
-          Log log(0, epoch, pool, name);
+          Log log(0, epoch, pool, name, ptrs);
           logs_[key] = log;
         } else {
-          Log log(position, epoch, pool, name);
+          Log log(position, epoch, pool, name, ptrs);
           logs_[key] = log;
         }
       }
