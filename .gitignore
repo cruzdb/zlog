@@ -32,3 +32,4 @@ src/zlog-seqr
 
 src/test
 src/zstate-test
+src/stream-stress
