@@ -43,7 +43,19 @@ int zlog_checktail(zlog_log_t log, uint64_t *pposition, int next);
 /*
  *
  */
+int zlog_checktail_batch(zlog_log_t log, uint64_t *pposition, size_t count);
+
+/*
+ *
+ */
 int zlog_append(zlog_log_t log, const void *data, size_t len, uint64_t *pposition);
+
+/*
+ *
+ */
+int zlog_multiappend(zlog_log_t log, const void *data, size_t data_len,
+    const uint64_t *stream_ids, size_t stream_ids_len,
+    uint64_t *pposition);
 
 /*
  *

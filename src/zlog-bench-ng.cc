@@ -214,12 +214,16 @@ class FakeSeqrClient : public zlog::SeqrClient {
     ret = log.Seal(epoch);
     assert(ret == 0);
 
+    bool log_empty;
     uint64_t position;
-    ret = log.FindMaxPosition(epoch, &position);
+    ret = log.FindMaxPosition(epoch, &log_empty, &position);
     assert(ret == 0);
 
     epoch_ = epoch;
-    seq_.store(position);
+    if (log_empty)
+      seq_.store(0);
+    else
+      seq_.store(position);
 
     std::cout << "init seq: pos=" << seq_.load() << std::endl;
   }
@@ -241,11 +245,11 @@ class FakeSeqrClient : public zlog::SeqrClient {
         seq_++;
       } else {
         uint64_t tail = seq_.fetch_add(1); // returns previous value
-        *position = tail + 1;
+        *position = tail;
       }
 #else
       uint64_t tail = seq_.fetch_add(1); // returns previous value
-      *position = tail + 1;
+      *position = tail;
 #endif
     } else
       *position = seq_.load();

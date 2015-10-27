@@ -11,6 +11,13 @@ message MSeqRequest {
     required string pool = 2;
     required string name = 3;
     required bool next = 4;
+    required uint32 count = 5;
+    repeated uint64 stream_ids = 6 [packed = true];
+}
+
+message StreamBackPointer {
+    required uint64 id = 1;
+    repeated uint64 backpointer = 2 [packed = true];
 }
 
 message MSeqReply {
@@ -19,6 +26,11 @@ message MSeqReply {
         INIT_LOG = 1;
         STALE_EPOCH = 2;
     }
-    required uint64 position = 1;
+    repeated uint64 position = 1 [packed = true];
     optional Status status = 2 [default = OK];
+    repeated StreamBackPointer stream_backpointers = 3;
 }
+
+message EntryHeader {
+  repeated StreamBackPointer stream_backpointers = 1;
+};
