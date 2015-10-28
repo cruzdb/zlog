@@ -7,4 +7,4 @@ before_install:
   - docker pull zlog/ci
 
 script:
-  - docker run zlog/ci
+    - docker run -v $TRAVIS_BUILD_DIR:/src/zlog zlog/ci
