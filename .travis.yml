@@ -1,56 +1,10 @@
-language: cpp
-
-compiler:
-  - gcc
-  - clang
-
-before_install:
-  - sudo apt-get update
-  - pushd /tmp
-  - git clone --recursive https://github.com/noahdesu/ceph.git
-  - cd ceph
-  - git checkout origin/cls_zlog
-  - ./install-deps.sh
-  - ./autogen.sh
-  - ./configure
-  - cd src
-  - make libcls_zlog.la
-  - make libcls_zlog_client.la
-  - popd
-  - ssh-keygen -f $HOME/.ssh/id_rsa -t rsa -N ''
-  - cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-  - chmod 600 ~/.ssh/authorized_keys
-  - sudo pip install ceph-deploy
-  - ceph-deploy install --dev master `hostname`
-  - ceph-deploy pkg --install librados-dev `hostname`
-  - sudo cp /tmp/ceph/src/.libs/libcls_zlog.so* /usr/lib/rados-classes/
-  - bash ci/micro-osd.sh /tmp/micro-ceph
-  - export CEPH_CONF=/tmp/micro-ceph/ceph.conf
-  - ceph status
-  - sudo apt-get install libprotobuf-dev protobuf-compiler
-  
-install:
-  - autoreconf -ivf
-  - mkdir -p /tmp/install/rados/
-  - cp /tmp/ceph/src/cls/zlog/cls_zlog_client.h /tmp/install/rados
-  - CPPFLAGS=-I/tmp/install LDFLAGS=-L/tmp/ceph/src/.libs ./configure
-  - make
-
-script:
-  - cd src
-  - export LD_LIBRARY_PATH=/tmp/ceph/src/.libs:$LD_LIBRARY_PATH
-  - ./zlog-seqr --port 5678 --daemon
-  - ./test
-
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-    packages:
-      - gcc-4.8
-      - g++-4.8
-      - clang
-
 sudo: required 
+
 services:   
   - docker
+
+before_install:
+  - docker pull zlog/ci
+
+script:
+  - docker run zlog/ci
