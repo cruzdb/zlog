@@ -1010,3 +1010,73 @@ TEST(LibZlogC, CheckTailBatch) {
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
+
+TEST(LibZlogCStream, MultiAppend) {
+  rados_t rados;
+  rados_ioctx_t ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ(0, create_one_pool_pp(pool_name, &rados));
+  ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
+
+  zlog_log_t log;
+  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ASSERT_EQ(ret, 0);
+
+  // empty set of streams
+  ret = zlog_multiappend(log, NULL, 1, NULL, 0, NULL);
+  ASSERT_EQ(ret, -EINVAL);
+
+  std::deque<std::set<uint64_t>> stream_ids_list;
+  std::vector<uint64_t> pos_list;
+
+  /*
+   * Generate a bunch of random sets of stream ids and do an append. Save the
+   * position and set for each case.
+   */
+  for (int i = 0; i < 100; i++) {
+    std::vector<unsigned int> indicies(10);
+    std::iota(indicies.begin(), indicies.end(), 0);
+    std::random_shuffle(indicies.begin(), indicies.end());
+
+    std::set<uint64_t> stream_ids;
+    int count = rand() % 9 + 1;
+    for (int j = 0; j < count; j++)
+      stream_ids.insert(indicies[j]);
+
+    char data[1];
+    std::vector<uint64_t> stream_ids_vec;
+    for (auto it = stream_ids.begin(); it != stream_ids.end(); it++)
+      stream_ids_vec.push_back(*it);
+
+    uint64_t pos;
+    ret = zlog_multiappend(log, data, sizeof(data),
+        &stream_ids_vec[0], stream_ids_vec.size(), &pos);
+    ASSERT_EQ(ret, 0);
+
+    stream_ids_list.push_back(stream_ids);
+    pos_list.push_back(pos);
+  }
+
+  // compare log entries to saved stream sets from above
+  for (unsigned i = 0; i < pos_list.size(); i++) {
+    uint64_t pos = pos_list[i];
+
+    std::vector<uint64_t> stream_ids_out_vec;
+    stream_ids_out_vec.resize(100);
+
+    ret = zlog_stream_membership(log,
+        &stream_ids_out_vec[0], 100, pos);
+    ASSERT_GE(ret, 0);
+
+    std::set<uint64_t> stream_ids_out;
+    for (int i = 0; i < ret; i++)
+      stream_ids_out.insert(stream_ids_out_vec[i]);
+
+    ASSERT_EQ(stream_ids_out, stream_ids_list[i]);
+  }
+
+  ret = zlog_destroy(log);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
