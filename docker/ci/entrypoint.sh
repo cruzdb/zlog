@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -x
 
 # startup a ceph cluster
 mkdir /tmp/ceph
@@ -13,7 +14,9 @@ apt-get install -y libprotobuf-dev protobuf-compiler
 # pull the latest zlog source each time the container is run
 cd /src
 
-if [ ! -d /src/zlog/.git ]; then
+ls -l
+
+if [ ! -d /src/zlog ]; then
   git clone --branch=$BRANCH https://github.com/noahdesu/zlog.git
 fi
 
