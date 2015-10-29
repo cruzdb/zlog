@@ -1349,3 +1349,79 @@ TEST(LibZlogCStream, Sync) {
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
+
+TEST(LibZlogCStream, StreamId) {
+  rados_t rados;
+  rados_ioctx_t ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ(0, create_one_pool_pp(pool_name, &rados));
+  ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
+
+  zlog_log_t log;
+  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ASSERT_EQ(ret, 0);
+
+  zlog_stream_t stream0;
+  ret = zlog_stream_open(log, 0, &stream0);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(zlog_stream_id(stream0), 0);
+
+  zlog_stream_t stream33;
+  ret = zlog_stream_open(log, 33, &stream33);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(zlog_stream_id(stream33), 33);
+
+  ret = zlog_destroy(log);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlogCStream, Append) {
+  rados_t rados;
+  rados_ioctx_t ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ(0, create_one_pool_pp(pool_name, &rados));
+  ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
+
+  zlog_log_t log;
+  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ASSERT_EQ(ret, 0);
+
+  zlog_stream_t stream;
+  ret = zlog_stream_open(log, 0, &stream);
+  ASSERT_EQ(ret, 0);
+
+  // nothing in stream
+  uint64_t pos = 99;
+  ret = zlog_stream_readnext(stream, NULL, 0, &pos);
+  ASSERT_EQ(ret, -EBADF);
+  ASSERT_EQ(pos, 99);
+
+  // add something to stream
+  char data[5];
+  uint64_t pos2;
+  ret = zlog_stream_append(stream, data, sizeof(data), &pos2);
+  ASSERT_EQ(ret, 0);
+
+  // still don't see it...
+  ret = zlog_stream_readnext(stream, NULL, 0, &pos);
+  ASSERT_EQ(ret, -EBADF);
+  ASSERT_EQ(pos, 99);
+
+  // update view
+  ret = zlog_stream_sync(stream);
+  ASSERT_EQ(ret, 0);
+
+  // we should see it now..
+  ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
+  ASSERT_EQ(ret, sizeof(data));
+  ASSERT_EQ(pos, pos2);
+
+  ret = zlog_destroy(log);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
