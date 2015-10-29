@@ -1384,8 +1384,14 @@ extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
 
   ceph::bufferlist bl;
+  // FIXME: below the buffer is added to avoid double copies. However, in
+  // ReadNext we have to create a view of the data read to remove the header.
+  // It isn't clear how to do that without the copies. As a fix for now we
+  // just force the case where the bufferlist has to be resized.
+#if 0
   ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
   bl.push_back(bp);
+#endif
 
   int ret = ctx->stream.ReadNext(bl, pposition);
 
@@ -1433,7 +1439,7 @@ extern "C" size_t zlog_stream_history(zlog_stream_t stream, uint64_t *pos, size_
 
   std::vector<uint64_t> history = ctx->stream.History();
   size_t size = history.size();
-  if (size <= len)
+  if (pos && size <= len)
     std::copy(history.begin(), history.end(), pos);
 
   return size;
