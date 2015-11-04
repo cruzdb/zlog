@@ -114,6 +114,11 @@ class Log {
   int Read(uint64_t position, ceph::bufferlist& bl);
 
   /*
+   *
+   */
+  int Trim(uint64_t position);
+
+  /*
    * Create a new log.
    */
   static int Create(librados::IoCtx& ioctx, const std::string& name,

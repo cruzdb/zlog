@@ -71,6 +71,11 @@ int zlog_fill(zlog_log_t log, uint64_t position);
 /*
  *
  */
+int zlog_trim(zlog_log_t log, uint64_t position);
+
+/*
+ *
+ */
 int zlog_stream_open(zlog_log_t log, uint64_t stream_id,
     zlog_stream_t *pstream);
 

@@ -272,6 +272,18 @@ TEST(LibZlog, Append) {
     ASSERT_EQ(ret, 0);
   }
 
+  uint64_t pos, pos2;
+  ret = log.CheckTail(&pos, false);
+  ASSERT_EQ(ret, 0);
+
+  ret = log.Trim(pos);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  ret = log.Append(bl, &pos2);
+  ASSERT_EQ(ret, 0);
+  ASSERT_GT(pos2, pos);
+
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
 
@@ -699,6 +711,13 @@ TEST(LibZlog, Fill) {
   ret = log.Fill(pos);
   ASSERT_EQ(ret, -EROFS);
 
+  // ok to fill a trimmed position
+  ret = log.Trim(pos);
+  ASSERT_EQ(ret, 0);
+
+  ret = log.Fill(pos);
+  ASSERT_EQ(ret, 0);
+
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
 
@@ -745,6 +764,98 @@ TEST(LibZlog, Read) {
   ASSERT_EQ(ret, 0);
 
   ASSERT_TRUE(bl == bl2);
+
+  // trim a written position
+  ret = log.Trim(pos);
+  ASSERT_EQ(ret, 0);
+  ret = log.Read(pos, bl);
+  ASSERT_EQ(ret, -EFAULT);
+
+  // same for unwritten position
+  pos = 456;
+  ret = log.Trim(pos);
+  ASSERT_EQ(ret, 0);
+  ret = log.Read(pos, bl);
+  ASSERT_EQ(ret, -EFAULT);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlog, Trim) {
+  librados::Rados rados;
+  librados::IoCtx ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
+  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
+
+  zlog::SeqrClient client("localhost", "5678");
+  ASSERT_NO_THROW(client.Connect());
+
+  zlog::Log log;
+  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  ASSERT_EQ(ret, 0);
+
+  // can trim empty spot
+  ret = log.Trim(55);
+  ASSERT_EQ(ret, 0);
+
+  // can trim filled spot
+  ret = log.Fill(60);
+  ASSERT_EQ(ret, 0);
+  ret = log.Trim(60);
+  ASSERT_EQ(ret, 0);
+
+  // can trim written spot
+  uint64_t pos;
+  ceph::bufferlist bl;
+  ret = log.Append(bl, &pos);
+  ASSERT_EQ(ret, 0);
+  ret = log.Trim(pos);
+  ASSERT_EQ(ret, 0);
+
+  // can trim trimmed spot
+  ret = log.Trim(70);
+  ASSERT_EQ(ret, 0);
+  ret = log.Trim(70);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
+}
+
+TEST(LibZlogC, Trim) {
+  rados_t rados;
+  rados_ioctx_t ioctx;
+  std::string pool_name = get_temp_pool_name();
+  ASSERT_EQ(0, create_one_pool_pp(pool_name, &rados));
+  ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
+
+  zlog_log_t log;
+  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ASSERT_EQ(ret, 0);
+
+  // can trim empty spot
+  ret = zlog_trim(log, 55);
+  ASSERT_EQ(ret, 0);
+
+  // can trim filled spot
+  ret = zlog_fill(log, 60);
+  ASSERT_EQ(ret, 0);
+  ret = zlog_trim(log, 60);
+  ASSERT_EQ(ret, 0);
+
+  // can trim written spot
+  uint64_t pos;
+  char data[5];
+  ret = zlog_append(log, data, sizeof(data), &pos);
+  ASSERT_EQ(ret, 0);
+  ret = zlog_trim(log, pos);
+  ASSERT_EQ(ret, 0);
+
+  // can trim trimmed spot
+  ret = zlog_trim(log, 70);
+  ASSERT_EQ(ret, 0);
+  ret = zlog_trim(log, 70);
+  ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -869,6 +980,18 @@ TEST(LibZlogC, Append) {
     ASSERT_EQ(ret, 0);
   }
 
+  uint64_t pos, pos2;
+  ret = zlog_checktail(log, &pos, false);
+  ASSERT_EQ(ret, 0);
+
+  ret = zlog_trim(log, pos);
+  ASSERT_EQ(ret, 0);
+
+  char data[1];
+  ret = zlog_append(log, data, sizeof(data), &pos2);
+  ASSERT_EQ(ret, 0);
+  ASSERT_GT(pos2, pos);
+
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
 
@@ -903,6 +1026,13 @@ TEST(LibZlogC, Fill) {
 
   ret = zlog_fill(log, pos);
   ASSERT_EQ(ret, -EROFS);
+
+  // ok to fill a trimmed position
+  ret = zlog_trim(log, pos);
+  ASSERT_EQ(ret, 0);
+
+  ret = zlog_fill(log, pos);
+  ASSERT_EQ(ret, 0);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
@@ -955,6 +1085,19 @@ TEST(LibZlogC, Read) {
   ASSERT_EQ(ret, sizeof(data2));
 
   ASSERT_TRUE(strcmp(data2, s) == 0);
+
+  // trim a written position
+  ret = zlog_trim(log, pos);
+  ASSERT_EQ(ret, 0);
+  ret = zlog_read(log, pos, data2, sizeof(data2));
+  ASSERT_EQ(ret, -EFAULT);
+
+  // same for unwritten position
+  pos = 456;
+  ret = zlog_trim(log, pos);
+  ASSERT_EQ(ret, 0);
+  ret = zlog_read(log, pos, data2, sizeof(data2));
+  ASSERT_EQ(ret, -EFAULT);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);

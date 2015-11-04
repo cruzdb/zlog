@@ -774,6 +774,33 @@ int Log::Fill(uint64_t position)
   }
 }
 
+int Log::Trim(uint64_t position)
+{
+  for (;;) {
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_trim(op, epoch_, position);
+
+    std::string oid = position_to_oid(position);
+    int ret = ioctx_->operate(oid, &op);
+    if (ret < 0) {
+      std::cerr << "trim: failed ret " << ret << std::endl;
+      return ret;
+    }
+
+    if (ret == zlog::CLS_ZLOG_OK)
+      return 0;
+
+    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    assert(0);
+  }
+}
+
 int Log::AioRead(uint64_t position, AioCompletion *c,
     ceph::bufferlist *pbl)
 {
@@ -1334,6 +1361,12 @@ extern "C" int zlog_fill(zlog_log_t log, uint64_t position)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   return ctx->log.Fill(position);
+}
+
+extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  return ctx->log.Trim(position);
 }
 
 struct zlog_stream_ctx {
