@@ -12,11 +12,21 @@ enum AioType {
 };
 
 struct zlog::Log::AioCompletionImpl {
+  /*
+   * concurrency control
+   */
   std::condition_variable cond;
   std::mutex lock;
   int ref;
   bool complete;
   bool released;
+
+  /*
+   * base log and rados completion
+   */
+  Log *log;
+  librados::IoCtx *ioctx;
+  librados::AioCompletion *c;
 
   /*
    * Common
@@ -50,10 +60,6 @@ struct zlog::Log::AioCompletionImpl {
    *  - where to put result
    */
   ceph::bufferlist *pbl;
-
-  Log *log;
-  librados::IoCtx *ioctx;
-  librados::AioCompletion *c;
 
   AioCompletionImpl() :
     ref(1), complete(false), released(false), retval(0)
@@ -97,7 +103,8 @@ struct zlog::Log::AioCompletionImpl {
     safe_cb_arg = arg;
   }
 
-  static void aio_safe_cb(librados::completion_t cb, void *arg);
+  static void aio_safe_cb_read(librados::completion_t cb, void *arg);
+  static void aio_safe_cb_append(librados::completion_t cb, void *arg);
 };
 
 void zlog::Log::AioCompletion::wait_for_complete()
@@ -129,7 +136,7 @@ void zlog::Log::AioCompletion::set_callback(void *arg,
 /*
  *
  */
-void zlog::Log::AioCompletionImpl::aio_safe_cb(librados::completion_t cb, void *arg)
+void zlog::Log::AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
 {
   zlog::Log::AioCompletionImpl *impl = (zlog::Log::AioCompletionImpl*)arg;
   librados::AioCompletion *rc = impl->c;
@@ -142,17 +149,13 @@ void zlog::Log::AioCompletionImpl::aio_safe_cb(librados::completion_t cb, void *
   // done with the rados completion
   rc->release();
 
-  assert(impl->type == ZLOG_AIO_APPEND ||
-         impl->type == ZLOG_AIO_READ);
+  assert(impl->type == ZLOG_AIO_READ);
 
   if (ret == zlog::CLS_ZLOG_OK) {
     /*
-     * Append was successful. We're done.
+     * Read was successful. We're done.
      */
-    if (impl->type == ZLOG_AIO_APPEND && impl->pposition) {
-      *impl->pposition = impl->position;
-    } else if (impl->type == ZLOG_AIO_READ && impl->pbl &&
-        impl->bl.length() > 0) {
+    if (impl->pbl && impl->bl.length() > 0) {
       *impl->pbl = impl->bl;
     }
     ret = 0;
@@ -170,18 +173,13 @@ void zlog::Log::AioCompletionImpl::aio_safe_cb(librados::completion_t cb, void *
      */
     finish = true;
   } else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN) {
-    assert(impl->type == ZLOG_AIO_READ);
     ret = -ENODEV;
     finish = true;
   } else if (ret == zlog::CLS_ZLOG_INVALIDATED) {
-    assert(impl->type == ZLOG_AIO_READ);
     ret = -EFAULT;
     finish = true;
   } else {
-    if (impl->type == ZLOG_AIO_APPEND)
-      assert(ret == zlog::CLS_ZLOG_READ_ONLY);
-    else
-      assert(0);
+    assert(0);
   }
 
   /*
@@ -189,48 +187,104 @@ void zlog::Log::AioCompletionImpl::aio_safe_cb(librados::completion_t cb, void *
    * stale epoch that we refresh, or if the position was marked read-only.
    */
   if (!finish) {
-    if (impl->type == ZLOG_AIO_APPEND) {
-      // if we are appending, get a new position
-      uint64_t position;
-      ret = impl->log->CheckTail(&position, true);
-      if (ret)
-        finish = true;
-      else
-        impl->position = position;
+    impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb_read);
+    assert(impl->c);
+    // don't need impl->get(): reuse reference
+
+    // build and submit new op
+    std::string oid = impl->log->position_to_oid(impl->position);
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_read(op, impl->log->epoch_, impl->position);
+    ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
+    if (ret)
+      finish = true;
+  }
+
+  // complete aio if append success, or any error
+  if (finish) {
+    impl->retval = ret;
+    impl->complete = true;
+    impl->lock.unlock();
+    if (impl->safe_cb)
+      impl->safe_cb(impl, impl->safe_cb_arg);
+    impl->cond.notify_all();
+    impl->lock.lock();
+    impl->put_unlock();
+    return;
+  }
+
+  impl->lock.unlock();
+}
+
+/*
+ *
+ */
+void zlog::Log::AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
+{
+  zlog::Log::AioCompletionImpl *impl = (zlog::Log::AioCompletionImpl*)arg;
+  librados::AioCompletion *rc = impl->c;
+  bool finish = false;
+
+  impl->lock.lock();
+
+  int ret = rc->get_return_value();
+
+  // done with the rados completion
+  rc->release();
+
+  assert(impl->type == ZLOG_AIO_APPEND);
+
+  if (ret == zlog::CLS_ZLOG_OK) {
+    /*
+     * Append was successful. We're done.
+     */
+    if (impl->pposition) {
+      *impl->pposition = impl->position;
     }
+    ret = 0;
+    finish = true;
+  } else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    /*
+     * We'll need to try again with a new epoch.
+     */
+    ret = impl->log->RefreshProjection();
+    if (ret)
+      finish = true;
+  } else if (ret < 0) {
+    /*
+     * Encountered a RADOS error.
+     */
+    finish = true;
+  } else {
+    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+  }
+
+  /*
+   * Try append again with a new position. This can happen if above there is a
+   * stale epoch that we refresh, or if the position was marked read-only.
+   */
+  if (!finish) {
+    // if we are appending, get a new position
+    uint64_t position;
+    ret = impl->log->CheckTail(&position, true);
+    if (ret)
+      finish = true;
+    else
+      impl->position = position;
 
     // we are still good. build a new aio
     if (!finish) {
-      impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb);
+      impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb_append);
       assert(impl->c);
       // don't need impl->get(): reuse reference
 
       // build and submit new op
       std::string oid = impl->log->position_to_oid(impl->position);
-      switch (impl->type) {
-        case ZLOG_AIO_APPEND:
-          {
-            librados::ObjectWriteOperation op;
-            zlog::cls_zlog_write(op, impl->log->epoch_, impl->position, impl->bl);
-            ret = impl->ioctx->aio_operate(oid, impl->c, &op);
-            if (ret)
-              finish = true;
-          }
-          break;
-
-        case ZLOG_AIO_READ:
-          {
-            librados::ObjectReadOperation op;
-            zlog::cls_zlog_read(op, impl->log->epoch_, impl->position);
-            ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
-            if (ret)
-              finish = true;
-          }
-          break;
-
-        default:
-          assert(0);
-      }
+      librados::ObjectWriteOperation op;
+      zlog::cls_zlog_write(op, impl->log->epoch_, impl->position, impl->bl);
+      ret = impl->ioctx->aio_operate(oid, impl->c, &op);
+      if (ret)
+        finish = true;
     }
   }
 
@@ -288,7 +342,7 @@ int Log::AioAppend(AioCompletion *c, ceph::bufferlist& data,
 
   impl->get(); // rados aio now has a reference
   impl->c = librados::Rados::aio_create_completion(impl, NULL,
-      AioCompletionImpl::aio_safe_cb);
+      AioCompletionImpl::aio_safe_cb_append);
   assert(impl->c);
 
   librados::ObjectWriteOperation op;
@@ -319,7 +373,7 @@ int Log::AioRead(uint64_t position, AioCompletion *c,
 
   impl->get(); // rados aio now has a reference
   impl->c = librados::Rados::aio_create_completion(impl, NULL,
-      AioCompletionImpl::aio_safe_cb);
+      AioCompletionImpl::aio_safe_cb_read);
   assert(impl->c);
 
   librados::ObjectReadOperation op;
