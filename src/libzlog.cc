@@ -2,53 +2,12 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <condition_variable>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
-#include "libzlog.h"
 #include "zlog.pb.h"
-
-/*
- * Pack a protobuf message into a bufferlist.
- */
-template<typename T>
-void pack_msg(ceph::bufferlist& bl, T& m) {
-  assert(m.IsInitialized());
-  char buf[m.ByteSize()];
-  assert(m.SerializeToArray(buf, sizeof(buf)));
-  bl.append(buf, sizeof(buf));
-}
-
-/*
- * Pack a protobuf message into a bufferlist with a length header.
- */
-template<typename T>
-void pack_msg_hdr(ceph::bufferlist& bl, T& m) {
-  assert(m.IsInitialized());
-  uint32_t buf_size = m.ByteSize();
-  char buf[buf_size];
-  assert(m.SerializeToArray(buf, buf_size));
-  uint32_t be_buf_size = htonl(buf_size);
-  bl.append((char*)&be_buf_size, sizeof(be_buf_size));
-  bl.append(buf, sizeof(buf));
-}
-
-/*
- * Unpack a protobuf message from a bufferlist.
- */
-template<typename T>
-bool unpack_msg(T& m, ceph::bufferlist& bl) {
-  if (!m.ParseFromArray(bl.c_str(), bl.length())) {
-    std::cerr << "unpack_msg: could not parse message" << std::endl;
-    return false;
-  }
-  if (!m.IsInitialized()) {
-    std::cerr << "unpack_msg: message is uninitialized" << std::endl;
-    return false;
-  }
-  return true;
-}
+#include "protobuf_bufferlist_adapter.h"
+#include "internal.hpp"
 
 namespace zlog {
 
@@ -320,303 +279,6 @@ int Log::CheckTail(const std::set<uint64_t>& stream_ids,
   assert(0);
 }
 
-enum AioType {
-  ZLOG_AIO_APPEND,
-  ZLOG_AIO_READ,
-};
-
-struct zlog::Log::AioCompletionImpl {
-  std::condition_variable cond;
-  std::mutex lock;
-  int ref;
-  bool complete;
-  bool released;
-
-  /*
-   * Common
-   *
-   * position:
-   *   - current attempt (append)
-   *   - target (read)
-   * bl:
-   *  - data being appended (append)
-   *  - temp storage for read (read)
-   */
-  int retval;
-  Log::AioCompletion::callback_t safe_cb;
-  void *safe_cb_arg;
-  uint64_t position;
-  ceph::bufferlist bl;
-  AioType type;
-
-  /*
-   * AioAppend
-   *
-   * pposition:
-   *  - final append position
-   */
-  uint64_t *pposition;
-
-  /*
-   * AioRead
-   *
-   * pbl:
-   *  - where to put result
-   */
-  ceph::bufferlist *pbl;
-
-  Log *log;
-  librados::IoCtx *ioctx;
-  librados::AioCompletion *c;
-
-  AioCompletionImpl() :
-    ref(1), complete(false), released(false), retval(0)
-  {}
-
-  int wait_for_complete() {
-    std::unique_lock<std::mutex> l(lock);
-    cond.wait(l, [&]{ return complete; });
-    return 0;
-  }
-
-  int get_return_value() {
-    std::lock_guard<std::mutex> l(lock);
-    return retval;
-  }
-
-  void release() {
-    lock.lock();
-    assert(!released);
-    released = true;
-    put_unlock();
-  }
-
-  void put_unlock() {
-    assert(ref > 0);
-    int n = --ref;
-    lock.unlock();
-    if (!n)
-      delete this;
-  }
-
-  void get() {
-    std::lock_guard<std::mutex> l(lock);
-    assert(ref > 0);
-    ref++;
-  }
-
-  void set_callback(void *arg, zlog::Log::AioCompletion::callback_t cb) {
-    std::lock_guard<std::mutex> l(lock);
-    safe_cb = cb;
-    safe_cb_arg = arg;
-  }
-};
-
-void zlog::Log::AioCompletion::wait_for_complete()
-{
-  AioCompletionImpl *impl = (AioCompletionImpl*)pc;
-  impl->wait_for_complete();
-}
-
-int zlog::Log::AioCompletion::get_return_value()
-{
-  zlog::Log::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
-  return impl->get_return_value();
-}
-
-void zlog::Log::AioCompletion::release()
-{
-  zlog::Log::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
-  impl->release();
-  delete this;
-}
-
-void zlog::Log::AioCompletion::set_callback(void *arg,
-    zlog::Log::AioCompletion::callback_t cb)
-{
-  zlog::Log::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
-  impl->set_callback(arg, cb);
-}
-
-/*
- *
- */
-void aio_safe_cb(librados::completion_t cb, void *arg)
-{
-  zlog::Log::AioCompletionImpl *impl = (zlog::Log::AioCompletionImpl*)arg;
-  librados::AioCompletion *rc = impl->c;
-  bool finish = false;
-
-  impl->lock.lock();
-
-  int ret = rc->get_return_value();
-
-  // done with the rados completion
-  rc->release();
-
-  assert(impl->type == ZLOG_AIO_APPEND ||
-         impl->type == ZLOG_AIO_READ);
-
-  if (ret == zlog::CLS_ZLOG_OK) {
-    /*
-     * Append was successful. We're done.
-     */
-    if (impl->type == ZLOG_AIO_APPEND && impl->pposition) {
-      *impl->pposition = impl->position;
-    } else if (impl->type == ZLOG_AIO_READ && impl->pbl &&
-        impl->bl.length() > 0) {
-      *impl->pbl = impl->bl;
-    }
-    ret = 0;
-    finish = true;
-  } else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
-    /*
-     * We'll need to try again with a new epoch.
-     */
-    ret = impl->log->RefreshProjection();
-    if (ret)
-      finish = true;
-  } else if (ret < 0) {
-    /*
-     * Encountered a RADOS error.
-     */
-    finish = true;
-  } else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN) {
-    assert(impl->type == ZLOG_AIO_READ);
-    ret = -ENODEV;
-    finish = true;
-  } else if (ret == zlog::CLS_ZLOG_INVALIDATED) {
-    assert(impl->type == ZLOG_AIO_READ);
-    ret = -EFAULT;
-    finish = true;
-  } else {
-    if (impl->type == ZLOG_AIO_APPEND)
-      assert(ret == zlog::CLS_ZLOG_READ_ONLY);
-    else
-      assert(0);
-  }
-
-  /*
-   * Try append again with a new position. This can happen if above there is a
-   * stale epoch that we refresh, or if the position was marked read-only.
-   */
-  if (!finish) {
-    if (impl->type == ZLOG_AIO_APPEND) {
-      // if we are appending, get a new position
-      uint64_t position;
-      ret = impl->log->CheckTail(&position, true);
-      if (ret)
-        finish = true;
-      else
-        impl->position = position;
-    }
-
-    // we are still good. build a new aio
-    if (!finish) {
-      impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb);
-      assert(impl->c);
-      // don't need impl->get(): reuse reference
-
-      // build and submit new op
-      std::string oid = impl->log->position_to_oid(impl->position);
-      switch (impl->type) {
-        case ZLOG_AIO_APPEND:
-          {
-            librados::ObjectWriteOperation op;
-            zlog::cls_zlog_write(op, impl->log->epoch_, impl->position, impl->bl);
-            ret = impl->ioctx->aio_operate(oid, impl->c, &op);
-            if (ret)
-              finish = true;
-          }
-          break;
-
-        case ZLOG_AIO_READ:
-          {
-            librados::ObjectReadOperation op;
-            zlog::cls_zlog_read(op, impl->log->epoch_, impl->position);
-            ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
-            if (ret)
-              finish = true;
-          }
-          break;
-
-        default:
-          assert(0);
-      }
-    }
-  }
-
-  // complete aio if append success, or any error
-  if (finish) {
-    impl->retval = ret;
-    impl->complete = true;
-    impl->lock.unlock();
-    if (impl->safe_cb)
-      impl->safe_cb(impl, impl->safe_cb_arg);
-    impl->cond.notify_all();
-    impl->lock.lock();
-    impl->put_unlock();
-    return;
-  }
-
-  impl->lock.unlock();
-}
-
-Log::AioCompletion *Log::aio_create_completion(void *arg,
-    Log::AioCompletion::callback_t cb)
-{
-  AioCompletionImpl *impl = new AioCompletionImpl;
-  impl->safe_cb = cb;
-  impl->safe_cb_arg = arg;
-  return new AioCompletion(impl);
-}
-
-Log::AioCompletion *Log::aio_create_completion()
-{
-  return aio_create_completion(NULL, NULL);
-}
-
-/*
- * The retry for AioAppend is coordinated through the aio_safe_cb callback
- * which will dispatch a new rados operation.
- */
-int Log::AioAppend(AioCompletion *c, ceph::bufferlist& data,
-    uint64_t *pposition)
-{
-  // initial position guess
-  uint64_t position;
-  int ret = CheckTail(&position, true);
-  if (ret)
-    return ret;
-
-  AioCompletionImpl *impl = (AioCompletionImpl*)c->pc;
-
-  impl->log = this;
-  impl->bl = data;
-  impl->position = position;
-  impl->pposition = pposition;
-  impl->ioctx = ioctx_;
-  impl->type = ZLOG_AIO_APPEND;
-
-  impl->get(); // rados aio now has a reference
-  impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb);
-  assert(impl->c);
-
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch_, position, data);
-
-  std::string oid = position_to_oid(position);
-  ret = ioctx_->aio_operate(oid, impl->c, &op);
-  /*
-   * Currently aio_operate never fails. If in the future that changes then we
-   * need to make sure that references to impl and the rados completion are
-   * cleaned up correctly.
-   */
-  assert(ret == 0);
-
-  return ret;
-}
-
 int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
   for (;;) {
@@ -627,71 +289,6 @@ int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
 
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_write(op, epoch_, position, data);
-
-    std::string oid = position_to_oid(position);
-    ret = ioctx_->operate(oid, &op);
-    if (ret < 0) {
-      std::cerr << "append: failed ret " << ret << std::endl;
-      return ret;
-    }
-
-    if (ret == zlog::CLS_ZLOG_OK) {
-      if (pposition)
-        *pposition = position;
-      return 0;
-    }
-
-    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
-        return ret;
-      continue;
-    }
-
-    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
-  }
-  assert(0);
-}
-
-int Log::MultiAppend(ceph::bufferlist& data,
-    const std::set<uint64_t>& stream_ids, uint64_t *pposition)
-{
-  for (;;) {
-    /*
-     * Get a new spot at the tail of the log and return a set of backpointers
-     * for the specified streams. The stream ids and backpointers are stored
-     * in the header of the entry being appeneded to the log.
-     */
-    uint64_t position;
-    std::map<uint64_t, std::vector<uint64_t>> stream_backpointers;
-    int ret = CheckTail(stream_ids, stream_backpointers, &position, true);
-    if (ret)
-      return ret;
-
-    assert(stream_ids.size() == stream_backpointers.size());
-
-    zlog_proto::EntryHeader hdr;
-    size_t index = 0;
-    for (std::set<uint64_t>::const_iterator it = stream_ids.begin();
-         it != stream_ids.end(); it++) {
-      uint64_t stream_id = *it;
-      const std::vector<uint64_t>& backpointers = stream_backpointers[index];
-      zlog_proto::StreamBackPointer *ptrs = hdr.add_stream_backpointers();
-      ptrs->set_id(stream_id);
-      for (std::vector<uint64_t>::const_iterator it2 = backpointers.begin();
-           it2 != backpointers.end(); it2++) {
-        uint64_t pos = *it2;
-        ptrs->add_backpointer(pos);
-      }
-      index++;
-    }
-
-    ceph::bufferlist bl;
-    pack_msg_hdr<zlog_proto::EntryHeader>(bl, hdr);
-    bl.append(data.c_str(), data.length());
-
-    librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write(op, epoch_, position, bl);
 
     std::string oid = position_to_oid(position);
     ret = ioctx_->operate(oid, &op);
@@ -801,36 +398,6 @@ int Log::Trim(uint64_t position)
   }
 }
 
-int Log::AioRead(uint64_t position, AioCompletion *c,
-    ceph::bufferlist *pbl)
-{
-  AioCompletionImpl *impl = (AioCompletionImpl*)c->pc;
-
-  impl->log = this;
-  impl->pbl = pbl;
-  impl->position = position;
-  impl->ioctx = ioctx_;
-  impl->type = ZLOG_AIO_READ;
-
-  impl->get(); // rados aio now has a reference
-  impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb);
-  assert(impl->c);
-
-  librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch_, position);
-
-  std::string oid = position_to_oid(position);
-  int ret = ioctx_->aio_operate(oid, impl->c, &op, &impl->bl);
-  /*
-   * Currently aio_operate never fails. If in the future that changes then we
-   * need to make sure that references to impl and the rados completion are
-   * cleaned up correctly.
-   */
-  assert(ret == 0);
-
-  return ret;
-}
-
 int Log::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
@@ -895,300 +462,6 @@ int Log::Read(uint64_t position, ceph::bufferlist& bl)
   assert(0);
 }
 
-int Log::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
-    size_t *header_size)
-{
-  if (bl.length() <= sizeof(uint32_t))
-    return -EINVAL;
-
-  const char *data = bl.c_str();
-
-  uint32_t hdr_len = ntohl(*((uint32_t*)data));
-  if (hdr_len > 512) // TODO something reasonable...?
-    return -EINVAL;
-
-  if ((sizeof(uint32_t) + hdr_len) > bl.length())
-    return -EINVAL;
-
-  zlog_proto::EntryHeader hdr;
-  if (!hdr.ParseFromArray(data + sizeof(uint32_t), hdr_len))
-    return -EINVAL;
-
-  if (!hdr.IsInitialized())
-    return -EINVAL;
-
-  std::set<uint64_t> ids;
-  for (int i = 0; i < hdr.stream_backpointers_size(); i++) {
-    const zlog_proto::StreamBackPointer& ptr = hdr.stream_backpointers(i);
-    ids.insert(ptr.id());
-  }
-
-  if (header_size)
-    *header_size = sizeof(uint32_t) + hdr_len;
-
-  stream_ids.swap(ids);
-
-  return 0;
-}
-
-int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
-{
-  ceph::bufferlist bl;
-  int ret = Read(position, bl);
-  if (ret)
-    return ret;
-
-  ret = StreamHeader(bl, stream_ids);
-
-  return ret;
-}
-
-int Log::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
-{
-  ceph::bufferlist bl;
-  int ret = Read(epoch, position, bl);
-  if (ret)
-    return ret;
-
-  ret = StreamHeader(bl, stream_ids);
-
-  return ret;
-}
-
-struct Log::Stream::StreamImpl {
-  uint64_t stream_id;
-  Log *log;
-
-  std::set<uint64_t> pos;
-  std::set<uint64_t>::const_iterator prevpos;
-  std::set<uint64_t>::const_iterator curpos;
-};
-
-std::vector<uint64_t> Log::Stream::History() const
-{
-  Log::Stream::StreamImpl *impl = this->impl;
-
-  std::vector<uint64_t> ret;
-  for (auto it = impl->pos.cbegin(); it != impl->pos.cend(); it++)
-    ret.push_back(*it);
-  return ret;
-}
-
-int Log::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
-{
-  Log::Stream::StreamImpl *impl = this->impl;
-  std::set<uint64_t> stream_ids;
-  stream_ids.insert(impl->stream_id);
-  return impl->log->MultiAppend(data, stream_ids, pposition);
-}
-
-int Log::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
-{
-  Log::Stream::StreamImpl *impl = this->impl;
-
-  if (impl->curpos == impl->pos.cend())
-    return -EBADF;
-
-  assert(!impl->pos.empty());
-
-  uint64_t pos = *impl->curpos;
-
-  ceph::bufferlist bl_out;
-  int ret = impl->log->Read(pos, bl_out);
-  if (ret)
-    return ret;
-
-  size_t header_size;
-  std::set<uint64_t> stream_ids;
-  ret = impl->log->StreamHeader(bl_out, stream_ids, &header_size);
-  if (ret)
-    return -EIO;
-
-  assert(stream_ids.find(impl->stream_id) != stream_ids.end());
-
-  // FIXME: how to create this view more efficiently?
-  const char *data = bl_out.c_str();
-  bl.append(data + header_size, bl_out.length() - header_size);
-
-  if (pposition)
-    *pposition = pos;
-
-  impl->prevpos = impl->curpos;
-  impl->curpos++;
-
-  return 0;
-}
-
-int Log::Stream::Reset()
-{
-  Log::Stream::StreamImpl *impl = this->impl;
-  impl->curpos = impl->pos.cbegin();
-  return 0;
-}
-
-/*
- * Optimizations:
- *   - follow backpointers
- */
-int Log::Stream::Sync()
-{
-  Log::Stream::StreamImpl *impl = this->impl;
-  const uint64_t stream_id = impl->stream_id;
-
-  /*
-   * First contact the sequencer to find out what log position corresponds to
-   * the tail of the stream, and then synchronize up to that position.
-   */
-  std::set<uint64_t> stream_ids;
-  stream_ids.insert(stream_id);
-
-  std::map<uint64_t, std::vector<uint64_t>> stream_backpointers;
-
-  int ret = impl->log->CheckTail(stream_ids, stream_backpointers, NULL, false);
-  if (ret)
-    return ret;
-
-  assert(stream_backpointers.size() == 1);
-  const std::vector<uint64_t>& backpointers = stream_backpointers.at(stream_id);
-
-  /*
-   * The tail of the stream is the maximum log position handed out by the
-   * sequencer for this particular stream. When the tail of a stream is
-   * incremented the position is placed onto the list of backpointers. Thus
-   * the max position in the backpointers set for a stream is the tail
-   * position of the stream.
-   *
-   * If the current set of backpointers is empty, then the stream is empty and
-   * there is nothing to do.
-   */
-  std::vector<uint64_t>::const_iterator bpit =
-    std::max_element(backpointers.begin(), backpointers.end());
-  if (bpit == backpointers.end()) {
-    assert(impl->pos.empty());
-    return 0;
-  }
-  uint64_t stream_tail = *bpit;
-
-  /*
-   * Avoid sync in log ranges that we've already processed by examining the
-   * maximum stream position that we know about. If our local stream history
-   * is empty then use the beginning of the log as the low point.
-   *
-   * we are going to search for stream entries between stream_tail (the last
-   * position handed out by the sequencer for this stream), and the largest
-   * stream position that we (the client) knows about. if we do not yet know
-   * about any stream positions then we'll search down until position zero.
-   */
-  bool has_known = false;
-  uint64_t known_stream_tail;
-  if (!impl->pos.empty()) {
-    auto it = impl->pos.crbegin();
-    assert(it != impl->pos.crend());
-    known_stream_tail = *it;
-    has_known = true;
-  }
-
-  assert(!has_known || known_stream_tail <= stream_tail);
-  if (has_known && known_stream_tail == stream_tail)
-    return 0;
-
-  std::set<uint64_t> updates;
-  for (;;) {
-    if (has_known && stream_tail == known_stream_tail)
-      break;
-    for (;;) {
-      std::set<uint64_t> stream_ids;
-      ret = impl->log->StreamMembership(stream_ids, stream_tail);
-      if (ret == 0) {
-        // save position if it belongs to this stream
-        if (stream_ids.find(stream_id) != stream_ids.end())
-          updates.insert(stream_tail);
-        break;
-      } else if (ret == -EINVAL) {
-        // skip non-stream entries
-        break;
-      } else if (ret == -EFAULT) {
-        // skip invalidated entries
-        break;
-      } else if (ret == -ENODEV) {
-        // fill entries unwritten entries
-        ret = impl->log->Fill(stream_tail);
-        if (ret == 0) {
-          // skip invalidated entries
-          break;
-        } else if (ret == -EROFS) {
-          // retry
-          continue;
-        } else
-          return ret;
-      } else
-        return ret;
-    }
-    if (!has_known && stream_tail == 0)
-      break;
-    stream_tail--;
-  }
-
-  if (updates.empty())
-    return 0;
-
-  impl->pos.insert(updates.begin(), updates.end());
-
-  if (impl->curpos == impl->pos.cend()) {
-    if (impl->prevpos == impl->pos.cend()) {
-      impl->curpos = impl->pos.cbegin();
-      assert(impl->curpos != impl->pos.cend());
-    } else {
-      impl->curpos = impl->prevpos;
-      impl->curpos++;
-      assert(impl->curpos != impl->pos.cend());
-    }
-  }
-
-  return 0;
-}
-
-uint64_t Log::Stream::Id() const
-{
-  Log::Stream::StreamImpl *impl = this->impl;
-  return impl->stream_id;
-}
-
-int Log::OpenStream(uint64_t stream_id, Stream& stream)
-{
-  assert(!stream.impl);
-
-  Log::Stream::StreamImpl *impl = new Log::Stream::StreamImpl;
-  impl->stream_id = stream_id;
-  impl->log = this;
-
-  /*
-   * Previous position always points to the last position in the stream that
-   * was successfully read, except on initialization when it points to the end
-   * of the stream.
-   */
-  impl->prevpos = impl->pos.cend();
-
-  /*
-   * Current position always points to the element that is the next to be
-   * read, or to the end of the stream if there are no [more] elements in the
-   * stream to be read.
-   */
-  impl->curpos = impl->pos.cbegin();
-
-  stream.impl = impl;
-
-  return 0;
-}
-
-}
-
-struct zlog_log_ctx {
-  librados::IoCtx ioctx;
-  zlog::SeqrClient *seqr;
-  zlog::Log log;
-};
-
 extern "C" int zlog_destroy(zlog_log_t log)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
@@ -1197,9 +470,6 @@ extern "C" int zlog_destroy(zlog_log_t log)
   return 0;
 }
 
-/*
- *
- */
 extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
     const char *host, const char *port,
     zlog_log_t *log)
@@ -1224,9 +494,6 @@ extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
   return 0;
 }
 
-/*
- *
- */
 extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
     int stripe_size, const char *host, const char *port,
     zlog_log_t *log)
@@ -1251,9 +518,6 @@ extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
   return 0;
 }
 
-/*
- *
- */
 extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
     int stripe_size, const char *host, const char *port,
     zlog_log_t *log)
@@ -1278,9 +542,6 @@ extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
   return 0;
 }
 
-/*
- *
- */
 extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition, int next)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
@@ -1305,9 +566,6 @@ extern "C" int zlog_checktail_batch(zlog_log_t log, uint64_t *positions,
   return 0;
 }
 
-/*
- *
- */
 extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
     uint64_t *pposition)
 {
@@ -1317,9 +575,6 @@ extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
   return ctx->log.Append(bl, pposition);
 }
 
-/*
- *
- */
 extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
     size_t data_len, const uint64_t *stream_ids, size_t stream_ids_len,
     uint64_t *pposition)
@@ -1333,9 +588,6 @@ extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
   return ctx->log.MultiAppend(bl, ids, pposition);
 }
 
-/*
- *
- */
 extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
     size_t len)
 {
@@ -1354,9 +606,6 @@ extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
   return ret;
 }
 
-/*
- *
- */
 extern "C" int zlog_fill(zlog_log_t log, uint64_t position)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
@@ -1369,132 +618,4 @@ extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
   return ctx->log.Trim(position);
 }
 
-struct zlog_stream_ctx {
-  zlog::Log::Stream stream;
-  zlog_log_ctx *log_ctx;
-};
-
-/*
- *
- */
-extern "C" int zlog_stream_open(zlog_log_t log, uint64_t stream_id,
-    zlog_stream_t *pstream)
-{
-  zlog_log_ctx *log_ctx = (zlog_log_ctx*)log;
-
-  zlog_stream_ctx *stream_ctx = new zlog_stream_ctx;
-  stream_ctx->log_ctx = log_ctx;
-
-  int ret = log_ctx->log.OpenStream(stream_id, stream_ctx->stream);
-  if (ret) {
-    delete stream_ctx;
-    return ret;
-  }
-
-  *pstream = stream_ctx;
-
-  return 0;
-}
-
-/*
- *
- */
-extern "C" int zlog_stream_append(zlog_stream_t stream, const void *data,
-    size_t len, uint64_t *pposition)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  ceph::bufferlist bl;
-  bl.append((char*)data, len);
-  return ctx->stream.Append(bl, pposition);
-}
-
-/*
- *
- */
-extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
-    size_t len, uint64_t *pposition)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-
-  ceph::bufferlist bl;
-  // FIXME: below the buffer is added to avoid double copies. However, in
-  // ReadNext we have to create a view of the data read to remove the header.
-  // It isn't clear how to do that without the copies. As a fix for now we
-  // just force the case where the bufferlist has to be resized.
-#if 0
-  ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
-  bl.push_back(bp);
-#endif
-
-  int ret = ctx->stream.ReadNext(bl, pposition);
-
-  if (ret >= 0) {
-    if (bl.length() > len)
-      return -ERANGE;
-    if (bl.c_str() != data)
-      bl.copy(0, bl.length(), (char*)data);
-    ret = bl.length();
-  }
-
-  return ret;
-}
-
-/*
- *
- */
-extern "C" int zlog_stream_reset(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream.Reset();
-}
-
-/*
- *
- */
-extern "C" int zlog_stream_sync(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream.Sync();
-}
-
-/*
- *
- */
-extern "C" uint64_t zlog_stream_id(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream.Id();
-}
-
-extern "C" size_t zlog_stream_history(zlog_stream_t stream, uint64_t *pos, size_t len)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-
-  std::vector<uint64_t> history = ctx->stream.History();
-  size_t size = history.size();
-  if (pos && size <= len)
-    std::copy(history.begin(), history.end(), pos);
-
-  return size;
-}
-
-extern "C" int zlog_stream_membership(zlog_log_t log,
-    uint64_t *stream_ids, size_t len, uint64_t position)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-
-  std::set<uint64_t> ids;
-  int ret = ctx->log.StreamMembership(ids, position);
-  if (ret)
-    return ret;
-
-  size_t size = ids.size();
-  if (size <= len) {
-    std::vector<uint64_t> tmp;
-    for (auto it = ids.begin(); it != ids.end(); it++)
-      tmp.push_back(*it);
-    std::copy(tmp.begin(), tmp.end(), stream_ids);
-  }
-
-  return size;
 }

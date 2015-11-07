@@ -5,8 +5,6 @@
 
 namespace zlog {
 
-extern void aio_safe_cb(librados::completion_t cb, void *arg);
-
 class Log {
  public:
   Log() {}
@@ -190,8 +188,6 @@ class Log {
   int stripe_size_;
   SeqrClient *seqr;
   uint64_t epoch_;
-
-  friend void zlog::aio_safe_cb(librados::completion_t cb, void *arg);
 };
 
 }
