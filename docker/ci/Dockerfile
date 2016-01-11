@@ -4,27 +4,19 @@ MAINTAINER Noah Watkins <noahwatkins@gmail.com>
 
 RUN apt-get update && apt-get install -y git wget
 
-# install ceph master development branch
+# built ceph/rados bits
 RUN wget -q -O- 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/autobuild.asc' | sudo apt-key add -
-RUN echo deb http://gitbuilder.ceph.com/ceph-deb-$(lsb_release -sc)-x86_64-basic/ref/master $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
+RUN echo deb http://gitbuilder.ceph.com/ceph-deb-$(lsb_release -sc)-x86_64-basic/ref/jewel $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
 RUN apt-get update && apt-get install -y --force-yes ceph librados-dev
 
-# install ceph build dependencies and build zlog ceph plugin bits
+# ceph dev deps
 RUN mkdir /src && cd /src && \
-  git clone --recursive https://github.com/noahdesu/ceph.git && \
+  git clone --branch=jewel --recursive https://github.com/ceph/ceph.git && \
   cd ceph && \
-  git checkout -b cls_zlog origin/cls_zlog && \
-  bash ./install-deps.sh && \
-  ./autogen.sh && \
-  ./configure && \
-  cd src && \
-  make libcls_zlog.la && \
-  make libcls_zlog_client.la && \
-  cp .libs/libcls_zlog.so* /usr/lib/rados-classes/ && \
-  cp .libs/libcls_zlog_client.so* /usr/lib/ && \
-  cp cls/zlog/cls_zlog_client.h /usr/include/rados/ && \
-  cd .. && \
-  make clean
+  bash ./install-deps.sh
+
+# zlog dev deps
+RUN apt-get install -y libprotobuf-dev protobuf-compiler
 
 ADD micro-osd.sh /src/micro-osd.sh
 ADD entrypoint.sh /entrypoint.sh
