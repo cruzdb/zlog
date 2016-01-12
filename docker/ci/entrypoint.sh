@@ -37,12 +37,13 @@ fi
 cd zlog
 git status
 
-autoreconf -ivf
-./configure
+mkdir build
+cd build
+cmake ..
 make
 
 # run seqr and tests
-cd /src/zlog/src
+cd src
 export CEPH_CONF=/tmp/ceph/ceph.conf
 ./zlog-seqr --port 5678 --daemon
-./test
+./zlog-test
