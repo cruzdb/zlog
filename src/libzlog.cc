@@ -18,6 +18,20 @@ std::string Log::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
+std::string Log::position_to_oid_from_map(uint64_t position)
+{
+  std::map<uint64_t,int>::iterator it, search;
+  search = stripe_map_.find(position);
+  if (search != stripe_map_.end())
+  {
+    // Exact key found.
+    return slot_to_oid(position % search->second);
+  }
+  it = stripe_map_.lower_bound(position);
+  --it;
+  return slot_to_oid(position % it->second);
+}
+
 std::string Log::position_to_oid(uint64_t position)
 {
   // round-robin striping
@@ -47,7 +61,10 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
 
   // pack up config info in a buffer
   zlog_proto::MetaLog config;
-  config.set_stripe_size(stripe_size);
+  zlog_proto::MetaLog::Stripe* new_stripe = config.add_stripes();
+  new_stripe->set_stripe_size(stripe_size);
+  new_stripe->set_start_sequence(0);
+
   ceph::bufferlist bl;
   pack_msg<zlog_proto::MetaLog>(bl, config);
 
@@ -70,6 +87,8 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   log.name_ = name;
   log.metalog_oid_ = metalog_oid;
   log.stripe_size_ = stripe_size;
+  // Initialize stripe_map_ here.
+  log.stripe_map_[0] = stripe_size;
   log.seqr = seqr;
 
   ret = log.RefreshProjection();
@@ -111,7 +130,17 @@ int Log::Open(librados::IoCtx& ioctx, const std::string& name,
   log.pool_ = ioctx.get_pool_name();
   log.name_ = name;
   log.metalog_oid_ = metalog_oid;
-  log.stripe_size_ = config.stripe_size();
+  int len_stripes = config.stripes_size();
+  // Use the latest stripe size entry for the append stripe_size_.
+  log.stripe_size_ = config.stripes(len_stripes - 1).stripe_size();
+
+  // Initialize stripe_map_ here. 
+  for (int i = 0; i < len_stripes; i++)
+  {
+    uint64_t seq_num = config.stripes(i).start_sequence();
+    log.stripe_map_[seq_num] = config.stripes(i).stripe_size();
+  }
+ 
   log.seqr = seqr;
 
   ret = log.RefreshProjection();
@@ -146,7 +175,7 @@ int Log::Seal(uint64_t epoch)
     cls_zlog_seal(op, epoch);
     int ret = ioctx_->operate(oid, &op);
     if (ret != zlog::CLS_ZLOG_OK) {
-      std::cerr << "failed to seal object" << std::endl;
+      std::cerr << "failed to seal object" << oid << std::endl;
       return ret;
     }
   }
@@ -398,19 +427,130 @@ int Log::Trim(uint64_t position)
   }
 }
 
+int Log::UpdateLayout(librados::IoCtx& ioctx, int stripe_size)
+{
+  uint64_t epoch;
+  uint64_t max_position;
+  int ret;
+  int max_stripe_size = 0;
+
+  for (std::map<uint64_t,int>::iterator it = stripe_map_.begin(); it != stripe_map_.end(); ++it) {
+    if(it->second > max_stripe_size) {
+      max_stripe_size = it->second;
+    }
+  }
+  if (stripe_size > max_stripe_size)
+  {
+    for (int i = max_stripe_size; i < stripe_size; i++) {
+      std::string oid = slot_to_oid(i);
+      librados::ObjectWriteOperation op;
+      cls_zlog_seal(op, epoch);
+      int ret = ioctx_->operate(oid, &op);
+      if (ret != zlog::CLS_ZLOG_OK) {
+        std::cerr << "failed to seal object" << std::endl;
+        return ret;
+      }
+    }
+  } 
+  // 1. Update the metadata in the head object metalog oid
+  // 2. Seal the objects with the current epoch, but only
+  //    the new objects being created
+  //
+  //    When the client that created the log is restarted and instructed to open the log it will retrieve the metadata updated by this function from the metalog head object. Since UpdateLayout also seals the new objects corresponding to the new stripe width, then appends to those objects by the client performing the workload should succeed.
+
+  /* 
+  std::cout << "epoch " << epoch_ << std::endl; 
+  ret = SetProjection(&epoch);
+  if (ret) {
+    std::cerr << "failed to set new projection " << ret << std::endl;
+    return ret;
+  }
+ 
+  std::cout << "epoch " << epoch_ << std::endl; 
+  ret = Seal(epoch_);
+  if (ret) {
+    std::cerr << "failed to seal the store  loc" << ret << std::endl;
+    return ret;
+  }
+  */
+  bool log_empty;
+  ret = FindMaxPosition(epoch_, &log_empty, &max_position);
+  if (ret) {
+    std::cerr << "failed to find max position " << ret << std::endl;
+    return ret;
+  }
+
+  // Read metalog from rados object.
+  std::string metalog_oid = Log::metalog_oid_from_name(name_);
+
+  ceph::bufferlist bl;
+  ret = ioctx.read(metalog_oid, bl, 0, 0);
+  if (ret < 0) {
+    std::cerr << "failed to read object " << metalog_oid << " ret "
+      << ret << std::endl;
+    return ret;
+  }
+
+  zlog_proto::MetaLog config;
+  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
+    std::cerr << "failed to parse configuration" << std::endl;
+    return -EIO;
+  }
+
+  // Update metalog stripe list with new striping layout.
+  zlog_proto::MetaLog::Stripe* new_stripe = config.add_stripes();
+  new_stripe->set_stripe_size(stripe_size);
+  new_stripe->set_start_sequence(max_position + 1);
+
+  config.PrintDebugString();
+  // Write to the metalog rados object.
+  bl.clear();
+  pack_msg<zlog_proto::MetaLog>(bl, config);
+
+  // setup rados operation to create log
+  librados::ObjectWriteOperation op;
+  op.write_full(bl);
+  cls_zlog_set_projection(op);
+
+  ret = ioctx.operate(metalog_oid, &op);
+  if (ret) {
+    std::cerr << "Failed to update metalog " << name_ << " ret "
+      << ret << " (" << strerror(-ret) << ")" << std::endl;
+    return ret;
+  }
+
+  stripe_size_ = stripe_size;
+  /*
+  ret = SetProjection(&epoch);
+  if (ret) {
+    std::cerr << "failed to set new projection " << ret << std::endl;
+    return ret;
+  }
+  */
+  /*
+  ret = Seal(epoch_);
+  if (ret) {
+    std::cerr << "failed to seal the store " << ret << std::endl;
+    return ret;
+  }*/
+  //std::cout << "epoch " << epoch_ << std::endl; 
+  //std::cout << "log position" << max_position << " Empty: " << log_empty << std::endl;
+  return 0; 
+}
+
 int Log::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, epoch, position);
 
-    std::string oid = position_to_oid(position);
+    // Change position_to_oid to position_to_oid_from_map
+    std::string oid = position_to_oid_from_map(position);
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;
     }
-
     if (ret == zlog::CLS_ZLOG_OK)
       return 0;
     else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN)
@@ -436,7 +576,7 @@ int Log::Read(uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = position_to_oid_from_map(position);
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;

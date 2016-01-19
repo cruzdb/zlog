@@ -115,6 +115,11 @@ class Log {
    *
    */
   int Trim(uint64_t position);
+ 
+  /*
+   *
+   */
+  int UpdateLayout(librados::IoCtx& ioctx, int stripe_size);
 
   /*
    * Create a new log.
@@ -180,12 +185,14 @@ class Log {
   static std::string metalog_oid_from_name(const std::string& name);
   std::string slot_to_oid(int i);
   std::string position_to_oid(uint64_t position);
+  std::string position_to_oid_from_map(uint64_t position);
 
   librados::IoCtx *ioctx_;
   std::string pool_;
   std::string name_;
   std::string metalog_oid_;
   int stripe_size_;
+  std::map<uint64_t, int> stripe_map_;
   SeqrClient *seqr;
   uint64_t epoch_;
 };
