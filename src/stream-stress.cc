@@ -39,7 +39,7 @@ int main(int argc, char **argv)
   client->Connect();
 
   zlog::LogHL log;
-  ret = zlog::LogHL::OpenOrCreate(ioctx, "log2", 5, client, log);
+  ret = zlog::LogHL::OpenOrCreate(ioctx, "log2", client, log);
   assert(ret == 0);
 
   std::vector<zlog::LogHL::Stream> stream(10);

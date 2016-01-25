@@ -33,7 +33,7 @@ static void make_context(librados::Rados& rados, librados::IoCtx& ioctx)
 static void get_log(librados::IoCtx& ioctx, zlog::LogHL& log, std::string name,
     zlog::SeqrClient *client)
 {
-  int ret = zlog::LogHL::OpenOrCreate(ioctx, name, 13, client, log);
+  int ret = zlog::LogHL::OpenOrCreate(ioctx, name, client, log);
   ASSERT_EQ(ret, 0);
 }
 

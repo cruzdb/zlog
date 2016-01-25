@@ -71,17 +71,17 @@ class LogHL {
    */
 
   static int Create(librados::IoCtx& ioctx, const std::string& name,
-      int stripe_size, SeqrClient *seqr, LogHL& log);
+      SeqrClient *seqr, LogHL& log);
 
   static int Open(librados::IoCtx& ioctx, const std::string& name,
       SeqrClient *seqr, LogHL& log);
 
   static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
-      int stripe_size, SeqrClient *seqr, LogHL& log) {
+      SeqrClient *seqr, LogHL& log) {
     int ret = Open(ioctx, name, seqr, log);
     if (ret != -ENOENT)
       return ret;
-    ret = Create(ioctx, name, stripe_size, seqr, log);
+    ret = Create(ioctx, name, seqr, log);
     if (ret == 0)
       return Open(ioctx, name, seqr, log);
     return ret;

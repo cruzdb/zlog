@@ -9,6 +9,14 @@
 #include "protobuf_bufferlist_adapter.h"
 #include "internal.hpp"
 
+/*
+ * We can use Ceph API to query and make some intelligent decisiosn about what
+ * the stripe size should be at runtime. In any case logs are not created
+ * programmatically where this is needed. They are created for instance with a
+ * CLI tool, and in any case the width can be changed online.
+ */
+#define DEFAULT_STRIPE_SIZE 100
+
 namespace zlog {
 
 std::string LogLL::metalog_oid_from_name(const std::string& name)
@@ -495,8 +503,7 @@ extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
 }
 
 extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
-    int stripe_size, const char *host, const char *port,
-    zlog_log_t *log)
+    const char *host, const char *port, zlog_log_t *log)
 {
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
@@ -505,7 +512,7 @@ extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogLL::Create(ctx->ioctx, name, stripe_size,
+  int ret = zlog::LogLL::Create(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
       ctx->seqr, ctx->log);
   if (ret) {
     delete ctx->seqr;
@@ -519,8 +526,7 @@ extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
 }
 
 extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
-    int stripe_size, const char *host, const char *port,
-    zlog_log_t *log)
+    const char *host, const char *port, zlog_log_t *log)
 {
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
@@ -529,7 +535,7 @@ extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogLL::OpenOrCreate(ctx->ioctx, name, stripe_size,
+  int ret = zlog::LogLL::OpenOrCreate(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
       ctx->seqr, ctx->log);
   if (ret) {
     delete ctx->seqr;
@@ -605,12 +611,15 @@ class LogHL::LogHLImpl {
   LogLL log;
 };
 
+/*
+ * FIXME: switch to return pointer and add destructor
+ */
 int LogHL::Create(librados::IoCtx& ioctx, const std::string& name,
-    int stripe_size, SeqrClient *seqr, LogHL& log)
+    SeqrClient *seqr, LogHL& log)
 {
   LogHLImpl *impl = new LogHLImpl;
   log.impl = impl;
-  return LogLL::Create(ioctx, name, stripe_size, seqr, log.impl->log);
+  return LogLL::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log.impl->log);
 }
 
 int LogHL::Open(librados::IoCtx& ioctx, const std::string& name,
