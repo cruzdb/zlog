@@ -6,10 +6,11 @@
 #include <thread>
 #include <rados/librados.hpp>
 #include "libzlog.hpp"
+#include "internal.hpp"
 
 namespace po = boost::program_options;
 
-void client_thread(zlog::Log *log, bool check_tail)
+void client_thread(zlog::LogLL *log, bool check_tail)
 {
   // buffer with random bytes
   char buf[4096];
@@ -83,8 +84,8 @@ int main(int argc, char **argv)
   for (int i = 0; i < num_threads; i++) {
     zlog::SeqrClient *client = new zlog::SeqrClient(server.c_str(), port.c_str());
     client->Connect();
-    zlog::Log *log = new zlog::Log();
-    ret = zlog::Log::OpenOrCreate(ioctx, logname.str(), width, client, *log);
+    zlog::LogLL *log = new zlog::LogLL();
+    ret = zlog::LogLL::OpenOrCreate(ioctx, logname.str(), width, client, *log);
     assert(ret == 0);
     std::thread t(client_thread, log, check_tail);
     threads.push_back(std::move(t));

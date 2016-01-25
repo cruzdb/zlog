@@ -6,7 +6,7 @@
 namespace skytype {
   class SkyObject {
     public:
-      explicit SkyObject(zlog::Log& log) : log_(log), position_(0) {}
+      explicit SkyObject(zlog::LogHL& log) : log_(log), position_(0) {}
 
     protected:
       virtual void apply(const void *data) = 0;
@@ -14,7 +14,7 @@ namespace skytype {
       int query_helper();
 
     private:
-      zlog::Log& log_;
+      zlog::LogHL& log_;
       uint64_t position_;
   };
 }

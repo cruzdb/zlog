@@ -11,6 +11,7 @@
 #include <rados/librados.hpp>
 #include "libzlog.hpp"
 #include "zlog.pb.h"
+#include "internal.hpp"
 
 namespace po = boost::program_options;
 
@@ -284,8 +285,8 @@ class LogManager {
       return ret;
     }
 
-    zlog::Log log;
-    ret = zlog::Log::Open(ioctx, name, NULL, log);
+    zlog::LogLL log;
+    ret = zlog::LogLL::Open(ioctx, name, NULL, log);
     if (ret) {
       std::cerr << "failed to open log " << name << std::endl;
       return ret;

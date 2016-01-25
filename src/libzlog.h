@@ -39,12 +39,7 @@ int zlog_destroy(zlog_log_t log);
 /*
  *
  */
-int zlog_checktail(zlog_log_t log, uint64_t *pposition, int next);
-
-/*
- *
- */
-int zlog_checktail_batch(zlog_log_t log, uint64_t *pposition, size_t count);
+int zlog_checktail(zlog_log_t log, uint64_t *pposition);
 
 /*
  *

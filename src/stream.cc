@@ -8,7 +8,7 @@
 
 namespace zlog {
 
-int Log::MultiAppend(ceph::bufferlist& data,
+int LogLL::MultiAppend(ceph::bufferlist& data,
     const std::set<uint64_t>& stream_ids, uint64_t *pposition)
 {
   for (;;) {
@@ -73,7 +73,7 @@ int Log::MultiAppend(ceph::bufferlist& data,
   assert(0);
 }
 
-int Log::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+int LogLL::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
     size_t *header_size)
 {
   if (bl.length() <= sizeof(uint32_t))
@@ -109,7 +109,7 @@ int Log::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
   return 0;
 }
 
-int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+int LogLL::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
 {
   ceph::bufferlist bl;
   int ret = Read(position, bl);
@@ -121,7 +121,7 @@ int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
   return ret;
 }
 
-int Log::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
+int LogLL::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
 {
   ceph::bufferlist bl;
   int ret = Read(epoch, position, bl);
@@ -133,18 +133,18 @@ int Log::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64
   return ret;
 }
 
-struct Log::Stream::StreamImpl {
+struct LogLL::Stream::StreamImpl {
   uint64_t stream_id;
-  Log *log;
+  LogLL *log;
 
   std::set<uint64_t> pos;
   std::set<uint64_t>::const_iterator prevpos;
   std::set<uint64_t>::const_iterator curpos;
 };
 
-std::vector<uint64_t> Log::Stream::History() const
+std::vector<uint64_t> LogLL::Stream::History() const
 {
-  Log::Stream::StreamImpl *impl = this->impl;
+  LogLL::Stream::StreamImpl *impl = this->impl;
 
   std::vector<uint64_t> ret;
   for (auto it = impl->pos.cbegin(); it != impl->pos.cend(); it++)
@@ -152,17 +152,17 @@ std::vector<uint64_t> Log::Stream::History() const
   return ret;
 }
 
-int Log::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
+int LogLL::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
-  Log::Stream::StreamImpl *impl = this->impl;
+  LogLL::Stream::StreamImpl *impl = this->impl;
   std::set<uint64_t> stream_ids;
   stream_ids.insert(impl->stream_id);
   return impl->log->MultiAppend(data, stream_ids, pposition);
 }
 
-int Log::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
+int LogLL::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
 {
-  Log::Stream::StreamImpl *impl = this->impl;
+  LogLL::Stream::StreamImpl *impl = this->impl;
 
   if (impl->curpos == impl->pos.cend())
     return -EBADF;
@@ -197,9 +197,9 @@ int Log::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
   return 0;
 }
 
-int Log::Stream::Reset()
+int LogLL::Stream::Reset()
 {
-  Log::Stream::StreamImpl *impl = this->impl;
+  LogLL::Stream::StreamImpl *impl = this->impl;
   impl->curpos = impl->pos.cbegin();
   return 0;
 }
@@ -208,9 +208,9 @@ int Log::Stream::Reset()
  * Optimizations:
  *   - follow backpointers
  */
-int Log::Stream::Sync()
+int LogLL::Stream::Sync()
 {
-  Log::Stream::StreamImpl *impl = this->impl;
+  LogLL::Stream::StreamImpl *impl = this->impl;
   const uint64_t stream_id = impl->stream_id;
 
   /*
@@ -326,17 +326,21 @@ int Log::Stream::Sync()
   return 0;
 }
 
-uint64_t Log::Stream::Id() const
+uint64_t LogLL::Stream::Id() const
 {
-  Log::Stream::StreamImpl *impl = this->impl;
+  LogLL::Stream::StreamImpl *impl = this->impl;
   return impl->stream_id;
 }
 
-int Log::OpenStream(uint64_t stream_id, Stream& stream)
+/*
+ * FIXME:
+ *  - Looks like a memory leak on the StreamImpl
+ */
+int LogLL::OpenStream(uint64_t stream_id, Stream& stream)
 {
   assert(!stream.impl);
 
-  Log::Stream::StreamImpl *impl = new Log::Stream::StreamImpl;
+  LogLL::Stream::StreamImpl *impl = new LogLL::Stream::StreamImpl;
   impl->stream_id = stream_id;
   impl->log = this;
 
