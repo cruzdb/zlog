@@ -3,6 +3,7 @@
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
+#include "internal.hpp"
 
 namespace zlog {
 
@@ -11,7 +12,7 @@ enum AioType {
   ZLOG_AIO_READ,
 };
 
-struct zlog::Log::AioCompletionImpl {
+struct zlog::LogLL::AioCompletionImpl {
   /*
    * concurrency control
    */
@@ -24,7 +25,7 @@ struct zlog::Log::AioCompletionImpl {
   /*
    * base log and rados completion
    */
-  Log *log;
+  LogLL *log;
   librados::IoCtx *ioctx;
   librados::AioCompletion *c;
 
@@ -39,7 +40,7 @@ struct zlog::Log::AioCompletionImpl {
    *  - temp storage for read (read)
    */
   int retval;
-  Log::AioCompletion::callback_t safe_cb;
+  LogLL::AioCompletion::callback_t safe_cb;
   void *safe_cb_arg;
   uint64_t position;
   ceph::bufferlist bl;
@@ -97,7 +98,7 @@ struct zlog::Log::AioCompletionImpl {
     ref++;
   }
 
-  void set_callback(void *arg, zlog::Log::AioCompletion::callback_t cb) {
+  void set_callback(void *arg, zlog::LogLL::AioCompletion::callback_t cb) {
     std::lock_guard<std::mutex> l(lock);
     safe_cb = cb;
     safe_cb_arg = arg;
@@ -107,38 +108,38 @@ struct zlog::Log::AioCompletionImpl {
   static void aio_safe_cb_append(librados::completion_t cb, void *arg);
 };
 
-void zlog::Log::AioCompletion::wait_for_complete()
+void zlog::LogLL::AioCompletion::wait_for_complete()
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)pc;
   impl->wait_for_complete();
 }
 
-int zlog::Log::AioCompletion::get_return_value()
+int zlog::LogLL::AioCompletion::get_return_value()
 {
-  zlog::Log::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
+  zlog::LogLL::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
   return impl->get_return_value();
 }
 
-void zlog::Log::AioCompletion::release()
+void zlog::LogLL::AioCompletion::release()
 {
-  zlog::Log::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
+  zlog::LogLL::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
   impl->release();
   delete this;
 }
 
-void zlog::Log::AioCompletion::set_callback(void *arg,
-    zlog::Log::AioCompletion::callback_t cb)
+void zlog::LogLL::AioCompletion::set_callback(void *arg,
+    zlog::LogLL::AioCompletion::callback_t cb)
 {
-  zlog::Log::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
+  zlog::LogLL::AioCompletionImpl *impl = (AioCompletionImpl*)pc;
   impl->set_callback(arg, cb);
 }
 
 /*
  *
  */
-void zlog::Log::AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
+void zlog::LogLL::AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
 {
-  zlog::Log::AioCompletionImpl *impl = (zlog::Log::AioCompletionImpl*)arg;
+  zlog::LogLL::AioCompletionImpl *impl = (zlog::LogLL::AioCompletionImpl*)arg;
   librados::AioCompletion *rc = impl->c;
   bool finish = false;
 
@@ -219,9 +220,9 @@ void zlog::Log::AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, v
 /*
  *
  */
-void zlog::Log::AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
+void zlog::LogLL::AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
 {
-  zlog::Log::AioCompletionImpl *impl = (zlog::Log::AioCompletionImpl*)arg;
+  zlog::LogLL::AioCompletionImpl *impl = (zlog::LogLL::AioCompletionImpl*)arg;
   librados::AioCompletion *rc = impl->c;
   bool finish = false;
 
@@ -304,8 +305,8 @@ void zlog::Log::AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb,
   impl->lock.unlock();
 }
 
-Log::AioCompletion *Log::aio_create_completion(void *arg,
-    Log::AioCompletion::callback_t cb)
+LogLL::AioCompletion *LogLL::aio_create_completion(void *arg,
+    LogLL::AioCompletion::callback_t cb)
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->safe_cb = cb;
@@ -313,7 +314,7 @@ Log::AioCompletion *Log::aio_create_completion(void *arg,
   return new AioCompletion(impl);
 }
 
-Log::AioCompletion *Log::aio_create_completion()
+LogLL::AioCompletion *LogLL::aio_create_completion()
 {
   return aio_create_completion(NULL, NULL);
 }
@@ -322,7 +323,7 @@ Log::AioCompletion *Log::aio_create_completion()
  * The retry for AioAppend is coordinated through the aio_safe_cb callback
  * which will dispatch a new rados operation.
  */
-int Log::AioAppend(AioCompletion *c, ceph::bufferlist& data,
+int LogLL::AioAppend(AioCompletion *c, ceph::bufferlist& data,
     uint64_t *pposition)
 {
   // initial position guess
@@ -360,7 +361,7 @@ int Log::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   return ret;
 }
 
-int Log::AioRead(uint64_t position, AioCompletion *c,
+int LogLL::AioRead(uint64_t position, AioCompletion *c,
     ceph::bufferlist *pbl)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)c->pc;

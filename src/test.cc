@@ -9,7 +9,7 @@
 /*
  * Helper function from ceph/src/test/librados/test.cc
  */
-std::string get_temp_pool_name()
+static std::string get_temp_pool_name()
 {
   char hostname[80];
   char out[80];
@@ -24,7 +24,7 @@ std::string get_temp_pool_name()
   return prefix;
 }
 
-int create_one_pool_pp(const std::string &pool_name, rados_t *rados)
+static int create_one_pool_pp(const std::string &pool_name, rados_t *rados)
 {
   int ret = rados_create(rados, NULL);
   if (ret)
@@ -44,7 +44,7 @@ int create_one_pool_pp(const std::string &pool_name, rados_t *rados)
   return 0;
 }
 
-int destroy_one_pool_pp(const std::string &pool_name, rados_t rados)
+static int destroy_one_pool_pp(const std::string &pool_name, rados_t rados)
 {
   int ret = rados_pool_delete(rados, pool_name.c_str());
   if (ret) {
@@ -58,7 +58,7 @@ int destroy_one_pool_pp(const std::string &pool_name, rados_t rados)
 /*
  * Helper function from ceph/src/test/librados/test.cc
  */
-std::string create_one_pool_pp(const std::string &pool_name, librados::Rados &cluster)
+static std::string create_one_pool_pp(const std::string &pool_name, librados::Rados &cluster)
 {
   char *id = getenv("CEPH_CLIENT_ID");
   if (id) std::cerr << "Client id is: " << id << std::endl;
@@ -98,7 +98,7 @@ std::string create_one_pool_pp(const std::string &pool_name, librados::Rados &cl
 /*
  * Helper function from ceph/src/test/librados/test.cc
  */
-int destroy_one_pool_pp(const std::string &pool_name, librados::Rados &cluster)
+static int destroy_one_pool_pp(const std::string &pool_name, librados::Rados &cluster)
 {
   int ret = cluster.pool_delete(pool_name.c_str());
   if (ret) {
@@ -116,22 +116,16 @@ TEST(LibZlog, Create) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::Log log;
+  zlog::LogHL log;
 
-  int ret = zlog::Log::Create(ioctx, "mylog", 0, NULL, log);
-  ASSERT_EQ(ret, -EINVAL);
-
-  ret = zlog::Log::Create(ioctx, "mylog", -1, NULL, log);
-  ASSERT_EQ(ret, -EINVAL);
-
-  ret = zlog::Log::Create(ioctx, "", 5, NULL, log);
+  int ret = zlog::LogHL::Create(ioctx, "", NULL, log);
   ASSERT_EQ(ret, -EINVAL);
 
   // TODO: creating a log with NULL seqclient should be an error
-  ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
+  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, log);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
+  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, log);
   ASSERT_EQ(ret, -EEXIST);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
@@ -144,17 +138,17 @@ TEST(LibZlog, Open) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::Log log;
+  zlog::LogHL log;
 
-  int ret = zlog::Log::Open(ioctx, "", NULL, log);
+  int ret = zlog::LogHL::Open(ioctx, "", NULL, log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog::Log::Open(ioctx, "dne", NULL, log);
+  ret = zlog::LogHL::Open(ioctx, "dne", NULL, log);
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = zlog::Log::Create(ioctx, "mylog", 5, NULL, log);
+  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, log);
   ASSERT_EQ(ret, 0);
-  ret = zlog::Log::Open(ioctx, "mylog", NULL, log);
+  ret = zlog::LogHL::Open(ioctx, "mylog", NULL, log);
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
@@ -170,74 +164,18 @@ TEST(LibZlog, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ret = log.CheckTail(&pos, false);
+  ret = log.CheckTail(&pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = log.CheckTail(&pos, false);
+  ret = log.CheckTail(&pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
-
-  ret = log.CheckTail(&pos, true);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)0);
-
-  ret = log.CheckTail(&pos, true);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)1);
-
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
-}
-
-TEST(LibZlog, CheckTailBatch) {
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
-
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
-  ASSERT_EQ(ret, 0);
-
-  uint64_t pos;
-  ret = log.CheckTail(&pos, false);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)0);
-
-  std::vector<uint64_t> result;
-  ret = log.CheckTail(result, 1);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(result[0], 0);
-
-  ret = log.CheckTail(result, 5);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(result[0], 1);
-  ASSERT_EQ(result[1], 2);
-  ASSERT_EQ(result[2], 3);
-  ASSERT_EQ(result[3], 4);
-  ASSERT_EQ(result[4], 5);
-
-  ret = log.CheckTail(&pos, false);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)6);
-
-  ret = log.CheckTail(&pos, true);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)6);
-
-  ret = log.CheckTail(result, 2);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(result[0], 7);
-  ASSERT_EQ(result[1], 8);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -252,12 +190,12 @@ TEST(LibZlog, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
-  ret = log.CheckTail(&tail, false);
+  ret = log.CheckTail(&tail);
   ASSERT_EQ(ret, 0);
 
   for (int i = 0; i < 100; i++) {
@@ -268,12 +206,12 @@ TEST(LibZlog, Append) {
 
     ASSERT_EQ(pos, tail);
 
-    ret = log.CheckTail(&tail, false);
+    ret = log.CheckTail(&tail);
     ASSERT_EQ(ret, 0);
   }
 
   uint64_t pos, pos2;
-  ret = log.CheckTail(&pos, false);
+  ret = log.CheckTail(&pos);
   ASSERT_EQ(ret, 0);
 
   ret = log.Trim(pos);
@@ -297,8 +235,8 @@ TEST(LibZlogStream, MultiAppend) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -358,17 +296,17 @@ TEST(LibZlogStream, StreamId) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream stream0;
+  zlog::LogHL::Stream stream0;
   ret = log.OpenStream(0, stream0);
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(stream0.Id(), 0);
 
-  zlog::Log::Stream stream33;
+  zlog::LogHL::Stream stream33;
   ret = log.OpenStream(33, stream33);
   ASSERT_EQ(ret, 0);
 
@@ -387,11 +325,11 @@ TEST(LibZlogStream, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream stream;
+  zlog::LogHL::Stream stream;
   ret = log.OpenStream(0, stream);
   ASSERT_EQ(ret, 0);
 
@@ -434,11 +372,11 @@ TEST(LibZlogStream, ReadNext) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream stream;
+  zlog::LogHL::Stream stream;
   ret = log.OpenStream(0, stream);
   ASSERT_EQ(ret, 0);
 
@@ -517,11 +455,11 @@ TEST(LibZlogStream, Reset) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream stream;
+  zlog::LogHL::Stream stream;
   ret = log.OpenStream(0, stream);
   ASSERT_EQ(ret, 0);
 
@@ -588,12 +526,12 @@ TEST(LibZlogStream, Sync) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
-  std::vector<zlog::Log::Stream> streams(10);
+  std::vector<zlog::LogHL::Stream> streams(10);
   for (unsigned i = 0; i < 10; i++) {
     ret = log.OpenStream(i, streams[i]);
     ASSERT_EQ(ret, 0);
@@ -690,8 +628,8 @@ TEST(LibZlog, Fill) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   ret = log.Fill(0);
@@ -731,8 +669,8 @@ TEST(LibZlog, Read) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -791,8 +729,8 @@ TEST(LibZlog, Trim) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::Log log;
-  int ret = zlog::Log::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogHL log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
   ASSERT_EQ(ret, 0);
 
   // can trim empty spot
@@ -830,7 +768,7 @@ TEST(LibZlogC, Trim) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   // can trim empty spot
@@ -869,22 +807,16 @@ TEST(LibZlogC, Create) {
 
   zlog_log_t log;
 
-  int ret = zlog_create(ioctx, "mylog", 0, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "", "localhost", "5678", &log);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog_create(ioctx, "mylog", -1, "localhost", "5678", &log);
-  ASSERT_EQ(ret, -EINVAL);
-
-  ret = zlog_create(ioctx, "", 5, "localhost", "5678", &log);
-  ASSERT_EQ(ret, -EINVAL);
-
-  ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, -EEXIST);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
@@ -905,7 +837,7 @@ TEST(LibZlogC, Open) {
   ret = zlog_open(ioctx, "dne", "localhost", "5678", &log);
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
@@ -926,25 +858,17 @@ TEST(LibZlogC, CheckTail) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ret = zlog_checktail(log, &pos, false);
+  ret = zlog_checktail(log, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = zlog_checktail(log, &pos, false);
+  ret = zlog_checktail(log, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
-
-  ret = zlog_checktail(log, &pos, true);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)0);
-
-  ret = zlog_checktail(log, &pos, true);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)1);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
@@ -961,11 +885,11 @@ TEST(LibZlogC, Append) {
 
   zlog_log_t log;
 
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
-  ret = zlog_checktail(log, &tail, false);
+  ret = zlog_checktail(log, &tail);
   ASSERT_EQ(ret, 0);
 
   for (int i = 0; i < 100; i++) {
@@ -976,12 +900,12 @@ TEST(LibZlogC, Append) {
 
     ASSERT_EQ(pos, tail);
 
-    ret = zlog_checktail(log, &tail, false);
+    ret = zlog_checktail(log, &tail);
     ASSERT_EQ(ret, 0);
   }
 
   uint64_t pos, pos2;
-  ret = zlog_checktail(log, &pos, false);
+  ret = zlog_checktail(log, &pos);
   ASSERT_EQ(ret, 0);
 
   ret = zlog_trim(log, pos);
@@ -1007,7 +931,7 @@ TEST(LibZlogC, Fill) {
 
   zlog_log_t log;
 
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   ret = zlog_fill(log, 0);
@@ -1048,7 +972,7 @@ TEST(LibZlogC, Read) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   char data[4096];
@@ -1105,55 +1029,6 @@ TEST(LibZlogC, Read) {
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
 
-TEST(LibZlogC, CheckTailBatch) {
-  rados_t rados;
-  rados_ioctx_t ioctx;
-  std::string pool_name = get_temp_pool_name();
-  ASSERT_EQ(0, create_one_pool_pp(pool_name, &rados));
-  ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
-
-  zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
-  ASSERT_EQ(ret, 0);
-
-  uint64_t pos;
-  ret = zlog_checktail(log, &pos, false);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)0);
-
-  uint64_t pos2[50];
-
-  ret = zlog_checktail_batch(log, pos2, 1);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos2[0], 0);
-
-  ret = zlog_checktail_batch(log, pos2, 5);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos2[0], 1);
-  ASSERT_EQ(pos2[1], 2);
-  ASSERT_EQ(pos2[2], 3);
-  ASSERT_EQ(pos2[3], 4);
-  ASSERT_EQ(pos2[4], 5);
-
-  ret = zlog_checktail(log, &pos, false);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)6);
-
-  ret = zlog_checktail(log, &pos, true);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (unsigned)6);
-
-  ret = zlog_checktail_batch(log, pos2, 2);
-  ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos2[0], 7);
-  ASSERT_EQ(pos2[1], 8);
-
-  ret = zlog_destroy(log);
-  ASSERT_EQ(ret, 0);
-
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
-}
-
 TEST(LibZlogCStream, MultiAppend) {
   rados_t rados;
   rados_ioctx_t ioctx;
@@ -1162,7 +1037,7 @@ TEST(LibZlogCStream, MultiAppend) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   // empty set of streams
@@ -1232,7 +1107,7 @@ TEST(LibZlogCStream, ReadNext) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   zlog_stream_t stream;
@@ -1312,7 +1187,7 @@ TEST(LibZlogCStream, Reset) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   zlog_stream_t stream;
@@ -1383,7 +1258,7 @@ TEST(LibZlogCStream, Sync) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
@@ -1501,7 +1376,7 @@ TEST(LibZlogCStream, StreamId) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   zlog_stream_t stream0;
@@ -1530,7 +1405,7 @@ TEST(LibZlogCStream, Append) {
   ASSERT_EQ(0, rados_ioctx_create(rados, pool_name.c_str(), &ioctx));
 
   zlog_log_t log;
-  int ret = zlog_create(ioctx, "mylog", 5, "localhost", "5678", &log);
+  int ret = zlog_create(ioctx, "mylog", "localhost", "5678", &log);
   ASSERT_EQ(ret, 0);
 
   zlog_stream_t stream;

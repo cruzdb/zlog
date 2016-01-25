@@ -68,7 +68,7 @@ GTEST_CXXFLAGS = -I$(top_srcdir)/src/gtest/include
 GTEST_LDADD = $(top_builddir)/src/libgtest.a -lpthread
 
 bin_PROGRAMS += test
-test_SOURCES = test.cc
+test_SOURCES = test.cc test_internal.cc
 test_CXXFLAGS = $(GTEST_CXXFLAGS)
 test_LDADD = libzlog.la $(GTEST_LDADD) $(BOOST_SYSTEM_LIBS)
 

@@ -14,8 +14,7 @@ typedef void *zlog_stream_t;
  *
  */
 int zlog_create(rados_ioctx_t ioctx, const char *name,
-    int stripe_size, const char *host, const char *port,
-    zlog_log_t *log);
+    const char *host, const char *port, zlog_log_t *log);
 
 /*
  *
@@ -28,8 +27,7 @@ int zlog_open(rados_ioctx_t ioctx, const char *name,
  *
  */
 int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
-    int stripe_size, const char *host, const char *port,
-    zlog_log_t *log);
+    const char *host, const char *port, zlog_log_t *log);
 
 /*
  *
@@ -39,12 +37,7 @@ int zlog_destroy(zlog_log_t log);
 /*
  *
  */
-int zlog_checktail(zlog_log_t log, uint64_t *pposition, int next);
-
-/*
- *
- */
-int zlog_checktail_batch(zlog_log_t log, uint64_t *pposition, size_t count);
+int zlog_checktail(zlog_log_t log, uint64_t *pposition);
 
 /*
  *
