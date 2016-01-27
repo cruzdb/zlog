@@ -116,17 +116,23 @@ TEST(LibZlog, Create) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::LogHL log;
+  zlog::LogHL *log = NULL;
 
-  int ret = zlog::LogHL::Create(ioctx, "", NULL, log);
+  int ret = zlog::LogHL::Create(ioctx, "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(log, nullptr);
 
   // TODO: creating a log with NULL seqclient should be an error
-  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, log);
+  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
+  ASSERT_NE(log, nullptr);
 
-  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, log);
+  delete log;
+  log = NULL;
+
+  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, -EEXIST);
+  ASSERT_EQ(log, nullptr);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -138,18 +144,28 @@ TEST(LibZlog, Open) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::LogHL log;
+  zlog::LogHL *log = NULL;
 
-  int ret = zlog::LogHL::Open(ioctx, "", NULL, log);
+  int ret = zlog::LogHL::Open(ioctx, "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(log, nullptr);
 
-  ret = zlog::LogHL::Open(ioctx, "dne", NULL, log);
+  ret = zlog::LogHL::Open(ioctx, "dne", NULL, &log);
   ASSERT_EQ(ret, -ENOENT);
+  ASSERT_EQ(log, nullptr);
 
-  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, log);
+  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
-  ret = zlog::LogHL::Open(ioctx, "mylog", NULL, log);
+  ASSERT_NE(log, nullptr);
+
+  delete log;
+  log = NULL;
+
+  ret = zlog::LogHL::Open(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
+  ASSERT_NE(log, nullptr);
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -164,18 +180,20 @@ TEST(LibZlog, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ret = log.CheckTail(&pos);
+  ret = log->CheckTail(&pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = log.CheckTail(&pos);
+  ret = log->CheckTail(&pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -190,37 +208,39 @@ TEST(LibZlog, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
-  ret = log.CheckTail(&tail);
+  ret = log->CheckTail(&tail);
   ASSERT_EQ(ret, 0);
 
   for (int i = 0; i < 100; i++) {
     uint64_t pos;
     ceph::bufferlist bl;
-    ret = log.Append(bl, &pos);
+    ret = log->Append(bl, &pos);
     ASSERT_EQ(ret, 0);
 
     ASSERT_EQ(pos, tail);
 
-    ret = log.CheckTail(&tail);
+    ret = log->CheckTail(&tail);
     ASSERT_EQ(ret, 0);
   }
 
   uint64_t pos, pos2;
-  ret = log.CheckTail(&pos);
+  ret = log->CheckTail(&pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Trim(pos);
+  ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
-  ret = log.Append(bl, &pos2);
+  ret = log->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
   ASSERT_GT(pos2, pos);
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -235,8 +255,8 @@ TEST(LibZlogStream, MultiAppend) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -244,7 +264,7 @@ TEST(LibZlogStream, MultiAppend) {
   {
     // empty set of streams
     std::set<uint64_t> stream_ids;
-    ret = log.MultiAppend(bl, stream_ids, NULL);
+    ret = log->MultiAppend(bl, stream_ids, NULL);
     ASSERT_EQ(ret, -EINVAL);
   }
 
@@ -266,7 +286,7 @@ TEST(LibZlogStream, MultiAppend) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    ret = log.MultiAppend(bl, stream_ids, &pos);
+    ret = log->MultiAppend(bl, stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     stream_ids_list.push_back(stream_ids);
@@ -278,10 +298,12 @@ TEST(LibZlogStream, MultiAppend) {
     uint64_t pos = pos_list[i];
 
     std::set<uint64_t> stream_ids_out;
-    ret = log.StreamMembership(stream_ids_out, pos);
+    ret = log->StreamMembership(stream_ids_out, pos);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(stream_ids_out, stream_ids_list[i]);
   }
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -296,21 +318,27 @@ TEST(LibZlogStream, StreamId) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream0;
-  ret = log.OpenStream(0, stream0);
+  zlog::LogHL::Stream *stream0;
+  ret = log->OpenStream(0, &stream0);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(stream0.Id(), 0);
+  ASSERT_EQ(stream0->Id(), 0);
 
-  zlog::LogHL::Stream stream33;
-  ret = log.OpenStream(33, stream33);
+  delete stream0;
+
+  zlog::LogHL::Stream *stream33;
+  ret = log->OpenStream(33, &stream33);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(stream33.Id(), 33);
+  ASSERT_EQ(stream33->Id(), 33);
+
+  delete stream33;
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -325,39 +353,43 @@ TEST(LibZlogStream, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream;
-  ret = log.OpenStream(0, stream);
+  zlog::LogHL::Stream *stream;
+  ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
   // nothing in stream
   uint64_t pos = 99;
   ceph::bufferlist bl;
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
   // add something to stream
   uint64_t pos2;
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
   // still don't see it...
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
   // update view
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
+
+  delete stream;
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -372,26 +404,26 @@ TEST(LibZlogStream, ReadNext) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream;
-  ret = log.OpenStream(0, stream);
+  zlog::LogHL::Stream *stream;
+  ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
   // empty
   uint64_t pos = 99;
   ceph::bufferlist bl;
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // still empty
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -401,21 +433,21 @@ TEST(LibZlogStream, ReadNext) {
   uint64_t pos2;
   bl.clear();
   bl.append(data, sizeof(data));
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
   ceph::bufferlist bl_out;
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
 
   // we just read it, so it should be empty stream again
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
@@ -424,23 +456,27 @@ TEST(LibZlogStream, ReadNext) {
   // again
   bl.clear();
   bl.append(data2, sizeof(data2));
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
   bl_out.clear();
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
 
   // we just read it, so it should be empty stream again
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
+
+  delete stream;
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -455,26 +491,26 @@ TEST(LibZlogStream, Reset) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream;
-  ret = log.OpenStream(0, stream);
+  zlog::LogHL::Stream *stream;
+  ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
   // empty
   uint64_t pos = 99;
   ceph::bufferlist bl;
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
-  ret = stream.Reset();
+  ret = stream->Reset();
   ASSERT_EQ(ret, 0);
 
   // still empty
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -484,34 +520,38 @@ TEST(LibZlogStream, Reset) {
   uint64_t pos2;
   bl.clear();
   bl.append(data, sizeof(data));
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
   ceph::bufferlist bl_out;
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
 
   // we just read it, so it should be empty stream again
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
   // go back to beginning
-  ret = stream.Reset();
+  ret = stream->Reset();
   ASSERT_EQ(ret, 0);
 
   // we see the same thing again
   bl_out.clear();
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
+
+  delete stream;
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -526,20 +566,20 @@ TEST(LibZlogStream, Sync) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
-  std::vector<zlog::LogHL::Stream> streams(10);
+  std::vector<zlog::LogHL::Stream*> streams(10);
   for (unsigned i = 0; i < 10; i++) {
-    ret = log.OpenStream(i, streams[i]);
+    ret = log->OpenStream(i, &streams[i]);
     ASSERT_EQ(ret, 0);
   }
 
   // an empty stream sync is OK
-  ASSERT_TRUE(streams[4].History().empty());
-  ret = streams[4].Sync();
+  ASSERT_TRUE(streams[4]->History().empty());
+  ret = streams[4]->Sync();
   ASSERT_EQ(ret, 0);
 
   std::vector<std::vector<uint64_t>> stream_history(streams.size());
@@ -561,7 +601,7 @@ TEST(LibZlogStream, Sync) {
 
     uint64_t pos;
     ceph::bufferlist bl;
-    ret = log.MultiAppend(bl, stream_ids, &pos);
+    ret = log->MultiAppend(bl, stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();
@@ -575,9 +615,9 @@ TEST(LibZlogStream, Sync) {
   // it is first populating the history. the stream history internally should
   // match our view of the history.
   for (unsigned i = 0; i < streams.size(); i++) {
-    ret = streams[i].Sync();
+    ret = streams[i]->Sync();
     ASSERT_EQ(ret, 0);
-    ASSERT_EQ(stream_history[i], streams[i].History());
+    ASSERT_EQ(stream_history[i], streams[i]->History());
   }
 
   /*
@@ -598,7 +638,7 @@ TEST(LibZlogStream, Sync) {
 
     uint64_t pos;
     ceph::bufferlist bl;
-    ret = log.MultiAppend(bl, stream_ids, &pos);
+    ret = log->MultiAppend(bl, stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();
@@ -610,10 +650,16 @@ TEST(LibZlogStream, Sync) {
 
   // re-verify
   for (unsigned i = 0; i < streams.size(); i++) {
-    ret = streams[i].Sync();
+    ret = streams[i]->Sync();
     ASSERT_EQ(ret, 0);
-    ASSERT_EQ(stream_history[i], streams[i].History());
+    ASSERT_EQ(stream_history[i], streams[i]->History());
   }
+
+  for (unsigned i = 0; i < 10; i++) {
+    delete streams[i];
+  }
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -628,33 +674,35 @@ TEST(LibZlog, Fill) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Fill(0);
+  ret = log->Fill(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Fill(232);
+  ret = log->Fill(232);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Fill(232);
+  ret = log->Fill(232);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
   ceph::bufferlist bl;
-  ret = log.Append(bl, &pos);
+  ret = log->Append(bl, &pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Fill(pos);
+  ret = log->Fill(pos);
   ASSERT_EQ(ret, -EROFS);
 
   // ok to fill a trimmed position
-  ret = log.Trim(pos);
+  ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Fill(pos);
+  ret = log->Fill(pos);
   ASSERT_EQ(ret, 0);
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -669,52 +717,54 @@ TEST(LibZlog, Read) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
-  ret = log.Read(0, bl);
+  ret = log->Read(0, bl);
   ASSERT_EQ(ret, -ENODEV);
 
-  ret = log.Fill(0);
+  ret = log->Fill(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Read(0, bl);
+  ret = log->Read(0, bl);
   ASSERT_EQ(ret, -EFAULT);
 
-  ret = log.Read(232, bl);
+  ret = log->Read(232, bl);
   ASSERT_EQ(ret, -ENODEV);
 
-  ret = log.Fill(232);
+  ret = log->Fill(232);
   ASSERT_EQ(ret, 0);
 
-  ret = log.Read(232, bl);
+  ret = log->Read(232, bl);
   ASSERT_EQ(ret, -EFAULT);
 
   uint64_t pos;
   bl.append("asdfasdfasdf");
-  ret = log.Append(bl, &pos);
+  ret = log->Append(bl, &pos);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl2;
-  ret = log.Read(pos, bl2);
+  ret = log->Read(pos, bl2);
   ASSERT_EQ(ret, 0);
 
   ASSERT_TRUE(bl == bl2);
 
   // trim a written position
-  ret = log.Trim(pos);
+  ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
-  ret = log.Read(pos, bl);
+  ret = log->Read(pos, bl);
   ASSERT_EQ(ret, -EFAULT);
 
   // same for unwritten position
   pos = 456;
-  ret = log.Trim(pos);
+  ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
-  ret = log.Read(pos, bl);
+  ret = log->Read(pos, bl);
   ASSERT_EQ(ret, -EFAULT);
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
@@ -729,33 +779,35 @@ TEST(LibZlog, Trim) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, log);
+  zlog::LogHL *log;
+  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   // can trim empty spot
-  ret = log.Trim(55);
+  ret = log->Trim(55);
   ASSERT_EQ(ret, 0);
 
   // can trim filled spot
-  ret = log.Fill(60);
+  ret = log->Fill(60);
   ASSERT_EQ(ret, 0);
-  ret = log.Trim(60);
+  ret = log->Trim(60);
   ASSERT_EQ(ret, 0);
 
   // can trim written spot
   uint64_t pos;
   ceph::bufferlist bl;
-  ret = log.Append(bl, &pos);
+  ret = log->Append(bl, &pos);
   ASSERT_EQ(ret, 0);
-  ret = log.Trim(pos);
+  ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
 
   // can trim trimmed spot
-  ret = log.Trim(70);
+  ret = log->Trim(70);
   ASSERT_EQ(ret, 0);
-  ret = log.Trim(70);
+  ret = log->Trim(70);
   ASSERT_EQ(ret, 0);
+
+  delete log;
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
