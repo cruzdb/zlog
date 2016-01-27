@@ -734,6 +734,10 @@ int LogHL::AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl)
   return impl->log.AioRead(position, cimpl->c, bpl);
 }
 
+/*
+ * If we don't stash anything in here except a LogLL then we should just
+ * remove it and point directly to the LogLL
+ */
 class LogHL::Stream::StreamImpl {
  public:
   LogLL::Stream stream;
@@ -742,11 +746,20 @@ class LogHL::Stream::StreamImpl {
 /*
  * FIXME: Memory leak on StreamImpl
  */
-int LogHL::OpenStream(uint64_t stream_id, Stream& stream)
+int LogHL::OpenStream(uint64_t stream_id, Stream **streamptr)
 {
-  LogHL::Stream::StreamImpl *simpl = new LogHL::Stream::StreamImpl;
-  stream.impl = simpl;
-  return impl->log.OpenStream(stream_id, stream.impl->stream);
+  LogHL::Stream *stream = new LogHL::Stream;
+  stream->impl = new LogHL::Stream::StreamImpl;
+
+  int ret = impl->log.OpenStream(stream_id, stream->impl->stream);
+  if (ret) {
+    delete stream->impl;
+    delete stream;
+  }
+
+  *streamptr = stream;
+
+  return 0;
 }
 
 int LogHL::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)

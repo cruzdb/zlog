@@ -322,17 +322,21 @@ TEST(LibZlogStream, StreamId) {
   int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream0;
-  ret = log->OpenStream(0, stream0);
+  zlog::LogHL::Stream *stream0;
+  ret = log->OpenStream(0, &stream0);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(stream0.Id(), 0);
+  ASSERT_EQ(stream0->Id(), 0);
 
-  zlog::LogHL::Stream stream33;
-  ret = log->OpenStream(33, stream33);
+  delete stream0;
+
+  zlog::LogHL::Stream *stream33;
+  ret = log->OpenStream(33, &stream33);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(stream33.Id(), 33);
+  ASSERT_EQ(stream33->Id(), 33);
+
+  delete stream33;
 
   delete log;
 
@@ -353,35 +357,37 @@ TEST(LibZlogStream, Append) {
   int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream;
-  ret = log->OpenStream(0, stream);
+  zlog::LogHL::Stream *stream;
+  ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
   // nothing in stream
   uint64_t pos = 99;
   ceph::bufferlist bl;
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
   // add something to stream
   uint64_t pos2;
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
   // still don't see it...
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
   // update view
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
+
+  delete stream;
 
   delete log;
 
@@ -402,22 +408,22 @@ TEST(LibZlogStream, ReadNext) {
   int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream;
-  ret = log->OpenStream(0, stream);
+  zlog::LogHL::Stream *stream;
+  ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
   // empty
   uint64_t pos = 99;
   ceph::bufferlist bl;
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // still empty
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -427,21 +433,21 @@ TEST(LibZlogStream, ReadNext) {
   uint64_t pos2;
   bl.clear();
   bl.append(data, sizeof(data));
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
   ceph::bufferlist bl_out;
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
 
   // we just read it, so it should be empty stream again
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
@@ -450,23 +456,25 @@ TEST(LibZlogStream, ReadNext) {
   // again
   bl.clear();
   bl.append(data2, sizeof(data2));
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
   bl_out.clear();
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
 
   // we just read it, so it should be empty stream again
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
+
+  delete stream;
 
   delete log;
 
@@ -487,22 +495,22 @@ TEST(LibZlogStream, Reset) {
   int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream stream;
-  ret = log->OpenStream(0, stream);
+  zlog::LogHL::Stream *stream;
+  ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
   // empty
   uint64_t pos = 99;
   ceph::bufferlist bl;
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
-  ret = stream.Reset();
+  ret = stream->Reset();
   ASSERT_EQ(ret, 0);
 
   // still empty
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -512,34 +520,36 @@ TEST(LibZlogStream, Reset) {
   uint64_t pos2;
   bl.clear();
   bl.append(data, sizeof(data));
-  ret = stream.Append(bl, &pos2);
+  ret = stream->Append(bl, &pos2);
   ASSERT_EQ(ret, 0);
 
-  ret = stream.Sync();
+  ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
   ceph::bufferlist bl_out;
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
 
   // we just read it, so it should be empty stream again
-  ret = stream.ReadNext(bl, &pos);
+  ret = stream->ReadNext(bl, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
   // go back to beginning
-  ret = stream.Reset();
+  ret = stream->Reset();
   ASSERT_EQ(ret, 0);
 
   // we see the same thing again
   bl_out.clear();
-  ret = stream.ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
   ASSERT_EQ(bl, bl_out);
+
+  delete stream;
 
   delete log;
 
@@ -561,15 +571,15 @@ TEST(LibZlogStream, Sync) {
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
-  std::vector<zlog::LogHL::Stream> streams(10);
+  std::vector<zlog::LogHL::Stream*> streams(10);
   for (unsigned i = 0; i < 10; i++) {
-    ret = log->OpenStream(i, streams[i]);
+    ret = log->OpenStream(i, &streams[i]);
     ASSERT_EQ(ret, 0);
   }
 
   // an empty stream sync is OK
-  ASSERT_TRUE(streams[4].History().empty());
-  ret = streams[4].Sync();
+  ASSERT_TRUE(streams[4]->History().empty());
+  ret = streams[4]->Sync();
   ASSERT_EQ(ret, 0);
 
   std::vector<std::vector<uint64_t>> stream_history(streams.size());
@@ -605,9 +615,9 @@ TEST(LibZlogStream, Sync) {
   // it is first populating the history. the stream history internally should
   // match our view of the history.
   for (unsigned i = 0; i < streams.size(); i++) {
-    ret = streams[i].Sync();
+    ret = streams[i]->Sync();
     ASSERT_EQ(ret, 0);
-    ASSERT_EQ(stream_history[i], streams[i].History());
+    ASSERT_EQ(stream_history[i], streams[i]->History());
   }
 
   /*
@@ -640,9 +650,13 @@ TEST(LibZlogStream, Sync) {
 
   // re-verify
   for (unsigned i = 0; i < streams.size(); i++) {
-    ret = streams[i].Sync();
+    ret = streams[i]->Sync();
     ASSERT_EQ(ret, 0);
-    ASSERT_EQ(stream_history[i], streams[i].History());
+    ASSERT_EQ(stream_history[i], streams[i]->History());
+  }
+
+  for (unsigned i = 0; i < 10; i++) {
+    delete streams[i];
   }
 
   delete log;

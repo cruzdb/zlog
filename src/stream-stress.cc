@@ -2,10 +2,10 @@
 #include <rados/librados.hpp>
 #include "libzlog.hpp"
 
-static void print_history(zlog::LogHL::Stream& stream, int len = 10)
+static void print_history(zlog::LogHL::Stream *stream, int len = 10)
 {
-    std::cout << "stream " << stream.Id() << ": ";
-    std::vector<uint64_t> history = stream.History();
+    std::cout << "stream " << stream->Id() << ": ";
+    std::vector<uint64_t> history = stream->History();
     if (history.empty())
       std::cout << "empty";
     else {
@@ -42,12 +42,12 @@ int main(int argc, char **argv)
   ret = zlog::LogHL::OpenOrCreate(ioctx, "log2", client, &log);
   assert(ret == 0);
 
-  std::vector<zlog::LogHL::Stream> stream(10);
+  std::vector<zlog::LogHL::Stream*> stream(10);
   for (unsigned i = 0; i < 10; i++) {
-    ret = log->OpenStream(i, stream[i]);
+    ret = log->OpenStream(i, &stream[i]);
     assert(ret == 0);
 
-    ret = stream[i].Sync();
+    ret = stream[i]->Sync();
     assert(ret == 0);
 
     print_history(stream[i]);
@@ -57,15 +57,19 @@ int main(int argc, char **argv)
   for (unsigned count = 1; 1; count++) {
     for (unsigned i = 0; i < 10; i++) {
       ceph::bufferlist bl;
-      ret = stream[i].Append(bl);
+      ret = stream[i]->Append(bl);
       assert(ret == 0);
 
       if (count % print_freq == 0) {
-        ret = stream[i].Sync();
+        ret = stream[i]->Sync();
         assert(ret == 0);
         print_history(stream[i]);
       }
     }
+  }
+
+  for (unsigned i = 0; i < 10; i++) {
+    delete stream[i];
   }
 
   delete log;

@@ -61,7 +61,7 @@ class LogHL {
     StreamImpl *impl;
   };
 
-  int OpenStream(uint64_t stream_id, Stream& stream);
+  int OpenStream(uint64_t stream_id, Stream **streamptr);
   int MultiAppend(ceph::bufferlist& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
   int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
