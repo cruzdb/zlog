@@ -38,13 +38,13 @@ int main(int argc, char **argv)
   client = new zlog::SeqrClient("localhost", "5678");
   client->Connect();
 
-  zlog::LogHL log;
-  ret = zlog::LogHL::OpenOrCreate(ioctx, "log2", client, log);
+  zlog::LogHL *log;
+  ret = zlog::LogHL::OpenOrCreate(ioctx, "log2", client, &log);
   assert(ret == 0);
 
   std::vector<zlog::LogHL::Stream> stream(10);
   for (unsigned i = 0; i < 10; i++) {
-    ret = log.OpenStream(i, stream[i]);
+    ret = log->OpenStream(i, stream[i]);
     assert(ret == 0);
 
     ret = stream[i].Sync();
@@ -67,4 +67,6 @@ int main(int argc, char **argv)
       }
     }
   }
+
+  delete log;
 }

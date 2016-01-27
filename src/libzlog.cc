@@ -606,6 +606,10 @@ extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
   return ctx->log.Trim(position);
 }
 
+/*
+ * If nothing goes into this except LogLL then we should just remove this
+ * level of indirection and point directly to LogLL.
+ */
 class LogHL::LogHLImpl {
  public:
   LogLL log;
@@ -615,19 +619,39 @@ class LogHL::LogHLImpl {
  * FIXME: switch to return pointer and add destructor
  */
 int LogHL::Create(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, LogHL& log)
+    SeqrClient *seqr, LogHL **logptr)
 {
-  LogHLImpl *impl = new LogHLImpl;
-  log.impl = impl;
-  return LogLL::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log.impl->log);
+  LogHL *log = new LogHL;
+  log->impl = new LogHLImpl;
+
+  int ret = LogLL::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log->impl->log);
+  if (ret) {
+    delete log->impl;
+    delete log;
+    return ret;
+  }
+
+  *logptr = log;
+
+  return 0;
 }
 
 int LogHL::Open(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, LogHL& log)
+    SeqrClient *seqr, LogHL **logptr)
 {
-  LogHLImpl *impl = new LogHLImpl;
-  log.impl = impl;
-  return LogLL::Open(ioctx, name, seqr, log.impl->log);
+  LogHL *log = new LogHL;
+  log->impl = new LogHLImpl;
+
+  int ret = LogLL::Open(ioctx, name, seqr, log->impl->log);
+  if (ret) {
+    delete log->impl;
+    delete log;
+    return ret;
+  }
+
+  *logptr = log;
+
+  return 0;
 }
 
 int LogHL::Append(ceph::bufferlist& data, uint64_t *pposition)
