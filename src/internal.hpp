@@ -26,19 +26,14 @@ class LogLL {
   };
 
   /*
-   * Set a new projection.
+   * Create cut.
    */
-  int SetProjection(uint64_t *pepoch);
-
-  /*
-   * Get the current projection.
-   */
-  int GetProjection(uint64_t *pepoch);
+  int CreateCut(uint64_t *pepoch, uint64_t *maxpos);
 
   /*
    * Find the maximum position written.
    */
-  int FindMaxPosition(uint64_t epoch, bool *pempty, uint64_t *pposition);
+  int FindMaxPosition(uint64_t epoch, int ss, uint64_t *pposition);
 
   /*
    * Seal all storage devices.

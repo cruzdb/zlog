@@ -209,22 +209,12 @@ class FakeSeqrClient : public zlog::SeqrClient {
     assert(ret == 0);
 
     uint64_t epoch;
-    ret = log.SetProjection(&epoch);
-    assert(ret == 0);
-
-    ret = log.Seal(epoch);
-    assert(ret == 0);
-
-    bool log_empty;
     uint64_t position;
-    ret = log.FindMaxPosition(epoch, &log_empty, &position);
+    ret = log.CreateCut(&epoch, &position);
     assert(ret == 0);
 
     epoch_ = epoch;
-    if (log_empty)
-      seq_.store(0);
-    else
-      seq_.store(position);
+    seq_.store(position);
 
     std::cout << "init seq: pos=" << seq_.load() << std::endl;
   }

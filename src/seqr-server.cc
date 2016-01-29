@@ -258,7 +258,7 @@ class LogManager {
    * these steps are completed successfully.
    */
   int InitLog(const std::string& pool, const std::string& name,
-      uint64_t *pepoch, bool *pempty, uint64_t *pposition,
+      uint64_t *pepoch, uint64_t *pposition,
       std::map<uint64_t, std::deque<uint64_t>>& ptrs) {
 
     librados::Rados rados;
@@ -293,23 +293,10 @@ class LogManager {
     }
 
     uint64_t epoch;
-    ret = log.SetProjection(&epoch);
-    if (ret) {
-      std::cerr << "failed to set new projection " << ret << std::endl;
-      return ret;
-    }
-
-    ret = log.Seal(epoch);
-    if (ret) {
-      std::cerr << "failed to seal the store " << ret << std::endl;
-      return ret;
-    }
-
-    bool log_empty;
     uint64_t position;
-    ret = log.FindMaxPosition(epoch, &log_empty, &position);
+    ret = log.CreateCut(&epoch, &position);
     if (ret) {
-      std::cerr << "failed to find max position " << ret << std::endl;
+      std::cerr << "failed to create cut ret " << ret << std::endl;
       return ret;
     }
 
@@ -320,7 +307,7 @@ class LogManager {
      * more dynamic and efficient during a later rewrite of the streaming
      * interface.
      */
-    if (!log_empty) {
+    if (position > 0) {
       assert(position > 0);
       uint64_t tail = position;
       std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
@@ -365,9 +352,7 @@ class LogManager {
     }
 
     *pepoch = epoch;
-    *pempty = log_empty;
-    if (!log_empty)
-      *pposition = position;
+    *pposition = position;
 
     ioctx.close();
     rados.shutdown();
@@ -459,10 +444,9 @@ class LogManager {
         name = it->second;
       }
 
-      bool log_empty;
       uint64_t position, epoch;
       std::map<uint64_t, std::deque<uint64_t>> ptrs;
-      int ret = InitLog(pool, name, &epoch, &log_empty, &position, ptrs);
+      int ret = InitLog(pool, name, &epoch, &position, ptrs);
       if (ret) {
         std::unique_lock<std::mutex> g(lock_);
         pending_logs_.erase(std::make_pair(pool, name));
@@ -476,13 +460,8 @@ class LogManager {
         assert(pending_logs_.count(key) == 1);
         pending_logs_.erase(key);
         assert(logs_.count(key) == 0);
-        if (log_empty) {
-          Log log(0, epoch, pool, name, ptrs);
-          logs_[key] = log;
-        } else {
-          Log log(position, epoch, pool, name, ptrs);
-          logs_[key] = log;
-        }
+        Log log(position, epoch, pool, name, ptrs);
+        logs_[key] = log;
       }
     }
   }
