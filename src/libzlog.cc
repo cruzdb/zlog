@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <mutex>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
@@ -26,18 +27,26 @@ std::string LogLL::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
-std::string LogLL::position_to_oid(uint64_t position)
-{
-  // round-robin striping
-  int slot = position % stripe_size_;
-  return slot_to_oid(slot);
-}
-
 std::string LogLL::slot_to_oid(int slot)
 {
   std::stringstream ss;
   ss << name_ << "." << slot;
   return ss.str();
+}
+
+std::string LogLL::position_to_oid(uint64_t position)
+{
+  std::lock_guard<std::mutex> l(lock_);
+
+  // find correct interval
+  assert(!stripe_history_.empty());
+  auto it = stripe_history_.upper_bound(position);
+  assert(it != stripe_history_.begin());
+  it--;
+
+  // round-robin striping
+  int slot = position % it->second;
+  return slot_to_oid(slot);
 }
 
 int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
@@ -53,9 +62,18 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
     return -EINVAL;
   }
 
-  // pack up config info in a buffer
+  /*
+   * Setup stripe history. Initially there is a single entry:
+   *
+   *   0:stripe_width
+   *
+   * which should be interpreted as "any log position greater than or equal to
+   * zero should be mapped to RADOS using a stripe size of `stripe_width`".
+   */
   zlog_proto::MetaLog config;
-  config.set_stripe_size(stripe_size);
+  zlog_proto::MetaLog_StripeHistoryEntry *entry = config.add_stripe_history();
+  entry->set_pos(0);
+  entry->set_width(stripe_size);
   ceph::bufferlist bl;
   pack_msg<zlog_proto::MetaLog>(bl, config);
 
@@ -127,6 +145,99 @@ int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
+int LogLL::SetStripeWidth(int width)
+{
+  /*
+   * Get the current projection. We'll add the new striping width when we
+   * propose the next projection/epoch.
+   */
+  int rv;
+  uint64_t epoch;
+  ceph::bufferlist bl;
+  librados::ObjectReadOperation get_op;
+  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &bl);
+
+  ceph::bufferlist unused;
+  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
+  if (ret || rv) {
+    std::cerr << "failed to get projection ret " << ret
+      << " rv " << rv << std::endl;
+    if (ret)
+      return ret;
+    if (rv)
+      return rv;
+  }
+
+  zlog_proto::MetaLog config;
+  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
+    std::cerr << "failed to parse configuration" << std::endl;
+    return -EIO;
+  }
+
+  /*
+   * Get the latest stripe size so we can seal all the objects in the current
+   * epoch/projection.
+   */
+  std::map<uint64_t, uint32_t> history;
+  for (int i = 0; i < config.stripe_history_size(); i++) {
+    const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
+    history[e.pos()] = e.width();
+  }
+  assert(!history.empty());
+
+  auto it = history.rbegin();
+  assert(it != history.rend());
+  int stripe_size = it->second;
+
+  /*
+   * Seal the current epoch/projection.
+   */
+  for (int i = 0; i < stripe_size; i++) {
+    std::string oid = slot_to_oid(i);
+    librados::ObjectWriteOperation seal_op;
+    cls_zlog_seal(seal_op, epoch);
+    ret = ioctx_->operate(oid, &seal_op);
+    if (ret != zlog::CLS_ZLOG_OK) {
+      std::cerr << "failed to seal object" << std::endl;
+      return ret;
+    }
+  }
+
+  /*
+   * Calculate the max log position.
+   */
+  uint64_t max_position;
+  ret = FindMaxPosition(epoch, stripe_size, &max_position);
+  if (ret) {
+    std::cerr << "failed to find max pos ret " << ret << std::endl;
+    return ret;
+  }
+
+  /*
+   * Add max_position:new_width to the stripe history
+   */
+  zlog_proto::MetaLog_StripeHistoryEntry *entry = config.add_stripe_history();
+  entry->set_pos(max_position);
+  entry->set_width(width);
+  bl.clear();
+  pack_msg<zlog_proto::MetaLog>(bl, config);
+
+  /*
+   * Propose the updated projection for the next epoch.
+   */
+  uint64_t next_epoch = epoch + 1;
+  librados::ObjectWriteOperation set_op;
+  cls_zlog_set_projection(set_op, next_epoch, bl);
+  ret = ioctx_->operate(metalog_oid_, &set_op);
+  if (ret) {
+    std::cerr << "failed to set new epoch " << next_epoch
+      << " ret " << ret << std::endl;
+    return ret;
+  }
+
+  return 0;
+}
+
 int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
 {
   /*
@@ -157,9 +268,23 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   }
 
   /*
+   * Calculate the stripe size for the latest epoch/projection
+   */
+  std::map<uint64_t, uint32_t> history;
+  for (int i = 0; i < config.stripe_history_size(); i++) {
+    const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
+    history[e.pos()] = e.width();
+  }
+  assert(!history.empty());
+
+  auto it = history.rbegin();
+  assert(it != history.rend());
+  int stripe_size = it->second;
+
+  /*
    * Seal the current epoch/projection.
    */
-  for (int i = 0; i < config.stripe_size(); i++) {
+  for (int i = 0; i < stripe_size; i++) {
     std::string oid = slot_to_oid(i);
     librados::ObjectWriteOperation seal_op;
     cls_zlog_seal(seal_op, epoch);
@@ -174,7 +299,7 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    * Calculate the max log position.
    */
   uint64_t max_position;
-  ret = FindMaxPosition(epoch, config.stripe_size(), &max_position);
+  ret = FindMaxPosition(epoch, stripe_size, &max_position);
   if (ret) {
     std::cerr << "failed to find max pos ret " << ret << std::endl;
     return ret;
@@ -196,21 +321,6 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   *pepoch = next_epoch;
   *maxpos = max_position;
 
-  return 0;
-}
-
-int LogLL::Seal(uint64_t epoch)
-{
-  for (int i = 0; i < stripe_size_; i++) {
-    std::string oid = slot_to_oid(i);
-    librados::ObjectWriteOperation op;
-    cls_zlog_seal(op, epoch);
-    int ret = ioctx_->operate(oid, &op);
-    if (ret != zlog::CLS_ZLOG_OK) {
-      std::cerr << "failed to seal object" << std::endl;
-      return ret;
-    }
-  }
   return 0;
 }
 
@@ -288,8 +398,23 @@ int LogLL::RefreshProjection()
       return -EIO;
     }
 
+    /*
+     * Build the new history object
+     */
+    std::map<uint64_t, uint32_t> history;
+    for (int i = 0; i < config.stripe_history_size(); i++) {
+      const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
+      history[e.pos()] = e.width();
+    }
+    assert(!history.empty());
+
+    std::lock_guard<std::mutex> l(lock_);
+
     epoch_ = epoch;
-    stripe_size_ = config.stripe_size();
+    stripe_history_.swap(history);
+
+    std::cout << "RefreshProjection: e" << epoch_ << std::endl;
+
     break;
   }
 
@@ -373,7 +498,9 @@ int LogLL::CheckTail(const std::set<uint64_t>& stream_ids,
  * This means that a hole is created each time an append hits a stale epoch.
  * If there are a lot of clients, a large hole is created each time the
  * projection is refreshed. Is this necessary in all cases? When could a
- * client try again with the same position?
+ * client try again with the same position? We could also mitigate this affect
+ * a bit by having the sequencer, upon startup, begin finding log tails
+ * proactively instead of waiting for a client to perform a check tail.
  *
  * 2. When a stale epoch return code occurs we continuously look for a new
  * projection and retry the append. to avoid just spinning and creating holes

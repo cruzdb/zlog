@@ -11,12 +11,14 @@ int main(int argc, char **argv)
   std::string log_name;
   std::string server;
   std::string port;
+  int width;
 
   po::options_description desc("Allowed options");
   desc.add_options()
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
     ("logname", po::value<std::string>(&log_name)->required(), "Log name")
     ("create-cut", po::bool_switch()->default_value(false), "Create a cut")
+    ("set-width", po::value<int>(&width)->default_value(-1), "Set stripe width")
   ;
 
   po::variables_map vm;
@@ -44,7 +46,17 @@ int main(int argc, char **argv)
   ret = zlog::LogLL::Open(ioctx, log_name, client, log);
   assert(ret == 0);
 
-  if (vm["create-cut"].as<bool>()) {
+  if (width != -1) {
+    if (width > 0) {
+      ret = log.SetStripeWidth(width);
+      if (ret)
+        std::cerr << "set-width: failed to set width " << width
+          << " ret " << ret << std::endl;
+      else
+        std::cout << "set-width: set log stripe width " << width << std::endl;
+    } else
+      std::cerr << "set-width: invalid stripe width " << width << std::endl;
+  } else if (vm["create-cut"].as<bool>()) {
     uint64_t epoch, maxpos;
     ret = log.CreateCut(&epoch, &maxpos);
     if (ret)

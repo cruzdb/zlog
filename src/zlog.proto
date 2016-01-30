@@ -3,7 +3,11 @@ package zlog_proto;
 option optimize_for = SPEED;
 
 message MetaLog {
-    required uint32 stripe_size = 1;
+    message StripeHistoryEntry {
+        required uint64 pos = 1;
+        required uint32 width = 2;
+    }
+    repeated StripeHistoryEntry stripe_history = 1;
 }
 
 message MSeqRequest {

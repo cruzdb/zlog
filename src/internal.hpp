@@ -1,6 +1,7 @@
 #ifndef LIBZLOG_INTERNAL_HPP
 #define LIBZLOG_INTERNAL_HPP
 
+#include <mutex>
 #include <rados/librados.h>
 #include "libzlog.hpp"
 #include "libzlog.h"
@@ -31,14 +32,14 @@ class LogLL {
   int CreateCut(uint64_t *pepoch, uint64_t *maxpos);
 
   /*
+   * Set log stripe width
+   */
+  int SetStripeWidth(int width);
+
+  /*
    * Find the maximum position written.
    */
   int FindMaxPosition(uint64_t epoch, int ss, uint64_t *pposition);
-
-  /*
-   * Seal all storage devices.
-   */
-  int Seal(uint64_t epoch);
 
   /*
    * Find and optionally increment the current tail position.
@@ -179,8 +180,13 @@ class LogLL {
   std::string pool_;
   std::string name_;
   std::string metalog_oid_;
-  int stripe_size_;
   SeqrClient *seqr;
+
+  /*
+   *
+   */
+  std::mutex lock_;
+  std::map<uint64_t, uint32_t> stripe_history_;
   uint64_t epoch_;
 };
 
