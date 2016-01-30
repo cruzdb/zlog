@@ -133,10 +133,7 @@ class LogLL {
     int ret = Open(ioctx, name, seqr, log);
     if (ret != -ENOENT)
       return ret;
-    ret = Create(ioctx, name, stripe_size, seqr, log);
-    if (ret == 0)
-      return Open(ioctx, name, seqr, log);
-    return ret;
+    return Create(ioctx, name, stripe_size, seqr, log);
   }
 
   static AioCompletion *aio_create_completion();

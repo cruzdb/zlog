@@ -81,10 +81,7 @@ class LogHL {
     int ret = Open(ioctx, name, seqr, logptr);
     if (ret != -ENOENT)
       return ret;
-    ret = Create(ioctx, name, seqr, logptr);
-    if (ret == 0)
-      return Open(ioctx, name, seqr, logptr);
-    return ret;
+    return Create(ioctx, name, seqr, logptr);
   }
 
  private:
