@@ -42,6 +42,18 @@ stream_stress_CPPFLAGS = $(BOOST_CPPFLAGS)
 stream_stress_LDFLAGS = $(BOOST_THREAD_LDFLAGS) $(BOOST_SYSTEM_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LDFLAGS)
 stream_stress_LDADD = libseqr.la libzlog.la $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
 
+bin_PROGRAMS += append-check
+append_check_SOURCES = append-check.cc
+append_check_CPPFLAGS = $(BOOST_CPPFLAGS)
+append_check_LDFLAGS = $(BOOST_THREAD_LDFLAGS) $(BOOST_SYSTEM_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LDFLAGS)
+append_check_LDADD = libseqr.la libzlog.la $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
+
+bin_PROGRAMS += zlog
+zlog_SOURCES = zlog-tool.cc
+zlog_CPPFLAGS = $(BOOST_CPPFLAGS)
+zlog_LDFLAGS = $(BOOST_THREAD_LDFLAGS) $(BOOST_SYSTEM_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LDFLAGS)
+zlog_LDADD = libseqr.la libzlog.la $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
+
 noinst_LTLIBRARIES += libseqr.la
 libseqr_la_SOURCES = libseqr.cc libseqr.h
 libseqr_la_LIBADD = libzlogproto.la
