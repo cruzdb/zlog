@@ -365,6 +365,21 @@ int LogLL::CheckTail(const std::set<uint64_t>& stream_ids,
   assert(0);
 }
 
+/*
+ * TODO:
+ *
+ * 1. When a stale epoch is encountered the projection is refreshed and the
+ * append is retried with a new tail position retrieved from the sequencer.
+ * This means that a hole is created each time an append hits a stale epoch.
+ * If there are a lot of clients, a large hole is created each time the
+ * projection is refreshed. Is this necessary in all cases? When could a
+ * client try again with the same position?
+ *
+ * 2. When a stale epoch return code occurs we continuously look for a new
+ * projection and retry the append. to avoid just spinning and creating holes
+ * we pause for a second. other options include waiting to observe an _actual_
+ * change to a new projection. that is probably better...
+ */
 int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
   for (;;) {
@@ -390,6 +405,7 @@ int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
     }
 
     if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      sleep(1); // avoid spinning in this loop
       ret = RefreshProjection();
       if (ret)
         return ret;
