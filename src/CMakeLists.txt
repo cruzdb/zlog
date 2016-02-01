@@ -16,22 +16,28 @@ target_link_libraries(zlog_seqr
 
 ####
 
-add_library(zlog SHARED
+add_library(libzlog SHARED
     libzlog.cc
     stream.cc
     aio.cc
+    stripe_history.cc
+    log_mapper.cc
 )
 
-target_include_directories(zlog
+target_include_directories(libzlog
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
     PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
 )
 
-target_link_libraries(zlog
+target_link_libraries(libzlog
     zlog_proto
     ${LIBRADOS_LIBRARIES}
     ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
+    ${Boost_LOG_LIBRARY}
 )
+
+set_target_properties(libzlog PROPERTIES COMPILE_DEFINITIONS "BOOST_LOG_DYN_LINK")
+set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
 ####
 
@@ -40,7 +46,7 @@ add_library(zstate SHARED
 )
 
 target_link_libraries(zstate
-    zlog
+    libzlog
 )
 
 ####
@@ -50,8 +56,29 @@ add_executable(zlog-seqr
 )
 
 target_link_libraries(zlog-seqr
-    zlog
+    libzlog
     zlog_proto
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+####
+
+add_executable(append-check append-check.cc)
+target_link_libraries(append-check
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+####
+
+add_executable(zlogtool zlog-tool.cc)
+set_target_properties(zlogtool PROPERTIES OUTPUT_NAME "zlog")
+target_link_libraries(zlogtool
+    libzlog
     zlog_seqr
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
@@ -64,7 +91,7 @@ add_executable(zlog-seqr-bench
 )
 
 target_link_libraries(zlog-seqr-bench
-    zlog
+    libzlog
     zlog_seqr
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
@@ -77,7 +104,7 @@ add_executable(zlog-bench-ng
 )
 
 target_link_libraries(zlog-bench-ng
-    zlog
+    libzlog
     zlog_seqr
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
@@ -91,7 +118,7 @@ add_executable(stream-stress
 )
 
 target_link_libraries(stream-stress
-    zlog
+    libzlog
     zlog_seqr
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
@@ -116,7 +143,7 @@ add_executable(zlog-test
 )
 
 target_link_libraries(zlog-test
-    zlog
+    libzlog
     gtest
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
@@ -129,7 +156,7 @@ add_executable(zstate-test
 )
 
 target_link_libraries(zstate-test
-    zlog
+    libzlog
     gtest
     zstate
     zlog_seqr
