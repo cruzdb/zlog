@@ -67,9 +67,9 @@ libzlog_la_SOURCES = \
 	libzlog.h \
 	stripe_history.cc stripe_history.h \
 	log_mapper.cc log_mapper.h
-libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS)
-libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS)
-libzlog_la_LIBADD = libseqr.la -lcls_zlog_client $(BOOST_SYSTEM_LIBS)
+libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS) -DBOOST_LOG_DYN_LINK
+libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS) $(BOOST_LOG_LDFLAGS)
+libzlog_la_LIBADD = libseqr.la -lcls_zlog_client $(BOOST_SYSTEM_LIBS) $(BOOST_LOG_LIBS)
 
 include_HEADERS = libzlog.h libzlog.hpp
 
