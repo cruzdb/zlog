@@ -1,6 +1,6 @@
 #include "stripe_history.h"
 #include "proto/zlog.pb.h"
-#include "protobuf_bufferlist_adapter.h"
+#include "proto/protobuf_bufferlist_adapter.h"
 
 ceph::bufferlist StripeHistory::Serialize() const
 {

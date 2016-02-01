@@ -13,7 +13,7 @@
 
 #include "libzlog.hpp"
 #include "proto/zlog.pb.h"
-#include "protobuf_bufferlist_adapter.h"
+#include "proto/protobuf_bufferlist_adapter.h"
 #include "internal.hpp"
 
 /*
