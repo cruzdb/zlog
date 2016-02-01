@@ -6,11 +6,11 @@ target_link_libraries(zlog_seqr zlog_proto)
 ####
 
 add_library(libzlog SHARED
-    libzlog.cc
-    stream.cc
-    aio.cc
-    stripe_history.cc
-    log_mapper.cc
+    libzlog/libzlog.cc
+    libzlog/stream.cc
+    libzlog/aio.cc
+    libzlog/stripe_history.cc
+    libzlog/log_mapper.cc
 )
 
 target_include_directories(libzlog

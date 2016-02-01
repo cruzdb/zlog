@@ -7,7 +7,7 @@
 #include <thread>
 #include <rados/librados.hpp>
 #include <gtest/gtest.h>
-#include "../../zstate/objects/register.h"
+#include "zstate/objects/register.h"
 
 static std::string randstr(void)
 {
