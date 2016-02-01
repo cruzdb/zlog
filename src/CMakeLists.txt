@@ -128,7 +128,8 @@ target_include_directories(gtest
 ####
 
 add_executable(zlog-test
-    test.cc
+    test/test.cc
+    test/test_internal.cc
 )
 
 target_link_libraries(zlog-test
@@ -141,7 +142,7 @@ target_link_libraries(zlog-test
 ####
 
 add_executable(zstate-test
-    zstate/test.cc
+    test/zstate_test.cc
 )
 
 target_link_libraries(zstate-test
