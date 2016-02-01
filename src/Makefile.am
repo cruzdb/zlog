@@ -59,7 +59,14 @@ libseqr_la_SOURCES = libseqr.cc libseqr.h
 libseqr_la_LIBADD = libzlogproto.la
 
 lib_LTLIBRARIES += libzlog.la
-libzlog_la_SOURCES = libzlog.cc stream.cc aio.cc libzlog.hpp libzlog.h
+libzlog_la_SOURCES = \
+	libzlog.cc \
+	stream.cc \
+	aio.cc \
+	libzlog.hpp \
+	libzlog.h \
+	stripe_history.cc stripe_history.h \
+	log_mapper.cc log_mapper.h
 libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS)
 libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS)
 libzlog_la_LIBADD = libseqr.la -lcls_zlog_client $(BOOST_SYSTEM_LIBS)

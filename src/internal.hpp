@@ -1,5 +1,7 @@
 #ifndef LIBZLOG_INTERNAL_HPP
 #define LIBZLOG_INTERNAL_HPP
+#include "stripe_history.h"
+#include "log_mapper.h"
 
 #include <mutex>
 #include <rados/librados.h>
@@ -39,7 +41,8 @@ class LogLL {
   /*
    * Find the maximum position written.
    */
-  int FindMaxPosition(uint64_t epoch, int ss, uint64_t *pposition);
+  int FindMaxPosition(uint64_t epoch, const std::vector<std::string>& objects,
+      uint64_t *pposition);
 
   /*
    * Find and optionally increment the current tail position.
@@ -173,8 +176,6 @@ class LogLL {
       uint64_t *position, bool next);
 
   static std::string metalog_oid_from_name(const std::string& name);
-  std::string slot_to_oid(int i);
-  std::string position_to_oid(uint64_t position);
 
   librados::IoCtx *ioctx_;
   std::string pool_;
@@ -186,7 +187,7 @@ class LogLL {
    *
    */
   std::mutex lock_;
-  std::map<uint64_t, uint32_t> stripe_history_;
+  LogMapper mapper_;
   uint64_t epoch_;
 };
 

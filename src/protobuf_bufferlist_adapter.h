@@ -5,8 +5,8 @@
 #ifndef PROTOBUF_BUFFERLIST_ADAPTER
 #define PROTOBUF_BUFFERLIST_ADAPTER
 
+#include <iostream>
 #include <rados/buffer.h>
-#include "zlog.pb.h"
 
 /*
  * Pack a protobuf message into a bufferlist.

@@ -1,8 +1,11 @@
+#include "stripe_history.h"
+
 #include <cerrno>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <mutex>
+#include <vector>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
@@ -27,28 +30,6 @@ std::string LogLL::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
-std::string LogLL::slot_to_oid(int slot)
-{
-  std::stringstream ss;
-  ss << name_ << "." << slot;
-  return ss.str();
-}
-
-std::string LogLL::position_to_oid(uint64_t position)
-{
-  std::lock_guard<std::mutex> l(lock_);
-
-  // find correct interval
-  assert(!stripe_history_.empty());
-  auto it = stripe_history_.upper_bound(position);
-  assert(it != stripe_history_.begin());
-  it--;
-
-  // round-robin striping
-  int slot = position % it->second;
-  return slot_to_oid(slot);
-}
-
 int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
     int stripe_size, SeqrClient *seqr, LogLL& log)
 {
@@ -62,20 +43,10 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
     return -EINVAL;
   }
 
-  /*
-   * Setup stripe history. Initially there is a single entry:
-   *
-   *   0:stripe_width
-   *
-   * which should be interpreted as "any log position greater than or equal to
-   * zero should be mapped to RADOS using a stripe size of `stripe_width`".
-   */
-  zlog_proto::MetaLog config;
-  zlog_proto::MetaLog_StripeHistoryEntry *entry = config.add_stripe_history();
-  entry->set_pos(0);
-  entry->set_width(stripe_size);
-  ceph::bufferlist bl;
-  pack_msg<zlog_proto::MetaLog>(bl, config);
+  // Setup the first projection
+  StripeHistory hist;
+  hist.AddStripe(0, stripe_size);
+  ceph::bufferlist bl = hist.Serialize();
 
   /*
    * Create the log metadata/head object and create the first projection. The
@@ -104,6 +75,7 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
   log.name_ = name;
   log.metalog_oid_ = metalog_oid;
   log.seqr = seqr;
+  log.mapper_.SetName(name);
 
   ret = log.RefreshProjection();
   if (ret)
@@ -137,6 +109,7 @@ int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
   log.name_ = name;
   log.metalog_oid_ = metalog_oid;
   log.seqr = seqr;
+  log.mapper_.SetName(name);
 
   ret = log.RefreshProjection();
   if (ret)
@@ -153,9 +126,9 @@ int LogLL::SetStripeWidth(int width)
    */
   int rv;
   uint64_t epoch;
-  ceph::bufferlist bl;
+  ceph::bufferlist in_bl;
   librados::ObjectReadOperation get_op;
-  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &bl);
+  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &in_bl);
 
   ceph::bufferlist unused;
   int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
@@ -168,32 +141,19 @@ int LogLL::SetStripeWidth(int width)
       return rv;
   }
 
-  zlog_proto::MetaLog config;
-  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
-    std::cerr << "failed to parse configuration" << std::endl;
-    return -EIO;
-  }
+  StripeHistory hist;
+  ret = hist.Deserialize(in_bl);
+  if (ret)
+    return ret;
+  assert(!hist.Empty());
 
-  /*
-   * Get the latest stripe size so we can seal all the objects in the current
-   * epoch/projection.
-   */
-  std::map<uint64_t, uint32_t> history;
-  for (int i = 0; i < config.stripe_history_size(); i++) {
-    const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
-    history[e.pos()] = e.width();
-  }
-  assert(!history.empty());
-
-  auto it = history.rbegin();
-  assert(it != history.rend());
-  int stripe_size = it->second;
+  std::vector<std::string> objects;
+  mapper_.LatestObjectSet(objects, hist);
 
   /*
    * Seal the current epoch/projection.
    */
-  for (int i = 0; i < stripe_size; i++) {
-    std::string oid = slot_to_oid(i);
+  for (const auto& oid : objects) {
     librados::ObjectWriteOperation seal_op;
     cls_zlog_seal(seal_op, epoch);
     ret = ioctx_->operate(oid, &seal_op);
@@ -207,27 +167,21 @@ int LogLL::SetStripeWidth(int width)
    * Calculate the max log position.
    */
   uint64_t max_position;
-  ret = FindMaxPosition(epoch, stripe_size, &max_position);
+  ret = FindMaxPosition(epoch, objects, &max_position);
   if (ret) {
     std::cerr << "failed to find max pos ret " << ret << std::endl;
     return ret;
   }
 
-  /*
-   * Add max_position:new_width to the stripe history
-   */
-  zlog_proto::MetaLog_StripeHistoryEntry *entry = config.add_stripe_history();
-  entry->set_pos(max_position);
-  entry->set_width(width);
-  bl.clear();
-  pack_msg<zlog_proto::MetaLog>(bl, config);
+  hist.AddStripe(max_position, width);
+  ceph::bufferlist out_bl = hist.Serialize();
 
   /*
    * Propose the updated projection for the next epoch.
    */
   uint64_t next_epoch = epoch + 1;
   librados::ObjectWriteOperation set_op;
-  cls_zlog_set_projection(set_op, next_epoch, bl);
+  cls_zlog_set_projection(set_op, next_epoch, out_bl);
   ret = ioctx_->operate(metalog_oid_, &set_op);
   if (ret) {
     std::cerr << "failed to set new epoch " << next_epoch
@@ -261,31 +215,19 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
       return rv;
   }
 
-  zlog_proto::MetaLog config;
-  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
-    std::cerr << "failed to parse configuration" << std::endl;
-    return -EIO;
-  }
+  StripeHistory hist;
+  ret = hist.Deserialize(bl);
+  if (ret)
+    return ret;
+  assert(!hist.Empty());
 
-  /*
-   * Calculate the stripe size for the latest epoch/projection
-   */
-  std::map<uint64_t, uint32_t> history;
-  for (int i = 0; i < config.stripe_history_size(); i++) {
-    const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
-    history[e.pos()] = e.width();
-  }
-  assert(!history.empty());
-
-  auto it = history.rbegin();
-  assert(it != history.rend());
-  int stripe_size = it->second;
+  std::vector<std::string> objects;
+  mapper_.LatestObjectSet(objects, hist);
 
   /*
    * Seal the current epoch/projection.
    */
-  for (int i = 0; i < stripe_size; i++) {
-    std::string oid = slot_to_oid(i);
+  for (const auto& oid : objects) {
     librados::ObjectWriteOperation seal_op;
     cls_zlog_seal(seal_op, epoch);
     ret = ioctx_->operate(oid, &seal_op);
@@ -299,7 +241,7 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    * Calculate the max log position.
    */
   uint64_t max_position;
-  ret = FindMaxPosition(epoch, stripe_size, &max_position);
+  ret = FindMaxPosition(epoch, objects, &max_position);
   if (ret) {
     std::cerr << "failed to find max pos ret " << ret << std::endl;
     return ret;
@@ -324,16 +266,13 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   return 0;
 }
 
-int LogLL::FindMaxPosition(uint64_t epoch, int ss, uint64_t *pposition)
+int LogLL::FindMaxPosition(uint64_t epoch,
+    const std::vector<std::string>& objects, uint64_t *pposition)
 {
   uint64_t max_position;
   bool first = true;
 
-  assert(ss > 0);
-
-  for (int i = 0; i < ss; i++) {
-    std::string oid = slot_to_oid(i);
-
+  for (const auto& oid : objects) {
     /*
      * Prepare max_position operation
      */
@@ -392,26 +331,16 @@ int LogLL::RefreshProjection()
       continue;
     }
 
-    zlog_proto::MetaLog config;
-    if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
-      std::cerr << "failed to parse configuration" << std::endl;
-      return -EIO;
-    }
-
-    /*
-     * Build the new history object
-     */
-    std::map<uint64_t, uint32_t> history;
-    for (int i = 0; i < config.stripe_history_size(); i++) {
-      const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
-      history[e.pos()] = e.width();
-    }
-    assert(!history.empty());
+    StripeHistory hist;
+    ret = hist.Deserialize(bl);
+    if (ret)
+      return ret;
+    assert(!hist.Empty());
 
     std::lock_guard<std::mutex> l(lock_);
 
     epoch_ = epoch;
-    stripe_history_.swap(history);
+    mapper_.SetHistory(hist);
 
     std::cout << "RefreshProjection: e" << epoch_ << std::endl;
 
@@ -518,7 +447,7 @@ int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_write(op, epoch_, position, data);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "append: failed ret " << ret << std::endl;
@@ -550,7 +479,7 @@ int LogLL::Fill(uint64_t epoch, uint64_t position)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_fill(op, epoch, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
@@ -578,7 +507,7 @@ int LogLL::Fill(uint64_t position)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_fill(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
@@ -606,7 +535,7 @@ int LogLL::Trim(uint64_t position)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_trim(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "trim: failed ret " << ret << std::endl;
@@ -633,7 +562,7 @@ int LogLL::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, epoch, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
@@ -665,7 +594,7 @@ int LogLL::Read(uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;

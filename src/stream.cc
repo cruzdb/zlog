@@ -48,7 +48,7 @@ int LogLL::MultiAppend(ceph::bufferlist& data,
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_write(op, epoch_, position, bl);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "append: failed ret " << ret << std::endl;

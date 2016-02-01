@@ -193,7 +193,7 @@ void zlog::LogLL::AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb,
     // don't need impl->get(): reuse reference
 
     // build and submit new op
-    std::string oid = impl->log->position_to_oid(impl->position);
+    std::string oid = impl->log->mapper_.FindObject(impl->position);
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, impl->log->epoch_, impl->position);
     ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
@@ -280,7 +280,7 @@ void zlog::LogLL::AioCompletionImpl::aio_safe_cb_append(librados::completion_t c
       // don't need impl->get(): reuse reference
 
       // build and submit new op
-      std::string oid = impl->log->position_to_oid(impl->position);
+      std::string oid = impl->log->mapper_.FindObject(impl->position);
       librados::ObjectWriteOperation op;
       zlog::cls_zlog_write(op, impl->log->epoch_, impl->position, impl->bl);
       ret = impl->ioctx->aio_operate(oid, impl->c, &op);
@@ -349,7 +349,7 @@ int LogLL::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   librados::ObjectWriteOperation op;
   zlog::cls_zlog_write(op, epoch_, position, data);
 
-  std::string oid = position_to_oid(position);
+  std::string oid = mapper_.FindObject(position);
   ret = ioctx_->aio_operate(oid, impl->c, &op);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -380,7 +380,7 @@ int LogLL::AioRead(uint64_t position, AioCompletion *c,
   librados::ObjectReadOperation op;
   zlog::cls_zlog_read(op, epoch_, position);
 
-  std::string oid = position_to_oid(position);
+  std::string oid = mapper_.FindObject(position);
   int ret = ioctx_->aio_operate(oid, impl->c, &op, &impl->bl);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
