@@ -5,15 +5,23 @@
 
 class StripeHistory {
  public:
-  void AddStripe(uint64_t position, int width);
+  struct Stripe {
+    uint64_t epoch;
+    int width;
+  };
+
+  void AddStripe(uint64_t position, uint64_t epoch, int width);
+
+  Stripe FindStripe(uint64_t position) const;
+  Stripe LatestStripe() const;
+
+  bool Empty() const;
+
   ceph::bufferlist Serialize() const;
   int Deserialize(ceph::bufferlist& bl);
-  bool Empty() const;
-  int FindStripeSize(uint64_t position) const;
-  int LatestStripe() const;
 
  private:
-  std::map<uint64_t, uint32_t> history_;
+  std::map<uint64_t, Stripe> history_;
 };
 
 #endif

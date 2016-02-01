@@ -46,7 +46,7 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
 
   // Setup the first projection
   StripeHistory hist;
-  hist.AddStripe(0, stripe_size);
+  hist.AddStripe(0, 0, stripe_size);
   ceph::bufferlist bl = hist.Serialize();
 
   /*
@@ -158,13 +158,13 @@ int LogLL::SetStripeWidth(int width)
     return ret;
   }
 
-  hist.AddStripe(max_position, width);
+  uint64_t next_epoch = epoch + 1;
+  hist.AddStripe(max_position, next_epoch, width);
   ceph::bufferlist out_bl = hist.Serialize();
 
   /*
    * Propose the updated projection for the next epoch.
    */
-  uint64_t next_epoch = epoch + 1;
   librados::ObjectWriteOperation set_op;
   cls_zlog_set_projection(set_op, next_epoch, out_bl);
   ret = ioctx_->operate(metalog_oid_, &set_op);
