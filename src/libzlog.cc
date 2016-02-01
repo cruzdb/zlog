@@ -6,11 +6,13 @@
 #include <string>
 #include <mutex>
 #include <vector>
+
 #include <boost/log/trivial.hpp>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
+
 #include "libzlog.hpp"
-#include "zlog.pb.h"
+#include "proto/zlog.pb.h"
 #include "protobuf_bufferlist_adapter.h"
 #include "internal.hpp"
 

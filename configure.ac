@@ -47,6 +47,7 @@ LDFLAGS=$SAVED_LDFLAGS
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
+  src/proto/Makefile
 ])
 
 AC_OUTPUT
