@@ -39,12 +39,6 @@ class LogLL {
   int SetStripeWidth(int width);
 
   /*
-   * Find the maximum position written.
-   */
-  int FindMaxPosition(uint64_t epoch, const std::vector<std::string>& objects,
-      uint64_t *pposition);
-
-  /*
    * Find and optionally increment the current tail position.
    */
   int CheckTail(uint64_t *pposition, bool increment = false);
@@ -150,6 +144,10 @@ class LogLL {
   int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
   int StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position);
   int Fill(uint64_t epoch, uint64_t position);
+
+  // Seal an epoch across a set of objects and return the next position.
+  int Seal(const std::vector<std::string>& objects,
+      uint64_t epoch, uint64_t *next_pos);
 
  private:
   LogLL(const LogLL& rhs);

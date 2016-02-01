@@ -150,26 +150,10 @@ int LogLL::SetStripeWidth(int width)
   std::vector<std::string> objects;
   mapper_.LatestObjectSet(objects, hist);
 
-  /*
-   * Seal the current epoch/projection.
-   */
-  for (const auto& oid : objects) {
-    librados::ObjectWriteOperation seal_op;
-    cls_zlog_seal(seal_op, epoch);
-    ret = ioctx_->operate(oid, &seal_op);
-    if (ret != zlog::CLS_ZLOG_OK) {
-      std::cerr << "failed to seal object" << std::endl;
-      return ret;
-    }
-  }
-
-  /*
-   * Calculate the max log position.
-   */
   uint64_t max_position;
-  ret = FindMaxPosition(epoch, objects, &max_position);
+  ret = Seal(objects, epoch, &max_position);
   if (ret) {
-    std::cerr << "failed to find max pos ret " << ret << std::endl;
+    std::cerr << "failed to seal " << ret << std::endl;
     return ret;
   }
 
@@ -224,26 +208,10 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   std::vector<std::string> objects;
   mapper_.LatestObjectSet(objects, hist);
 
-  /*
-   * Seal the current epoch/projection.
-   */
-  for (const auto& oid : objects) {
-    librados::ObjectWriteOperation seal_op;
-    cls_zlog_seal(seal_op, epoch);
-    ret = ioctx_->operate(oid, &seal_op);
-    if (ret != zlog::CLS_ZLOG_OK) {
-      std::cerr << "failed to seal object" << std::endl;
-      return ret;
-    }
-  }
-
-  /*
-   * Calculate the max log position.
-   */
   uint64_t max_position;
-  ret = FindMaxPosition(epoch, objects, &max_position);
+  ret = Seal(objects, epoch, &max_position);
   if (ret) {
-    std::cerr << "failed to find max pos ret " << ret << std::endl;
+    std::cerr << "failed to seal " << ret << std::endl;
     return ret;
   }
 
@@ -266,12 +234,27 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   return 0;
 }
 
-int LogLL::FindMaxPosition(uint64_t epoch,
-    const std::vector<std::string>& objects, uint64_t *pposition)
+int LogLL::Seal(const std::vector<std::string>& objects,
+    uint64_t epoch, uint64_t *next_pos)
 {
+  /*
+   * Seal each object
+   */
+  for (const auto& oid : objects) {
+    librados::ObjectWriteOperation seal_op;
+    cls_zlog_seal(seal_op, epoch);
+    int ret = ioctx_->operate(oid, &seal_op);
+    if (ret != zlog::CLS_ZLOG_OK) {
+      std::cerr << "failed to seal object" << std::endl;
+      return ret;
+    }
+  }
+
+  /*
+   * Get next position from each object
+   */
   uint64_t max_position;
   bool first = true;
-
   for (const auto& oid : objects) {
     /*
      * Prepare max_position operation
@@ -308,7 +291,7 @@ int LogLL::FindMaxPosition(uint64_t epoch,
     max_position = std::max(max_position, this_pos);
   }
 
-  *pposition =  max_position;
+  *next_pos = max_position;
 
   return 0;
 }
