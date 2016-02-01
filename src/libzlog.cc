@@ -1,7 +1,12 @@
+#include "stripe_history.h"
+
 #include <cerrno>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <mutex>
+#include <vector>
+#include <boost/log/trivial.hpp>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
@@ -26,20 +31,6 @@ std::string LogLL::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
-std::string LogLL::position_to_oid(uint64_t position)
-{
-  // round-robin striping
-  int slot = position % stripe_size_;
-  return slot_to_oid(slot);
-}
-
-std::string LogLL::slot_to_oid(int slot)
-{
-  std::stringstream ss;
-  ss << name_ << "." << slot;
-  return ss.str();
-}
-
 int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
     int stripe_size, SeqrClient *seqr, LogLL& log)
 {
@@ -53,17 +44,24 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
     return -EINVAL;
   }
 
-  // pack up config info in a buffer
-  zlog_proto::MetaLog config;
-  config.set_stripe_size(stripe_size);
-  ceph::bufferlist bl;
-  pack_msg<zlog_proto::MetaLog>(bl, config);
+  // Setup the first projection
+  StripeHistory hist;
+  hist.AddStripe(0, 0, stripe_size);
+  ceph::bufferlist bl = hist.Serialize();
 
-  // setup rados operation to create log
+  /*
+   * Create the log metadata/head object and create the first projection. The
+   * initial projection number is epoch = 0. Note that we don't initially seal
+   * the objects that the log will be striped across. The semantics of
+   * cls_zlog are such that unitialized objects behave exactly as if they had
+   * been sealed with epoch = -1.
+   *
+   * The projection will be initialized for this log object during
+   * RefreshProjection in the same way that it is done during Open().
+   */
   librados::ObjectWriteOperation op;
   op.create(true); // exclusive create
-  op.write_full(bl);
-  cls_zlog_set_projection(op);
+  cls_zlog_set_projection(op, 0, bl);
 
   std::string metalog_oid = LogLL::metalog_oid_from_name(name);
   int ret = ioctx.operate(metalog_oid, &op);
@@ -77,14 +75,10 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
   log.pool_ = ioctx.get_pool_name();
   log.name_ = name;
   log.metalog_oid_ = metalog_oid;
-  log.stripe_size_ = stripe_size;
   log.seqr = seqr;
+  log.mapper_.SetName(name);
 
   ret = log.RefreshProjection();
-  if (ret)
-    return ret;
-
-  ret = log.Seal(log.epoch_);
   if (ret)
     return ret;
 
@@ -99,28 +93,24 @@ int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
     return -EINVAL;
   }
 
+  /*
+   * Check that the log metadata/head object exists. The projection and other
+   * state is read during RefreshProjection.
+   */
   std::string metalog_oid = LogLL::metalog_oid_from_name(name);
-
-  ceph::bufferlist bl;
-  int ret = ioctx.read(metalog_oid, bl, 0, 0);
-  if (ret < 0) {
-    std::cerr << "failed to read object " << metalog_oid << " ret "
-      << ret << std::endl;
+  int ret = ioctx.stat(metalog_oid, NULL, NULL);
+  if (ret) {
+    std::cerr << "Failed to open log meta object " << metalog_oid << " ret " <<
+      ret << std::endl;
     return ret;
-  }
-
-  zlog_proto::MetaLog config;
-  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
-    std::cerr << "failed to parse configuration" << std::endl;
-    return -EIO;
   }
 
   log.ioctx_ = &ioctx;
   log.pool_ = ioctx.get_pool_name();
   log.name_ = name;
   log.metalog_oid_ = metalog_oid;
-  log.stripe_size_ = config.stripe_size();
   log.seqr = seqr;
+  log.mapper_.SetName(name);
 
   ret = log.RefreshProjection();
   if (ret)
@@ -129,75 +119,180 @@ int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
-int LogLL::SetProjection(uint64_t *pepoch)
+int LogLL::SetStripeWidth(int width)
 {
-  librados::ObjectWriteOperation op;
-  cls_zlog_set_projection(op);
-  int ret = ioctx_->operate(metalog_oid_, &op);
+  /*
+   * Get the current projection. We'll add the new striping width when we
+   * propose the next projection/epoch.
+   */
+  int rv;
+  uint64_t epoch;
+  ceph::bufferlist in_bl;
+  librados::ObjectReadOperation get_op;
+  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &in_bl);
+
+  ceph::bufferlist unused;
+  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
+  if (ret || rv) {
+    std::cerr << "failed to get projection ret " << ret
+      << " rv " << rv << std::endl;
+    if (ret)
+      return ret;
+    if (rv)
+      return rv;
+  }
+
+  StripeHistory hist;
+  ret = hist.Deserialize(in_bl);
+  if (ret)
+    return ret;
+  assert(!hist.Empty());
+
+  std::vector<std::string> objects;
+  mapper_.LatestObjectSet(objects, hist);
+
+  uint64_t max_position;
+  ret = Seal(objects, epoch, &max_position);
   if (ret) {
-    std::cerr << "failed to set projection " << ret << std::endl;
+    std::cerr << "failed to seal " << ret << std::endl;
     return ret;
   }
-  return GetProjection(pepoch);
+
+  uint64_t next_epoch = epoch + 1;
+  hist.AddStripe(max_position, next_epoch, width);
+  ceph::bufferlist out_bl = hist.Serialize();
+
+  /*
+   * Propose the updated projection for the next epoch.
+   */
+  librados::ObjectWriteOperation set_op;
+  cls_zlog_set_projection(set_op, next_epoch, out_bl);
+  ret = ioctx_->operate(metalog_oid_, &set_op);
+  if (ret) {
+    std::cerr << "failed to set new epoch " << next_epoch
+      << " ret " << ret << std::endl;
+    return ret;
+  }
+
+  return 0;
 }
 
-int LogLL::GetProjection(uint64_t *pepoch)
+int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
 {
-  return cls_zlog_get_projection(*ioctx_, metalog_oid_, pepoch);
+  /*
+   * Get the current projection. We'll make a copy of this as the next
+   * projection.
+   */
+  int rv;
+  uint64_t epoch;
+  ceph::bufferlist bl;
+  librados::ObjectReadOperation get_op;
+  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &bl);
+
+  ceph::bufferlist unused;
+  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
+  if (ret || rv) {
+    std::cerr << "failed to get projection ret " << ret
+      << " rv " << rv << std::endl;
+    if (ret)
+      return ret;
+    if (rv)
+      return rv;
+  }
+
+  StripeHistory hist;
+  ret = hist.Deserialize(bl);
+  if (ret)
+    return ret;
+  assert(!hist.Empty());
+
+  std::vector<std::string> objects;
+  mapper_.LatestObjectSet(objects, hist);
+
+  uint64_t max_position;
+  ret = Seal(objects, epoch, &max_position);
+  if (ret) {
+    std::cerr << "failed to seal " << ret << std::endl;
+    return ret;
+  }
+
+  /*
+   * Propose the next epoch / projection.
+   */
+  uint64_t next_epoch = epoch + 1;
+  librados::ObjectWriteOperation set_op;
+  cls_zlog_set_projection(set_op, next_epoch, bl);
+  ret = ioctx_->operate(metalog_oid_, &set_op);
+  if (ret) {
+    std::cerr << "failed to set new epoch " << next_epoch
+      << " ret " << ret << std::endl;
+    return ret;
+  }
+
+  *pepoch = next_epoch;
+  *maxpos = max_position;
+
+  return 0;
 }
 
-int LogLL::Seal(uint64_t epoch)
+int LogLL::Seal(const std::vector<std::string>& objects,
+    uint64_t epoch, uint64_t *next_pos)
 {
-  for (int i = 0; i < stripe_size_; i++) {
-    std::string oid = slot_to_oid(i);
-    librados::ObjectWriteOperation op;
-    cls_zlog_seal(op, epoch);
-    int ret = ioctx_->operate(oid, &op);
+  /*
+   * Seal each object
+   */
+  for (const auto& oid : objects) {
+    librados::ObjectWriteOperation seal_op;
+    cls_zlog_seal(seal_op, epoch);
+    int ret = ioctx_->operate(oid, &seal_op);
     if (ret != zlog::CLS_ZLOG_OK) {
       std::cerr << "failed to seal object" << std::endl;
       return ret;
     }
   }
-  return 0;
-}
 
-int LogLL::FindMaxPosition(uint64_t epoch, bool *pempty, uint64_t *pposition)
-{
-  bool log_empty = true;
+  /*
+   * Get next position from each object
+   */
   uint64_t max_position;
-
-  for (int i = 0; i < stripe_size_; i++) {
-    std::string oid = slot_to_oid(i);
-
-    librados::bufferlist bl;
-    librados::ObjectReadOperation op;
+  bool first = true;
+  for (const auto& oid : objects) {
+    /*
+     * Prepare max_position operation
+     */
     int op_ret;
     uint64_t this_pos;
-
+    librados::ObjectReadOperation op;
     cls_zlog_max_position(op, epoch, &this_pos, &op_ret);
 
-    int ret = ioctx_->operate(oid, &op, &bl);
-    if (ret < 0) {
-      if (ret == -ENOENT) // no writes yet
-        continue;
-      std::cerr << "failed to find max pos " << ret << std::endl;
+    /*
+     * The max_position function should only be called on objects that have
+     * been sealed, thus here we return from any error includes -ENOENT. The
+     * epoch tag must also match the sealed epoch in the object otherwise
+     * we'll receive -EINVAL.
+     */
+    ceph::bufferlist unused;
+    int ret = ioctx_->operate(oid, &op, &unused);
+    if (ret != zlog::CLS_ZLOG_OK) {
+      std::cerr << "failed to find max pos ret " << ret << std::endl;
       return ret;
     }
 
-    if (op_ret == zlog::CLS_ZLOG_OK) {
-      if (log_empty) {
-        max_position = this_pos;
-        log_empty = false;
-        continue;
-      }
-      max_position = std::max(max_position, this_pos);
+    if (op_ret != zlog::CLS_ZLOG_OK) {
+      std::cerr << "failed to find max pos op_ret " << ret << std::endl;
+      return ret;
     }
+
+    if (first) {
+      max_position = this_pos;
+      first = false;
+      continue;
+    }
+
+    max_position = std::max(max_position, this_pos);
   }
 
-  *pempty = log_empty;
-
-  if (!log_empty)
-    *pposition =  max_position;
+  *next_pos = max_position;
 
   return 0;
 }
@@ -205,16 +300,37 @@ int LogLL::FindMaxPosition(uint64_t epoch, bool *pempty, uint64_t *pposition)
 int LogLL::RefreshProjection()
 {
   for (;;) {
+    int rv;
     uint64_t epoch;
-    int ret = GetProjection(&epoch);
-    if (ret) {
-      std::cerr << "failed to get projection ret " << ret << std::endl;
+    ceph::bufferlist bl;
+    librados::ObjectReadOperation op;
+    cls_zlog_get_latest_projection(op, &rv, &epoch, &bl);
+
+    ceph::bufferlist unused;
+    int ret = ioctx_->operate(metalog_oid_, &op, &unused);
+    if (ret || rv) {
+      std::cerr << "failed to get projection ret "
+        << ret << " rv " << rv << std::endl;
       sleep(1);
       continue;
     }
+
+    StripeHistory hist;
+    ret = hist.Deserialize(bl);
+    if (ret)
+      return ret;
+    assert(!hist.Empty());
+
+    std::lock_guard<std::mutex> l(lock_);
+
     epoch_ = epoch;
+    mapper_.SetHistory(hist);
+
+    BOOST_LOG_TRIVIAL(debug) << "RefreshProjection: e" << epoch_;
+
     break;
   }
+
   return 0;
 }
 
@@ -287,6 +403,23 @@ int LogLL::CheckTail(const std::set<uint64_t>& stream_ids,
   assert(0);
 }
 
+/*
+ * TODO:
+ *
+ * 1. When a stale epoch is encountered the projection is refreshed and the
+ * append is retried with a new tail position retrieved from the sequencer.
+ * This means that a hole is created each time an append hits a stale epoch.
+ * If there are a lot of clients, a large hole is created each time the
+ * projection is refreshed. Is this necessary in all cases? When could a
+ * client try again with the same position? We could also mitigate this affect
+ * a bit by having the sequencer, upon startup, begin finding log tails
+ * proactively instead of waiting for a client to perform a check tail.
+ *
+ * 2. When a stale epoch return code occurs we continuously look for a new
+ * projection and retry the append. to avoid just spinning and creating holes
+ * we pause for a second. other options include waiting to observe an _actual_
+ * change to a new projection. that is probably better...
+ */
 int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
   for (;;) {
@@ -298,7 +431,7 @@ int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_write(op, epoch_, position, data);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "append: failed ret " << ret << std::endl;
@@ -312,6 +445,7 @@ int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
     }
 
     if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+      sleep(1); // avoid spinning in this loop
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -329,7 +463,7 @@ int LogLL::Fill(uint64_t epoch, uint64_t position)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_fill(op, epoch, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
@@ -357,7 +491,7 @@ int LogLL::Fill(uint64_t position)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_fill(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
@@ -385,7 +519,7 @@ int LogLL::Trim(uint64_t position)
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_trim(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "trim: failed ret " << ret << std::endl;
@@ -412,7 +546,7 @@ int LogLL::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, epoch, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
@@ -444,7 +578,7 @@ int LogLL::Read(uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     zlog::cls_zlog_read(op, epoch_, position);
 
-    std::string oid = position_to_oid(position);
+    std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;

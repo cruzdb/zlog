@@ -1,6 +1,9 @@
 #ifndef LIBZLOG_INTERNAL_HPP
 #define LIBZLOG_INTERNAL_HPP
+#include "stripe_history.h"
+#include "log_mapper.h"
 
+#include <mutex>
 #include <rados/librados.h>
 #include "libzlog.hpp"
 #include "libzlog.h"
@@ -26,24 +29,14 @@ class LogLL {
   };
 
   /*
-   * Set a new projection.
+   * Create cut.
    */
-  int SetProjection(uint64_t *pepoch);
+  int CreateCut(uint64_t *pepoch, uint64_t *maxpos);
 
   /*
-   * Get the current projection.
+   * Set log stripe width
    */
-  int GetProjection(uint64_t *pepoch);
-
-  /*
-   * Find the maximum position written.
-   */
-  int FindMaxPosition(uint64_t epoch, bool *pempty, uint64_t *pposition);
-
-  /*
-   * Seal all storage devices.
-   */
-  int Seal(uint64_t epoch);
+  int SetStripeWidth(int width);
 
   /*
    * Find and optionally increment the current tail position.
@@ -138,10 +131,7 @@ class LogLL {
     int ret = Open(ioctx, name, seqr, log);
     if (ret != -ENOENT)
       return ret;
-    ret = Create(ioctx, name, stripe_size, seqr, log);
-    if (ret == 0)
-      return Open(ioctx, name, seqr, log);
-    return ret;
+    return Create(ioctx, name, stripe_size, seqr, log);
   }
 
   static AioCompletion *aio_create_completion();
@@ -154,6 +144,10 @@ class LogLL {
   int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
   int StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position);
   int Fill(uint64_t epoch, uint64_t position);
+
+  // Seal an epoch across a set of objects and return the next position.
+  int Seal(const std::vector<std::string>& objects,
+      uint64_t epoch, uint64_t *next_pos);
 
  private:
   LogLL(const LogLL& rhs);
@@ -180,15 +174,18 @@ class LogLL {
       uint64_t *position, bool next);
 
   static std::string metalog_oid_from_name(const std::string& name);
-  std::string slot_to_oid(int i);
-  std::string position_to_oid(uint64_t position);
 
   librados::IoCtx *ioctx_;
   std::string pool_;
   std::string name_;
   std::string metalog_oid_;
-  int stripe_size_;
   SeqrClient *seqr;
+
+  /*
+   *
+   */
+  std::mutex lock_;
+  LogMapper mapper_;
   uint64_t epoch_;
 };
 
