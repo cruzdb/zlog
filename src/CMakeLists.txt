@@ -1,12 +1,7 @@
 add_subdirectory(proto)
 
-add_library(zlog_seqr SHARED
-    libseqr.cc
-)
-
-target_link_libraries(zlog_seqr
-    zlog_proto
-)
+add_library(zlog_seqr SHARED libseq/libseqr.cc)
+target_link_libraries(zlog_seqr zlog_proto)
 
 ####
 
