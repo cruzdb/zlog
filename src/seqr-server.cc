@@ -11,7 +11,7 @@
 #include <rados/librados.hpp>
 #include "proto/zlog.pb.h"
 #include "libzlog/libzlog.hpp"
-#include "libzlog/internal.hpp"
+#include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 

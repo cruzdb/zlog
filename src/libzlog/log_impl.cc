@@ -1,4 +1,4 @@
-#include "stripe_history.h"
+#include "log_impl.h"
 
 #include <cerrno>
 #include <iostream>
@@ -10,10 +10,10 @@
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 
+#include "stripe_history.h"
 #include "libzlog.hpp"
 #include "proto/zlog.pb.h"
 #include "proto/protobuf_bufferlist_adapter.h"
-#include "internal.hpp"
 
 /*
  * We can use Ceph API to query and make some intelligent decisiosn about what

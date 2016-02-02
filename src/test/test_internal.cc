@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include "libzlog/libzlog.hpp"
 #include "libzlog/libzlog.h"
-#include "libzlog/internal.hpp"
+#include "libzlog/log_impl.h"
 
 /*
  * Helper function from ceph/src/test/librados/test.cc

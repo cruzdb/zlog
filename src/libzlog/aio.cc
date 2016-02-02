@@ -1,9 +1,10 @@
+#include "log_impl.h"
+
 #include <mutex>
 #include <condition_variable>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
-#include "internal.hpp"
 
 namespace zlog {
 

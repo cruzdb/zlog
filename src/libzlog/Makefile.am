@@ -1,7 +1,7 @@
 lib_LTLIBRARIES += libzlog.la
 
 libzlog_la_SOURCES = \
-	libzlog/libzlog.cc \
+	libzlog/log_impl.cc \
 	libzlog/stream.cc \
 	libzlog/aio.cc \
 	libzlog/libzlog.hpp \

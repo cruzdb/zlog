@@ -1,7 +1,7 @@
 #include <iostream>
 #include <boost/program_options.hpp>
 #include <rados/librados.hpp>
-#include "libzlog/internal.hpp"
+#include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 
