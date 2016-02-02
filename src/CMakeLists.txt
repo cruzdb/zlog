@@ -22,10 +22,8 @@ target_link_libraries(libzlog
     zlog_proto
     ${LIBRADOS_LIBRARIES}
     ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
-    ${Boost_LOG_LIBRARY}
 )
 
-set_target_properties(libzlog PROPERTIES COMPILE_DEFINITIONS "BOOST_LOG_DYN_LINK")
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
 ####

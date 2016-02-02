@@ -7,7 +7,6 @@
 #include <mutex>
 #include <vector>
 
-#include <boost/log/trivial.hpp>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 
@@ -327,8 +326,6 @@ int LogLL::RefreshProjection()
 
     epoch_ = epoch;
     mapper_.SetHistory(hist);
-
-    BOOST_LOG_TRIVIAL(debug) << "RefreshProjection: e" << epoch_;
 
     break;
   }
