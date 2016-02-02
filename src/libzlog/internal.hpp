@@ -10,9 +10,9 @@
 
 namespace zlog {
 
-class LogLL {
+class LogImpl {
  public:
-  LogLL() {}
+  LogImpl() {}
 
   struct AioCompletionImpl;
 
@@ -74,7 +74,7 @@ class LogLL {
     std::vector<uint64_t> History() const;
 
    private:
-    friend class LogLL;
+    friend class LogImpl;
     struct StreamImpl;
     StreamImpl *impl;
   };
@@ -115,19 +115,19 @@ class LogLL {
    * Create a new log.
    */
   static int Create(librados::IoCtx& ioctx, const std::string& name,
-      int stripe_size, SeqrClient *seqr, LogLL& log);
+      int stripe_size, SeqrClient *seqr, LogImpl& log);
 
   /*
    * Open an existing log.
    */
   static int Open(librados::IoCtx& ioctx, const std::string& name,
-      SeqrClient *seqr, LogLL& log);
+      SeqrClient *seqr, LogImpl& log);
 
   /*
    * Open an existing log or create it if it doesn't exist.
    */
   static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
-      int stripe_size, SeqrClient *seqr, LogLL& log) {
+      int stripe_size, SeqrClient *seqr, LogImpl& log) {
     int ret = Open(ioctx, name, seqr, log);
     if (ret != -ENOENT)
       return ret;
@@ -136,7 +136,7 @@ class LogLL {
 
   static AioCompletion *aio_create_completion();
   static AioCompletion *aio_create_completion(void *arg,
-      zlog::LogLL::AioCompletion::callback_t cb);
+      zlog::LogImpl::AioCompletion::callback_t cb);
 
   /*
    * Return the stream membership for a log entry position.
@@ -150,8 +150,8 @@ class LogLL {
       uint64_t epoch, uint64_t *next_pos);
 
  private:
-  LogLL(const LogLL& rhs);
-  LogLL& operator=(const LogLL& rhs);
+  LogImpl(const LogImpl& rhs);
+  LogImpl& operator=(const LogImpl& rhs);
 
   int RefreshProjection();
 
@@ -192,11 +192,11 @@ class LogLL {
 struct zlog_log_ctx {
   librados::IoCtx ioctx;
   zlog::SeqrClient *seqr;
-  zlog::LogLL log;
+  zlog::LogImpl log;
 };
 
 struct zlog_stream_ctx {
-  zlog::LogLL::Stream stream;
+  zlog::LogImpl::Stream stream;
   zlog_log_ctx *log_ctx;
 };
 

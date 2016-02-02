@@ -42,8 +42,8 @@ int main(int argc, char **argv)
   //client = new zlog::SeqrClient(server.c_str(), port.c_str());
   //client->Connect();
 
-  zlog::LogLL log;
-  ret = zlog::LogLL::Open(ioctx, log_name, client, log);
+  zlog::LogImpl log;
+  ret = zlog::LogImpl::Open(ioctx, log_name, client, log);
   assert(ret == 0);
 
   if (width != -1) {

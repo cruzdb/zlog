@@ -25,15 +25,15 @@
 
 namespace zlog {
 
-std::string LogLL::metalog_oid_from_name(const std::string& name)
+std::string LogImpl::metalog_oid_from_name(const std::string& name)
 {
   std::stringstream ss;
   ss << name << ".meta";
   return ss.str();
 }
 
-int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
-    int stripe_size, SeqrClient *seqr, LogLL& log)
+int LogImpl::Create(librados::IoCtx& ioctx, const std::string& name,
+    int stripe_size, SeqrClient *seqr, LogImpl& log)
 {
   if (stripe_size <= 0) {
     std::cerr << "Invalid stripe size (" << stripe_size << " <= 0)" << std::endl;
@@ -64,7 +64,7 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
   op.create(true); // exclusive create
   cls_zlog_set_projection(op, 0, bl);
 
-  std::string metalog_oid = LogLL::metalog_oid_from_name(name);
+  std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
   int ret = ioctx.operate(metalog_oid, &op);
   if (ret) {
     std::cerr << "Failed to create log " << name << " ret "
@@ -86,8 +86,8 @@ int LogLL::Create(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
-int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, LogLL& log)
+int LogImpl::Open(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, LogImpl& log)
 {
   if (name.length() == 0) {
     std::cerr << "Invalid log name (empty string)" << std::endl;
@@ -98,7 +98,7 @@ int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
    * Check that the log metadata/head object exists. The projection and other
    * state is read during RefreshProjection.
    */
-  std::string metalog_oid = LogLL::metalog_oid_from_name(name);
+  std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
   int ret = ioctx.stat(metalog_oid, NULL, NULL);
   if (ret) {
     std::cerr << "Failed to open log meta object " << metalog_oid << " ret " <<
@@ -120,7 +120,7 @@ int LogLL::Open(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
-int LogLL::SetStripeWidth(int width)
+int LogImpl::SetStripeWidth(int width)
 {
   /*
    * Get the current projection. We'll add the new striping width when we
@@ -178,7 +178,7 @@ int LogLL::SetStripeWidth(int width)
   return 0;
 }
 
-int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
+int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
 {
   /*
    * Get the current projection. We'll make a copy of this as the next
@@ -236,7 +236,7 @@ int LogLL::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   return 0;
 }
 
-int LogLL::Seal(const std::vector<std::string>& objects,
+int LogImpl::Seal(const std::vector<std::string>& objects,
     uint64_t epoch, uint64_t *next_pos)
 {
   /*
@@ -298,7 +298,7 @@ int LogLL::Seal(const std::vector<std::string>& objects,
   return 0;
 }
 
-int LogLL::RefreshProjection()
+int LogImpl::RefreshProjection()
 {
   for (;;) {
     int rv;
@@ -333,7 +333,7 @@ int LogLL::RefreshProjection()
   return 0;
 }
 
-int LogLL::CheckTail(uint64_t *pposition, bool increment)
+int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
     int ret = seqr->CheckTail(epoch_, pool_, name_, pposition, increment);
@@ -353,7 +353,7 @@ int LogLL::CheckTail(uint64_t *pposition, bool increment)
   assert(0);
 }
 
-int LogLL::CheckTail(std::vector<uint64_t>& positions, size_t count)
+int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 {
   if (count <= 0 || count > 100)
     return -EINVAL;
@@ -379,7 +379,7 @@ int LogLL::CheckTail(std::vector<uint64_t>& positions, size_t count)
   assert(0);
 }
 
-int LogLL::CheckTail(const std::set<uint64_t>& stream_ids,
+int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
     uint64_t *pposition, bool increment)
 {
@@ -419,7 +419,7 @@ int LogLL::CheckTail(const std::set<uint64_t>& stream_ids,
  * we pause for a second. other options include waiting to observe an _actual_
  * change to a new projection. that is probably better...
  */
-int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
+int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
   for (;;) {
     uint64_t position;
@@ -456,7 +456,7 @@ int LogLL::Append(ceph::bufferlist& data, uint64_t *pposition)
   assert(0);
 }
 
-int LogLL::Fill(uint64_t epoch, uint64_t position)
+int LogImpl::Fill(uint64_t epoch, uint64_t position)
 {
   for (;;) {
     librados::ObjectWriteOperation op;
@@ -484,7 +484,7 @@ int LogLL::Fill(uint64_t epoch, uint64_t position)
   }
 }
 
-int LogLL::Fill(uint64_t position)
+int LogImpl::Fill(uint64_t position)
 {
   for (;;) {
     librados::ObjectWriteOperation op;
@@ -512,7 +512,7 @@ int LogLL::Fill(uint64_t position)
   }
 }
 
-int LogLL::Trim(uint64_t position)
+int LogImpl::Trim(uint64_t position)
 {
   for (;;) {
     librados::ObjectWriteOperation op;
@@ -539,7 +539,7 @@ int LogLL::Trim(uint64_t position)
   }
 }
 
-int LogLL::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
+int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
     librados::ObjectReadOperation op;
@@ -571,7 +571,7 @@ int LogLL::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
   assert(0);
 }
 
-int LogLL::Read(uint64_t position, ceph::bufferlist& bl)
+int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
     librados::ObjectReadOperation op;
@@ -622,7 +622,7 @@ extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogLL::Open(ctx->ioctx, name,
+  int ret = zlog::LogImpl::Open(ctx->ioctx, name,
       ctx->seqr, ctx->log);
   if (ret) {
     delete ctx->seqr;
@@ -645,7 +645,7 @@ extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogLL::Create(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
+  int ret = zlog::LogImpl::Create(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
       ctx->seqr, ctx->log);
   if (ret) {
     delete ctx->seqr;
@@ -668,7 +668,7 @@ extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogLL::OpenOrCreate(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
+  int ret = zlog::LogImpl::OpenOrCreate(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
       ctx->seqr, ctx->log);
   if (ret) {
     delete ctx->seqr;
@@ -740,12 +740,12 @@ extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
 }
 
 /*
- * If nothing goes into this except LogLL then we should just remove this
- * level of indirection and point directly to LogLL.
+ * If nothing goes into this except LogImpl then we should just remove this
+ * level of indirection and point directly to LogImpl.
  */
 class LogHL::LogHLImpl {
  public:
-  LogLL log;
+  LogImpl log;
 };
 
 /*
@@ -757,7 +757,7 @@ int LogHL::Create(librados::IoCtx& ioctx, const std::string& name,
   LogHL *log = new LogHL;
   log->impl = new LogHLImpl;
 
-  int ret = LogLL::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log->impl->log);
+  int ret = LogImpl::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log->impl->log);
   if (ret) {
     delete log->impl;
     delete log;
@@ -775,7 +775,7 @@ int LogHL::Open(librados::IoCtx& ioctx, const std::string& name,
   LogHL *log = new LogHL;
   log->impl = new LogHLImpl;
 
-  int ret = LogLL::Open(ioctx, name, seqr, log->impl->log);
+  int ret = LogImpl::Open(ioctx, name, seqr, log->impl->log);
   if (ret) {
     delete log->impl;
     delete log;
@@ -813,14 +813,14 @@ int LogHL::Trim(uint64_t position)
 }
 
 struct LogHL::AioCompletionImpl {
-  LogLL::AioCompletion *c;
+  LogImpl::AioCompletion *c;
 };
 
 LogHL::AioCompletion *LogHL::aio_create_completion(void *arg,
     zlog::LogHL::AioCompletion::callback_t cb)
 {
   LogHL::AioCompletionImpl *impl = new LogHL::AioCompletionImpl;
-  impl->c = LogLL::aio_create_completion(arg, cb);
+  impl->c = LogImpl::aio_create_completion(arg, cb);
   return new AioCompletion(impl);
 }
 
@@ -868,12 +868,12 @@ int LogHL::AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl)
 }
 
 /*
- * If we don't stash anything in here except a LogLL then we should just
- * remove it and point directly to the LogLL
+ * If we don't stash anything in here except a LogImpl then we should just
+ * remove it and point directly to the LogImpl
  */
 class LogHL::Stream::StreamImpl {
  public:
-  LogLL::Stream stream;
+  LogImpl::Stream stream;
 };
 
 /*

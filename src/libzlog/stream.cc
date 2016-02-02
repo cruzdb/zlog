@@ -8,7 +8,7 @@
 
 namespace zlog {
 
-int LogLL::MultiAppend(ceph::bufferlist& data,
+int LogImpl::MultiAppend(ceph::bufferlist& data,
     const std::set<uint64_t>& stream_ids, uint64_t *pposition)
 {
   for (;;) {
@@ -73,7 +73,7 @@ int LogLL::MultiAppend(ceph::bufferlist& data,
   assert(0);
 }
 
-int LogLL::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+int LogImpl::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
     size_t *header_size)
 {
   if (bl.length() <= sizeof(uint32_t))
@@ -109,7 +109,7 @@ int LogLL::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
   return 0;
 }
 
-int LogLL::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+int LogImpl::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
 {
   ceph::bufferlist bl;
   int ret = Read(position, bl);
@@ -121,7 +121,7 @@ int LogLL::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
   return ret;
 }
 
-int LogLL::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
+int LogImpl::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
 {
   ceph::bufferlist bl;
   int ret = Read(epoch, position, bl);
@@ -133,18 +133,18 @@ int LogLL::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint
   return ret;
 }
 
-struct LogLL::Stream::StreamImpl {
+struct LogImpl::Stream::StreamImpl {
   uint64_t stream_id;
-  LogLL *log;
+  LogImpl *log;
 
   std::set<uint64_t> pos;
   std::set<uint64_t>::const_iterator prevpos;
   std::set<uint64_t>::const_iterator curpos;
 };
 
-std::vector<uint64_t> LogLL::Stream::History() const
+std::vector<uint64_t> LogImpl::Stream::History() const
 {
-  LogLL::Stream::StreamImpl *impl = this->impl;
+  LogImpl::Stream::StreamImpl *impl = this->impl;
 
   std::vector<uint64_t> ret;
   for (auto it = impl->pos.cbegin(); it != impl->pos.cend(); it++)
@@ -152,17 +152,17 @@ std::vector<uint64_t> LogLL::Stream::History() const
   return ret;
 }
 
-int LogLL::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
+int LogImpl::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
-  LogLL::Stream::StreamImpl *impl = this->impl;
+  LogImpl::Stream::StreamImpl *impl = this->impl;
   std::set<uint64_t> stream_ids;
   stream_ids.insert(impl->stream_id);
   return impl->log->MultiAppend(data, stream_ids, pposition);
 }
 
-int LogLL::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
+int LogImpl::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
 {
-  LogLL::Stream::StreamImpl *impl = this->impl;
+  LogImpl::Stream::StreamImpl *impl = this->impl;
 
   if (impl->curpos == impl->pos.cend())
     return -EBADF;
@@ -197,9 +197,9 @@ int LogLL::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
   return 0;
 }
 
-int LogLL::Stream::Reset()
+int LogImpl::Stream::Reset()
 {
-  LogLL::Stream::StreamImpl *impl = this->impl;
+  LogImpl::Stream::StreamImpl *impl = this->impl;
   impl->curpos = impl->pos.cbegin();
   return 0;
 }
@@ -208,9 +208,9 @@ int LogLL::Stream::Reset()
  * Optimizations:
  *   - follow backpointers
  */
-int LogLL::Stream::Sync()
+int LogImpl::Stream::Sync()
 {
-  LogLL::Stream::StreamImpl *impl = this->impl;
+  LogImpl::Stream::StreamImpl *impl = this->impl;
   const uint64_t stream_id = impl->stream_id;
 
   /*
@@ -326,9 +326,9 @@ int LogLL::Stream::Sync()
   return 0;
 }
 
-uint64_t LogLL::Stream::Id() const
+uint64_t LogImpl::Stream::Id() const
 {
-  LogLL::Stream::StreamImpl *impl = this->impl;
+  LogImpl::Stream::StreamImpl *impl = this->impl;
   return impl->stream_id;
 }
 
@@ -336,11 +336,11 @@ uint64_t LogLL::Stream::Id() const
  * FIXME:
  *  - Looks like a memory leak on the StreamImpl
  */
-int LogLL::OpenStream(uint64_t stream_id, Stream& stream)
+int LogImpl::OpenStream(uint64_t stream_id, Stream& stream)
 {
   assert(!stream.impl);
 
-  LogLL::Stream::StreamImpl *impl = new LogLL::Stream::StreamImpl;
+  LogImpl::Stream::StreamImpl *impl = new LogImpl::Stream::StreamImpl;
   impl->stream_id = stream_id;
   impl->log = this;
 

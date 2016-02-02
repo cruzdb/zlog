@@ -120,8 +120,8 @@ TEST(LibZlogInternal, CheckTailBatch) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogLL log;
-  int ret = zlog::LogLL::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogImpl log;
+  int ret = zlog::LogImpl::Create(ioctx, "mylog", 5, &client, log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -168,8 +168,8 @@ TEST(LibZlogInternal, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogLL log;
-  int ret = zlog::LogLL::Create(ioctx, "mylog", 5, &client, log);
+  zlog::LogImpl log;
+  int ret = zlog::LogImpl::Create(ioctx, "mylog", 5, &client, log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;

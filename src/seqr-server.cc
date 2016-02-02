@@ -285,8 +285,8 @@ class LogManager {
       return ret;
     }
 
-    zlog::LogLL log;
-    ret = zlog::LogLL::Open(ioctx, name, NULL, log);
+    zlog::LogImpl log;
+    ret = zlog::LogImpl::Open(ioctx, name, NULL, log);
     if (ret) {
       std::cerr << "failed to open log " << name << std::endl;
       return ret;

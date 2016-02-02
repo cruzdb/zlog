@@ -21,10 +21,10 @@ namespace po = boost::program_options;
 //#define SLOPPY_SEQ
 
 struct AioState {
-  zlog::LogLL *log;
+  zlog::LogImpl *log;
   ceph::bufferlist append_bl;
   ceph::bufferlist read_bl;
-  zlog::LogLL::AioCompletion *c;
+  zlog::LogImpl::AioCompletion *c;
   librados::AioCompletion *rc; // used by append workload
   uint64_t position;
   std::chrono::time_point<std::chrono::steady_clock> submitted;
@@ -110,12 +110,12 @@ static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
 }
 #endif
 
-static void handle_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
+static void handle_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
     void *arg)
 {
   AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
-  zlog::LogLL *log = s->log;
+  zlog::LogImpl *log = s->log;
 
   ios_completed++;
   ios_completed_total++;
@@ -133,7 +133,7 @@ static void handle_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
 #ifdef VERIFY_IOS
   if (s->append_bl.length() > 0)
     assert(!(s->append_bl == s->read_bl));
-  s->c = zlog::LogLL::aio_create_completion(s, verify_append_cb);
+  s->c = zlog::LogImpl::aio_create_completion(s, verify_append_cb);
   int ret = log->AioRead(s->position, s->c, &s->read_bl);
   assert(ret == 0);
 #else
@@ -141,7 +141,7 @@ static void handle_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
 #endif
 }
 
-static void handle_bulk_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
+static void handle_bulk_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
     void *arg)
 {
   AioState *s = (AioState*)arg;
@@ -167,7 +167,7 @@ static void handle_bulk_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
 #endif
 }
 
-static void handle_read_cb(zlog::LogLL::AioCompletion::completion_t cb,
+static void handle_read_cb(zlog::LogImpl::AioCompletion::completion_t cb,
     void *arg)
 {
   AioState *s = (AioState*)arg;
@@ -204,8 +204,8 @@ class FakeSeqrClient : public zlog::SeqrClient {
   }
 
   void Init(librados::IoCtx& ioctx) {
-    zlog::LogLL log;
-    int ret = zlog::LogLL::Open(ioctx, name_, NULL, log);
+    zlog::LogImpl log;
+    int ret = zlog::LogImpl::Open(ioctx, name_, NULL, log);
     assert(ret == 0);
 
     uint64_t epoch;
@@ -344,8 +344,8 @@ int main(int argc, char **argv)
   } else {
     client = new FakeSeqrClient(logname);
   }
-  zlog::LogLL log;
-  ret = zlog::LogLL::OpenOrCreate(ioctx, logname, width, client, log);
+  zlog::LogImpl log;
+  ret = zlog::LogImpl::OpenOrCreate(ioctx, logname, width, client, log);
   assert(ret == 0);
 
   if (server.length() == 0) {
@@ -454,7 +454,7 @@ int main(int argc, char **argv)
         state->log = &log;
         if (read_mode) {
           state->position = dis(gen);
-          state->c = zlog::LogLL::aio_create_completion(state, handle_read_cb);
+          state->c = zlog::LogImpl::aio_create_completion(state, handle_read_cb);
           assert(state->c);
           state->submitted = std::chrono::steady_clock::now();
           ret = log.AioRead(state->position, state->c, &state->read_bl);
@@ -483,7 +483,7 @@ int main(int argc, char **argv)
 
           append_count++;
         } else {
-          state->c = zlog::LogLL::aio_create_completion(state, handle_append_cb);
+          state->c = zlog::LogImpl::aio_create_completion(state, handle_append_cb);
           assert(state->c);
           for (unsigned i = 0; i < iosize; i++) {
             iobuf[i] = (char)rand();
