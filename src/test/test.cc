@@ -3,8 +3,8 @@
 #include <rados/librados.hpp>
 #include <rados/librados.h>
 #include <gtest/gtest.h>
-#include "libzlog.hpp"
-#include "libzlog.h"
+#include "libzlog/libzlog.hpp"
+#include "libzlog/libzlog.h"
 
 /*
  * Helper function from ceph/src/test/librados/test.cc

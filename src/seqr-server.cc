@@ -9,9 +9,9 @@
 #include <thread>
 #include <atomic>
 #include <rados/librados.hpp>
-#include "libzlog.hpp"
-#include "zlog.pb.h"
-#include "internal.hpp"
+#include "proto/zlog.pb.h"
+#include "libzlog/libzlog.hpp"
+#include "libzlog/internal.hpp"
 
 namespace po = boost::program_options;
 

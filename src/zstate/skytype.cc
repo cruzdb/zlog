@@ -1,5 +1,5 @@
 #include <rados/buffer.h>
-#include "../libzlog.hpp"
+#include "libzlog/libzlog.hpp"
 #include "skytype.h"
 
 using namespace skytype;

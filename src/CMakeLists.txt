@@ -1,27 +1,16 @@
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS zlog.proto)
-add_library(zlog_proto SHARED ${PROTO_SRCS} ${PROTO_HDRS})
-target_link_libraries(zlog_proto
-    ${PROTOBUF_LIBRARIES}
-)
+add_subdirectory(proto)
 
-####
-
-add_library(zlog_seqr SHARED
-    libseqr.cc
-)
-
-target_link_libraries(zlog_seqr
-    zlog_proto
-)
+add_library(zlog_seqr SHARED libseq/libseqr.cc)
+target_link_libraries(zlog_seqr zlog_proto)
 
 ####
 
 add_library(libzlog SHARED
-    libzlog.cc
-    stream.cc
-    aio.cc
-    stripe_history.cc
-    log_mapper.cc
+    libzlog/libzlog.cc
+    libzlog/stream.cc
+    libzlog/aio.cc
+    libzlog/stripe_history.cc
+    libzlog/log_mapper.cc
 )
 
 target_include_directories(libzlog
@@ -33,10 +22,8 @@ target_link_libraries(libzlog
     zlog_proto
     ${LIBRADOS_LIBRARIES}
     ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
-    ${Boost_LOG_LIBRARY}
 )
 
-set_target_properties(libzlog PROPERTIES COMPILE_DEFINITIONS "BOOST_LOG_DYN_LINK")
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
 ####
@@ -139,7 +126,8 @@ target_include_directories(gtest
 ####
 
 add_executable(zlog-test
-    test.cc
+    test/test.cc
+    test/test_internal.cc
 )
 
 target_link_libraries(zlog-test
@@ -152,7 +140,7 @@ target_link_libraries(zlog-test
 ####
 
 add_executable(zstate-test
-    zstate/test.cc
+    test/zstate_test.cc
 )
 
 target_link_libraries(zstate-test

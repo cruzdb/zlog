@@ -2,7 +2,7 @@
 #include <map>
 #include <boost/asio.hpp>
 #include "libseqr.h"
-#include "zlog.pb.h"
+#include "proto/zlog.pb.h"
 
 namespace zlog {
 

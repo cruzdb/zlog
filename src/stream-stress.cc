@@ -1,6 +1,6 @@
 #include <iostream>
 #include <rados/librados.hpp>
-#include "libzlog.hpp"
+#include "libzlog/libzlog.hpp"
 
 static void print_history(zlog::LogHL::Stream *stream, int len = 10)
 {

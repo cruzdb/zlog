@@ -2,7 +2,7 @@
 #define SKYTYPE_REGISTER_H
 
 #include <errno.h>
-#include "libzlog.h"
+#include "libzlog/libzlog.h"
 #include "zstate/skytype.h"
 
 class Register : private skytype::SkyObject {

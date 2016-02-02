@@ -2,8 +2,8 @@
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "libzlog.hpp"
-#include "zlog.pb.h"
-#include "protobuf_bufferlist_adapter.h"
+#include "proto/zlog.pb.h"
+#include "proto/protobuf_bufferlist_adapter.h"
 #include "internal.hpp"
 
 namespace zlog {

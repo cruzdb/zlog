@@ -2,8 +2,6 @@
 set -e
 set -x
 
-sudo apt-get install -y libboost-log-dev
-
 # checkout zlog ceph repo
 pushd /src/ceph
 git remote add nd https://github.com/noahdesu/ceph.git
