@@ -2,6 +2,7 @@
 #define LIBZLOG_ZLOG_HPP
 #include <rados/librados.hpp>
 #include "libseq/libseqr.h"
+#include "zlog/stream.h"
 
 namespace zlog {
 
@@ -11,17 +12,6 @@ class AioCompletion {
   virtual void SetCallback(std::function<void()> callback) = 0;
   virtual void WaitForComplete() = 0;
   virtual int ReturnValue() = 0;
-};
-
-class Stream {
- public:
-  virtual ~Stream();
-  virtual int Append(ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
-  virtual int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL) = 0;
-  virtual int Reset() = 0;
-  virtual int Sync() = 0;
-  virtual uint64_t Id() const = 0;
-  virtual std::vector<uint64_t> History() const = 0;
 };
 
 class Log {
