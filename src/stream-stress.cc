@@ -2,7 +2,7 @@
 #include <rados/librados.hpp>
 #include "include/zlog/log.h"
 
-static void print_history(zlog::Log::Stream *stream, int len = 10)
+static void print_history(zlog::Stream *stream, int len = 10)
 {
     std::cout << "stream " << stream->Id() << ": ";
     std::vector<uint64_t> history = stream->History();
@@ -42,7 +42,7 @@ int main(int argc, char **argv)
   ret = zlog::Log::OpenOrCreate(ioctx, "log2", client, &log);
   assert(ret == 0);
 
-  std::vector<zlog::Log::Stream*> stream(10);
+  std::vector<zlog::Stream*> stream(10);
   for (unsigned i = 0; i < 10; i++) {
     ret = log->OpenStream(i, &stream[i]);
     assert(ret == 0);

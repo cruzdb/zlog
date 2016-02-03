@@ -16,6 +16,17 @@ class AioCompletion {
   virtual ~AioCompletion();
 };
 
+class Stream {
+ public:
+  virtual ~Stream();
+  virtual int Append(ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
+  virtual int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL) = 0;
+  virtual int Reset() = 0;
+  virtual int Sync() = 0;
+  virtual uint64_t Id() const = 0;
+  virtual std::vector<uint64_t> History() const = 0;
+};
+
 class Log {
  public:
   Log() {}
@@ -42,24 +53,6 @@ class Log {
   /*
    * Stream API
    */
-
-  class Stream {
-   public:
-    Stream() : impl(NULL) {}
-    int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
-    int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL);
-    int Reset();
-    int Sync();
-    uint64_t Id() const;
-
-    std::vector<uint64_t> History() const;
-
-   private:
-    friend class LogImpl;
-    class StreamImpl;
-    StreamImpl *impl;
-  };
-
   virtual int OpenStream(uint64_t stream_id, Stream **streamptr) = 0;
   virtual int MultiAppend(ceph::bufferlist& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) = 0;

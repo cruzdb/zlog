@@ -322,7 +322,7 @@ TEST(LibZlogStream, StreamId) {
   int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream *stream0;
+  zlog::Stream *stream0;
   ret = log->OpenStream(0, &stream0);
   ASSERT_EQ(ret, 0);
 
@@ -330,7 +330,7 @@ TEST(LibZlogStream, StreamId) {
 
   delete stream0;
 
-  zlog::Log::Stream *stream33;
+  zlog::Stream *stream33;
   ret = log->OpenStream(33, &stream33);
   ASSERT_EQ(ret, 0);
 
@@ -357,7 +357,7 @@ TEST(LibZlogStream, Append) {
   int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream *stream;
+  zlog::Stream *stream;
   ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
@@ -408,7 +408,7 @@ TEST(LibZlogStream, ReadNext) {
   int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream *stream;
+  zlog::Stream *stream;
   ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
@@ -495,7 +495,7 @@ TEST(LibZlogStream, Reset) {
   int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::Log::Stream *stream;
+  zlog::Stream *stream;
   ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
@@ -571,7 +571,7 @@ TEST(LibZlogStream, Sync) {
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
-  std::vector<zlog::Log::Stream*> streams(10);
+  std::vector<zlog::Stream*> streams(10);
   for (unsigned i = 0; i < 10; i++) {
     ret = log->OpenStream(i, &streams[i]);
     ASSERT_EQ(ret, 0);

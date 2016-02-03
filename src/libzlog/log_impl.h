@@ -38,16 +38,13 @@ class LogImpl : public Log {
    */
   int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
 
+  int OpenStream(uint64_t stream_id, zlog::Stream **streamptr);
+
   /*
    * Append data to multiple streams and return its position.
    */
   int MultiAppend(ceph::bufferlist& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
-
-  /*
-   *
-   */
-  int OpenStream(uint64_t stream_id, Log::Stream **streamptr);
 
   /*
    * Append data asynchronously to the log and return its position.
@@ -134,7 +131,7 @@ struct zlog_log_ctx {
 };
 
 struct zlog_stream_ctx {
-  zlog::Log::Stream *stream;
+  zlog::Stream *stream;
   zlog_log_ctx *log_ctx;
 };
 
