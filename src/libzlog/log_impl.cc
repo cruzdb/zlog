@@ -2,18 +2,20 @@
 
 #include <cerrno>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <string>
-#include <mutex>
 #include <vector>
 
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 
-#include "stripe_history.h"
-#include "libzlog.hpp"
 #include "proto/zlog.pb.h"
 #include "proto/protobuf_bufferlist_adapter.h"
+#include "include/zlog/log.h"
+#include "include/zlog/capi.h"
+
+#include "stripe_history.h"
 
 /*
  * We can use Ceph API to query and make some intelligent decisiosn about what

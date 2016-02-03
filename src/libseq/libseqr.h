@@ -1,5 +1,6 @@
 #ifndef LIBSEQR_H
 #define LIBSEQR_H
+#include <set>
 #include <boost/asio.hpp>
 
 namespace zlog {

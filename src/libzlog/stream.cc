@@ -3,9 +3,10 @@
 #include <iostream>
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
-#include "libzlog.hpp"
+
 #include "proto/zlog.pb.h"
 #include "proto/protobuf_bufferlist_adapter.h"
+#include "include/zlog/capi.h"
 
 namespace zlog {
 

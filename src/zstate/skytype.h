@@ -1,6 +1,6 @@
 #ifndef SKYTYPE_H
 #define SKYTYPE_H
-#include "libzlog/libzlog.hpp"
+#include "include/zlog/log.h"
 
 namespace skytype {
   class SkyObject {

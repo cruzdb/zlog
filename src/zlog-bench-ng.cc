@@ -1,18 +1,17 @@
+#include <signal.h>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <fstream>
+#include <iostream>
+#include <random>
 #include <sstream>
+#include <thread>
+#include <boost/program_options.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/program_options.hpp>
-#include <condition_variable>
-#include <signal.h>
-#include <chrono>
-#include <fstream>
-#include <iostream>
-#include <atomic>
-#include <thread>
-#include <random>
 #include <rados/librados.hpp>
-#include "libzlog/libzlog.hpp"
 #include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;

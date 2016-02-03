@@ -1,16 +1,15 @@
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-#include <deque>
-#include <boost/bind.hpp>
-#include <boost/asio.hpp>
-#include <boost/program_options.hpp>
-#include <condition_variable>
-#include <thread>
 #include <atomic>
+#include <condition_variable>
+#include <cstdlib>
+#include <deque>
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <boost/program_options.hpp>
 #include <rados/librados.hpp>
 #include "proto/zlog.pb.h"
-#include "libzlog/libzlog.hpp"
 #include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;

@@ -1,12 +1,9 @@
 #ifndef LIBZLOG_INTERNAL_HPP
 #define LIBZLOG_INTERNAL_HPP
-#include "stripe_history.h"
-#include "log_mapper.h"
-
 #include <mutex>
 #include <rados/librados.h>
-#include "libzlog.hpp"
-#include "libzlog.h"
+#include "libseq/libseqr.h"
+#include "log_mapper.h"
 
 namespace zlog {
 

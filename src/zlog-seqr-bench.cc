@@ -1,11 +1,10 @@
 #include <sstream>
+#include <thread>
+#include <boost/program_options.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/program_options.hpp>
-#include <thread>
 #include <rados/librados.hpp>
-#include "libzlog/libzlog.hpp"
 #include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
