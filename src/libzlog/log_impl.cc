@@ -27,6 +27,8 @@
 
 namespace zlog {
 
+AioCompletion::~AioCompletion() {}
+
 std::string LogImpl::metalog_oid_from_name(const std::string& name)
 {
   std::stringstream ss;

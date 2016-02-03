@@ -52,13 +52,13 @@ class LogImpl : public Log {
   /*
    * Append data asynchronously to the log and return its position.
    */
-  int AioAppend(Log::AioCompletion *c, ceph::bufferlist& data,
+  int AioAppend(zlog::AioCompletion *c, ceph::bufferlist& data,
       uint64_t *pposition = NULL);
 
   /*
    * Read data asynchronously from the log.
    */
-  int AioRead(uint64_t position, Log::AioCompletion *c,
+  int AioRead(uint64_t position, zlog::AioCompletion *c,
       ceph::bufferlist *bpl);
 
   /*

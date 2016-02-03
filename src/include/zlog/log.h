@@ -5,23 +5,20 @@
 
 namespace zlog {
 
+class AioCompletion {
+ public:
+  virtual void SetCallback(std::function<void()> callback) = 0;
+  virtual void WaitForComplete() = 0;
+  virtual int ReturnValue() = 0;
+  virtual void Release() = 0;
+
+ protected:
+  virtual ~AioCompletion();
+};
+
 class Log {
  public:
   Log() {}
-
-  struct AioCompletionImpl;
-
-  class AioCompletion {
-   public:
-    typedef void *completion_t;
-    typedef void (*callback_t)(completion_t cb, void *arg);
-    AioCompletion(AioCompletionImpl *pc) : pc(pc) {}
-    void set_callback(void *arg, callback_t cb);
-    void wait_for_complete();
-    int get_return_value();
-    void release();
-    void *pc;
-  };
 
   /*
    * Synchronous API
@@ -39,8 +36,8 @@ class Log {
   virtual int AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl) = 0;
 
   static AioCompletion *aio_create_completion();
-  static AioCompletion *aio_create_completion(void *arg,
-      zlog::Log::AioCompletion::callback_t cb);
+  static AioCompletion *aio_create_completion(
+      std::function<void()> callback);
 
   /*
    * Stream API

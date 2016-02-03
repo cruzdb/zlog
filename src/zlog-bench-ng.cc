@@ -23,7 +23,7 @@ struct AioState {
   zlog::LogImpl *log;
   ceph::bufferlist append_bl;
   ceph::bufferlist read_bl;
-  zlog::LogImpl::AioCompletion *c;
+  zlog::AioCompletion *c;
   librados::AioCompletion *rc; // used by append workload
   uint64_t position;
   std::chrono::time_point<std::chrono::steady_clock> submitted;
@@ -89,13 +89,10 @@ static void report()
 }
 
 #ifdef VERIFY_IOS
-static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
-    void *arg)
+static void verify_append_cb(AioState *s)
 {
-  AioState *s = (AioState*)arg;
-
-  assert(s->c->get_return_value() == 0);
-  s->c->release();
+  assert(s->c->ReturnValue() == 0);
+  s->c->Release();
 
   assert(s->read_bl == s->append_bl);
   int sum1 = 0, sum2 = 0;
@@ -109,10 +106,8 @@ static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
 }
 #endif
 
-static void handle_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
-    void *arg)
+static void handle_append_cb(AioState *s)
 {
-  AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
   zlog::LogImpl *log = s->log;
 
@@ -121,8 +116,8 @@ static void handle_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
   outstanding_ios--;
   io_cond.notify_one();
 
-  assert(s->c->get_return_value() == 0);
-  s->c->release();
+  assert(s->c->ReturnValue() == 0);
+  s->c->Release();
   s->c = NULL;
 
   auto diff_us = std::chrono::duration_cast<
@@ -132,7 +127,7 @@ static void handle_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
 #ifdef VERIFY_IOS
   if (s->append_bl.length() > 0)
     assert(!(s->append_bl == s->read_bl));
-  s->c = zlog::LogImpl::aio_create_completion(s, verify_append_cb);
+  s->c = zlog::Log::aio_create_completion(std::bind(verify_append_cb, s));
   int ret = log->AioRead(s->position, s->c, &s->read_bl);
   assert(ret == 0);
 #else
@@ -140,8 +135,7 @@ static void handle_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
 #endif
 }
 
-static void handle_bulk_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
-    void *arg)
+static void handle_bulk_append_cb(librados::completion_t cb, void *arg)
 {
   AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
@@ -166,10 +160,8 @@ static void handle_bulk_append_cb(zlog::LogImpl::AioCompletion::completion_t cb,
 #endif
 }
 
-static void handle_read_cb(zlog::LogImpl::AioCompletion::completion_t cb,
-    void *arg)
+static void handle_read_cb(AioState *s)
 {
-  AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
 
   ios_completed++;
@@ -177,14 +169,14 @@ static void handle_read_cb(zlog::LogImpl::AioCompletion::completion_t cb,
   outstanding_ios--;
   io_cond.notify_one();
 
-  int op_rv = s->c->get_return_value();
+  int op_rv = s->c->ReturnValue();
   if (op_rv) {
     std::cout << op_rv << " " << s->position << std::endl;
   }
-  assert(s->c->get_return_value() == 0);
+  assert(s->c->ReturnValue() == 0);
   assert(s->read_bl.length() > 0);
 
-  s->c->release();
+  s->c->Release();
   s->c = NULL;
 
   auto diff_us = std::chrono::duration_cast<
@@ -274,7 +266,7 @@ int main(int argc, char **argv)
   desc.add_options()
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
     ("logname", po::value<std::string>(&logname_req)->default_value(""), "Log name")
-    ("width", po::value<int>(&width)->required(), "Width")
+    ("width", po::value<int>(&width)->default_value(0), "Width")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
     ("iosize", po::value<int>(&iosize)->default_value(0), "IO Size")
     ("read", po::value<bool>(&read_mode)->default_value(false), "Read mode")
@@ -329,6 +321,7 @@ int main(int argc, char **argv)
   // append to the objects.
   std::vector<std::string> append_oids;
   if (append) {
+      assert(width > 0);
       for (size_t i = 0; i < width; i++) {
           std::stringstream oid;
           oid << logname << "." << i;
@@ -455,7 +448,7 @@ int main(int argc, char **argv)
         state->log = log;
         if (read_mode) {
           state->position = dis(gen);
-          state->c = zlog::LogImpl::aio_create_completion(state, handle_read_cb);
+          state->c = zlog::Log::aio_create_completion(std::bind(handle_read_cb, state));
           assert(state->c);
           state->submitted = std::chrono::steady_clock::now();
           ret = log->AioRead(state->position, state->c, &state->read_bl);
@@ -484,7 +477,7 @@ int main(int argc, char **argv)
 
           append_count++;
         } else {
-          state->c = zlog::LogImpl::aio_create_completion(state, handle_append_cb);
+          state->c = zlog::Log::aio_create_completion(std::bind(handle_append_cb, state));
           assert(state->c);
           for (unsigned i = 0; i < iosize; i++) {
             iobuf[i] = (char)rand();
