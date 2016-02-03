@@ -116,21 +116,21 @@ TEST(LibZlog, Create) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::LogHL *log = NULL;
+  zlog::Log *log = NULL;
 
-  int ret = zlog::LogHL::Create(ioctx, "", NULL, &log);
+  int ret = zlog::Log::Create(ioctx, "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
   // TODO: creating a log with NULL seqclient should be an error
-  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
   delete log;
   log = NULL;
 
-  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, -EEXIST);
   ASSERT_EQ(log, nullptr);
 
@@ -144,24 +144,24 @@ TEST(LibZlog, Open) {
   ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
   ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::LogHL *log = NULL;
+  zlog::Log *log = NULL;
 
-  int ret = zlog::LogHL::Open(ioctx, "", NULL, &log);
+  int ret = zlog::Log::Open(ioctx, "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
-  ret = zlog::LogHL::Open(ioctx, "dne", NULL, &log);
+  ret = zlog::Log::Open(ioctx, "dne", NULL, &log);
   ASSERT_EQ(ret, -ENOENT);
   ASSERT_EQ(log, nullptr);
 
-  ret = zlog::LogHL::Create(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Create(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
   delete log;
   log = NULL;
 
-  ret = zlog::LogHL::Open(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Open(ioctx, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
@@ -180,8 +180,8 @@ TEST(LibZlog, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -208,8 +208,8 @@ TEST(LibZlog, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
@@ -255,8 +255,8 @@ TEST(LibZlogStream, MultiAppend) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -318,11 +318,11 @@ TEST(LibZlogStream, StreamId) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream *stream0;
+  zlog::Log::Stream *stream0;
   ret = log->OpenStream(0, &stream0);
   ASSERT_EQ(ret, 0);
 
@@ -330,7 +330,7 @@ TEST(LibZlogStream, StreamId) {
 
   delete stream0;
 
-  zlog::LogHL::Stream *stream33;
+  zlog::Log::Stream *stream33;
   ret = log->OpenStream(33, &stream33);
   ASSERT_EQ(ret, 0);
 
@@ -353,11 +353,11 @@ TEST(LibZlogStream, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream *stream;
+  zlog::Log::Stream *stream;
   ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
@@ -404,11 +404,11 @@ TEST(LibZlogStream, ReadNext) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream *stream;
+  zlog::Log::Stream *stream;
   ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
@@ -491,11 +491,11 @@ TEST(LibZlogStream, Reset) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  zlog::LogHL::Stream *stream;
+  zlog::Log::Stream *stream;
   ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
 
@@ -566,12 +566,12 @@ TEST(LibZlogStream, Sync) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
-  std::vector<zlog::LogHL::Stream*> streams(10);
+  std::vector<zlog::Log::Stream*> streams(10);
   for (unsigned i = 0; i < 10; i++) {
     ret = log->OpenStream(i, &streams[i]);
     ASSERT_EQ(ret, 0);
@@ -674,8 +674,8 @@ TEST(LibZlog, Fill) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   ret = log->Fill(0);
@@ -717,8 +717,8 @@ TEST(LibZlog, Read) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -779,8 +779,8 @@ TEST(LibZlog, Trim) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
-  int ret = zlog::LogHL::Create(ioctx, "mylog", &client, &log);
+  zlog::Log *log;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   // can trim empty spot

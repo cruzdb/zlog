@@ -30,10 +30,10 @@ static void make_context(librados::Rados& rados, librados::IoCtx& ioctx)
   assert(!rados.ioctx_create("contrail", ioctx));
 }
 
-static void get_log(librados::IoCtx& ioctx, zlog::LogHL **log, std::string name,
+static void get_log(librados::IoCtx& ioctx, zlog::Log **log, std::string name,
     zlog::SeqrClient *client)
 {
-  int ret = zlog::LogHL::OpenOrCreate(ioctx, name, client, log);
+  int ret = zlog::Log::OpenOrCreate(ioctx, name, client, log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(*log, nullptr);
 }
@@ -47,7 +47,7 @@ TEST(Register, DefaultValue) {
   ASSERT_NO_THROW(client.Connect());
 
   std::string log_name = randstr();
-  zlog::LogHL *log;
+  zlog::Log *log;
   get_log(ioctx, &log, log_name, &client);
 
   Register reg(log);
@@ -69,7 +69,7 @@ TEST(Register, Basic) {
 
   std::string log_name = randstr();
 
-  zlog::LogHL *log;
+  zlog::Log *log;
   get_log(ioctx, &log, log_name, &client);
 
   Register reg(log);
@@ -95,7 +95,7 @@ static void thrash_log(librados::Rados *rados, std::string pool_name, std::strin
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
+  zlog::Log *log;
   get_log(ioctx, &log, log_name, &client);
 
   Register reg(log);
@@ -126,7 +126,7 @@ TEST(Register, MultiThreaded) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogHL *log;
+  zlog::Log *log;
   get_log(ioctx, &log, log_name, &client);
 
   std::vector<std::thread> threads;

@@ -745,21 +745,21 @@ extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
  * If nothing goes into this except LogImpl then we should just remove this
  * level of indirection and point directly to LogImpl.
  */
-class LogHL::LogHLImpl {
+class Log::LogImpl {
  public:
-  LogImpl log;
+  ::zlog::LogImpl log;
 };
 
 /*
  * FIXME: switch to return pointer and add destructor
  */
-int LogHL::Create(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, LogHL **logptr)
+int Log::Create(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
 {
-  LogHL *log = new LogHL;
-  log->impl = new LogHLImpl;
+  Log *log = new Log;
+  log->impl = new LogImpl;
 
-  int ret = LogImpl::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log->impl->log);
+  int ret = ::zlog::LogImpl::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log->impl->log);
   if (ret) {
     delete log->impl;
     delete log;
@@ -771,13 +771,13 @@ int LogHL::Create(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
-int LogHL::Open(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, LogHL **logptr)
+int Log::Open(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
 {
-  LogHL *log = new LogHL;
-  log->impl = new LogHLImpl;
+  Log *log = new Log;
+  log->impl = new LogImpl;
 
-  int ret = LogImpl::Open(ioctx, name, seqr, log->impl->log);
+  int ret = ::zlog::LogImpl::Open(ioctx, name, seqr, log->impl->log);
   if (ret) {
     delete log->impl;
     delete log;
@@ -789,83 +789,83 @@ int LogHL::Open(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
-int LogHL::Append(ceph::bufferlist& data, uint64_t *pposition)
+int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
   return impl->log.Append(data, pposition);
 }
 
-int LogHL::Read(uint64_t position, ceph::bufferlist& bl)
+int Log::Read(uint64_t position, ceph::bufferlist& bl)
 {
   return impl->log.Read(position, bl);
 }
 
-int LogHL::Fill(uint64_t position)
+int Log::Fill(uint64_t position)
 {
   return impl->log.Fill(position);
 }
 
-int LogHL::CheckTail(uint64_t *pposition)
+int Log::CheckTail(uint64_t *pposition)
 {
   return impl->log.CheckTail(pposition);
 }
 
-int LogHL::Trim(uint64_t position)
+int Log::Trim(uint64_t position)
 {
   return impl->log.Trim(position);
 }
 
-struct LogHL::AioCompletionImpl {
-  LogImpl::AioCompletion *c;
+struct Log::AioCompletionImpl {
+  ::zlog::LogImpl::AioCompletion *c;
 };
 
-LogHL::AioCompletion *LogHL::aio_create_completion(void *arg,
-    zlog::LogHL::AioCompletion::callback_t cb)
+Log::AioCompletion *Log::aio_create_completion(void *arg,
+    zlog::Log::AioCompletion::callback_t cb)
 {
-  LogHL::AioCompletionImpl *impl = new LogHL::AioCompletionImpl;
-  impl->c = LogImpl::aio_create_completion(arg, cb);
+  Log::AioCompletionImpl *impl = new Log::AioCompletionImpl;
+  impl->c = ::zlog::LogImpl::aio_create_completion(arg, cb);
   return new AioCompletion(impl);
 }
 
-LogHL::AioCompletion *LogHL::aio_create_completion()
+Log::AioCompletion *Log::aio_create_completion()
 {
   return aio_create_completion(NULL, NULL);
 }
 
-int LogHL::AioCompletion::get_return_value()
+int Log::AioCompletion::get_return_value()
 {
-  LogHL::AioCompletionImpl *impl = (LogHL::AioCompletionImpl*)pc;
+  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
   return impl->c->get_return_value();
 }
 
-void LogHL::AioCompletion::set_callback(void *arg,
-    zlog::LogHL::AioCompletion::callback_t cb)
+void Log::AioCompletion::set_callback(void *arg,
+    zlog::Log::AioCompletion::callback_t cb)
 {
-  LogHL::AioCompletionImpl *impl = (LogHL::AioCompletionImpl*)pc;
+  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
   impl->c->set_callback(arg, cb);
 }
 
-void LogHL::AioCompletion::wait_for_complete()
+void Log::AioCompletion::wait_for_complete()
 {
-  LogHL::AioCompletionImpl *impl = (LogHL::AioCompletionImpl*)pc;
+  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
   impl->c->wait_for_complete();
 }
 
-void LogHL::AioCompletion::release()
+void Log::AioCompletion::release()
 {
-  LogHL::AioCompletionImpl *impl = (LogHL::AioCompletionImpl*)pc;
+  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
   impl->c->release();
   delete this;
 }
 
-int LogHL::AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition)
+int Log::AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition)
 {
-  LogHL::AioCompletionImpl *cimpl = (LogHL::AioCompletionImpl*)c->pc;
+  Log::AioCompletionImpl *cimpl = (Log::AioCompletionImpl*)c->pc;
   return impl->log.AioAppend(cimpl->c, data, pposition);
 }
 
-int LogHL::AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl)
+int Log::AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl)
 {
-  LogHL::AioCompletionImpl *cimpl = (LogHL::AioCompletionImpl*)c->pc;
+  Log::AioCompletionImpl *cimpl = (Log::AioCompletionImpl*)c->pc;
   return impl->log.AioRead(position, cimpl->c, bpl);
 }
 
@@ -873,18 +873,18 @@ int LogHL::AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl)
  * If we don't stash anything in here except a LogImpl then we should just
  * remove it and point directly to the LogImpl
  */
-class LogHL::Stream::StreamImpl {
+class Log::Stream::StreamImpl {
  public:
-  LogImpl::Stream stream;
+  ::zlog::LogImpl::Stream stream;
 };
 
 /*
  * FIXME: Memory leak on StreamImpl
  */
-int LogHL::OpenStream(uint64_t stream_id, Stream **streamptr)
+int Log::OpenStream(uint64_t stream_id, Stream **streamptr)
 {
-  LogHL::Stream *stream = new LogHL::Stream;
-  stream->impl = new LogHL::Stream::StreamImpl;
+  Log::Stream *stream = new Log::Stream;
+  stream->impl = new Log::Stream::StreamImpl;
 
   int ret = impl->log.OpenStream(stream_id, stream->impl->stream);
   if (ret) {
@@ -897,43 +897,43 @@ int LogHL::OpenStream(uint64_t stream_id, Stream **streamptr)
   return 0;
 }
 
-int LogHL::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
+int Log::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
 {
   return impl->stream.Append(data, pposition);
 }
 
-int LogHL::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
+int Log::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
 {
   return impl->stream.ReadNext(bl, pposition);
 }
 
-int LogHL::Stream::Reset()
+int Log::Stream::Reset()
 {
   return impl->stream.Reset();
 }
 
-int LogHL::Stream::Sync()
+int Log::Stream::Sync()
 {
   return impl->stream.Sync();
 }
 
-uint64_t LogHL::Stream::Id() const
+uint64_t Log::Stream::Id() const
 {
   return impl->stream.Id();
 }
 
-std::vector<uint64_t> LogHL::Stream::History() const
+std::vector<uint64_t> Log::Stream::History() const
 {
   return impl->stream.History();
 }
 
-int LogHL::MultiAppend(ceph::bufferlist& data,
+int Log::MultiAppend(ceph::bufferlist& data,
     const std::set<uint64_t>& stream_ids, uint64_t *pposition)
 {
   return impl->log.MultiAppend(data, stream_ids, pposition);
 }
 
-int LogHL::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
 {
   return impl->log.StreamMembership(stream_ids, position);
 }

@@ -38,8 +38,8 @@ static void check_appends(std::string pool, std::string server,
   client = new zlog::SeqrClient(server.c_str(), port.c_str());
   client->Connect();
 
-  zlog::LogHL *log;
-  ret = zlog::LogHL::OpenOrCreate(ioctx, log_name, client, &log);
+  zlog::Log *log;
+  ret = zlog::Log::OpenOrCreate(ioctx, log_name, client, &log);
   assert(ret == 0);
 
   int count = 0;
@@ -108,8 +108,8 @@ int main(int argc, char **argv)
   client = new zlog::SeqrClient(server.c_str(), port.c_str());
   client->Connect();
 
-  zlog::LogHL *log;
-  ret = zlog::LogHL::OpenOrCreate(ioctx, log_name, client, &log);
+  zlog::Log *log;
+  ret = zlog::Log::OpenOrCreate(ioctx, log_name, client, &log);
   assert(ret == 0);
 
   std::thread check_thread(check_appends, pool, server, port, log_name);

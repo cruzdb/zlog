@@ -5,7 +5,7 @@
 
 namespace zlog {
 
-class LogHL {
+class Log {
  public:
   struct AioCompletionImpl;
 
@@ -38,7 +38,7 @@ class LogHL {
 
   static AioCompletion *aio_create_completion();
   static AioCompletion *aio_create_completion(void *arg,
-      zlog::LogHL::AioCompletion::callback_t cb);
+      zlog::Log::AioCompletion::callback_t cb);
 
   /*
    * Stream API
@@ -56,7 +56,7 @@ class LogHL {
     std::vector<uint64_t> History() const;
 
    private:
-    friend class LogHL;
+    friend class Log;
     class StreamImpl;
     StreamImpl *impl;
   };
@@ -71,13 +71,13 @@ class LogHL {
    */
 
   static int Create(librados::IoCtx& ioctx, const std::string& name,
-      SeqrClient *seqr, LogHL **logptr);
+      SeqrClient *seqr, Log **logptr);
 
   static int Open(librados::IoCtx& ioctx, const std::string& name,
-      SeqrClient *seqr, LogHL **logptr);
+      SeqrClient *seqr, Log **logptr);
 
   static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
-      SeqrClient *seqr, LogHL **logptr) {
+      SeqrClient *seqr, Log **logptr) {
     int ret = Open(ioctx, name, seqr, logptr);
     if (ret != -ENOENT)
       return ret;
@@ -85,8 +85,8 @@ class LogHL {
   }
 
  private:
-  class LogHLImpl;
-  LogHLImpl *impl;
+  class LogImpl;
+  LogImpl *impl;
 };
 
 }
