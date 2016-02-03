@@ -34,7 +34,7 @@ void client_thread(zlog::LogImpl *log, bool check_tail)
 
 int main(int argc, char **argv)
 {
-  int width, num_threads;
+  int num_threads;
   std::string server;
   std::string pool;
   std::string port;
@@ -46,7 +46,6 @@ int main(int argc, char **argv)
     ("server", po::value<std::string>(&server)->required(), "Server host")
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
     ("port", po::value<std::string>(&port)->required(), "Server port")
-    ("width", po::value<int>(&width)->required(), "Stripe width")
     ("threads", po::value<int>(&num_threads)->required(), "Number of threads")
     ("logname", po::value<std::string>(&logname_req)->default_value(""), "Log name")
     ("checktail", po::value<bool>(&check_tail)->default_value(false), "Only check tail")
@@ -83,8 +82,9 @@ int main(int argc, char **argv)
   for (int i = 0; i < num_threads; i++) {
     zlog::SeqrClient *client = new zlog::SeqrClient(server.c_str(), port.c_str());
     client->Connect();
-    zlog::LogImpl *log = new zlog::LogImpl();
-    ret = zlog::LogImpl::OpenOrCreate(ioctx, logname.str(), width, client, *log);
+    zlog::Log *baselog;
+    ret = zlog::LogImpl::OpenOrCreate(ioctx, logname.str(), client, &baselog);
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
     assert(ret == 0);
     std::thread t(client_thread, log, check_tail);
     threads.push_back(std::move(t));

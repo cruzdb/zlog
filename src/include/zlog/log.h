@@ -7,6 +7,8 @@ namespace zlog {
 
 class Log {
  public:
+  Log() {}
+
   struct AioCompletionImpl;
 
   class AioCompletion {
@@ -24,17 +26,17 @@ class Log {
   /*
    * Synchronous API
    */
-  int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
-  int Read(uint64_t position, ceph::bufferlist& bl);
-  int Fill(uint64_t position);
-  int CheckTail(uint64_t *pposition);
-  int Trim(uint64_t position);
+  virtual int Append(ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
+  virtual int Read(uint64_t position, ceph::bufferlist& bl) = 0;
+  virtual int Fill(uint64_t position) = 0;
+  virtual int CheckTail(uint64_t *pposition) = 0;
+  virtual int Trim(uint64_t position) = 0;
 
   /*
    * Asynchronous API
    */
-  int AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition = NULL);
-  int AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl);
+  virtual int AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
+  virtual int AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl) = 0;
 
   static AioCompletion *aio_create_completion();
   static AioCompletion *aio_create_completion(void *arg,
@@ -56,15 +58,15 @@ class Log {
     std::vector<uint64_t> History() const;
 
    private:
-    friend class Log;
+    friend class LogImpl;
     class StreamImpl;
     StreamImpl *impl;
   };
 
-  int OpenStream(uint64_t stream_id, Stream **streamptr);
-  int MultiAppend(ceph::bufferlist& data,
-      const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
-  int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
+  virtual int OpenStream(uint64_t stream_id, Stream **streamptr) = 0;
+  virtual int MultiAppend(ceph::bufferlist& data,
+      const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) = 0;
+  virtual int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) = 0;
 
   /*
    * Log Management
@@ -85,8 +87,8 @@ class Log {
   }
 
  private:
-  class LogImpl;
-  LogImpl *impl;
+  Log(const Log&);
+  void operator=(const Log&);
 };
 
 }

@@ -5,6 +5,7 @@
 #include <rados/librados.h>
 #include <gtest/gtest.h>
 #include "include/zlog/log.h"
+#include "libzlog/log_impl.h"
 
 /*
  * Helper function from ceph/src/test/librados/test.cc
@@ -119,21 +120,22 @@ TEST(LibZlogInternal, CheckTailBatch) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogImpl log;
-  int ret = zlog::LogImpl::Create(ioctx, "mylog", 5, &client, log);
+  zlog::Log *blog;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &blog);
   ASSERT_EQ(ret, 0);
+  zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(blog);
 
   uint64_t pos;
-  ret = log.CheckTail(&pos, false);
+  ret = log->CheckTail(&pos, false);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
   std::vector<uint64_t> result;
-  ret = log.CheckTail(result, 1);
+  ret = log->CheckTail(result, 1);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(result[0], 0);
 
-  ret = log.CheckTail(result, 5);
+  ret = log->CheckTail(result, 5);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(result[0], 1);
   ASSERT_EQ(result[1], 2);
@@ -141,15 +143,15 @@ TEST(LibZlogInternal, CheckTailBatch) {
   ASSERT_EQ(result[3], 4);
   ASSERT_EQ(result[4], 5);
 
-  ret = log.CheckTail(&pos, false);
+  ret = log->CheckTail(&pos, false);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)6);
 
-  ret = log.CheckTail(&pos, true);
+  ret = log->CheckTail(&pos, true);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)6);
 
-  ret = log.CheckTail(result, 2);
+  ret = log->CheckTail(result, 2);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(result[0], 7);
   ASSERT_EQ(result[1], 8);
@@ -167,24 +169,25 @@ TEST(LibZlogInternal, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
-  zlog::LogImpl log;
-  int ret = zlog::LogImpl::Create(ioctx, "mylog", 5, &client, log);
+  zlog::Log *blog;
+  int ret = zlog::Log::Create(ioctx, "mylog", &client, &blog);
   ASSERT_EQ(ret, 0);
+  zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(blog);
 
   uint64_t pos;
-  ret = log.CheckTail(&pos, false);
+  ret = log->CheckTail(&pos, false);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = log.CheckTail(&pos, false);
+  ret = log->CheckTail(&pos, false);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = log.CheckTail(&pos, true);
+  ret = log->CheckTail(&pos, true);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = log.CheckTail(&pos, true);
+  ret = log->CheckTail(&pos, true);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)1);
 

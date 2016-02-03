@@ -12,7 +12,7 @@ enum AioType {
   ZLOG_AIO_READ,
 };
 
-struct zlog::LogImpl::AioCompletionImpl {
+struct zlog::Log::AioCompletionImpl {
   /*
    * concurrency control
    */
@@ -40,7 +40,7 @@ struct zlog::LogImpl::AioCompletionImpl {
    *  - temp storage for read (read)
    */
   int retval;
-  LogImpl::AioCompletion::callback_t safe_cb;
+  Log::AioCompletion::callback_t safe_cb;
   void *safe_cb_arg;
   uint64_t position;
   ceph::bufferlist bl;
@@ -98,7 +98,7 @@ struct zlog::LogImpl::AioCompletionImpl {
     ref++;
   }
 
-  void set_callback(void *arg, zlog::LogImpl::AioCompletion::callback_t cb) {
+  void set_callback(void *arg, zlog::Log::AioCompletion::callback_t cb) {
     std::lock_guard<std::mutex> l(lock);
     safe_cb = cb;
     safe_cb_arg = arg;
@@ -108,7 +108,7 @@ struct zlog::LogImpl::AioCompletionImpl {
   static void aio_safe_cb_append(librados::completion_t cb, void *arg);
 };
 
-void zlog::LogImpl::AioCompletion::wait_for_complete()
+void zlog::Log::AioCompletion::wait_for_complete()
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)pc;
   impl->wait_for_complete();
@@ -305,8 +305,8 @@ void zlog::LogImpl::AioCompletionImpl::aio_safe_cb_append(librados::completion_t
   impl->lock.unlock();
 }
 
-LogImpl::AioCompletion *LogImpl::aio_create_completion(void *arg,
-    LogImpl::AioCompletion::callback_t cb)
+Log::AioCompletion *Log::aio_create_completion(void *arg,
+    Log::AioCompletion::callback_t cb)
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->safe_cb = cb;
@@ -314,7 +314,7 @@ LogImpl::AioCompletion *LogImpl::aio_create_completion(void *arg,
   return new AioCompletion(impl);
 }
 
-LogImpl::AioCompletion *LogImpl::aio_create_completion()
+Log::AioCompletion *Log::aio_create_completion()
 {
   return aio_create_completion(NULL, NULL);
 }

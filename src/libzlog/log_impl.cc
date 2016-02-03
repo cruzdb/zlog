@@ -34,9 +34,11 @@ std::string LogImpl::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
-int LogImpl::Create(librados::IoCtx& ioctx, const std::string& name,
-    int stripe_size, SeqrClient *seqr, LogImpl& log)
+int Log::Create(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
 {
+  const int stripe_size = DEFAULT_STRIPE_SIZE;
+
   if (stripe_size <= 0) {
     std::cerr << "Invalid stripe size (" << stripe_size << " <= 0)" << std::endl;
     return -EINVAL;
@@ -74,22 +76,28 @@ int LogImpl::Create(librados::IoCtx& ioctx, const std::string& name,
     return ret;
   }
 
-  log.ioctx_ = &ioctx;
-  log.pool_ = ioctx.get_pool_name();
-  log.name_ = name;
-  log.metalog_oid_ = metalog_oid;
-  log.seqr = seqr;
-  log.mapper_.SetName(name);
+  LogImpl *impl = new LogImpl;
 
-  ret = log.RefreshProjection();
-  if (ret)
+  impl->ioctx_ = &ioctx;
+  impl->pool_ = ioctx.get_pool_name();
+  impl->name_ = name;
+  impl->metalog_oid_ = metalog_oid;
+  impl->seqr = seqr;
+  impl->mapper_.SetName(name);
+
+  ret = impl->RefreshProjection();
+  if (ret) {
+    delete impl;
     return ret;
+  }
+
+  *logptr = impl;
 
   return 0;
 }
 
-int LogImpl::Open(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, LogImpl& log)
+int Log::Open(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
 {
   if (name.length() == 0) {
     std::cerr << "Invalid log name (empty string)" << std::endl;
@@ -108,16 +116,22 @@ int LogImpl::Open(librados::IoCtx& ioctx, const std::string& name,
     return ret;
   }
 
-  log.ioctx_ = &ioctx;
-  log.pool_ = ioctx.get_pool_name();
-  log.name_ = name;
-  log.metalog_oid_ = metalog_oid;
-  log.seqr = seqr;
-  log.mapper_.SetName(name);
+  LogImpl *impl = new LogImpl;
 
-  ret = log.RefreshProjection();
-  if (ret)
+  impl->ioctx_ = &ioctx;
+  impl->pool_ = ioctx.get_pool_name();
+  impl->name_ = name;
+  impl->metalog_oid_ = metalog_oid;
+  impl->seqr = seqr;
+  impl->mapper_.SetName(name);
+
+  ret = impl->RefreshProjection();
+  if (ret) {
+    delete impl;
     return ret;
+  }
+
+  *logptr = impl;
 
   return 0;
 }
@@ -353,6 +367,11 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
     return ret;
   }
   assert(0);
+}
+
+int LogImpl::CheckTail(uint64_t *pposition)
+{
+  return CheckTail(pposition, false);
 }
 
 int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
@@ -608,6 +627,7 @@ int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
 extern "C" int zlog_destroy(zlog_log_t log)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  delete ctx->log;
   delete ctx->seqr;
   delete ctx;
   return 0;
@@ -624,8 +644,8 @@ extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogImpl::Open(ctx->ioctx, name,
-      ctx->seqr, ctx->log);
+  int ret = zlog::Log::Open(ctx->ioctx, name,
+      ctx->seqr, &ctx->log);
   if (ret) {
     delete ctx->seqr;
     delete ctx;
@@ -647,8 +667,8 @@ extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogImpl::Create(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
-      ctx->seqr, ctx->log);
+  int ret = zlog::Log::Create(ctx->ioctx, name,
+      ctx->seqr, &ctx->log);
   if (ret) {
     delete ctx->seqr;
     delete ctx;
@@ -670,8 +690,8 @@ extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
   ctx->seqr = new zlog::SeqrClient(host, port);
   ctx->seqr->Connect();
 
-  int ret = zlog::LogImpl::OpenOrCreate(ctx->ioctx, name, DEFAULT_STRIPE_SIZE,
-      ctx->seqr, ctx->log);
+  int ret = zlog::Log::OpenOrCreate(ctx->ioctx, name,
+      ctx->seqr, &ctx->log);
   if (ret) {
     delete ctx->seqr;
     delete ctx;
@@ -686,7 +706,7 @@ extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
 extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log.CheckTail(pposition);
+  return ctx->log->CheckTail(pposition);
 }
 
 extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
@@ -695,7 +715,7 @@ extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   ceph::bufferlist bl;
   bl.append((char*)data, len);
-  return ctx->log.Append(bl, pposition);
+  return ctx->log->Append(bl, pposition);
 }
 
 extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
@@ -708,7 +728,7 @@ extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
   std::set<uint64_t> ids(stream_ids, stream_ids + stream_ids_len);
   ceph::bufferlist bl;
   bl.append((char*)data, data_len);
-  return ctx->log.MultiAppend(bl, ids, pposition);
+  return ctx->log->MultiAppend(bl, ids, pposition);
 }
 
 extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
@@ -718,7 +738,7 @@ extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
   ceph::bufferlist bl;
   ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
   bl.push_back(bp);
-  int ret = ctx->log.Read(position, bl);
+  int ret = ctx->log->Read(position, bl);
   if (ret >= 0) {
     if (bl.length() > len)
       return -ERANGE;
@@ -732,210 +752,13 @@ extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
 extern "C" int zlog_fill(zlog_log_t log, uint64_t position)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log.Fill(position);
+  return ctx->log->Fill(position);
 }
 
 extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log.Trim(position);
-}
-
-/*
- * If nothing goes into this except LogImpl then we should just remove this
- * level of indirection and point directly to LogImpl.
- */
-class Log::LogImpl {
- public:
-  ::zlog::LogImpl log;
-};
-
-/*
- * FIXME: switch to return pointer and add destructor
- */
-int Log::Create(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, Log **logptr)
-{
-  Log *log = new Log;
-  log->impl = new LogImpl;
-
-  int ret = ::zlog::LogImpl::Create(ioctx, name, DEFAULT_STRIPE_SIZE, seqr, log->impl->log);
-  if (ret) {
-    delete log->impl;
-    delete log;
-    return ret;
-  }
-
-  *logptr = log;
-
-  return 0;
-}
-
-int Log::Open(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, Log **logptr)
-{
-  Log *log = new Log;
-  log->impl = new LogImpl;
-
-  int ret = ::zlog::LogImpl::Open(ioctx, name, seqr, log->impl->log);
-  if (ret) {
-    delete log->impl;
-    delete log;
-    return ret;
-  }
-
-  *logptr = log;
-
-  return 0;
-}
-
-int Log::Append(ceph::bufferlist& data, uint64_t *pposition)
-{
-  return impl->log.Append(data, pposition);
-}
-
-int Log::Read(uint64_t position, ceph::bufferlist& bl)
-{
-  return impl->log.Read(position, bl);
-}
-
-int Log::Fill(uint64_t position)
-{
-  return impl->log.Fill(position);
-}
-
-int Log::CheckTail(uint64_t *pposition)
-{
-  return impl->log.CheckTail(pposition);
-}
-
-int Log::Trim(uint64_t position)
-{
-  return impl->log.Trim(position);
-}
-
-struct Log::AioCompletionImpl {
-  ::zlog::LogImpl::AioCompletion *c;
-};
-
-Log::AioCompletion *Log::aio_create_completion(void *arg,
-    zlog::Log::AioCompletion::callback_t cb)
-{
-  Log::AioCompletionImpl *impl = new Log::AioCompletionImpl;
-  impl->c = ::zlog::LogImpl::aio_create_completion(arg, cb);
-  return new AioCompletion(impl);
-}
-
-Log::AioCompletion *Log::aio_create_completion()
-{
-  return aio_create_completion(NULL, NULL);
-}
-
-int Log::AioCompletion::get_return_value()
-{
-  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
-  return impl->c->get_return_value();
-}
-
-void Log::AioCompletion::set_callback(void *arg,
-    zlog::Log::AioCompletion::callback_t cb)
-{
-  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
-  impl->c->set_callback(arg, cb);
-}
-
-void Log::AioCompletion::wait_for_complete()
-{
-  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
-  impl->c->wait_for_complete();
-}
-
-void Log::AioCompletion::release()
-{
-  Log::AioCompletionImpl *impl = (Log::AioCompletionImpl*)pc;
-  impl->c->release();
-  delete this;
-}
-
-int Log::AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition)
-{
-  Log::AioCompletionImpl *cimpl = (Log::AioCompletionImpl*)c->pc;
-  return impl->log.AioAppend(cimpl->c, data, pposition);
-}
-
-int Log::AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl)
-{
-  Log::AioCompletionImpl *cimpl = (Log::AioCompletionImpl*)c->pc;
-  return impl->log.AioRead(position, cimpl->c, bpl);
-}
-
-/*
- * If we don't stash anything in here except a LogImpl then we should just
- * remove it and point directly to the LogImpl
- */
-class Log::Stream::StreamImpl {
- public:
-  ::zlog::LogImpl::Stream stream;
-};
-
-/*
- * FIXME: Memory leak on StreamImpl
- */
-int Log::OpenStream(uint64_t stream_id, Stream **streamptr)
-{
-  Log::Stream *stream = new Log::Stream;
-  stream->impl = new Log::Stream::StreamImpl;
-
-  int ret = impl->log.OpenStream(stream_id, stream->impl->stream);
-  if (ret) {
-    delete stream->impl;
-    delete stream;
-  }
-
-  *streamptr = stream;
-
-  return 0;
-}
-
-int Log::Stream::Append(ceph::bufferlist& data, uint64_t *pposition)
-{
-  return impl->stream.Append(data, pposition);
-}
-
-int Log::Stream::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
-{
-  return impl->stream.ReadNext(bl, pposition);
-}
-
-int Log::Stream::Reset()
-{
-  return impl->stream.Reset();
-}
-
-int Log::Stream::Sync()
-{
-  return impl->stream.Sync();
-}
-
-uint64_t Log::Stream::Id() const
-{
-  return impl->stream.Id();
-}
-
-std::vector<uint64_t> Log::Stream::History() const
-{
-  return impl->stream.History();
-}
-
-int Log::MultiAppend(ceph::bufferlist& data,
-    const std::set<uint64_t>& stream_ids, uint64_t *pposition)
-{
-  return impl->log.MultiAppend(data, stream_ids, pposition);
-}
-
-int Log::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
-{
-  return impl->log.StreamMembership(stream_ids, position);
+  return ctx->log->Trim(position);
 }
 
 }

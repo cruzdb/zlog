@@ -338,11 +338,11 @@ uint64_t LogImpl::Stream::Id() const
  * FIXME:
  *  - Looks like a memory leak on the StreamImpl
  */
-int LogImpl::OpenStream(uint64_t stream_id, Stream& stream)
+int LogImpl::OpenStream(uint64_t stream_id, Stream **streamptr)
 {
-  assert(!stream.impl);
-
+  Log::Stream *stream = new Log::Stream;
   LogImpl::Stream::StreamImpl *impl = new LogImpl::Stream::StreamImpl;
+
   impl->stream_id = stream_id;
   impl->log = this;
 
@@ -360,7 +360,8 @@ int LogImpl::OpenStream(uint64_t stream_id, Stream& stream)
    */
   impl->curpos = impl->pos.cbegin();
 
-  stream.impl = impl;
+  stream->impl = impl;
+  *streamptr = stream;
 
   return 0;
 }
@@ -373,7 +374,7 @@ extern "C" int zlog_stream_open(zlog_log_t log, uint64_t stream_id,
   zlog_stream_ctx *stream_ctx = new zlog_stream_ctx;
   stream_ctx->log_ctx = log_ctx;
 
-  int ret = log_ctx->log.OpenStream(stream_id, stream_ctx->stream);
+  int ret = log_ctx->log->OpenStream(stream_id, &stream_ctx->stream);
   if (ret) {
     delete stream_ctx;
     return ret;
@@ -390,7 +391,7 @@ extern "C" int zlog_stream_append(zlog_stream_t stream, const void *data,
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
   ceph::bufferlist bl;
   bl.append((char*)data, len);
-  return ctx->stream.Append(bl, pposition);
+  return ctx->stream->Append(bl, pposition);
 }
 
 extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
@@ -408,7 +409,7 @@ extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
   bl.push_back(bp);
 #endif
 
-  int ret = ctx->stream.ReadNext(bl, pposition);
+  int ret = ctx->stream->ReadNext(bl, pposition);
 
   if (ret >= 0) {
     if (bl.length() > len)
@@ -424,26 +425,26 @@ extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
 extern "C" int zlog_stream_reset(zlog_stream_t stream)
 {
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream.Reset();
+  return ctx->stream->Reset();
 }
 
 extern "C" int zlog_stream_sync(zlog_stream_t stream)
 {
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream.Sync();
+  return ctx->stream->Sync();
 }
 
 extern "C" uint64_t zlog_stream_id(zlog_stream_t stream)
 {
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream.Id();
+  return ctx->stream->Id();
 }
 
 extern "C" size_t zlog_stream_history(zlog_stream_t stream, uint64_t *pos, size_t len)
 {
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
 
-  std::vector<uint64_t> history = ctx->stream.History();
+  std::vector<uint64_t> history = ctx->stream->History();
   size_t size = history.size();
   if (pos && size <= len)
     std::copy(history.begin(), history.end(), pos);
@@ -457,7 +458,7 @@ extern "C" int zlog_stream_membership(zlog_log_t log,
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
 
   std::set<uint64_t> ids;
-  int ret = ctx->log.StreamMembership(ids, position);
+  int ret = ctx->log->StreamMembership(ids, position);
   if (ret)
     return ret;
 

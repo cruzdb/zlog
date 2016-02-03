@@ -42,13 +42,14 @@ int main(int argc, char **argv)
   //client = new zlog::SeqrClient(server.c_str(), port.c_str());
   //client->Connect();
 
-  zlog::LogImpl log;
-  ret = zlog::LogImpl::Open(ioctx, log_name, client, log);
+  zlog::Log *baselog;
+  ret = zlog::Log::Open(ioctx, log_name, client, &baselog);
   assert(ret == 0);
+  zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
   if (width != -1) {
     if (width > 0) {
-      ret = log.SetStripeWidth(width);
+      ret = log->SetStripeWidth(width);
       if (ret)
         std::cerr << "set-width: failed to set width " << width
           << " ret " << ret << std::endl;
@@ -58,7 +59,7 @@ int main(int argc, char **argv)
       std::cerr << "set-width: invalid stripe width " << width << std::endl;
   } else if (vm["create-cut"].as<bool>()) {
     uint64_t epoch, maxpos;
-    ret = log.CreateCut(&epoch, &maxpos);
+    ret = log->CreateCut(&epoch, &maxpos);
     if (ret)
       std::cerr << "create-cut: failed ret " << ret << std::endl;
     else

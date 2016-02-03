@@ -2,28 +2,15 @@
 #define LIBZLOG_INTERNAL_HPP
 #include <mutex>
 #include <rados/librados.h>
+#include "include/zlog/log.h"
 #include "libseq/libseqr.h"
 #include "log_mapper.h"
 
 namespace zlog {
 
-class LogImpl {
+class LogImpl : public Log {
  public:
   LogImpl() {}
-
-  struct AioCompletionImpl;
-
-  class AioCompletion {
-   public:
-    typedef void *completion_t;
-    typedef void (*callback_t)(completion_t cb, void *arg);
-    AioCompletion(AioCompletionImpl *pc) : pc(pc) {}
-    void set_callback(void *arg, callback_t cb);
-    void wait_for_complete();
-    int get_return_value();
-    void release();
-    void *pc;
-  };
 
   /*
    * Create cut.
@@ -38,7 +25,8 @@ class LogImpl {
   /*
    * Find and optionally increment the current tail position.
    */
-  int CheckTail(uint64_t *pposition, bool increment = false);
+  int CheckTail(uint64_t *pposition, bool increment);
+  int CheckTail(uint64_t *pposition);
 
   /*
    * Return a batch of positions.
@@ -59,38 +47,18 @@ class LogImpl {
   /*
    *
    */
-  class Stream {
-   public:
-    Stream() : impl(NULL) {}
-    int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
-    int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL);
-    int Reset();
-    int Sync();
-    uint64_t Id() const;
-
-    std::vector<uint64_t> History() const;
-
-   private:
-    friend class LogImpl;
-    struct StreamImpl;
-    StreamImpl *impl;
-  };
-
-  /*
-   *
-   */
-  int OpenStream(uint64_t stream_id, Stream& stream);
+  int OpenStream(uint64_t stream_id, Log::Stream **streamptr);
 
   /*
    * Append data asynchronously to the log and return its position.
    */
-  int AioAppend(AioCompletion *c, ceph::bufferlist& data,
+  int AioAppend(Log::AioCompletion *c, ceph::bufferlist& data,
       uint64_t *pposition = NULL);
 
   /*
    * Read data asynchronously from the log.
    */
-  int AioRead(uint64_t position, AioCompletion *c,
+  int AioRead(uint64_t position, Log::AioCompletion *c,
       ceph::bufferlist *bpl);
 
   /*
@@ -109,33 +77,6 @@ class LogImpl {
   int Trim(uint64_t position);
 
   /*
-   * Create a new log.
-   */
-  static int Create(librados::IoCtx& ioctx, const std::string& name,
-      int stripe_size, SeqrClient *seqr, LogImpl& log);
-
-  /*
-   * Open an existing log.
-   */
-  static int Open(librados::IoCtx& ioctx, const std::string& name,
-      SeqrClient *seqr, LogImpl& log);
-
-  /*
-   * Open an existing log or create it if it doesn't exist.
-   */
-  static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
-      int stripe_size, SeqrClient *seqr, LogImpl& log) {
-    int ret = Open(ioctx, name, seqr, log);
-    if (ret != -ENOENT)
-      return ret;
-    return Create(ioctx, name, stripe_size, seqr, log);
-  }
-
-  static AioCompletion *aio_create_completion();
-  static AioCompletion *aio_create_completion(void *arg,
-      zlog::LogImpl::AioCompletion::callback_t cb);
-
-  /*
    * Return the stream membership for a log entry position.
    */
   int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
@@ -146,7 +87,8 @@ class LogImpl {
   int Seal(const std::vector<std::string>& objects,
       uint64_t epoch, uint64_t *next_pos);
 
- private:
+  static std::string metalog_oid_from_name(const std::string& name);
+
   LogImpl(const LogImpl& rhs);
   LogImpl& operator=(const LogImpl& rhs);
 
@@ -170,7 +112,6 @@ class LogImpl {
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);
 
-  static std::string metalog_oid_from_name(const std::string& name);
 
   librados::IoCtx *ioctx_;
   std::string pool_;
@@ -189,11 +130,11 @@ class LogImpl {
 struct zlog_log_ctx {
   librados::IoCtx ioctx;
   zlog::SeqrClient *seqr;
-  zlog::LogImpl log;
+  zlog::Log *log;
 };
 
 struct zlog_stream_ctx {
-  zlog::LogImpl::Stream stream;
+  zlog::Log::Stream *stream;
   zlog_log_ctx *log_ctx;
 };
 

@@ -284,16 +284,17 @@ class LogManager {
       return ret;
     }
 
-    zlog::LogImpl log;
-    ret = zlog::LogImpl::Open(ioctx, name, NULL, log);
+    zlog::Log *baselog;
+    ret = zlog::Log::Open(ioctx, name, NULL, &baselog);
     if (ret) {
       std::cerr << "failed to open log " << name << std::endl;
       return ret;
     }
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
     uint64_t epoch;
     uint64_t position;
-    ret = log.CreateCut(&epoch, &position);
+    ret = log->CreateCut(&epoch, &position);
     if (ret) {
       std::cerr << "failed to create cut ret " << ret << std::endl;
       return ret;
@@ -313,7 +314,7 @@ class LogManager {
       while (tail) {
         for (;;) {
           std::set<uint64_t> stream_ids;
-          ret = log.StreamMembership(epoch, stream_ids, tail);
+          ret = log->StreamMembership(epoch, stream_ids, tail);
           if (ret == 0) {
             for (auto it = stream_ids.begin(); it != stream_ids.end(); it++) {
               auto it2 = ptrs_out.find(*it);
@@ -329,7 +330,7 @@ class LogManager {
             break;
           } else if (ret == -ENODEV) {
             // fill entries unwritten entries
-            ret = log.Fill(epoch, tail);
+            ret = log->Fill(epoch, tail);
             if (ret == 0) {
               // skip invalidated entries
               break;

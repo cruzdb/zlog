@@ -203,13 +203,14 @@ class FakeSeqrClient : public zlog::SeqrClient {
   }
 
   void Init(librados::IoCtx& ioctx) {
-    zlog::LogImpl log;
-    int ret = zlog::LogImpl::Open(ioctx, name_, NULL, log);
+    zlog::Log *baselog;
+    int ret = zlog::LogImpl::Open(ioctx, name_, NULL, &baselog);
     assert(ret == 0);
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
     uint64_t epoch;
     uint64_t position;
-    ret = log.CreateCut(&epoch, &position);
+    ret = log->CreateCut(&epoch, &position);
     assert(ret == 0);
 
     epoch_ = epoch;
@@ -343,9 +344,10 @@ int main(int argc, char **argv)
   } else {
     client = new FakeSeqrClient(logname);
   }
-  zlog::LogImpl log;
-  ret = zlog::LogImpl::OpenOrCreate(ioctx, logname, width, client, log);
+  zlog::Log *baselog;
+  ret = zlog::LogImpl::OpenOrCreate(ioctx, logname, client, &baselog);
   assert(ret == 0);
+  zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
   if (server.length() == 0) {
     FakeSeqrClient *c = static_cast<FakeSeqrClient*>(client);
@@ -356,7 +358,7 @@ int main(int argc, char **argv)
   // log instance. otherwise when we blast out a bunch of async requests they
   // all end up having old epochs.
   ceph::bufferlist bl;
-  log.Append(bl);
+  log->Append(bl);
 
   /*
    * For read mode we look up the current tail and then issue random reads
@@ -364,7 +366,7 @@ int main(int argc, char **argv)
    */
   uint64_t tail = 0;
   if (read_mode) {
-    ret = log.CheckTail(&tail, false);
+    ret = log->CheckTail(&tail, false);
     assert(!ret);
     // teardown/setup is sloppy, so we trim off a bit so we don't hit any
     // unwritten entries.
@@ -402,7 +404,7 @@ int main(int argc, char **argv)
     while (!stop) {
       uint64_t pos;
       uint64_t start_ns = getns();
-      int ret = log.CheckTail(&pos, true);
+      int ret = log->CheckTail(&pos, true);
       uint64_t latency_ns = getns() - start_ns;
       assert(ret == 0);
       if (track_latency)
@@ -420,7 +422,7 @@ int main(int argc, char **argv)
         uint64_t pos = dis(gen);
         ceph::bufferlist bl;
         start_ns = getns();
-        int ret = log.Read(pos, bl);
+        int ret = log->Read(pos, bl);
         latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(bl.length() > 0);
@@ -432,7 +434,7 @@ int main(int argc, char **argv)
         ceph::bufferlist bl;
         bl.append(iobuf, iosize);
         start_ns = getns();
-        int ret = log.Append(bl, &pos);
+        int ret = log->Append(bl, &pos);
         latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(pos > 0);
@@ -450,20 +452,20 @@ int main(int argc, char **argv)
     for (;;) {
       while (outstanding_ios < qdepth) {
         AioState *state = new AioState;
-        state->log = &log;
+        state->log = log;
         if (read_mode) {
           state->position = dis(gen);
           state->c = zlog::LogImpl::aio_create_completion(state, handle_read_cb);
           assert(state->c);
           state->submitted = std::chrono::steady_clock::now();
-          ret = log.AioRead(state->position, state->c, &state->read_bl);
+          ret = log->AioRead(state->position, state->c, &state->read_bl);
           assert(ret == 0);
         } else if (append) {
           // this is a simulation where we grab a sequence number and do an
           // object append to simulate a mapping onto object data rather than
           // omap.
           uint64_t pos;
-          ret = log.CheckTail(&pos, true);
+          ret = log->CheckTail(&pos, true);
           assert(ret == 0);
 
           //
@@ -489,7 +491,7 @@ int main(int argc, char **argv)
           }
           state->append_bl.append(iobuf, iosize);
           state->submitted = std::chrono::steady_clock::now();
-          ret = log.AioAppend(state->c, state->append_bl, &state->position);
+          ret = log->AioAppend(state->c, state->append_bl, &state->position);
           assert(ret == 0);
         }
 
