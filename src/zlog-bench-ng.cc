@@ -92,7 +92,7 @@ static void report()
 static void verify_append_cb(AioState *s)
 {
   assert(s->c->ReturnValue() == 0);
-  s->c->Release();
+  delete s->c;
 
   assert(s->read_bl == s->append_bl);
   int sum1 = 0, sum2 = 0;
@@ -117,7 +117,7 @@ static void handle_append_cb(AioState *s)
   io_cond.notify_one();
 
   assert(s->c->ReturnValue() == 0);
-  s->c->Release();
+  delete s->c;
   s->c = NULL;
 
   auto diff_us = std::chrono::duration_cast<
@@ -176,7 +176,7 @@ static void handle_read_cb(AioState *s)
   assert(s->c->ReturnValue() == 0);
   assert(s->read_bl.length() > 0);
 
-  s->c->Release();
+  delete s->c;
   s->c = NULL;
 
   auto diff_us = std::chrono::duration_cast<

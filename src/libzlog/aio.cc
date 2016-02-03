@@ -12,7 +12,7 @@ enum AioType {
   ZLOG_AIO_READ,
 };
 
-class AioCompletionImpl : public zlog::AioCompletion {
+class AioCompletionImpl {
  public:
   /*
    * concurrency control
@@ -279,20 +279,54 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
   impl->lock.unlock();
 }
 
+AioCompletion::~AioCompletion() {}
+
+/*
+ * This is a wrapper around AioCompletion that lets users of the public API
+ * delete its AioCompletion without deleting the underlying AioCompletionImpl
+ * which is referece counted.
+ *
+ * This could also be done by exposing a shared_ptr. Are there other ways?
+ */
+class AioCompletionImplWrapper : public zlog::AioCompletion {
+ public:
+  explicit AioCompletionImplWrapper(AioCompletionImpl *impl) :
+    impl_(impl)
+  {}
+
+  ~AioCompletionImplWrapper() {
+    impl_->Release();
+  }
+
+  void SetCallback(std::function<void()> callback) {
+    impl_->SetCallback(callback);
+  }
+
+  void WaitForComplete() {
+    impl_->WaitForComplete();
+  }
+
+  int ReturnValue() {
+    return impl_->ReturnValue();
+  }
+
+  AioCompletionImpl *impl_;
+};
+
 zlog::AioCompletion *Log::aio_create_completion(
     std::function<void()> callback)
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->has_callback = true;
   impl->callback = callback;
-  return impl;
+  return new AioCompletionImplWrapper(impl);
 }
 
 zlog::AioCompletion *Log::aio_create_completion()
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->has_callback = false;
-  return impl;
+  return new AioCompletionImplWrapper(impl);
 }
 
 /*
@@ -308,7 +342,9 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   if (ret)
     return ret;
 
-  AioCompletionImpl *impl = reinterpret_cast<AioCompletionImpl*>(c);
+  AioCompletionImplWrapper *wrapper =
+    reinterpret_cast<AioCompletionImplWrapper*>(c);
+  AioCompletionImpl *impl = wrapper->impl_;
 
   impl->log = this;
   impl->bl = data;
@@ -340,7 +376,9 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
 int LogImpl::AioRead(uint64_t position, AioCompletion *c,
     ceph::bufferlist *pbl)
 {
-  AioCompletionImpl *impl = reinterpret_cast<AioCompletionImpl*>(c);
+  AioCompletionImplWrapper *wrapper =
+    reinterpret_cast<AioCompletionImplWrapper*>(c);
+  AioCompletionImpl *impl = wrapper->impl_;
 
   impl->log = this;
   impl->pbl = pbl;

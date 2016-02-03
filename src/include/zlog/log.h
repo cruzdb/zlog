@@ -7,13 +7,10 @@ namespace zlog {
 
 class AioCompletion {
  public:
+  virtual ~AioCompletion();
   virtual void SetCallback(std::function<void()> callback) = 0;
   virtual void WaitForComplete() = 0;
   virtual int ReturnValue() = 0;
-  virtual void Release() = 0;
-
- protected:
-  virtual ~AioCompletion();
 };
 
 class Stream {
