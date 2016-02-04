@@ -1,17 +1,16 @@
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-#include <deque>
-#include <boost/bind.hpp>
-#include <boost/asio.hpp>
-#include <boost/program_options.hpp>
-#include <condition_variable>
-#include <thread>
 #include <atomic>
+#include <condition_variable>
+#include <cstdlib>
+#include <deque>
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <boost/program_options.hpp>
 #include <rados/librados.hpp>
 #include "proto/zlog.pb.h"
-#include "libzlog/libzlog.hpp"
-#include "libzlog/internal.hpp"
+#include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 
@@ -285,16 +284,17 @@ class LogManager {
       return ret;
     }
 
-    zlog::LogLL log;
-    ret = zlog::LogLL::Open(ioctx, name, NULL, log);
+    zlog::Log *baselog;
+    ret = zlog::Log::Open(ioctx, name, NULL, &baselog);
     if (ret) {
       std::cerr << "failed to open log " << name << std::endl;
       return ret;
     }
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
     uint64_t epoch;
     uint64_t position;
-    ret = log.CreateCut(&epoch, &position);
+    ret = log->CreateCut(&epoch, &position);
     if (ret) {
       std::cerr << "failed to create cut ret " << ret << std::endl;
       return ret;
@@ -314,7 +314,7 @@ class LogManager {
       while (tail) {
         for (;;) {
           std::set<uint64_t> stream_ids;
-          ret = log.StreamMembership(epoch, stream_ids, tail);
+          ret = log->StreamMembership(epoch, stream_ids, tail);
           if (ret == 0) {
             for (auto it = stream_ids.begin(); it != stream_ids.end(); it++) {
               auto it2 = ptrs_out.find(*it);
@@ -330,7 +330,7 @@ class LogManager {
             break;
           } else if (ret == -ENODEV) {
             // fill entries unwritten entries
-            ret = log.Fill(epoch, tail);
+            ret = log->Fill(epoch, tail);
             if (ret == 0) {
               // skip invalidated entries
               break;

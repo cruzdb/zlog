@@ -1,11 +1,11 @@
 #ifndef SKYTYPE_H
 #define SKYTYPE_H
-#include "libzlog/libzlog.hpp"
+#include "include/zlog/log.h"
 
 namespace skytype {
   class SkyObject {
     public:
-      explicit SkyObject(zlog::LogHL *log) : log_(log), position_(0) {}
+      explicit SkyObject(zlog::Log *log) : log_(log), position_(0) {}
 
     protected:
       virtual void apply(const void *data) = 0;
@@ -13,7 +13,7 @@ namespace skytype {
       int query_helper();
 
     private:
-      zlog::LogHL *log_;
+      zlog::Log *log_;
       uint64_t position_;
   };
 }

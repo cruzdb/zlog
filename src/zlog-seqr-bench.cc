@@ -1,16 +1,15 @@
 #include <sstream>
+#include <thread>
+#include <boost/program_options.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/program_options.hpp>
-#include <thread>
 #include <rados/librados.hpp>
-#include "libzlog/libzlog.hpp"
-#include "libzlog/internal.hpp"
+#include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 
-void client_thread(zlog::LogLL *log, bool check_tail)
+void client_thread(zlog::LogImpl *log, bool check_tail)
 {
   // buffer with random bytes
   char buf[4096];
@@ -35,7 +34,7 @@ void client_thread(zlog::LogLL *log, bool check_tail)
 
 int main(int argc, char **argv)
 {
-  int width, num_threads;
+  int num_threads;
   std::string server;
   std::string pool;
   std::string port;
@@ -47,7 +46,6 @@ int main(int argc, char **argv)
     ("server", po::value<std::string>(&server)->required(), "Server host")
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
     ("port", po::value<std::string>(&port)->required(), "Server port")
-    ("width", po::value<int>(&width)->required(), "Stripe width")
     ("threads", po::value<int>(&num_threads)->required(), "Number of threads")
     ("logname", po::value<std::string>(&logname_req)->default_value(""), "Log name")
     ("checktail", po::value<bool>(&check_tail)->default_value(false), "Only check tail")
@@ -84,8 +82,9 @@ int main(int argc, char **argv)
   for (int i = 0; i < num_threads; i++) {
     zlog::SeqrClient *client = new zlog::SeqrClient(server.c_str(), port.c_str());
     client->Connect();
-    zlog::LogLL *log = new zlog::LogLL();
-    ret = zlog::LogLL::OpenOrCreate(ioctx, logname.str(), width, client, *log);
+    zlog::Log *baselog;
+    ret = zlog::LogImpl::OpenOrCreate(ioctx, logname.str(), client, &baselog);
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
     assert(ret == 0);
     std::thread t(client_thread, log, check_tail);
     threads.push_back(std::move(t));

@@ -1,13 +1,12 @@
 #ifndef SKYTYPE_REGISTER_H
 #define SKYTYPE_REGISTER_H
-
 #include <errno.h>
-#include "libzlog/libzlog.h"
+#include "include/zlog/log.h"
 #include "zstate/skytype.h"
 
 class Register : private skytype::SkyObject {
   public:
-    Register(zlog::LogHL *log) : SkyObject(log), state_(0) {}
+    Register(zlog::Log *log) : SkyObject(log), state_(0) {}
 
     int read(int *value) {
       int ret = query_helper();

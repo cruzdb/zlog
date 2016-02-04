@@ -1,19 +1,18 @@
+#include <signal.h>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <fstream>
+#include <iostream>
+#include <random>
 #include <sstream>
+#include <thread>
+#include <boost/program_options.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <boost/program_options.hpp>
-#include <condition_variable>
-#include <signal.h>
-#include <chrono>
-#include <fstream>
-#include <iostream>
-#include <atomic>
-#include <thread>
-#include <random>
 #include <rados/librados.hpp>
-#include "libzlog/libzlog.hpp"
-#include "libzlog/internal.hpp"
+#include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 
@@ -21,10 +20,10 @@ namespace po = boost::program_options;
 //#define SLOPPY_SEQ
 
 struct AioState {
-  zlog::LogLL *log;
+  zlog::LogImpl *log;
   ceph::bufferlist append_bl;
   ceph::bufferlist read_bl;
-  zlog::LogLL::AioCompletion *c;
+  zlog::AioCompletion *c;
   librados::AioCompletion *rc; // used by append workload
   uint64_t position;
   std::chrono::time_point<std::chrono::steady_clock> submitted;
@@ -90,13 +89,10 @@ static void report()
 }
 
 #ifdef VERIFY_IOS
-static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
-    void *arg)
+static void verify_append_cb(AioState *s)
 {
-  AioState *s = (AioState*)arg;
-
-  assert(s->c->get_return_value() == 0);
-  s->c->release();
+  assert(s->c->ReturnValue() == 0);
+  delete s->c;
 
   assert(s->read_bl == s->append_bl);
   int sum1 = 0, sum2 = 0;
@@ -110,20 +106,18 @@ static void verify_append_cb(zlog::Log::AioCompletion::completion_t cb,
 }
 #endif
 
-static void handle_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
-    void *arg)
+static void handle_append_cb(AioState *s)
 {
-  AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
-  zlog::LogLL *log = s->log;
+  zlog::LogImpl *log = s->log;
 
   ios_completed++;
   ios_completed_total++;
   outstanding_ios--;
   io_cond.notify_one();
 
-  assert(s->c->get_return_value() == 0);
-  s->c->release();
+  assert(s->c->ReturnValue() == 0);
+  delete s->c;
   s->c = NULL;
 
   auto diff_us = std::chrono::duration_cast<
@@ -133,7 +127,7 @@ static void handle_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
 #ifdef VERIFY_IOS
   if (s->append_bl.length() > 0)
     assert(!(s->append_bl == s->read_bl));
-  s->c = zlog::LogLL::aio_create_completion(s, verify_append_cb);
+  s->c = zlog::Log::aio_create_completion(std::bind(verify_append_cb, s));
   int ret = log->AioRead(s->position, s->c, &s->read_bl);
   assert(ret == 0);
 #else
@@ -141,8 +135,7 @@ static void handle_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
 #endif
 }
 
-static void handle_bulk_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
-    void *arg)
+static void handle_bulk_append_cb(librados::completion_t cb, void *arg)
 {
   AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
@@ -167,10 +160,8 @@ static void handle_bulk_append_cb(zlog::LogLL::AioCompletion::completion_t cb,
 #endif
 }
 
-static void handle_read_cb(zlog::LogLL::AioCompletion::completion_t cb,
-    void *arg)
+static void handle_read_cb(AioState *s)
 {
-  AioState *s = (AioState*)arg;
   auto completed = std::chrono::steady_clock::now();
 
   ios_completed++;
@@ -178,14 +169,14 @@ static void handle_read_cb(zlog::LogLL::AioCompletion::completion_t cb,
   outstanding_ios--;
   io_cond.notify_one();
 
-  int op_rv = s->c->get_return_value();
+  int op_rv = s->c->ReturnValue();
   if (op_rv) {
     std::cout << op_rv << " " << s->position << std::endl;
   }
-  assert(s->c->get_return_value() == 0);
+  assert(s->c->ReturnValue() == 0);
   assert(s->read_bl.length() > 0);
 
-  s->c->release();
+  delete s->c;
   s->c = NULL;
 
   auto diff_us = std::chrono::duration_cast<
@@ -204,13 +195,14 @@ class FakeSeqrClient : public zlog::SeqrClient {
   }
 
   void Init(librados::IoCtx& ioctx) {
-    zlog::LogLL log;
-    int ret = zlog::LogLL::Open(ioctx, name_, NULL, log);
+    zlog::Log *baselog;
+    int ret = zlog::LogImpl::Open(ioctx, name_, NULL, &baselog);
     assert(ret == 0);
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
     uint64_t epoch;
     uint64_t position;
-    ret = log.CreateCut(&epoch, &position);
+    ret = log->CreateCut(&epoch, &position);
     assert(ret == 0);
 
     epoch_ = epoch;
@@ -274,7 +266,7 @@ int main(int argc, char **argv)
   desc.add_options()
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
     ("logname", po::value<std::string>(&logname_req)->default_value(""), "Log name")
-    ("width", po::value<int>(&width)->required(), "Width")
+    ("width", po::value<int>(&width)->default_value(0), "Width")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
     ("iosize", po::value<int>(&iosize)->default_value(0), "IO Size")
     ("read", po::value<bool>(&read_mode)->default_value(false), "Read mode")
@@ -329,6 +321,7 @@ int main(int argc, char **argv)
   // append to the objects.
   std::vector<std::string> append_oids;
   if (append) {
+      assert(width > 0);
       for (size_t i = 0; i < width; i++) {
           std::stringstream oid;
           oid << logname << "." << i;
@@ -344,9 +337,10 @@ int main(int argc, char **argv)
   } else {
     client = new FakeSeqrClient(logname);
   }
-  zlog::LogLL log;
-  ret = zlog::LogLL::OpenOrCreate(ioctx, logname, width, client, log);
+  zlog::Log *baselog;
+  ret = zlog::LogImpl::OpenOrCreate(ioctx, logname, client, &baselog);
   assert(ret == 0);
+  zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
   if (server.length() == 0) {
     FakeSeqrClient *c = static_cast<FakeSeqrClient*>(client);
@@ -357,7 +351,7 @@ int main(int argc, char **argv)
   // log instance. otherwise when we blast out a bunch of async requests they
   // all end up having old epochs.
   ceph::bufferlist bl;
-  log.Append(bl);
+  log->Append(bl);
 
   /*
    * For read mode we look up the current tail and then issue random reads
@@ -365,7 +359,7 @@ int main(int argc, char **argv)
    */
   uint64_t tail = 0;
   if (read_mode) {
-    ret = log.CheckTail(&tail, false);
+    ret = log->CheckTail(&tail, false);
     assert(!ret);
     // teardown/setup is sloppy, so we trim off a bit so we don't hit any
     // unwritten entries.
@@ -403,7 +397,7 @@ int main(int argc, char **argv)
     while (!stop) {
       uint64_t pos;
       uint64_t start_ns = getns();
-      int ret = log.CheckTail(&pos, true);
+      int ret = log->CheckTail(&pos, true);
       uint64_t latency_ns = getns() - start_ns;
       assert(ret == 0);
       if (track_latency)
@@ -421,7 +415,7 @@ int main(int argc, char **argv)
         uint64_t pos = dis(gen);
         ceph::bufferlist bl;
         start_ns = getns();
-        int ret = log.Read(pos, bl);
+        int ret = log->Read(pos, bl);
         latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(bl.length() > 0);
@@ -433,7 +427,7 @@ int main(int argc, char **argv)
         ceph::bufferlist bl;
         bl.append(iobuf, iosize);
         start_ns = getns();
-        int ret = log.Append(bl, &pos);
+        int ret = log->Append(bl, &pos);
         latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(pos > 0);
@@ -451,20 +445,20 @@ int main(int argc, char **argv)
     for (;;) {
       while (outstanding_ios < qdepth) {
         AioState *state = new AioState;
-        state->log = &log;
+        state->log = log;
         if (read_mode) {
           state->position = dis(gen);
-          state->c = zlog::LogLL::aio_create_completion(state, handle_read_cb);
+          state->c = zlog::Log::aio_create_completion(std::bind(handle_read_cb, state));
           assert(state->c);
           state->submitted = std::chrono::steady_clock::now();
-          ret = log.AioRead(state->position, state->c, &state->read_bl);
+          ret = log->AioRead(state->position, state->c, &state->read_bl);
           assert(ret == 0);
         } else if (append) {
           // this is a simulation where we grab a sequence number and do an
           // object append to simulate a mapping onto object data rather than
           // omap.
           uint64_t pos;
-          ret = log.CheckTail(&pos, true);
+          ret = log->CheckTail(&pos, true);
           assert(ret == 0);
 
           //
@@ -483,14 +477,14 @@ int main(int argc, char **argv)
 
           append_count++;
         } else {
-          state->c = zlog::LogLL::aio_create_completion(state, handle_append_cb);
+          state->c = zlog::Log::aio_create_completion(std::bind(handle_append_cb, state));
           assert(state->c);
           for (unsigned i = 0; i < iosize; i++) {
             iobuf[i] = (char)rand();
           }
           state->append_bl.append(iobuf, iosize);
           state->submitted = std::chrono::steady_clock::now();
-          ret = log.AioAppend(state->c, state->append_bl, &state->position);
+          ret = log->AioAppend(state->c, state->append_bl, &state->position);
           assert(ret == 0);
         }
 
