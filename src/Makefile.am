@@ -14,12 +14,14 @@ LIBSEQ = libseqr.la
 LIBZLOG = libzlog.la
 LIBZSTATE = libzstate.la
 LIBGTEST = libgtest.a
+ZLOG_JAR = zlog.jar
 
 include proto/Makefile.am
 include libseq/Makefile.am
 include libzlog/Makefile.am
 include zstate/Makefile.am
 include test/Makefile.am
+include java/Makefile.am
 
 bin_PROGRAMS += zlog-seqr
 zlog_seqr_SOURCES = seqr-server.cc
