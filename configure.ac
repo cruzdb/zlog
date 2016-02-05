@@ -43,10 +43,12 @@ AC_LINK_IFELSE([
   ], [], [AC_MSG_FAILURE([libcls_zlog_client not found])]) 
 LDFLAGS=$SAVED_LDFLAGS
 
+AX_JNI_INCLUDE_DIR
+AC_SUBST(JNI_INCLUDE_DIR)
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
-  src/proto/Makefile
 ])
 
 AC_OUTPUT

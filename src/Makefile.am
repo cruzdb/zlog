@@ -1,5 +1,3 @@
-SUBDIRS = proto
-
 AM_CPPFLAGS = -I$(top_srcdir)/src/include
 
 bin_PROGRAMS =
@@ -11,12 +9,13 @@ MOSTLYCLEANFILES =
 dist_noinst_DATA =
 include_HEADERS =
 
-LIBPROTO = proto/libzlogproto.la
+LIBPROTO = libzlogproto.la
 LIBSEQ = libseqr.la
 LIBZLOG = libzlog.la
 LIBZSTATE = libzstate.la
 LIBGTEST = libgtest.a
 
+include proto/Makefile.am
 include libseq/Makefile.am
 include libzlog/Makefile.am
 include zstate/Makefile.am
