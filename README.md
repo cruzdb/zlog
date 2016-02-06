@@ -15,9 +15,10 @@ This project uses Semantic Versioning (http://semver.org/).
 
 ## Language Bindings
 
-The base zlog project provides both C and C++ bindings.
+The base zlog project provides C, C++, and Java bindings.
 
 * Go: https://github.com/noahdesu/go-zlog
+* Java: see directory `src/java`
 
 ## Example
 
