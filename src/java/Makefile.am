@@ -42,3 +42,13 @@ javadocs:
 	rm -rf $(JAVADOC_DIR)
 	mkdir -p $(JAVADOC_DIR)
 	$(JAVADOC) -d $(JAVADOC_DIR) -sourcepath $(MAIN_SRC) -subpackages com
+
+publish: javadocs
+	rm -rf /tmp/zlog.javadoc.bits
+	mkdir /tmp/zlog.javadoc.bits
+	cp -a $(JAVADOC_DIR)/* /tmp/zlog.javadoc.bits
+	cd /tmp/zlog.javadoc.bits; \
+		git init .; git add .; git commit -m "published"; \
+		git remote add origin http://github.com/noahdesu/zlog.git; \
+		git push -f origin master:gh-pages
+	rm -rf /tmp/zlog.javadoc.bits
