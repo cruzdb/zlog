@@ -39,3 +39,20 @@ cd src
 export CEPH_CONF=/tmp/ceph/ceph.conf
 ./zlog-seqr --port 5678 --daemon
 ./zlog-test
+
+skill zlog-seqr
+skill -9 zlog-seqr
+sleep 1
+ps aux | grep zlog
+
+# now with automake
+cd ../..
+rm -rf build
+autoreconf -ivf
+./configure
+make
+
+cd src
+export CEPH_CONF=/tmp/ceph/ceph.conf
+./zlog-seqr --port 5678 --daemon
+./zlog-test
