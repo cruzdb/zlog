@@ -2,6 +2,8 @@
 set -e
 set -x
 
+apt-get install -y curl
+
 # checkout zlog ceph repo
 pushd /src/ceph
 git remote add nd https://github.com/noahdesu/ceph.git
@@ -56,3 +58,4 @@ cd src
 export CEPH_CONF=/tmp/ceph/ceph.conf
 ./zlog-seqr --port 5678 --daemon
 ./zlog-test
+make test-java
