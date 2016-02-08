@@ -7,7 +7,9 @@ NATIVE_JAVA_CLASSES = \
 
 OUTPUT = java/target
 MAIN_CLASSES = $(OUTPUT)/classes
+TEST_CLASSES = $(OUTPUT)/test-classes
 MAIN_SRC = java/src/main/java
+TEST_SRC = java/src/test/java
 NATIVE_INCLUDE = java/include
 
 # TODO: add dependency on the java source (here and jar)
@@ -52,3 +54,19 @@ publish: javadocs
 		git remote add origin http://github.com/noahdesu/zlog.git; \
 		git push -f origin master:gh-pages
 	rm -rf /tmp/zlog.javadoc.bits
+
+JAVA_TEST_LIBDIR = test-libs
+JAVA_JUNIT_JAR = $(JAVA_TEST_LIBDIR)/junit-4.12.jar
+JAVA_HAMCR_JAR = $(JAVA_TEST_LIBDIR)/hamcrest-core-1.3.jar
+JAVA_TESTCLASSPATH = $(JAVA_JUNIT_JAR):$(JAVA_HAMCR_JAR)
+
+test-java-deps:
+	test -s "$(JAVA_TEST_LIBDIR)" || mkdir -p "$(JAVA_TEST_LIBDIR)"
+	test -s "$(JAVA_JUNIT_JAR)" || curl -k -L -o $(JAVA_JUNIT_JAR) http://search.maven.org/remotecontent?filepath=junit/junit/4.12/junit-4.12.jar
+	test -s "$(JAVA_HAMCR_JAR)" || curl -k -L -o $(JAVA_HAMCR_JAR) http://search.maven.org/remotecontent?filepath=org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar
+
+test-java: $(ZLOG_JAR) test-java-deps
+	rm -rf $(TEST_CLASSES)
+	mkdir -p $(TEST_CLASSES)
+	$(JAVAC) -cp $(JAVA_TESTCLASSPATH):$(OUTPUT)/$(ZLOG_JAR) -d $(TEST_CLASSES) $(TEST_SRC)/com/cruzdb/*.java
+	java -ea -Xcheck:jni -cp $(JAVA_TESTCLASSPATH):$(OUTPUT)/test-classes:$(OUTPUT)/$(ZLOG_JAR) com.cruzdb.AllTests com.cruzdb.LogTest
