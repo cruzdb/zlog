@@ -22,6 +22,7 @@ include libzlog/Makefile.am
 include zstate/Makefile.am
 include test/Makefile.am
 include java/Makefile.am
+include bench/Makefile.am
 
 bin_PROGRAMS += zlog-seqr
 zlog_seqr_SOURCES = seqr-server.cc
