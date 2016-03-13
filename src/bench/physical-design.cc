@@ -30,7 +30,7 @@ int main(int argc, char **argv)
   desc.add_options()
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
     ("experiment", po::value<std::string>(&experiment)->required(), "Experiment name")
-    ("stripe_width", po::value<size_t>(&stripe_width)->required(), "Stripe width")
+    ("stripe_width", po::value<size_t>(&stripe_width)->default_value(0), "Stripe width")
     ("entry_size", po::value<size_t>(&entry_size)->required(), "Entry size")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
     ("perf_file", po::value<std::string>(&perf_file)->default_value(""), "Perf output")
@@ -39,6 +39,16 @@ int main(int argc, char **argv)
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
   po::notify(vm);
+
+  if (qdepth <= 0) {
+    std::cerr << "invalid qdepth " << qdepth << std::endl;
+    return -1;
+  }
+
+  if (entry_size <= 0 || entry_size > (1ULL<<25)) {
+    std::cerr << "invalid entry_size " << entry_size << std::endl;
+    return -1;
+  }
 
   // connect to rados
   librados::Rados cluster;
@@ -57,12 +67,38 @@ int main(int argc, char **argv)
   if (experiment == "map_11") {
   } else if (experiment == "map_n1") {
   } else if (experiment == "bytestream_11") {
+
+    if (stripe_width != 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
+    workload = new ByteStream11_Workload(&ioctx, entry_size,
+        qdepth, op_history);
+
   } else if (experiment == "bytestream_n1_write") {
+
+    if (stripe_width <= 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
     workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
         entry_size, qdepth, op_history);
+
   } else if (experiment == "bytestream_n1_append") {
+
+    if (stripe_width <= 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
     workload = new ByteStreamN1Append_Workload(&ioctx, stripe_width,
         entry_size, qdepth, op_history);
+
   } else {
     std::cerr << "invalid experiment name: " << experiment << std::endl;
     return -1;
