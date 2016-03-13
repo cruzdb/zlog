@@ -4,64 +4,49 @@
 #include <boost/program_options.hpp>
 #include <signal.h>
 #include <rados/librados.hpp>
+#include "workload.h"
+#include "op_history.h"
 #include "common.h"
 
 namespace po = boost::program_options;
 
-// simulates the sequencer service
-static std::atomic_ullong seq;
-
-/*
- * track in-flight ios. the main thread creating and dispatching ios maintains
- * a target qdepth, and when an io completes the outstanding_ios is
- * decremented and the condition variable is notified.
- */
-static std::atomic_ullong outstanding_ios;
-static std::condition_variable io_cond;
-static std::mutex io_lock;
-
-// ctrl-c to stop
-static volatile int stop = 0;
+static Workload *workload_ptr;
 static void sigint_handler(int sig) {
-  stop = 1;
+  workload_ptr->stop();
 }
 
-static OpHistory *op_history;
+class PayloadAppendWorkload : public Workload {
+ public:
+  PayloadAppendWorkload(librados::IoCtx *ioctx, size_t stripe_width,
+      size_t entry_size, int qdepth, OpHistory *op_history) :
+    Workload(op_history, qdepth),
+    ioctx_(ioctx),
+    stripe_width_(stripe_width),
+    entry_size_(entry_size)
+  {}
 
-static std::string get_oid(unsigned long long seq, size_t stripe_width)
-{
-  std::stringstream oid;
-  size_t stripe_offset = seq % stripe_width;
-  oid << "log." << stripe_offset;
-  return oid.str();
-}
+  void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns) {
+    // target object
+    std::stringstream oid;
+    size_t stripe_offset = seq % stripe_width_;
+    oid << "log." << stripe_offset;
+    
+    // data
+    char data[entry_size_];
+    ceph::bufferlist bl;
+    bl.append(data, entry_size_);
 
-/*
- * aio_write callback
- */
-struct aio_state {
-  librados::AioCompletion *rc;
-  uint64_t submitted_ns;
+    //  submit the io
+    *submitted_ns = getns();
+    int ret = ioctx_->aio_append(oid.str(), rc, bl, bl.length());
+    assert(ret == 0);
+  }
+
+ private:
+  librados::IoCtx *ioctx_;
+  size_t stripe_width_;
+  size_t entry_size_;
 };
-
-static void handle_io_cb(librados::completion_t cb, void *arg)
-{
-  aio_state *io = (aio_state*)arg;
-
-  // timing
-  uint64_t submitted_ns = io->submitted_ns;
-  uint64_t latency_ns = getns() - submitted_ns;
-
-  // clean-up
-  outstanding_ios--;
-  assert(io->rc->get_return_value() == 0);
-  io->rc->release();
-  io_cond.notify_one();
-  delete io;
-
-  // record
-  op_history->add_latency(submitted_ns, latency_ns);
-}
 
 int main(int argc, char **argv)
 {
@@ -96,47 +81,15 @@ int main(int argc, char **argv)
   ret = cluster.ioctx_create(pool.c_str(), ioctx);
   assert(ret == 0);
 
+  OpHistory *op_history = new OpHistory(2000000);
+
+  PayloadAppendWorkload workload(&ioctx, stripe_width,
+      entry_size, qdepth, op_history);
+
+  workload_ptr = &workload;
   signal(SIGINT, sigint_handler);
 
-  op_history = new OpHistory(2000000);
-
-  // fill with random data
-  char data[entry_size];
-
-  std::unique_lock<std::mutex> lock(io_lock);
-
-  for (;;) {
-    while (outstanding_ios < qdepth) {
-      // create context to track the io
-      aio_state *io = new aio_state;
-      io->rc = librados::Rados::aio_create_completion(io, NULL, handle_io_cb);
-      assert(io->rc);
-
-      // setup io
-      std::string oid = get_oid(seq, stripe_width);
-      ceph::bufferlist bl;
-      bl.append(data, entry_size);
-
-      //  submit the io
-      io->submitted_ns = getns();
-      ret = ioctx.aio_append(oid, io->rc, bl, bl.length());
-      assert(ret == 0);
-
-      outstanding_ios++;
-      seq++;
-
-#if 0
-      std::cout << "wrote seq " << seq << " into " << oid
-        << " at offset " << offset << " .. "
-        << offset+bl.length() << std::endl;
-#endif
-    }
-
-    io_cond.wait(lock, [&]{ return outstanding_ios < qdepth; });
-
-    if (stop)
-      break;
-  }
+  workload.run();
 
   op_history->dump(perf_file);
 
