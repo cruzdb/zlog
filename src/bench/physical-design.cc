@@ -76,7 +76,16 @@ int main(int argc, char **argv)
         qdepth, op_history);
 
   } else if (experiment == "map_n1") {
-    assert(0);
+
+    if (stripe_width <= 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
+    workload = new MapN1_Workload(&ioctx, stripe_width,
+        entry_size, qdepth, op_history);
+
   } else if (experiment == "bytestream_11") {
 
     if (stripe_width != 0) {

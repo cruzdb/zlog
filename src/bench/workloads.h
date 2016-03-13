@@ -1,6 +1,49 @@
 #ifndef ZLOG_SRC_BENCH_WORKLOADS_H
 #define ZLOG_SRC_BENCH_WORKLOADS_H
 
+class MapN1_Workload : public Workload {
+ public:
+  MapN1_Workload(librados::IoCtx *ioctx, size_t stripe_width,
+      size_t entry_size, int qdepth, OpHistory *op_history) :
+    Workload(op_history, qdepth),
+    ioctx_(ioctx),
+    stripe_width_(stripe_width),
+    entry_size_(entry_size)
+  {}
+
+  void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns) {
+    // target object
+    std::stringstream oid;
+    size_t stripe_offset = seq % stripe_width_;
+    oid << "log." << stripe_offset;
+
+    // target omap key
+    std::stringstream key;
+    key << seq;
+
+    // data
+    char data[entry_size_];
+    ceph::bufferlist bl;
+    bl.append(data, entry_size_);
+
+    // omap set op
+    librados::ObjectWriteOperation op;
+    std::map<std::string, ceph::bufferlist> kvs;
+    kvs[key.str()] = bl;
+    op.omap_set(kvs);
+
+    //  submit the io
+    *submitted_ns = getns();
+    int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+    assert(ret == 0);
+  }
+
+ private:
+  librados::IoCtx *ioctx_;
+  size_t stripe_width_;
+  size_t entry_size_;
+};
+
 class Map11_Workload : public Workload {
  public:
   Map11_Workload(librados::IoCtx *ioctx, size_t entry_size,
@@ -25,7 +68,6 @@ class Map11_Workload : public Workload {
     std::map<std::string, ceph::bufferlist> kvs;
     kvs["entry"] = bl;
     op.omap_set(kvs);
-
 
     //  submit the io
     *submitted_ns = getns();
