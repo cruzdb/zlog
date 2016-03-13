@@ -1,7 +1,6 @@
 #include <atomic>
 #include <condition_variable>
 #include <iostream>
-#include <fstream>
 #include <boost/program_options.hpp>
 #include <signal.h>
 #include <rados/librados.hpp>
@@ -21,22 +20,13 @@ static std::atomic_ullong outstanding_ios;
 static std::condition_variable io_cond;
 static std::mutex io_lock;
 
-/*
- * track operation latency. when an aio completes its latency is stored in the
- * op_history list which is dumped out after the program exits.
- */
-struct op {
-  uint64_t start_ns;
-  uint64_t latency_ns;
-};
-static std::vector<op> op_history;
-static std::mutex op_history_lock;
-
 // ctrl-c to stop
 static volatile int stop = 0;
 static void sigint_handler(int sig) {
   stop = 1;
 }
+
+static OpHistory *op_history;
 
 static std::string get_oid(unsigned long long seq, size_t stripe_width)
 {
@@ -75,8 +65,7 @@ static void handle_io_cb(librados::completion_t cb, void *arg)
   delete io;
 
   // record
-  std::lock_guard<std::mutex> l(op_history_lock);
-  op_history.emplace_back(op{submitted_ns, latency_ns});
+  op_history->add_latency(submitted_ns, latency_ns);
 }
 
 int main(int argc, char **argv)
@@ -114,7 +103,7 @@ int main(int argc, char **argv)
 
   signal(SIGINT, sigint_handler);
 
-  op_history.reserve(2000000);
+  op_history = new OpHistory(2000000);
 
   // fill with random data
   char data[entry_size];
@@ -155,24 +144,7 @@ int main(int argc, char **argv)
       break;
   }
 
-  if (perf_file != "") {
-    std::lock_guard<std::mutex> l(op_history_lock);
-
-    std::ofstream ofs;
-    if (perf_file != "-")
-      ofs.open(perf_file, std::ios::out|std::ios::trunc);
-
-    std::ostream& os = perf_file == "-" ? std::cout : ofs;
-
-    for (auto& e : op_history) {
-      os << e.start_ns << " " << e.latency_ns << std::endl;
-    }
-
-    os.flush();
-    if (ofs.is_open())
-      ofs.close();
-  }
+  op_history->dump(perf_file);
 
   return 0;
-
 }
