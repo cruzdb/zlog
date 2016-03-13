@@ -65,7 +65,18 @@ int main(int argc, char **argv)
   OpHistory *op_history = new OpHistory(2000000);
 
   if (experiment == "map_11") {
+
+    if (stripe_width != 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
+    workload = new Map11_Workload(&ioctx, entry_size,
+        qdepth, op_history);
+
   } else if (experiment == "map_n1") {
+    assert(0);
   } else if (experiment == "bytestream_11") {
 
     if (stripe_width != 0) {
