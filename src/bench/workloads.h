@@ -1,6 +1,8 @@
 #ifndef ZLOG_SRC_BENCH_WORKLOADS_H
 #define ZLOG_SRC_BENCH_WORKLOADS_H
 
+//#define BENCH_DEBUG
+
 class MapN1_Workload : public Workload {
  public:
   MapN1_Workload(librados::IoCtx *ioctx, size_t stripe_width,
@@ -68,6 +70,21 @@ class Map11_Workload : public Workload {
     std::map<std::string, ceph::bufferlist> kvs;
     kvs["entry"] = bl;
     op.omap_set(kvs);
+
+#ifdef BENCH_DEBUG
+    std::stringstream kvs_dump;
+
+    for (auto& entry : kvs) {
+      kvs_dump << "key=" << entry.first << " "
+               << "val=bl/" << entry.second.length() << " ";
+    }
+
+    std::cout << "workload=map11" << " "
+              << "seq=" << seq << " "
+              << "obj=" << oid.str() << " "
+              << "omap_set: " << kvs_dump.str()
+              << std::endl;
+#endif
 
     //  submit the io
     *submitted_ns = getns();
