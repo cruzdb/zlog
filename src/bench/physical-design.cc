@@ -25,6 +25,7 @@ int main(int argc, char **argv)
   size_t entry_size;
   size_t stripe_width;
   int qdepth;
+  std::string prefix;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -33,6 +34,7 @@ int main(int argc, char **argv)
     ("stripe_width", po::value<size_t>(&stripe_width)->default_value(0), "Stripe width")
     ("entry_size", po::value<size_t>(&entry_size)->required(), "Entry size")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
+    ("prefix", po::value<std::string>(&prefix)->default_value(""), "Rados prefix")
     ("perf_file", po::value<std::string>(&perf_file)->default_value(""), "Perf output")
   ;
 
@@ -73,7 +75,7 @@ int main(int argc, char **argv)
     }
 
     workload = new Map11_Workload(&ioctx, entry_size,
-        qdepth, op_history);
+        qdepth, op_history, prefix);
 
   } else if (experiment == "map_n1") {
 
@@ -84,7 +86,7 @@ int main(int argc, char **argv)
     }
 
     workload = new MapN1_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history);
+        entry_size, qdepth, op_history, prefix);
 
   } else if (experiment == "bytestream_11") {
 
@@ -95,7 +97,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStream11_Workload(&ioctx, entry_size,
-        qdepth, op_history);
+        qdepth, op_history, prefix);
 
   } else if (experiment == "bytestream_n1_write") {
 
@@ -106,7 +108,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history);
+        entry_size, qdepth, op_history, prefix);
 
   } else if (experiment == "bytestream_n1_append") {
 
@@ -117,7 +119,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStreamN1Append_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history);
+        entry_size, qdepth, op_history, prefix);
 
   } else {
     std::cerr << "invalid experiment name: " << experiment << std::endl;

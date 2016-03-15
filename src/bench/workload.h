@@ -8,12 +8,18 @@
  */
 class Workload {
  public:
-  Workload(OpHistory *op_history, int qdepth) :
-    outstanding_ios(0), op_history_(op_history),
-    qdepth_(qdepth), stop_(0)
-  {}
+  Workload(OpHistory *op_history, int qdepth, size_t entry_size,
+      std::string& prefix) :
+    seq(0), entry_size_(entry_size), outstanding_ios(0),
+    op_history_(op_history), qdepth_(qdepth), stop_(0),
+    prefix_(prefix)
+  {
+    if (prefix_ != "")
+      prefix_ = prefix_ + ".";
+  }
 
-  virtual void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns) = 0;
+  virtual void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
+      ceph::bufferlist& bl) = 0;
 
   void run() {
     std::unique_lock<std::mutex> lock(io_lock);
@@ -25,8 +31,13 @@ class Workload {
         io->rc = librados::Rados::aio_create_completion(io, NULL, handle_io_cb);
         assert(io->rc);
 
+        // TODO: select from pool
+        char data[entry_size_];
+        ceph::bufferlist bl;
+        bl.append(data, entry_size_);
+
         // create operation
-        gen_op(io->rc, &io->submitted_ns);
+        gen_op(io->rc, &io->submitted_ns, bl);
 
         outstanding_ios++;
         seq++;
@@ -45,7 +56,9 @@ class Workload {
   }
 
  protected:
+  size_t entry_size_;
   std::atomic_ullong seq;
+  std::string prefix_;
 
  private:
   struct aio_state {
