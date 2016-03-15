@@ -4,6 +4,9 @@
 #include <iostream>
 #include <mutex>
 #include <vector>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /*
  *
@@ -20,22 +23,34 @@ class OpHistory {
     history_.emplace_back(op{start, latency});
   }
 
-  void dump(std::ostream& os) {
+  void dump(int fd) {
     std::lock_guard<std::mutex> l(lock_);
     for (auto& e : history_) {
-      os << e.start_ns << " " << e.latency_ns << std::endl;
+      dprintf(fd, "%llu %llu\n",
+          (unsigned long long)e.start_ns,
+          (unsigned long long)e.latency_ns);
     }
-    os.flush();
+    fsync(fd);
   }
 
   void dump(std::string& output) {
     if (output == "")
       return;
-    std::ofstream ofs;
-    if (output != "-")
-      ofs.open(output, std::ios::out|std::ios::trunc);
-    std::ostream& os = output == "-" ? std::cout : ofs;
-    dump(os);
+
+    int fd;
+    bool close_fd = false;
+    if (output == "-")
+      fd = fileno(stdout);
+    else {
+      fd = open(output.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0440);
+      assert(fd != -1);
+      close_fd = true;
+    }
+
+    dump(fd);
+
+    if (close_fd)
+      close(fd);
   }
 
  private:
