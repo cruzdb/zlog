@@ -1,5 +1,7 @@
 #ifndef SRC_ZLOG_BENCH_WORKLOAD_H
 #define SRC_ZLOG_BENCH_WORKLOAD_H
+#include <random>
+#include <iterator>
 #include "op_history.h"
 #include "common.h"
 
@@ -16,6 +18,17 @@ class Workload {
   {
     if (prefix_ != "")
       prefix_ = prefix_ + ".";
+
+    // create random data to use for payloads
+    rand_buf_size_ = 1ULL<<23;
+    rand_buf_.reserve(rand_buf_size_);
+    std::ifstream ifs("/dev/urandom", std::ios::binary | std::ios::in);
+    std::copy_n(std::istreambuf_iterator<char>(ifs),
+        rand_buf_size_, std::back_inserter(rand_buf_));
+    rand_buf_raw_ = rand_buf_.c_str();
+
+    rand_dist = std::uniform_int_distribution<int>(0,
+        rand_buf_size_ - entry_size_ - 1);
   }
 
   virtual void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -31,10 +44,10 @@ class Workload {
         io->rc = librados::Rados::aio_create_completion(io, NULL, handle_io_cb);
         assert(io->rc);
 
-        // TODO: select from pool
-        char data[entry_size_];
+        // select random slice of random byte buffer
+        size_t buf_offset = rand_dist(generator);
         ceph::bufferlist bl;
-        bl.append(data, entry_size_);
+        bl.append(rand_buf_raw_ + buf_offset, entry_size_);
 
         // create operation
         gen_op(io->rc, &io->submitted_ns, bl);
@@ -92,6 +105,11 @@ class Workload {
   OpHistory *op_history_;
   int qdepth_;
   volatile int stop_;
+  std::string rand_buf_;
+  size_t rand_buf_size_;
+  const char *rand_buf_raw_;
+  std::default_random_engine generator;
+  std::uniform_int_distribution<int> rand_dist;
 };
 
 #endif
