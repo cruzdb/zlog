@@ -33,7 +33,15 @@ AS_IF([test "x${PROTOC}" == "x"],
 AC_CHECK_LIB([rados], [rados_version],, [AC_MSG_FAILURE([librados not found])])
 AC_CHECK_HEADER([rados/librados.hpp],, [AC_MSG_FAILURE([librados.hpp not found])])
 
+AC_ARG_WITH([cls-zlog],
+    [AS_HELP_STRING([--with-cls-zlog], [build with cls_zlog support])],
+    [],
+    [with_cls_zlog=yes])
+AM_CONDITIONAL(WITH_CLS_ZLOG, test "$with_cls_zlog" = "yes")
+
 AC_LANG([C++])
+
+AS_IF([test "$with_cls_zlog" = "yes"], [
 SAVED_LDFLAGS=$LDFLAGS
 LDFLAGS="$LDFLAGS -lcls_zlog_client"
 AC_LINK_IFELSE([
@@ -42,6 +50,7 @@ AC_LINK_IFELSE([
     [void (*p)(librados::ObjectWriteOperation&, uint64_t); p = zlog::cls_zlog_seal;])
   ], [], [AC_MSG_FAILURE([libcls_zlog_client not found])]) 
 LDFLAGS=$SAVED_LDFLAGS
+])
 
 AX_PROG_JAVAC
 AX_PROG_JAVAH

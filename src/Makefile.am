@@ -9,6 +9,9 @@ MOSTLYCLEANFILES =
 dist_noinst_DATA =
 include_HEADERS =
 
+include bench/Makefile.am
+
+if WITH_CLS_ZLOG
 LIBPROTO = libzlogproto.la
 LIBSEQ = libseqr.la
 LIBZLOG = libzlog.la
@@ -22,7 +25,6 @@ include libzlog/Makefile.am
 include zstate/Makefile.am
 include test/Makefile.am
 include java/Makefile.am
-include bench/Makefile.am
 
 bin_PROGRAMS += zlog-seqr
 zlog_seqr_SOURCES = seqr-server.cc
@@ -59,3 +61,4 @@ zlog_SOURCES = zlog-tool.cc
 zlog_CPPFLAGS = $(BOOST_CPPFLAGS) $(AM_CPPFLAGS)
 zlog_LDFLAGS = $(BOOST_THREAD_LDFLAGS) $(BOOST_SYSTEM_LDFLAGS) $(BOOST_PROGRAM_OPTIONS_LDFLAGS)
 zlog_LDADD = $(LIBSEQ) $(LIBZLOG) $(BOOST_THREAD_LIBS) $(BOOST_SYSTEM_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
+endif
