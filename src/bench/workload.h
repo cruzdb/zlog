@@ -61,6 +61,13 @@ class Workload {
       if (stop_)
         break;
     }
+
+    while (1) {
+      if (outstanding_ios == 0)
+        break;
+      std::cout << "draining ios: " << outstanding_ios << " remaining" << std::endl;
+      sleep(1);
+    }
   }
 
   void stop() {
