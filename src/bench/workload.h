@@ -29,6 +29,8 @@ class Workload {
 
     rand_dist = std::uniform_int_distribution<int>(0,
         rand_buf_size_ - entry_size_ - 1);
+
+    stats_thread_ = std::thread(&Workload::print_stats, this);
   }
 
   virtual void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -105,6 +107,23 @@ class Workload {
     // record
     if (io->workload->op_history_)
       io->workload->op_history_->add_latency(submitted_ns, latency_ns);
+
+    io->workload->ios_completed_++;
+  }
+
+  void print_stats() {
+    while (!stop_) {
+      uint64_t start_ns = getns();
+      ios_completed_ = 0;
+
+      sleep(5);
+
+      uint64_t dur_ns = getns() - start_ns;
+      double dur_sec = dur_ns / (double)(1000000000ULL);
+      double ios_done = ios_completed_;
+      double ios_rate = ios_done / dur_sec;
+      std::cout << "rate=" << ios_rate << " iops" << std::endl;
+    }
   }
 
   std::atomic_ullong outstanding_ios;
@@ -118,6 +137,9 @@ class Workload {
   const char *rand_buf_raw_;
   std::default_random_engine generator;
   std::uniform_int_distribution<int> rand_dist;
+
+  std::thread stats_thread_;
+  std::atomic_ullong ios_completed_;
 };
 
 #endif
