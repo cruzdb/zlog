@@ -96,7 +96,8 @@ class Workload {
     delete io;
 
     // record
-    io->workload->op_history_->add_latency(submitted_ns, latency_ns);
+    if (io->workload->op_history_)
+      io->workload->op_history_->add_latency(submitted_ns, latency_ns);
   }
 
   std::atomic_ullong outstanding_ios;

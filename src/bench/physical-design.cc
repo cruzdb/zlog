@@ -64,7 +64,9 @@ int main(int argc, char **argv)
   ret = cluster.ioctx_create(pool.c_str(), ioctx);
   assert(ret == 0);
 
-  OpHistory *op_history = new OpHistory(2000000);
+  OpHistory *op_history = NULL;
+  if (perf_file != "")
+    op_history = new OpHistory(1000, perf_file);
 
   if (experiment == "map_11") {
 
@@ -130,7 +132,8 @@ int main(int argc, char **argv)
 
   workload->run();
 
-  op_history->dump(perf_file);
+  if (op_history)
+    op_history->stop();
 
   return 0;
 }
