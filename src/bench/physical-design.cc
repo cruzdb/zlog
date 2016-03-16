@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 
   OpHistory *op_history = NULL;
   if (perf_file != "")
-    op_history = new OpHistory(1000, perf_file);
+    op_history = new OpHistory(2000000, perf_file);
 
   if (experiment == "map_11") {
 
