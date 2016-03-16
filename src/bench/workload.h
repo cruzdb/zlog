@@ -102,13 +102,14 @@ class Workload {
     assert(io->rc->get_return_value() == 0);
     io->rc->release();
     io->workload->io_cond.notify_one();
-    delete io;
 
     // record
     if (io->workload->op_history_)
       io->workload->op_history_->add_latency(submitted_ns, latency_ns);
 
     io->workload->ios_completed_++;
+
+    delete io;
   }
 
   void print_stats() {
