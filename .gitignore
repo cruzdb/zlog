@@ -35,3 +35,4 @@ src/zstate-test
 src/stream-stress
 src/append-check
 src/zlog
+src/physical-design

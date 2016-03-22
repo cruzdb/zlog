@@ -444,7 +444,7 @@ TEST(LibZlogStream, ReadNext) {
   ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_EQ(bl, bl_out);
+  ASSERT_TRUE(bl == bl_out);
 
   // we just read it, so it should be empty stream again
   ret = stream->ReadNext(bl, &pos);
@@ -467,7 +467,7 @@ TEST(LibZlogStream, ReadNext) {
   ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_EQ(bl, bl_out);
+  ASSERT_TRUE(bl == bl_out);
 
   // we just read it, so it should be empty stream again
   ret = stream->ReadNext(bl, &pos);
@@ -531,7 +531,7 @@ TEST(LibZlogStream, Reset) {
   ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_EQ(bl, bl_out);
+  ASSERT_TRUE(bl == bl_out);
 
   // we just read it, so it should be empty stream again
   ret = stream->ReadNext(bl, &pos);
@@ -547,7 +547,7 @@ TEST(LibZlogStream, Reset) {
   ret = stream->ReadNext(bl_out, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_EQ(bl, bl_out);
+  ASSERT_TRUE(bl == bl_out);
 
   delete stream;
 
