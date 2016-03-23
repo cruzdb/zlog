@@ -5,8 +5,6 @@
 
 // bytestream stripe group size 4mb
 #define MAX_OBJECT_SIZE (1ULL<<22)
-// omap stripe group size
-#define MAX_OMAP_SIZE 1024
 
 /*
  * MapN1:
@@ -15,7 +13,7 @@
  *
  * Mapping:
  *  - log[seq] => obj.[seq % stripe_width].omap[seq]
- *  - wraps to new stripe group after MAX_OMAP_SIZE entries
+ *  - wraps to new stripe group after MAX_OBJECT_SIZE
  */
 class MapN1_Workload : public Workload {
  public:
@@ -26,7 +24,7 @@ class MapN1_Workload : public Workload {
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
-    entries_per_stripe_group_ = MAX_OMAP_SIZE * stripe_width_;
+    entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
