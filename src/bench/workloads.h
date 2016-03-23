@@ -3,6 +3,11 @@
 
 //#define BENCH_DEBUG
 
+// bytestream stripe group size 4mb
+#define MAX_OBJECT_SIZE (1ULL<<22)
+// omap stripe group size
+#define MAX_OMAP_SIZE 1024
+
 /*
  * MapN1:
  *  - a log entry maps to one of N distinct objects (round-robin)
@@ -10,6 +15,7 @@
  *
  * Mapping:
  *  - log[seq] => obj.[seq % stripe_width].omap[seq]
+ *  - wraps to new stripe group after MAX_OMAP_SIZE entries
  */
 class MapN1_Workload : public Workload {
  public:
@@ -19,15 +25,18 @@ class MapN1_Workload : public Workload {
     Workload(op_history, qdepth, entry_size, prefix),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
-  {}
+  {
+    entries_per_stripe_group_ = MAX_OMAP_SIZE * stripe_width_;
+  }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
       ceph::bufferlist& bl) {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3.omap[127])
     std::stringstream oid;
+    size_t stripe_group = seq / entries_per_stripe_group_;
     size_t stripe_index = seq % stripe_width_;
-    oid << prefix_ << "log_mapN1." << stripe_index;
+    oid << prefix_ << "log_mapN1." << stripe_group << "." << stripe_index;
 
     // target omap key (key = seq)
     std::stringstream key;
@@ -63,6 +72,7 @@ class MapN1_Workload : public Workload {
  private:
   librados::IoCtx *ioctx_;
   size_t stripe_width_;
+  size_t entries_per_stripe_group_;
 };
 
 /*
@@ -169,6 +179,7 @@ class ByteStream11_Workload : public Workload {
  * Mapping:
  *  - select object: log[seq] => obj.[seq % stripe_width]
  *      - select offset: obj.write(seq / stripe_width * entry_size)
+ *  - wrap to new stripe group after MAX_OBJECT_SIZE limit is reached
  */
 class ByteStreamN1Write_Workload : public Workload {
  public:
@@ -178,18 +189,22 @@ class ByteStreamN1Write_Workload : public Workload {
     Workload(op_history, qdepth, entry_size, prefix),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
-  {}
+  {
+    entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+  }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
       ceph::bufferlist& bl) {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3)
     std::stringstream oid;
+    size_t stripe_group = seq / entries_per_stripe_group_;
     size_t stripe_index = seq % stripe_width_;
-    oid << prefix_ << "log_bytestreamN1write." << stripe_index;
+    oid << prefix_ << "log_bytestreamN1write." << stripe_group << "." << stripe_index;
 
     // compute offset within object
     uint64_t offset = seq / stripe_width_ * entry_size_;
+    offset %= MAX_OBJECT_SIZE;
 
 #ifdef BENCH_DEBUG
     std::cout << "workload=bytestreamN1write" << " "
@@ -209,6 +224,7 @@ class ByteStreamN1Write_Workload : public Workload {
  private:
   librados::IoCtx *ioctx_;
   size_t stripe_width_;
+  size_t entries_per_stripe_group_;
 };
 
 /*
@@ -228,15 +244,18 @@ class ByteStreamN1Append_Workload : public Workload {
     Workload(op_history, qdepth, entry_size, prefix),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
-  {}
+  {
+    entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+  }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
       ceph::bufferlist& bl) {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3)
     std::stringstream oid;
+    size_t stripe_group = seq / entries_per_stripe_group_;
     size_t stripe_index = seq % stripe_width_;
-    oid << prefix_ << "log_bytestreamN1append." << stripe_index;
+    oid << prefix_ << "log_bytestreamN1append." << stripe_group << "." << stripe_index;
 
 #ifdef BENCH_DEBUG
     std::cout << "workload=bytestreamN1append" << " "
@@ -256,6 +275,7 @@ class ByteStreamN1Append_Workload : public Workload {
  private:
   librados::IoCtx *ioctx_;
   size_t stripe_width_;
+  size_t entries_per_stripe_group_;
 };
 
 #endif
