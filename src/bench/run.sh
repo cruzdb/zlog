@@ -1,3 +1,7 @@
+#!/bin/bash
+set -e
+set -x
+
 HOST=$1
 DDEV=$2
 JDEV=$3
