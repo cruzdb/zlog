@@ -11,10 +11,10 @@
 class Workload {
  public:
   Workload(OpHistory *op_history, int qdepth, size_t entry_size,
-      std::string& prefix) :
+      std::string& prefix, int tp_sec) :
     seq(0), entry_size_(entry_size), outstanding_ios(0),
     op_history_(op_history), qdepth_(qdepth), stop_(0),
-    prefix_(prefix)
+    prefix_(prefix), tp_sec_(tp_sec)
   {
     if (prefix_ != "")
       prefix_ = prefix_ + ".";
@@ -103,8 +103,9 @@ class Workload {
     io->rc->release();
     io->workload->io_cond.notify_one();
 
-    // record
-    if (io->workload->op_history_)
+    // record the latency of this IO unless we are tracing throughput or
+    // tracing isn't enabled.
+    if (io->workload->tp_sec_ == 0 && io->workload->op_history_)
       io->workload->op_history_->add_latency(submitted_ns, latency_ns);
 
     io->workload->ios_completed_++;
@@ -113,17 +114,37 @@ class Workload {
   }
 
   void print_stats() {
+
+    sleep(2);
+
+    int period = tp_sec_;
+    bool track_iops = period > 0;
+    if (!track_iops)
+      period = 2;
+
+    uint64_t expr_start_ns = getns();
+
+    ios_completed_ = 0;
+    uint64_t start_ns = getns();
+
     while (!stop_) {
-      uint64_t start_ns = getns();
-      ios_completed_ = 0;
 
-      sleep(5);
+      // length of time to accumulate iops stats
+      sleep(period);
 
-      uint64_t dur_ns = getns() - start_ns;
-      double dur_sec = dur_ns / (double)(1000000000ULL);
-      double ios_done = ios_completed_;
-      double ios_rate = ios_done / dur_sec;
-      std::cout << "rate=" << ios_rate << " iops" << std::endl;
+      uint64_t period_ios_completed = ios_completed_.exchange(0);
+      uint64_t end_ns = getns();
+      uint64_t dur_ns = end_ns - start_ns;
+      start_ns = end_ns;
+
+      // completed ios in prev period
+      double iops = (double)(period_ios_completed * 1000000000ULL) / (double)dur_ns;
+
+      if (track_iops && op_history_)
+        op_history_->add_iops(end_ns, (int)iops);
+
+      uint64_t elapsed_sec = (end_ns - expr_start_ns) / 1000000000ULL;
+      std::cout << elapsed_sec << "s: " << "rate=" << (int)iops << " iops" << std::endl;
     }
   }
 
@@ -138,6 +159,7 @@ class Workload {
   const char *rand_buf_raw_;
   std::default_random_engine generator;
   std::uniform_int_distribution<int> rand_dist;
+  int tp_sec_;
 
   std::thread stats_thread_;
   std::atomic_ullong ios_completed_;

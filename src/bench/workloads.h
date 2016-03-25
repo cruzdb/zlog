@@ -19,8 +19,8 @@ class MapN1_Workload : public Workload {
  public:
   MapN1_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix) :
-    Workload(op_history, qdepth, entry_size, prefix),
+      std::string& prefix, int tp_sec) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
@@ -84,8 +84,9 @@ class MapN1_Workload : public Workload {
 class Map11_Workload : public Workload {
  public:
   Map11_Workload(librados::IoCtx *ioctx, size_t entry_size,
-      int qdepth, OpHistory *op_history, std::string& prefix) :
-    Workload(op_history, qdepth, entry_size, prefix),
+      int qdepth, OpHistory *op_history, std::string& prefix,
+      int tp_sec) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
     ioctx_(ioctx)
   {}
 
@@ -138,8 +139,9 @@ class Map11_Workload : public Workload {
 class ByteStream11_Workload : public Workload {
  public:
   ByteStream11_Workload(librados::IoCtx *ioctx, size_t entry_size,
-      int qdepth, OpHistory *op_history, std::string& prefix) :
-    Workload(op_history, qdepth, entry_size, prefix),
+      int qdepth, OpHistory *op_history, std::string& prefix,
+      int tp_sec) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
     ioctx_(ioctx)
   {}
 
@@ -183,8 +185,8 @@ class ByteStreamN1Write_Workload : public Workload {
  public:
   ByteStreamN1Write_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix) :
-    Workload(op_history, qdepth, entry_size, prefix),
+      std::string& prefix, int tp_sec) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
@@ -238,8 +240,8 @@ class ByteStreamN1Append_Workload : public Workload {
  public:
   ByteStreamN1Append_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix) :
-    Workload(op_history, qdepth, entry_size, prefix),
+      std::string& prefix, int tp_sec) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
