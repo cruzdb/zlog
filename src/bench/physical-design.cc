@@ -26,6 +26,7 @@ int main(int argc, char **argv)
   size_t stripe_width;
   int qdepth;
   std::string prefix;
+  int tp_sec;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -35,6 +36,7 @@ int main(int argc, char **argv)
     ("entry_size", po::value<size_t>(&entry_size)->required(), "Entry size")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "Queue depth")
     ("prefix", po::value<std::string>(&prefix)->default_value(""), "Rados prefix")
+    ("tp",        po::value<int>(&tp_sec)->default_value(0), "Throughput tracing")
     ("perf_file", po::value<std::string>(&perf_file)->default_value(""), "Perf output")
   ;
 
@@ -77,7 +79,7 @@ int main(int argc, char **argv)
     }
 
     workload = new Map11_Workload(&ioctx, entry_size,
-        qdepth, op_history, prefix);
+        qdepth, op_history, prefix, tp_sec);
 
   } else if (experiment == "map_n1") {
 
@@ -88,7 +90,7 @@ int main(int argc, char **argv)
     }
 
     workload = new MapN1_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix);
+        entry_size, qdepth, op_history, prefix, tp_sec);
 
   } else if (experiment == "bytestream_11") {
 
@@ -99,7 +101,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStream11_Workload(&ioctx, entry_size,
-        qdepth, op_history, prefix);
+        qdepth, op_history, prefix, tp_sec);
 
   } else if (experiment == "bytestream_n1_write") {
 
@@ -110,7 +112,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix);
+        entry_size, qdepth, op_history, prefix, tp_sec);
 
   } else if (experiment == "bytestream_n1_append") {
 
@@ -121,7 +123,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStreamN1Append_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix);
+        entry_size, qdepth, op_history, prefix, tp_sec);
 
   } else {
     std::cerr << "invalid experiment name: " << experiment << std::endl;

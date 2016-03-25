@@ -32,6 +32,13 @@ class OpHistory {
       flush_cond_.notify_one();
   }
 
+  void add_iops(uint64_t timestamp, unsigned iops) {
+    std::lock_guard<std::mutex> l(lock_);
+    history_.emplace_back(op{timestamp, iops});
+    if (history_.size() > flush_level_)
+      flush_cond_.notify_one();
+  }
+
   void stop() {
     lock_.lock();
     stop_ = true;
@@ -41,6 +48,10 @@ class OpHistory {
   }
 
  private:
+  /*
+   * This tracks IOPS too in which case start_ns is a timestamp, and
+   * latency_ns is the number of iops in the previous period.
+   */
   struct op {
     uint64_t start_ns;
     uint64_t latency_ns;
