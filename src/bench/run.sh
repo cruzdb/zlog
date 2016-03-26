@@ -77,4 +77,4 @@ bench/reset-ceph.sh $HOST /tmp/long_2hr_stream_11_128 $DDEV $JDEV $pool $PGNUM
 # let ssd settle
 sleep 600
 # run the experiment
-bench/run-physical-design.sh $pool bytestream_11 $stripe_width 128 $qdepth 7200
+bench/run-physical-design.sh $pool bytestream_11 0 128 $qdepth 7200
