@@ -14,6 +14,7 @@ perf_file="pool-${pool}_expr-${experiment}"
 perf_file="${perf_file}_sw-${stripe_width}"
 perf_file="${perf_file}_es-${entry_size}"
 perf_file="${perf_file}_qd-${qdepth}"
+perf_file="${perf_file}_rt-${waitsec}"
 perf_file="${perf_file}.log"
 
 args="--pool $pool"
