@@ -58,7 +58,7 @@ class Workload {
         seq++;
       }
 
-      io_cond.wait(lock, [&]{ return outstanding_ios < qdepth_; });
+      io_cond.wait(lock, [&]{ return outstanding_ios < qdepth_ || stop_; });
 
       if (stop_)
         break;
@@ -73,8 +73,11 @@ class Workload {
   }
 
   void stop() {
+    io_lock.lock();
     std::cout << "Stopping workload..." << std::endl;
     stop_ = 1;
+    io_lock.unlock();
+    io_cond.notify_one();
   }
 
  protected:
