@@ -3,8 +3,8 @@
 
 //#define BENCH_DEBUG
 
-// bytestream stripe group size 4mb
-#define MAX_OBJECT_SIZE (1ULL<<22)
+// bytestream stripe group size 16mb
+#define MAX_OBJECT_SIZE (1ULL<<24)
 
 /*
  * MapN1:
