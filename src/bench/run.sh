@@ -69,3 +69,12 @@ for exp in $experiments_n1; do
 
   done
 done
+
+# run a long stream/1:1 test
+
+# completely reset ceph (uninstall, install, configure, start)
+bench/reset-ceph.sh $HOST /tmp/long_2hr_stream_11_128 $DDEV $JDEV $pool $PGNUM
+# let ssd settle
+sleep 600
+# run the experiment
+bench/run-physical-design.sh $pool bytestream_11 $stripe_width 128 $qdepth 7200
