@@ -64,6 +64,8 @@ class Workload {
         break;
     }
 
+    lock.unlock();
+
     while (1) {
       if (outstanding_ios == 0)
         break;
@@ -101,7 +103,9 @@ class Workload {
     uint64_t latency_ns = getns() - submitted_ns;
 
     // clean-up
+    io->workload->io_lock.lock();
     io->workload->outstanding_ios--;
+    io->workload->io_lock.unlock();
     assert(io->rc->get_return_value() == 0);
     io->rc->release();
     io->workload->io_cond.notify_one();
