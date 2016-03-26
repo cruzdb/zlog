@@ -21,6 +21,7 @@ args="$args --experiment $experiment"
 args="$args --stripe_width $stripe_width"
 args="$args --entry_size $entry_size"
 args="$args --qdepth $qdepth"
+args="$args --tp 2"
 args="$args --perf_file $perf_file"
 args="$args --prefix pre1"
 
