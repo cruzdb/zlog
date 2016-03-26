@@ -108,8 +108,29 @@ osd_op_num_shards = 10
 EOF
 
 # install ceph
-ceph-deploy install --release hammer $HOST
-ceph-deploy pkg --install librados-dev $HOST
+retries=0
+until [ $retries -ge 9 ]; do
+  ceph-deploy install --release hammer $HOST && break
+  retries=$[$retries+1]
+  sleep 600
+done
+
+retries=0
+until [ $retries -ge 9 ]; do
+  ceph-deploy pkg --install librados-dev $HOST && break
+  retries=$[$retries+1]
+  sleep 600
+done
+
+if [ ! -e /usr/bin/ceph ]; then
+  echo "ceph not installed"
+  exit 1
+fi
+
+if [ ! -e /usr/include/rados/librados.hpp ]; then
+  echo "rados-dev not installed"
+  exit 1
+fi
 
 # setup and start
 ceph-deploy mon create-initial
