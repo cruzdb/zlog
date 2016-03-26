@@ -38,6 +38,9 @@ for exp in $experiments_11; do
     # completely reset ceph (uninstall, install, configure, start)
     bench/reset-ceph.sh $HOST /tmp/${ename} $DDEV $JDEV $pool $PGNUM
 
+    # let ssd settle
+    sleep 600
+
     # run the experiment
     bench/run-physical-design.sh $pool $exp 0 $entry_size $qdepth $waitsec
 
@@ -58,6 +61,11 @@ for exp in $experiments_n1; do
     # completely reset ceph (uninstall, install, configure, start)
     bench/reset-ceph.sh $HOST /tmp/${ename} $DDEV $JDEV $pool $PGNUM
 
+    # let ssd settle
+    sleep 600
+
+    # run the experiment
     bench/run-physical-design.sh $pool $exp $stripe_width $entry_size $qdepth $waitsec
+
   done
 done
