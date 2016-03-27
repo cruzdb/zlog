@@ -6,6 +6,7 @@ HOST=$1
 DDEV=$2
 JDEV=$3
 PGNUM=128
+VERSION=jewel
 
 pool=zlog
 
@@ -36,7 +37,7 @@ for exp in $experiments_11; do
     ename="${ename}.cluster.settings"
 
     # completely reset ceph (uninstall, install, configure, start)
-    bench/reset-ceph.sh $HOST /tmp/${ename} $DDEV $JDEV $pool $PGNUM
+    bench/reset-ceph.sh $HOST /tmp/${ename} $DDEV $JDEV $pool $PGNUM $VERSION
 
     # let ssd settle
     sleep 600
@@ -59,7 +60,7 @@ for exp in $experiments_n1; do
     ename="${ename}.cluster.settings"
 
     # completely reset ceph (uninstall, install, configure, start)
-    bench/reset-ceph.sh $HOST /tmp/${ename} $DDEV $JDEV $pool $PGNUM
+    bench/reset-ceph.sh $HOST /tmp/${ename} $DDEV $JDEV $pool $PGNUM $VERSION
 
     # let ssd settle
     sleep 600
@@ -73,7 +74,7 @@ done
 # run a long stream/1:1 test
 
 # completely reset ceph (uninstall, install, configure, start)
-bench/reset-ceph.sh $HOST /tmp/long_2hr_stream_11_128 $DDEV $JDEV $pool $PGNUM
+bench/reset-ceph.sh $HOST /tmp/long_2hr_stream_11_128 $DDEV $JDEV $pool $PGNUM $VERSION
 # let ssd settle
 sleep 600
 # run the experiment
