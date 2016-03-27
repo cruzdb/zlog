@@ -29,13 +29,12 @@ class Workload {
 
     rand_dist = std::uniform_int_distribution<int>(0,
         rand_buf_size_ - entry_size_ - 1);
-
-    stats_thread_ = std::thread(&Workload::print_stats, this);
   }
 
   virtual void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
       ceph::bufferlist& bl) = 0;
 
+ private:
   void run() {
     std::unique_lock<std::mutex> lock(io_lock);
     for (;;) {
@@ -74,12 +73,22 @@ class Workload {
     }
   }
 
+ public:
+  void start() {
+    runner_thread_ = std::thread(&Workload::run, this);
+    stats_thread_ = std::thread(&Workload::print_stats, this);
+  }
+
   void stop() {
     io_lock.lock();
     std::cout << "Stopping workload..." << std::endl;
     stop_ = 1;
     io_lock.unlock();
     io_cond.notify_one();
+    stats_thread_.join();
+    runner_thread_.join();
+    if (op_history_)
+      op_history_->stop();
   }
 
  protected:
@@ -121,9 +130,6 @@ class Workload {
   }
 
   void print_stats() {
-
-    sleep(2);
-
     int period = tp_sec_;
     bool track_iops = period > 0;
     if (!track_iops)
@@ -135,7 +141,6 @@ class Workload {
     uint64_t start_ns = getns();
 
     while (!stop_) {
-
       // length of time to accumulate iops stats
       sleep(period);
 
@@ -169,6 +174,7 @@ class Workload {
   int tp_sec_;
 
   std::thread stats_thread_;
+  std::thread runner_thread_;
   std::atomic_ullong ios_completed_;
 };
 
