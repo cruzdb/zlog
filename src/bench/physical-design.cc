@@ -2,7 +2,6 @@
 #include <condition_variable>
 #include <iostream>
 #include <boost/program_options.hpp>
-#include <signal.h>
 #include <rados/librados.hpp>
 #include "workload.h"
 #include "op_history.h"
@@ -10,11 +9,6 @@
 #include "workloads.h"
 
 namespace po = boost::program_options;
-
-static Workload *workload;
-static void sigint_handler(int sig) {
-  workload->stop();
-}
 
 int main(int argc, char **argv)
 {
@@ -27,6 +21,7 @@ int main(int argc, char **argv)
   int qdepth;
   std::string prefix;
   int tp_sec;
+  int runtime;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -38,6 +33,7 @@ int main(int argc, char **argv)
     ("prefix", po::value<std::string>(&prefix)->default_value(""), "Rados prefix")
     ("tp",        po::value<int>(&tp_sec)->default_value(0), "Throughput tracing")
     ("perf_file", po::value<std::string>(&perf_file)->default_value(""), "Perf output")
+    ("runtime", po::value<int>(&runtime)->default_value(30), "Runtime (sec)")
   ;
 
   po::variables_map vm;
@@ -69,6 +65,8 @@ int main(int argc, char **argv)
   OpHistory *op_history = NULL;
   if (perf_file != "")
     op_history = new OpHistory(2000000, perf_file);
+
+  Workload *workload;
 
   if (experiment == "map_11") {
 
@@ -130,12 +128,9 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  signal(SIGINT, sigint_handler);
-
-  workload->run();
-
-  if (op_history)
-    op_history->stop();
+  workload->start();
+  sleep(runtime);
+  workload->stop();
 
   return 0;
 }
