@@ -73,8 +73,14 @@ fi
 # setup and start
 ceph-deploy mon create-initial
 ceph-deploy disk zap $HOST:$DDEV
-ceph-deploy disk zap $HOST:$JDEV
-ceph-deploy osd create $HOST:$DDEV:$JDEV
+if [ "$JDEV" != "none" ]; then
+  ceph-deploy disk zap $HOST:$JDEV
+fi
+if [ "$JDEV" != "none" ]; then
+  ceph-deploy osd create $HOST:$DDEV:$JDEV
+else
+  ceph-deploy osd create $HOST:$DDEV
+fi
 
 # wait for ceph health ok
 while true; do
