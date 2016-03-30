@@ -24,15 +24,8 @@ args="$args --entry_size $entry_size"
 args="$args --qdepth $qdepth"
 args="$args --tp 2"
 args="$args --perf_file $perf_file"
+args="$args --runtime $waitsec"
 args="$args --prefix pre1"
 
 echo "Running: ./physical-design $args"
-./physical-design $args &
-pid=$!
-
-echo "Waiting: $waitsec seconds"
-sleep $waitsec
-echo "Kill: $pid"
-kill -INT $pid
-echo "Wait: on $pid"
-wait $pid
+./physical-design $args
