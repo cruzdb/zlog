@@ -7,7 +7,8 @@
 
 enum StorageInterface {
   VANILLA, // only use librados interface
-  CLS_NO_INDEX, // append through cls without indexing
+  CLS_NO_INDEX, // cls equivalent without any i/o overhead
+  CLS_CHECK_EPOCH, // cls with epoch guard
 };
 
 
