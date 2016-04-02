@@ -21,10 +21,10 @@ class MapN1_Workload : public Workload {
  public:
   MapN1_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix, int tp_sec, StorageInterface interface) :
+      std::string& prefix, int tp_sec, StorageInterface interface,
+      bool use_stripe_group) :
     Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
-    ioctx_(ioctx),
-    stripe_width_(stripe_width)
+    ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA);
@@ -35,9 +35,12 @@ class MapN1_Workload : public Workload {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3.omap[127])
     std::stringstream oid;
-    size_t stripe_group = seq / entries_per_stripe_group_;
     size_t stripe_index = seq % stripe_width_;
-    oid << prefix_ << "log_mapN1." << stripe_group << "." << stripe_index;
+    if (use_stripe_group_) {
+      size_t stripe_group = seq / entries_per_stripe_group_;
+      oid << prefix_ << "log_mapN1." << stripe_group << "." << stripe_index;
+    } else
+      oid << prefix_ << "log_mapN1." << stripe_index;
 
     // target omap key (key = seq)
     std::stringstream key;
@@ -74,6 +77,7 @@ class MapN1_Workload : public Workload {
   librados::IoCtx *ioctx_;
   size_t stripe_width_;
   size_t entries_per_stripe_group_;
+  bool use_stripe_group_;
 };
 
 /*
@@ -192,10 +196,10 @@ class ByteStreamN1Write_Workload : public Workload {
  public:
   ByteStreamN1Write_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix, int tp_sec, StorageInterface interface) :
+      std::string& prefix, int tp_sec, StorageInterface interface,
+      bool use_stripe_group) :
     Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
-    ioctx_(ioctx),
-    stripe_width_(stripe_width)
+    ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA);
@@ -206,13 +210,17 @@ class ByteStreamN1Write_Workload : public Workload {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3)
     std::stringstream oid;
-    size_t stripe_group = seq / entries_per_stripe_group_;
     size_t stripe_index = seq % stripe_width_;
-    oid << prefix_ << "log_bytestreamN1write." << stripe_group << "." << stripe_index;
+    if (use_stripe_group_) {
+      size_t stripe_group = seq / entries_per_stripe_group_;
+      oid << prefix_ << "log_bytestreamN1write." << stripe_group << "." << stripe_index;
+    } else
+      oid << prefix_ << "log_bytestreamN1write." << stripe_index;
 
     // compute offset within object
     uint64_t offset = seq / stripe_width_ * entry_size_;
-    offset %= MAX_OBJECT_SIZE;
+    if (use_stripe_group_)
+      offset %= MAX_OBJECT_SIZE;
 
 #ifdef BENCH_DEBUG
     std::cout << "workload=bytestreamN1write" << " "
@@ -233,6 +241,7 @@ class ByteStreamN1Write_Workload : public Workload {
   librados::IoCtx *ioctx_;
   size_t stripe_width_;
   size_t entries_per_stripe_group_;
+  bool use_stripe_group_;
 };
 
 /*
@@ -248,10 +257,10 @@ class ByteStreamN1Append_Workload : public Workload {
  public:
   ByteStreamN1Append_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix, int tp_sec, StorageInterface interface) :
+      std::string& prefix, int tp_sec, StorageInterface interface,
+      bool use_stripe_group) :
     Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
-    ioctx_(ioctx),
-    stripe_width_(stripe_width)
+    ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA || interface_ == CLS_NO_INDEX);
@@ -262,9 +271,12 @@ class ByteStreamN1Append_Workload : public Workload {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3)
     std::stringstream oid;
-    size_t stripe_group = seq / entries_per_stripe_group_;
     size_t stripe_index = seq % stripe_width_;
-    oid << prefix_ << "log_bytestreamN1append." << stripe_group << "." << stripe_index;
+    if (use_stripe_group_) {
+      size_t stripe_group = seq / entries_per_stripe_group_;
+      oid << prefix_ << "log_bytestreamN1append." << stripe_group << "." << stripe_index;
+    } else
+      oid << prefix_ << "log_bytestreamN1append." << stripe_index;
 
 #ifdef BENCH_DEBUG
     std::cout << "workload=bytestreamN1append" << " "
@@ -305,6 +317,7 @@ class ByteStreamN1Append_Workload : public Workload {
   librados::IoCtx *ioctx_;
   size_t stripe_width_;
   size_t entries_per_stripe_group_;
+  bool use_stripe_group_;
 };
 
 #endif

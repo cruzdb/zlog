@@ -26,6 +26,8 @@ int main(int argc, char **argv)
   std::string interface_name;
   StorageInterface interface;
 
+  bool use_stripe_groups;
+
   po::options_description desc("Allowed options");
   desc.add_options()
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
@@ -38,6 +40,7 @@ int main(int argc, char **argv)
     ("perf_file", po::value<std::string>(&perf_file)->default_value(""), "Perf output")
     ("runtime", po::value<int>(&runtime)->default_value(30), "Runtime (sec)")
     ("interface", po::value<std::string>(&interface_name)->default_value("vanilla"), "Storage interface")
+    ("use_stripe_group", po::value<bool>(&use_stripe_groups)->default_value(false), "Use stripe groups")
   ;
 
   po::variables_map vm;
@@ -97,6 +100,11 @@ int main(int argc, char **argv)
       return -1;
     }
 
+    if (use_stripe_groups) {
+      std::cerr << "cannot use stripe groups with 1:1 workloads" << std::endl;
+      return -1;
+    }
+
     workload = new Map11_Workload(&ioctx, entry_size,
         qdepth, op_history, prefix, tp_sec, interface);
 
@@ -118,7 +126,7 @@ int main(int argc, char **argv)
     }
 
     workload = new MapN1_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix, tp_sec, interface);
+        entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups);
 
   /*
    *
@@ -134,6 +142,11 @@ int main(int argc, char **argv)
 
     if (interface != VANILLA) {
       std::cerr << "experiment stream/11: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
+
+    if (use_stripe_groups) {
+      std::cerr << "cannot use stripe groups with 1:1 workloads" << std::endl;
       return -1;
     }
 
@@ -158,7 +171,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix, tp_sec, interface);
+        entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups);
 
   /*
    * =================== stream/n1/append ======================
@@ -177,7 +190,7 @@ int main(int argc, char **argv)
     }
 
     workload = new ByteStreamN1Append_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix, tp_sec, interface);
+        entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups);
 
   } else {
     std::cerr << "invalid experiment name: " << experiment << std::endl;
