@@ -23,6 +23,9 @@ int main(int argc, char **argv)
   int tp_sec;
   int runtime;
 
+  std::string interface_name;
+  StorageInterface interface;
+
   po::options_description desc("Allowed options");
   desc.add_options()
     ("pool", po::value<std::string>(&pool)->required(), "Pool name")
@@ -34,6 +37,7 @@ int main(int argc, char **argv)
     ("tp",        po::value<int>(&tp_sec)->default_value(0), "Throughput tracing")
     ("perf_file", po::value<std::string>(&perf_file)->default_value(""), "Perf output")
     ("runtime", po::value<int>(&runtime)->default_value(30), "Runtime (sec)")
+    ("interface", po::value<std::string>(&interface_name)->default_value("vanilla"), "Storage interface")
   ;
 
   po::variables_map vm;
@@ -47,6 +51,15 @@ int main(int argc, char **argv)
 
   if (entry_size <= 0 || entry_size > (1ULL<<25)) {
     std::cerr << "invalid entry_size " << entry_size << std::endl;
+    return -1;
+  }
+
+  if (interface_name == "vanilla") {
+    interface = VANILLA;
+  } else if (interface_name == "cls_no_index") {
+    interface = CLS_NO_INDEX;
+  } else {
+    std::cerr << "invalid storage interface " << interface_name << std::endl;
     return -1;
   }
 
@@ -68,6 +81,9 @@ int main(int argc, char **argv)
 
   Workload *workload;
 
+  /*
+   * =================== map/11 ======================
+   */
   if (experiment == "map_11") {
 
     if (stripe_width != 0) {
@@ -76,9 +92,18 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    workload = new Map11_Workload(&ioctx, entry_size,
-        qdepth, op_history, prefix, tp_sec);
+    if (interface != VANILLA) {
+      std::cerr << "experiment map/11: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
 
+    workload = new Map11_Workload(&ioctx, entry_size,
+        qdepth, op_history, prefix, tp_sec, interface);
+
+  /*
+   *
+   * =================== map/n1 ======================
+   */
   } else if (experiment == "map_n1") {
 
     if (stripe_width <= 0) {
@@ -87,9 +112,18 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    workload = new MapN1_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix, tp_sec);
+    if (interface != VANILLA) {
+      std::cerr << "experiment map/n1: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
 
+    workload = new MapN1_Workload(&ioctx, stripe_width,
+        entry_size, qdepth, op_history, prefix, tp_sec, interface);
+
+  /*
+   *
+   * =================== stream/11 ======================
+   */
   } else if (experiment == "bytestream_11") {
 
     if (stripe_width != 0) {
@@ -98,9 +132,18 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    workload = new ByteStream11_Workload(&ioctx, entry_size,
-        qdepth, op_history, prefix, tp_sec);
+    if (interface != VANILLA) {
+      std::cerr << "experiment stream/11: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
 
+    workload = new ByteStream11_Workload(&ioctx, entry_size,
+        qdepth, op_history, prefix, tp_sec, interface);
+
+  /*
+   *
+   * =================== stream/n1/write ======================
+   */
   } else if (experiment == "bytestream_n1_write") {
 
     if (stripe_width <= 0) {
@@ -109,9 +152,17 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix, tp_sec);
+    if (interface != VANILLA) {
+      std::cerr << "experiment stream/n1/write: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
 
+    workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
+        entry_size, qdepth, op_history, prefix, tp_sec, interface);
+
+  /*
+   * =================== stream/n1/append ======================
+   */
   } else if (experiment == "bytestream_n1_append") {
 
     if (stripe_width <= 0) {
@@ -120,8 +171,13 @@ int main(int argc, char **argv)
       return -1;
     }
 
+    if (interface != VANILLA && interface != CLS_NO_INDEX) {
+      std::cerr << "experiment stream/n1/append: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
+
     workload = new ByteStreamN1Append_Workload(&ioctx, stripe_width,
-        entry_size, qdepth, op_history, prefix, tp_sec);
+        entry_size, qdepth, op_history, prefix, tp_sec, interface);
 
   } else {
     std::cerr << "invalid experiment name: " << experiment << std::endl;

@@ -5,16 +5,22 @@
 #include "op_history.h"
 #include "common.h"
 
+enum StorageInterface {
+  VANILLA, // only use librados interface
+  CLS_NO_INDEX, // append through cls without indexing
+};
+
+
 /*
  * Workload Generator
  */
 class Workload {
  public:
   Workload(OpHistory *op_history, int qdepth, size_t entry_size,
-      std::string& prefix, int tp_sec) :
+      std::string& prefix, int tp_sec, StorageInterface interface) :
     seq(0), entry_size_(entry_size), outstanding_ios(0),
     op_history_(op_history), qdepth_(qdepth), stop_(0),
-    prefix_(prefix), tp_sec_(tp_sec)
+    prefix_(prefix), tp_sec_(tp_sec), interface_(interface)
   {
     if (prefix_ != "")
       prefix_ = prefix_ + ".";
@@ -95,6 +101,7 @@ class Workload {
   size_t entry_size_;
   std::atomic_ullong seq;
   std::string prefix_;
+  StorageInterface interface_;
 
  private:
   struct aio_state {
