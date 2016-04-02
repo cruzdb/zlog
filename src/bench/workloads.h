@@ -1,5 +1,7 @@
 #ifndef ZLOG_SRC_BENCH_WORKLOADS_H
 #define ZLOG_SRC_BENCH_WORKLOADS_H
+#include "workload.h"
+#include <rados/cls_zlog_bench_client.h>
 
 //#define BENCH_DEBUG
 
@@ -19,12 +21,13 @@ class MapN1_Workload : public Workload {
  public:
   MapN1_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix, int tp_sec) :
-    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
+      std::string& prefix, int tp_sec, StorageInterface interface) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+    assert(interface_ == VANILLA);
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -85,10 +88,12 @@ class Map11_Workload : public Workload {
  public:
   Map11_Workload(librados::IoCtx *ioctx, size_t entry_size,
       int qdepth, OpHistory *op_history, std::string& prefix,
-      int tp_sec) :
-    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
+      int tp_sec, StorageInterface interface) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
     ioctx_(ioctx)
-  {}
+  {
+    assert(interface_ == VANILLA);
+  }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
       ceph::bufferlist& bl) {
@@ -140,10 +145,12 @@ class ByteStream11_Workload : public Workload {
  public:
   ByteStream11_Workload(librados::IoCtx *ioctx, size_t entry_size,
       int qdepth, OpHistory *op_history, std::string& prefix,
-      int tp_sec) :
-    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
+      int tp_sec, StorageInterface interface) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
     ioctx_(ioctx)
-  {}
+  {
+    assert(interface_ == VANILLA);
+  }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
       ceph::bufferlist& bl) {
@@ -185,12 +192,13 @@ class ByteStreamN1Write_Workload : public Workload {
  public:
   ByteStreamN1Write_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix, int tp_sec) :
-    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
+      std::string& prefix, int tp_sec, StorageInterface interface) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+    assert(interface_ == VANILLA);
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -240,12 +248,13 @@ class ByteStreamN1Append_Workload : public Workload {
  public:
   ByteStreamN1Append_Workload(librados::IoCtx *ioctx, size_t stripe_width,
       size_t entry_size, int qdepth, OpHistory *op_history,
-      std::string& prefix, int tp_sec) :
-    Workload(op_history, qdepth, entry_size, prefix, tp_sec),
+      std::string& prefix, int tp_sec, StorageInterface interface) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface),
     ioctx_(ioctx),
     stripe_width_(stripe_width)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+    assert(interface_ == VANILLA || interface_ == CLS_NO_INDEX);
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -268,8 +277,28 @@ class ByteStreamN1Append_Workload : public Workload {
     
     //  submit the io
     *submitted_ns = getns();
-    int ret = ioctx_->aio_append(oid.str(), rc, bl, bl.length());
-    assert(ret == 0);
+
+    switch (interface_) {
+    case CLS_NO_INDEX:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case VANILLA:
+      {
+        int ret = ioctx_->aio_append(oid.str(), rc, bl, bl.length());
+        assert(ret == 0);
+      }
+      break;
+
+    default:
+      assert(0);
+      exit(-1);
+    }
   }
 
  private:
