@@ -27,7 +27,23 @@ class MapN1_Workload : public Workload {
     ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
-    assert(interface_ == VANILLA);
+    assert(interface_ == VANILLA ||
+        interface_ == CLS_NO_INDEX ||
+        interface_ == CLS_FULL);
+
+    // init objects
+    if (interface_ == CLS_FULL) {
+      assert(!use_stripe_group_);
+      std::cout << "initializing objects..." << std::endl;
+      for (int i = 0; i < stripe_width_; i++) {
+        std::stringstream oid;
+        oid << prefix_ << "log_mapN1." << i;
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append_init(op);
+        int ret = ioctx_->operate(oid.str(), &op);
+        assert(ret == 0);
+      }
+    }
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -46,31 +62,64 @@ class MapN1_Workload : public Workload {
     std::stringstream key;
     key << seq;
 
-    // omap set op
-    librados::ObjectWriteOperation op;
-    std::map<std::string, ceph::bufferlist> kvs;
-    kvs[key.str()] = bl;
-    op.omap_set(kvs);
+    //  submit the io
+    *submitted_ns = getns();
+
+    switch (interface_) {
+    case CLS_NO_INDEX:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_map_write_null(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_FULL:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_map_write_full(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case VANILLA:
+      {
+        // omap set op
+        librados::ObjectWriteOperation op;
+        std::map<std::string, ceph::bufferlist> kvs;
+        kvs[key.str()] = bl;
+        op.omap_set(kvs);
+
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    default:
+      assert(0);
+      exit(-1);
+    }
 
 #ifdef BENCH_DEBUG
+#if 0
     std::stringstream kvs_dump;
 
     for (auto& entry : kvs) {
       kvs_dump << "key=" << entry.first << " "
                << "val=bl/" << entry.second.length() << " ";
     }
-
+#endif
     std::cout << "workload=mapN1" << " "
               << "seq=" << seq << " "
               << "obj=" << oid.str() << " "
+#if 0
               << "omap_set: " << kvs_dump.str()
+#endif
               << std::endl;
 #endif
 
-    //  submit the io
-    *submitted_ns = getns();
-    int ret = ioctx_->aio_operate(oid.str(), rc, &op);
-    assert(ret == 0);
   }
 
  private:
