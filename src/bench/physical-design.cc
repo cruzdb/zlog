@@ -63,6 +63,8 @@ int main(int argc, char **argv)
     interface = CLS_NO_INDEX;
   } else if (interface_name == "cls_check_epoch") {
     interface = CLS_CHECK_EPOCH;
+  } else if (interface_name == "cls_full") {
+    interface = CLS_FULL;
   } else {
     std::cerr << "invalid storage interface " << interface_name << std::endl;
     return -1;
@@ -188,13 +190,14 @@ int main(int argc, char **argv)
 
     if (interface != VANILLA &&
         interface != CLS_NO_INDEX &&
-        interface != CLS_CHECK_EPOCH) {
+        interface != CLS_CHECK_EPOCH &&
+        interface != CLS_FULL) {
       std::cerr << "experiment stream/n1/append: only supports vanilla i/o interface" << std::endl;
       return -1;
     }
 
     if (use_stripe_groups &&
-        (interface == CLS_CHECK_EPOCH)) {
+        (interface == CLS_CHECK_EPOCH || interface == CLS_FULL)) {
       std::cerr << "cannot use stripe groups and objects that need init" << std::endl;
       return -1;
     }
