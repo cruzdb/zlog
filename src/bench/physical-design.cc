@@ -179,8 +179,16 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    if (interface != VANILLA) {
-      std::cerr << "experiment stream/n1/write: only supports vanilla i/o interface" << std::endl;
+    if (interface != VANILLA &&
+        interface != CLS_NO_INDEX &&
+        interface != CLS_FULL) {
+      std::cerr << "experiment bytestream/n1/write: doesn't support interface "
+        << interface_name << std::endl;
+      return -1;
+    }
+
+    if (use_stripe_groups && interface == CLS_FULL) {
+      std::cerr << "cannot use stripe groups and objects that need init" << std::endl;
       return -1;
     }
 

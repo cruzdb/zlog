@@ -251,7 +251,23 @@ class ByteStreamN1Write_Workload : public Workload {
     ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
   {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
-    assert(interface_ == VANILLA);
+    assert(interface_ == VANILLA ||
+        interface_ == CLS_NO_INDEX ||
+        interface_ == CLS_FULL);
+
+    // init objects
+    if (interface_ == CLS_FULL) {
+      assert(!use_stripe_group_);
+      std::cout << "initializing objects..." << std::endl;
+      for (int i = 0; i < stripe_width_; i++) {
+        std::stringstream oid;
+        oid << prefix_ << "log_bytestreamN1write." << i;
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append_init(op);
+        int ret = ioctx_->operate(oid.str(), &op);
+        assert(ret == 0);
+      }
+    }
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
@@ -282,8 +298,37 @@ class ByteStreamN1Write_Workload : public Workload {
     
     //  submit the io
     *submitted_ns = getns();
-    int ret = ioctx_->aio_write(oid.str(), rc, bl, bl.length(), offset);
-    assert(ret == 0);
+
+    switch (interface_) {
+    case CLS_NO_INDEX:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_stream_write_null(op, 123, offset, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_FULL:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_stream_write_full(op, 123, offset, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case VANILLA:
+      {
+        int ret = ioctx_->aio_write(oid.str(), rc, bl, bl.length(), offset);
+        assert(ret == 0);
+      }
+      break;
+
+    default:
+      assert(0);
+      exit(-1);
+    }
   }
 
  private:
