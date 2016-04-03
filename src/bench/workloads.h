@@ -265,10 +265,11 @@ class ByteStreamN1Append_Workload : public Workload {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA ||
         interface_ == CLS_NO_INDEX ||
-        interface_ == CLS_CHECK_EPOCH);
+        interface_ == CLS_CHECK_EPOCH ||
+        interface_ == CLS_FULL);
 
     // init objects
-    if (interface_ == CLS_CHECK_EPOCH) {
+    if (interface_ == CLS_CHECK_EPOCH || interface_ == CLS_FULL) {
       assert(!use_stripe_group_);
       std::cout << "initializing objects..." << std::endl;
       for (int i = 0; i < stripe_width_; i++) {
@@ -320,6 +321,15 @@ class ByteStreamN1Append_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_append_check_epoch(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_FULL:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append_omap_index(op, 123, seq, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }

@@ -9,8 +9,8 @@ enum StorageInterface {
   VANILLA, // only use librados interface
   CLS_NO_INDEX, // cls equivalent without any i/o overhead
   CLS_CHECK_EPOCH, // cls with epoch guard
+  CLS_FULL, // cls with full overhead
 };
-
 
 /*
  * Workload Generator
