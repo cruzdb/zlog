@@ -70,6 +70,8 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  std::cout << "using storage interface: " << interface_name << std::endl;
+
   // connect to rados
   librados::Rados cluster;
   cluster.init(NULL);
