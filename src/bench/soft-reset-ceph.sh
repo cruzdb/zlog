@@ -2,11 +2,13 @@
 set -x
 set -e
 
-cdir=$1
-pool=$2
-pgnum=$3
-ddev=$4
+ddev=$1
+jdev=$2
+pool=$3
+pgnum=$4
 version=$5
+
+cdir=`mktemp -d`
 host=`hostname`
 shorthost=`hostname --short`
 
@@ -19,9 +21,11 @@ sudo stop ceph-mon id=$host || true
 sudo stop ceph-mon id=$shorthost || true
 sudo skill -9 ceph-osd || true
 sudo skill -9 ceph-mon || true
+ps aux | grep ceph
 sleep 10
 
 sudo find /var/lib/ceph -mindepth 1 -maxdepth 2 -type d -exec umount {} \; || true
+mount
 
 sudo rm -rf /etc/ceph
 sudo rm -rf /var/log/ceph
@@ -46,8 +50,6 @@ sudo mkdir /var/lib/ceph/bootstrap-mds/
 sudo mkdir /var/lib/ceph/bootstrap-rgw
 
 # setup cluster control dir
-rm -rf $cdir
-mkdir $cdir
 pushd $cdir
 
 ceph-deploy new $host
@@ -66,8 +68,17 @@ else
 fi
 
 ceph-deploy mon create-initial
+
 ceph-deploy disk zap $host:$ddev
-ceph-deploy osd create $host:$ddev
+if [ "$jdev" != "none" ]; then
+  ceph-deploy disk zap $host:$jdev
+fi
+
+if [ "$jdev" != "none" ]; then
+  ceph-deploy osd create $host:$ddev:$jdev
+else
+  ceph-deploy osd create $host:$ddev
+fi
 
 # wait for ceph health ok
 while true; do
