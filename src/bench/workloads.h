@@ -29,6 +29,7 @@ class MapN1_Workload : public Workload {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA ||
         interface_ == CLS_NO_INDEX ||
+        interface_ == CLS_NO_INDEX_WRONLY ||
         interface_ == CLS_FULL);
 
     // init objects
@@ -70,6 +71,15 @@ class MapN1_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_map_write_null(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_NO_INDEX_WRONLY:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_map_write_null_wronly(op, 123, seq, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }
@@ -253,6 +263,7 @@ class ByteStreamN1Write_Workload : public Workload {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA ||
         interface_ == CLS_NO_INDEX ||
+        interface_ == CLS_NO_INDEX_WRONLY ||
         interface_ == CLS_FULL);
 
     // init objects
@@ -309,6 +320,15 @@ class ByteStreamN1Write_Workload : public Workload {
       }
       break;
 
+    case CLS_NO_INDEX_WRONLY:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_stream_write_null_wronly(op, 123, offset, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
     case CLS_FULL:
       {
         librados::ObjectWriteOperation op;
@@ -359,6 +379,7 @@ class ByteStreamN1Append_Workload : public Workload {
     entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
     assert(interface_ == VANILLA ||
         interface_ == CLS_NO_INDEX ||
+        interface_ == CLS_NO_INDEX_WRONLY ||
         interface_ == CLS_CHECK_EPOCH ||
         interface_ == CLS_FULL);
 
@@ -406,6 +427,15 @@ class ByteStreamN1Append_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_append(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_NO_INDEX_WRONLY:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append_wronly(op, 123, seq, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }
