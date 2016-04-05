@@ -10,6 +10,7 @@ enum StorageInterface {
   CLS_NO_INDEX, // cls equivalent without any i/o overhead
   CLS_CHECK_EPOCH, // cls with epoch guard
   CLS_FULL, // cls with full overhead
+  CLS_NO_INDEX_WRONLY, // cls equiv with wronly flag
 };
 
 /*

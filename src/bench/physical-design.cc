@@ -65,6 +65,8 @@ int main(int argc, char **argv)
     interface = CLS_CHECK_EPOCH;
   } else if (interface_name == "cls_full") {
     interface = CLS_FULL;
+  } else if (interface_name == "cls_no_index_wronly") {
+    interface = CLS_NO_INDEX_WRONLY;
   } else {
     std::cerr << "invalid storage interface " << interface_name << std::endl;
     return -1;
@@ -128,6 +130,7 @@ int main(int argc, char **argv)
 
     if (interface != VANILLA &&
         interface != CLS_NO_INDEX &&
+        interface != CLS_NO_INDEX_WRONLY &&
         interface != CLS_FULL) {
       std::cerr << "experiment map/n1: doesn't support interface "
         << interface_name << std::endl;
@@ -181,6 +184,7 @@ int main(int argc, char **argv)
 
     if (interface != VANILLA &&
         interface != CLS_NO_INDEX &&
+        interface != CLS_NO_INDEX_WRONLY &&
         interface != CLS_FULL) {
       std::cerr << "experiment bytestream/n1/write: doesn't support interface "
         << interface_name << std::endl;
@@ -208,6 +212,7 @@ int main(int argc, char **argv)
 
     if (interface != VANILLA &&
         interface != CLS_NO_INDEX &&
+        interface != CLS_NO_INDEX_WRONLY &&
         interface != CLS_CHECK_EPOCH &&
         interface != CLS_FULL) {
       std::cerr << "experiment stream/n1/append: doesn't support interface "
