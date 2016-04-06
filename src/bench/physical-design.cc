@@ -67,6 +67,8 @@ int main(int argc, char **argv)
     interface = CLS_CHECK_EPOCH_HDR;
   } else if (interface_name == "cls_full") {
     interface = CLS_FULL;
+  } else if (interface_name == "cls_full_hdr_idx") {
+    interface = CLS_FULL_HDR_IDX;
   } else if (interface_name == "cls_no_index_wronly") {
     interface = CLS_NO_INDEX_WRONLY;
   } else {
@@ -187,13 +189,21 @@ int main(int argc, char **argv)
     if (interface != VANILLA &&
         interface != CLS_NO_INDEX &&
         interface != CLS_NO_INDEX_WRONLY &&
-        interface != CLS_FULL) {
+        interface != CLS_FULL &&
+        interface != CLS_FULL_HDR_IDX) {
       std::cerr << "experiment bytestream/n1/write: doesn't support interface "
         << interface_name << std::endl;
       return -1;
     }
 
-    if (use_stripe_groups && interface == CLS_FULL) {
+    /*
+     * NOTE: cls full hdr idx mode doesn't have an epoch guard. we still stick
+     * treat it as needing initialization because depending on the outcome of
+     * experiments we may go back and add in the epoch guard.
+     */
+    if (use_stripe_groups &&
+        (interface == CLS_FULL ||
+         interface == CLS_FULL_HDR_IDX)) {
       std::cerr << "cannot use stripe groups and objects that need init" << std::endl;
       return -1;
     }
@@ -217,7 +227,8 @@ int main(int argc, char **argv)
         interface != CLS_NO_INDEX_WRONLY &&
         interface != CLS_CHECK_EPOCH &&
         interface != CLS_CHECK_EPOCH_HDR &&
-        interface != CLS_FULL) {
+        interface != CLS_FULL &&
+        interface != CLS_FULL_HDR_IDX) {
       std::cerr << "experiment stream/n1/append: doesn't support interface "
         << interface_name << std::endl;
       return -1;
@@ -226,7 +237,8 @@ int main(int argc, char **argv)
     if (use_stripe_groups &&
         (interface == CLS_CHECK_EPOCH ||
          interface == CLS_CHECK_EPOCH_HDR ||
-         interface == CLS_FULL)) {
+         interface == CLS_FULL ||
+         interface == CLS_FULL_HDR_IDX)) {
       std::cerr << "cannot use stripe groups and objects that need init" << std::endl;
       return -1;
     }

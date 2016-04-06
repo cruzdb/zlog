@@ -264,7 +264,15 @@ class ByteStreamN1Write_Workload : public Workload {
     assert(interface_ == VANILLA ||
         interface_ == CLS_NO_INDEX ||
         interface_ == CLS_NO_INDEX_WRONLY ||
-        interface_ == CLS_FULL);
+        interface_ == CLS_FULL ||
+        interface_ == CLS_FULL_HDR_IDX);
+
+    /*
+     * NOTE: if we add epoch guard to full hdr index, then we need to do
+     * initialization next.
+     */
+    if (interface_ == CLS_FULL_HDR_IDX)
+      assert(!use_stripe_group_);
 
     // init objects
     if (interface_ == CLS_FULL) {
@@ -338,6 +346,15 @@ class ByteStreamN1Write_Workload : public Workload {
       }
       break;
 
+    case CLS_FULL_HDR_IDX:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_stream_write_null_sim_hdr_idx(op, 123, offset, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
     case VANILLA:
       {
         int ret = ioctx_->aio_write(oid.str(), rc, bl, bl.length(), offset);
@@ -382,7 +399,15 @@ class ByteStreamN1Append_Workload : public Workload {
         interface_ == CLS_NO_INDEX_WRONLY ||
         interface_ == CLS_CHECK_EPOCH ||
         interface_ == CLS_CHECK_EPOCH_HDR ||
-        interface_ == CLS_FULL);
+        interface_ == CLS_FULL ||
+        interface_ == CLS_FULL_HDR_IDX);
+
+    /*
+     * NOTE: if we add epoch guard to full hdr index, then we need to do
+     * initialization next.
+     */
+    if (interface_ == CLS_FULL_HDR_IDX)
+      assert(!use_stripe_group_);
 
     // init objects
     if (interface_ == CLS_CHECK_EPOCH ||
@@ -469,6 +494,15 @@ class ByteStreamN1Append_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_append_omap_index(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_FULL_HDR_IDX:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append_sim_hdr_idx(op, 123, seq, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }
