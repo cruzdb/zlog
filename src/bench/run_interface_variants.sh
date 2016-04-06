@@ -19,22 +19,25 @@ for interface in $interfaces; do
   sleep 300
   bench/run-physical-design.sh $pool $exp $stripe_width $entry_size \
     $qdepth $waitsec $interface
+  #${exp}.${interface}
 done
 
 exp="bytestream_n1_write"
-interfaces="vanilla cls_no_index cls_no_index_wronly cls_full"
+interfaces="vanilla cls_no_index cls_no_index_wronly cls_full cls_full_hdr_idx cls_full_inline_idx"
 for interface in $interfaces; do
   bench/soft-reset-ceph.sh $ddev $jdev $pool $pgnum $version
   sleep 300
   bench/run-physical-design.sh $pool $exp $stripe_width $entry_size \
     $qdepth $waitsec $interface
+  #${exp}.${interface}
 done
 
 exp="bytestream_n1_append"
-interfaces="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full"
+interfaces="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full cls_full_hdr_idx"
 for interface in $interfaces; do
   bench/soft-reset-ceph.sh $ddev $jdev $pool $pgnum $version
   sleep 300
   bench/run-physical-design.sh $pool $exp $stripe_width $entry_size \
     $qdepth $waitsec $interface
+  #${exp}.${interface}
 done
