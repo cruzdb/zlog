@@ -265,13 +265,14 @@ class ByteStreamN1Write_Workload : public Workload {
         interface_ == CLS_NO_INDEX ||
         interface_ == CLS_NO_INDEX_WRONLY ||
         interface_ == CLS_FULL ||
-        interface_ == CLS_FULL_HDR_IDX);
+        interface_ == CLS_FULL_HDR_IDX ||
+        interface_ == CLS_FULL_INLINE_IDX);
 
     /*
      * NOTE: if we add epoch guard to full hdr index, then we need to do
      * initialization next.
      */
-    if (interface_ == CLS_FULL_HDR_IDX)
+    if (interface_ == CLS_FULL_HDR_IDX || interface_ == CLS_FULL_INLINE_IDX)
       assert(!use_stripe_group_);
 
     // init objects
@@ -350,6 +351,15 @@ class ByteStreamN1Write_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_stream_write_null_sim_hdr_idx(op, 123, offset, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_FULL_INLINE_IDX:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_stream_write_null_sim_inline_idx(op, 123, offset, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }

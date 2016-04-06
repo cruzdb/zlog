@@ -69,6 +69,8 @@ int main(int argc, char **argv)
     interface = CLS_FULL;
   } else if (interface_name == "cls_full_hdr_idx") {
     interface = CLS_FULL_HDR_IDX;
+  } else if (interface_name == "cls_full_inline_idx") {
+    interface = CLS_FULL_INLINE_IDX;
   } else if (interface_name == "cls_no_index_wronly") {
     interface = CLS_NO_INDEX_WRONLY;
   } else {
@@ -190,7 +192,8 @@ int main(int argc, char **argv)
         interface != CLS_NO_INDEX &&
         interface != CLS_NO_INDEX_WRONLY &&
         interface != CLS_FULL &&
-        interface != CLS_FULL_HDR_IDX) {
+        interface != CLS_FULL_HDR_IDX &&
+        interface != CLS_FULL_INLINE_IDX) {
       std::cerr << "experiment bytestream/n1/write: doesn't support interface "
         << interface_name << std::endl;
       return -1;
@@ -203,7 +206,8 @@ int main(int argc, char **argv)
      */
     if (use_stripe_groups &&
         (interface == CLS_FULL ||
-         interface == CLS_FULL_HDR_IDX)) {
+         interface == CLS_FULL_HDR_IDX ||
+         interface == CLS_FULL_INLINE_IDX)) {
       std::cerr << "cannot use stripe groups and objects that need init" << std::endl;
       return -1;
     }
