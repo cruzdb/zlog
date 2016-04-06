@@ -31,7 +31,7 @@ for interface in $interfaces; do
 done
 
 exp="bytestream_n1_append"
-interfaces="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_full"
+interfaces="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full"
 for interface in $interfaces; do
   bench/soft-reset-ceph.sh $ddev $jdev $pool $pgnum $version
   sleep 300

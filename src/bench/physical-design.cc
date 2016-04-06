@@ -63,6 +63,8 @@ int main(int argc, char **argv)
     interface = CLS_NO_INDEX;
   } else if (interface_name == "cls_check_epoch") {
     interface = CLS_CHECK_EPOCH;
+  } else if (interface_name == "cls_check_epoch_hdr") {
+    interface = CLS_CHECK_EPOCH_HDR;
   } else if (interface_name == "cls_full") {
     interface = CLS_FULL;
   } else if (interface_name == "cls_no_index_wronly") {
@@ -214,6 +216,7 @@ int main(int argc, char **argv)
         interface != CLS_NO_INDEX &&
         interface != CLS_NO_INDEX_WRONLY &&
         interface != CLS_CHECK_EPOCH &&
+        interface != CLS_CHECK_EPOCH_HDR &&
         interface != CLS_FULL) {
       std::cerr << "experiment stream/n1/append: doesn't support interface "
         << interface_name << std::endl;
@@ -221,7 +224,9 @@ int main(int argc, char **argv)
     }
 
     if (use_stripe_groups &&
-        (interface == CLS_CHECK_EPOCH || interface == CLS_FULL)) {
+        (interface == CLS_CHECK_EPOCH ||
+         interface == CLS_CHECK_EPOCH_HDR ||
+         interface == CLS_FULL)) {
       std::cerr << "cannot use stripe groups and objects that need init" << std::endl;
       return -1;
     }

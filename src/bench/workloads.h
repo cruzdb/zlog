@@ -381,17 +381,23 @@ class ByteStreamN1Append_Workload : public Workload {
         interface_ == CLS_NO_INDEX ||
         interface_ == CLS_NO_INDEX_WRONLY ||
         interface_ == CLS_CHECK_EPOCH ||
+        interface_ == CLS_CHECK_EPOCH_HDR ||
         interface_ == CLS_FULL);
 
     // init objects
-    if (interface_ == CLS_CHECK_EPOCH || interface_ == CLS_FULL) {
+    if (interface_ == CLS_CHECK_EPOCH ||
+        interface_ == CLS_CHECK_EPOCH_HDR ||
+        interface_ == CLS_FULL) {
       assert(!use_stripe_group_);
       std::cout << "initializing objects..." << std::endl;
       for (int i = 0; i < stripe_width_; i++) {
         std::stringstream oid;
         oid << prefix_ << "log_bytestreamN1append." << i;
         librados::ObjectWriteOperation op;
-        zlog_bench::cls_zlog_bench_append_init(op);
+        if (interface_ == CLS_CHECK_EPOCH_HDR)
+          zlog_bench::cls_zlog_bench_append_hdr_init(op);
+        else
+          zlog_bench::cls_zlog_bench_append_init(op);
         int ret = ioctx_->operate(oid.str(), &op);
         assert(ret == 0);
       }
@@ -445,6 +451,15 @@ class ByteStreamN1Append_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_append_check_epoch(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_CHECK_EPOCH_HDR:
+      {
+        librados::ObjectWriteOperation op;
+        zlog_bench::cls_zlog_bench_append_check_epoch_hdr(op, 123, seq, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }
