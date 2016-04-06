@@ -199,11 +199,6 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    /*
-     * NOTE: cls full hdr idx mode doesn't have an epoch guard. we still stick
-     * treat it as needing initialization because depending on the outcome of
-     * experiments we may go back and add in the epoch guard.
-     */
     if (use_stripe_groups &&
         (interface == CLS_FULL ||
          interface == CLS_FULL_HDR_IDX ||

@@ -268,22 +268,20 @@ class ByteStreamN1Write_Workload : public Workload {
         interface_ == CLS_FULL_HDR_IDX ||
         interface_ == CLS_FULL_INLINE_IDX);
 
-    /*
-     * NOTE: if we add epoch guard to full hdr index, then we need to do
-     * initialization next.
-     */
-    if (interface_ == CLS_FULL_HDR_IDX || interface_ == CLS_FULL_INLINE_IDX)
-      assert(!use_stripe_group_);
-
     // init objects
-    if (interface_ == CLS_FULL) {
+    if (interface_ == CLS_FULL ||
+        interface_ == CLS_FULL_INLINE_IDX ||
+        interface_ == CLS_FULL_HDR_IDX) {
       assert(!use_stripe_group_);
       std::cout << "initializing objects..." << std::endl;
       for (int i = 0; i < stripe_width_; i++) {
         std::stringstream oid;
         oid << prefix_ << "log_bytestreamN1write." << i;
         librados::ObjectWriteOperation op;
-        zlog_bench::cls_zlog_bench_append_init(op);
+        if (interface_ == CLS_FULL_INLINE_IDX || interface_ == CLS_FULL_HDR_IDX)
+          zlog_bench::cls_zlog_bench_stream_write_hdr_init(op);
+        else
+          zlog_bench::cls_zlog_bench_append_init(op); // bad naming but sets omap epoch
         int ret = ioctx_->operate(oid.str(), &op);
         assert(ret == 0);
       }
@@ -412,24 +410,18 @@ class ByteStreamN1Append_Workload : public Workload {
         interface_ == CLS_FULL ||
         interface_ == CLS_FULL_HDR_IDX);
 
-    /*
-     * NOTE: if we add epoch guard to full hdr index, then we need to do
-     * initialization next.
-     */
-    if (interface_ == CLS_FULL_HDR_IDX)
-      assert(!use_stripe_group_);
-
     // init objects
     if (interface_ == CLS_CHECK_EPOCH ||
         interface_ == CLS_CHECK_EPOCH_HDR ||
-        interface_ == CLS_FULL) {
+        interface_ == CLS_FULL ||
+        interface_ == CLS_FULL_HDR_IDX) {
       assert(!use_stripe_group_);
       std::cout << "initializing objects..." << std::endl;
       for (int i = 0; i < stripe_width_; i++) {
         std::stringstream oid;
         oid << prefix_ << "log_bytestreamN1append." << i;
         librados::ObjectWriteOperation op;
-        if (interface_ == CLS_CHECK_EPOCH_HDR)
+        if (interface_ == CLS_CHECK_EPOCH_HDR || interface_ == CLS_FULL_HDR_IDX)
           zlog_bench::cls_zlog_bench_append_hdr_init(op);
         else
           zlog_bench::cls_zlog_bench_append_init(op);
