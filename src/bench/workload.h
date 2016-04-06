@@ -9,6 +9,7 @@ enum StorageInterface {
   VANILLA, // only use librados interface
   CLS_NO_INDEX, // cls equivalent without any i/o overhead
   CLS_CHECK_EPOCH, // cls with epoch guard
+  CLS_CHECK_EPOCH_HDR, // cls with epoch guard. guard stored in stream
   CLS_FULL, // cls with full overhead
   CLS_NO_INDEX_WRONLY, // cls equiv with wronly flag
 };
