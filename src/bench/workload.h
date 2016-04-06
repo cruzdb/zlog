@@ -11,6 +11,7 @@ enum StorageInterface {
   CLS_CHECK_EPOCH, // cls with epoch guard
   CLS_CHECK_EPOCH_HDR, // cls with epoch guard. guard stored in stream
   CLS_FULL, // cls with full overhead
+  CLS_FULL_HDR_IDX, // cls with hdr index (NOTE: no epoch guard)
   CLS_NO_INDEX_WRONLY, // cls equiv with wronly flag
 };
 
