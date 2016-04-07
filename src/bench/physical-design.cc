@@ -73,6 +73,8 @@ int main(int argc, char **argv)
     interface = CLS_FULL_INLINE_IDX;
   } else if (interface_name == "cls_no_index_wronly") {
     interface = CLS_NO_INDEX_WRONLY;
+  } else if (interface_name == "cls_no_index_wronly_xtn") {
+    interface = CLS_NO_INDEX_WRONLY_XTN;
   } else {
     std::cerr << "invalid storage interface " << interface_name << std::endl;
     return -1;
@@ -224,6 +226,7 @@ int main(int argc, char **argv)
     if (interface != VANILLA &&
         interface != CLS_NO_INDEX &&
         interface != CLS_NO_INDEX_WRONLY &&
+        interface != CLS_NO_INDEX_WRONLY_XTN &&
         interface != CLS_CHECK_EPOCH &&
         interface != CLS_CHECK_EPOCH_HDR &&
         interface != CLS_FULL &&

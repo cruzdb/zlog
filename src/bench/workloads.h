@@ -405,6 +405,7 @@ class ByteStreamN1Append_Workload : public Workload {
     assert(interface_ == VANILLA ||
         interface_ == CLS_NO_INDEX ||
         interface_ == CLS_NO_INDEX_WRONLY ||
+        interface_ == CLS_NO_INDEX_WRONLY_XTN ||
         interface_ == CLS_CHECK_EPOCH ||
         interface_ == CLS_CHECK_EPOCH_HDR ||
         interface_ == CLS_FULL ||
@@ -469,6 +470,16 @@ class ByteStreamN1Append_Workload : public Workload {
       {
         librados::ObjectWriteOperation op;
         zlog_bench::cls_zlog_bench_append_wronly(op, 123, seq, bl);
+        int ret = ioctx_->aio_operate(oid.str(), rc, &op);
+        assert(ret == 0);
+      }
+      break;
+
+    case CLS_NO_INDEX_WRONLY_XTN:
+      {
+        librados::ObjectWriteOperation op;
+        // despite the name, this only has the write flag set in cls
+        zlog_bench::cls_zlog_bench_append_plus_xtn(op, 123, seq, bl);
         int ret = ioctx_->aio_operate(oid.str(), rc, &op);
         assert(ret == 0);
       }

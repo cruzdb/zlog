@@ -14,6 +14,7 @@ enum StorageInterface {
   CLS_FULL_HDR_IDX, // cls with hdr index (NOTE: no epoch guard)
   CLS_FULL_INLINE_IDX, // cls with inline index (NOTE: no epoch guard)
   CLS_NO_INDEX_WRONLY, // cls equiv with wronly flag
+  CLS_NO_INDEX_WRONLY_XTN, // cls equiv with added 12 byte append
 };
 
 /*
