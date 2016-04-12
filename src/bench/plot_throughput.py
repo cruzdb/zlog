@@ -16,10 +16,10 @@ def plot_throughput(name, m, df, ax=None):
     df.throughput = pd.rolling_mean(df.throughput, window=5, min_periods=1)
     label = m.group('expr') + "/" + m.group('if')
     ax.plot(df.completed, df.throughput, label=label)
-    ax.set_title('Single OSD Append Throughput (Jewel 2016)')
+    ax.set_title('Single OSD Throughput (Jewel 2016)')
     ax.set_ylabel('Appends per Second per OSD')
-    ax.set_xlabel('Time')
-    ax.text(df.completed.tail(1), df.throughput.tail(1), 'asdf')
+    ax.set_xlabel('Time (Sec)')
+    #ax.text(df.completed.tail(1), df.throughput.tail(1), 'asdf')
 
 def parse_filename(filename):
     m = fn_re.match(os.path.basename(filename))
@@ -28,14 +28,18 @@ def parse_filename(filename):
     #        m.group('es'), m.group('qd'), m.group('rt'), m.group('if')
     return m
 
-def read_trace(filename, trimSecs=0):
+def read_trace(filename, trimSecsFront=100, trimSecsBack=0):
     trace = pd.read_table(filename, sep=" ", header=None,
             names=("completed", "throughput"))
     # shift timeseries to have zero start time
     trace.completed = pd.to_datetime(trace.completed, unit="ns")
     trace.completed = trace.completed - min(trace.completed)
     trace.completed = trace.completed / pd.Timedelta(seconds=1)
+    trace = trace[(trace.completed > trimSecsFront) & (trace.completed <
+        max(trace.completed) - trimSecsBack)]
+    trace.completed = trace.completed - min(trace.completed)
     trace.sort_values(by='completed', ascending=True, inplace=True)
+    print filename, "mean", trace.throughput.mean()
     return trace
 
 def plot_traces(traces, combine):
