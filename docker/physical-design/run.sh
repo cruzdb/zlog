@@ -5,51 +5,23 @@ set -x -e
 runtime=30
 logdir=/tmp/
 pg_nums="128"
-stripe_widths="4"
+stripe_widths="5"
 queue_depths="4"
 entry_sizes="4096"
-
 pool=zlog
 
 # workloads
 wl_11="map_11 bytestream_11"
 wl_n1="map_n1 bytestream_n1_write bytestream_n1_append"
-workloads="$wl_n1"
+workloads="$wl_11 $wl_n1"
+
+# i/o interfaces
+map_n1_if="vanilla cls_no_index cls_no_index_wronly cls_full"
+bytestream_n1_write_if="vanilla cls_no_index cls_no_index_wronly cls_full cls_full_hdr_idx cls_full_inline_idx"
+bytestream_n1_append_if="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full cls_full_hdr_idx cls_no_index_wronly_xtn"
 
 # log file dir in container
 guest_logdir=/results
-
-# is there another interface for when we verified the extra write won't hurt
-# anything (for the txn?)
-
-#ddev=/dev/sdc
-#jdev=none
-#pgnum=128
-#version=jewel
-#pool=zlog
-#waitsec=3600
-#qdepth=16
-#stripe_width=128
-#entry_size=1024
-
-#exp="map_n1"
-#interfaces="vanilla cls_no_index cls_no_index_wronly cls_full"
-#interfaces="vanilla cls_no_index cls_no_index_wronly cls_full"
-#
-#exp="bytestream_n1_write"
-#interfaces="vanilla cls_no_index cls_no_index_wronly cls_full cls_full_hdr_idx cls_full_inline_idx"
-#interfaces="vanilla cls_no_index cls_no_index_wronly cls_full cls_full_hdr_idx cls_full_inline_idx"
-#
-#exp="bytestream_n1_append"
-#interfaces="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full cls_full_hdr_idx"
-#interfaces="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full cls_full_hdr_idx"
-#
-## extras
-
-# interfaces
-# workloads
-# etc ceph
-# extra
 
 for pgnum in $pg_nums; do
 for stripe_width in $stripe_widths; do
@@ -57,7 +29,21 @@ for qdepth in $queue_depths; do
 for entry_size in $entry_sizes; do
 for workload in $workloads; do
 
-interface=vanilla
+if [ "$workload" = "map_n1" ]; then
+  interfaces=$map_n1_if
+else if [ "$workload" = "bytestream_n1_write" ]; then
+  interfaces=$bytestream_n1_write_if
+else if [ "$workload" = "bytestream_n1_append" ]; then
+  interfaces=$bytestream_n1_append_if
+else
+  interfaces="vanilla"
+fi
+
+for interface in $interfaces; do
+
+if [ "$workload" = "map_11" || "$workload" = "bytestream_11" ]; then
+  stripe_width=0
+fi
 
 ename="pool-${pool}_expr-${workload}"
 ename="${ename}_sw-${stripe_width}"
@@ -81,6 +67,7 @@ docker run --net=host \
   --interface $interface \
   --output $guest_logdir/$ename
 
+done
 done
 done
 done
