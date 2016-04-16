@@ -24,6 +24,12 @@ docker build -t zlog-pd .
 ./single-node-ceph.sh --data-dev sdc [--journal-dev sdd] [--noop dev[--noop dev ...]]
 ```
 
+For instance on Wisconsin Cloud Lab there is an SSD device available at `/dev/sdc` (verify with dmesg or your favorite way to inspect the system). This would support to a possible invocation of `single-node-ceph.sh`:
+
+```bash
+./single-node-ceph.sh --data-dev sdc --noop sdc
+```
+
 ## pull zlog ceph deps out of image
 
 ```bash
