@@ -3,6 +3,9 @@
 set -x
 set -e
 
+# defaults
+deps=false
+
 while [[ $# > 1 ]]; do
   key="$1"
   case $key in
@@ -46,12 +49,22 @@ while [[ $# > 1 ]]; do
       output="$2"
       shift
       ;;
+    --deps)
+      deps=$2
+      shift
+      ;;
     *)
       # unknown option
       ;;
   esac
   shift # past argument or value
 done 
+
+# just want to copy out the ceph dependencies
+if [ "$deps" = "true" ]; then
+ cp /usr/lib/rados-classes/libcls_zlog_bench.so $deps
+ exit 0
+fi
 
 # start with a fresh pool for the experiment
 ceph osd pool delete $pool $pool --yes-i-really-really-mean-it || true
