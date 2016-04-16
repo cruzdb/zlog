@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -x -e
+set -x
+set -e
 
 runtime=10
 logdir=/tmp/
@@ -41,7 +42,7 @@ fi
 
 for interface in $interfaces; do
 
-if [ "$workload" = "map_11" ] || ["$workload" = "bytestream_11" ]; then
+if [ "$workload" = "map_11" ] || [ "$workload" = "bytestream_11" ]; then
   stripe_width=0
 fi
 
