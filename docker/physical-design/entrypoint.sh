@@ -38,6 +38,10 @@ while [[ $# > 1 ]]; do
       interface="$2"
       shift
       ;;
+    -d|--dir)
+      outdir="$2"
+      shift
+      ;;
     -o|--output)
       output="$2"
       shift
@@ -67,13 +71,22 @@ done
 # run experiment
 pushd /src/zlog/src
 
+# build output log filename
+ceph_ver=$(ceph --version | awk '{print $3}')
+ceph_sha=$(ceph --version | awk '{print $4}' | cut -d "(" -f 2 | cut -c1-8)
+output="${output}_cv-${ceph_ver}"
+output="${output}_cs-${ceph_sha}"
+output="${output}.tp.log"
+output_path=$outdir/$output
+
+# build args to experiment runner
 args="--pool $pool"
 args="$args --experiment $workload"
 args="$args --stripe_width $stripe_width"
 args="$args --entry_size $entry_size"
 args="$args --qdepth $qdepth"
 args="$args --tp 5"
-args="$args --perf_file $output"
+args="$args --perf_file $output_path"
 args="$args --runtime $runtime"
 args="$args --interface $interface"
 
