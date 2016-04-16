@@ -12,7 +12,7 @@ if ! which docker &> /dev/null; then
     /etc/apt/sources.list.d/docker.list
   sudo apt-get -y update
   sudo apt-get -y install docker-engine
-  sudo service docker start  
+  sudo service docker start || true
 fi
 
 # add user to docker group if problem running
