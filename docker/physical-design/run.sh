@@ -25,7 +25,7 @@ bytestream_n1_append_if="vanilla cls_no_index cls_no_index_wronly cls_check_epoc
 guest_logdir=/results
 
 for pgnum in $pg_nums; do
-for stripe_width in $stripe_widths; do
+for stripe_width_want in $stripe_widths; do
 for qdepth in $queue_depths; do
 for entry_size in $entry_sizes; do
 for workload in $workloads; do
@@ -42,12 +42,10 @@ fi
 
 for interface in $interfaces; do
 
-if [ "$workload" = "map_11" ]; then
+if [ "$workload" = "map_11" ] || [ "$workload" = "bytestream_11" ]; then
   stripe_width=0
-fi
-
-if [ "$workload" = "bytestream_11" ]; then
-  stripe_width=0
+else
+  stripe_width=$stripe_width_want
 fi
 
 ename="pool-${pool}_expr-${workload}"
