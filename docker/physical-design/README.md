@@ -9,6 +9,7 @@ pushd zlog/docker/physical-design
 
 ```bash
 install-docker.sh
+# logout/login
 docker build -t zlog-pd .
 ```
 
