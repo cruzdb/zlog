@@ -2,7 +2,7 @@
 
 set -x -e
 
-runtime=30
+runtime=10
 logdir=/tmp/
 pg_nums="128"
 stripe_widths="5"
@@ -31,9 +31,9 @@ for workload in $workloads; do
 
 if [ "$workload" = "map_n1" ]; then
   interfaces=$map_n1_if
-else if [ "$workload" = "bytestream_n1_write" ]; then
+elif [ "$workload" = "bytestream_n1_write" ]; then
   interfaces=$bytestream_n1_write_if
-else if [ "$workload" = "bytestream_n1_append" ]; then
+elif [ "$workload" = "bytestream_n1_append" ]; then
   interfaces=$bytestream_n1_append_if
 else
   interfaces="vanilla"
@@ -41,7 +41,7 @@ fi
 
 for interface in $interfaces; do
 
-if [ "$workload" = "map_11" || "$workload" = "bytestream_11" ]; then
+if [ "$workload" = "map_11" ] || ["$workload" = "bytestream_11" ]; then
   stripe_width=0
 fi
 
@@ -54,9 +54,8 @@ ename="${ename}_if-${interface}"
 
 docker run --net=host \
   -v $logdir:$guest_logdir \
-  -v $HOME/src/ceph/src/ceph.conf:/etc/ceph/ceph.conf \
-  -v /home/nwatkins/src/ceph/src/:/home/nwatkins/src/ceph/src/ \
-  -it zlog \
+  -v /etc/ceph:/etc/ceph \
+  -it zlog-pd \
   --pool $pool \
   --pgnum $pgnum \
   --workload $workload \
