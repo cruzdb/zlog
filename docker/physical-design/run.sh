@@ -42,7 +42,11 @@ fi
 
 for interface in $interfaces; do
 
-if [ "$workload" = "map_11" ] || [ "$workload" = "bytestream_11" ]; then
+if [ "$workload" = "map_11" ]; then
+  stripe_width=0
+fi
+
+if [ "$workload" = "bytestream_11" ]; then
   stripe_width=0
 fi
 
