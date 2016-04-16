@@ -9,7 +9,11 @@ pushd zlog/docker/physical-design
 
 ```bash
 install-docker.sh
-# logout/login
+
+# logout/login. docker should be successfully installed:
+install-docker.sh 
+Docker installed successfully
+
 docker build -t zlog-pd .
 ```
 
