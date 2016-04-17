@@ -49,6 +49,10 @@ while [[ $# > 1 ]]; do
       deps=$2
       shift
       ;;
+    --rest)
+      rest=$2
+      shift
+      ;;
     *)
       # unknown option
       ;;
@@ -69,7 +73,6 @@ ceph osd pool delete $pool $pool --yes-i-really-really-mean-it || true
 ceph osd pool create $pool $pgnum $pgnum replicated
 ceph osd pool set $pool size 1
 
-
 # wait for ceph health ok and finished creating
 while true; do
   if ceph status | tee /dev/tty | grep -q HEALTH_OK; then
@@ -81,6 +84,11 @@ while true; do
 done
 
 set +x
+
+if [ ! -z "$rest" ]; then
+  echo "Letting Ceph rest for a while ($rest secs) ..."
+  sleep $rest
+fi
 
 # run experiment
 pushd /src/zlog/src

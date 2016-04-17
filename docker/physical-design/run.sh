@@ -39,6 +39,7 @@ ename="pool-${pool}_expr-${workload}"
 ename="${ename}_sw-${stripe_width}"
 ename="${ename}_es-${entry_size}"
 ename="${ename}_qd-${qdepth}"
+ename="${ename}_pg-${pgnum}"
 ename="${ename}_rt-${runtime}"
 ename="${ename}_if-${interface}"
 
@@ -56,7 +57,8 @@ docker run --net=host \
   --queue-depth $qdepth \
   --runtime $runtime \
   --interface $interface \
-  --output $guest_logdir/$ename
+  --output $guest_logdir/$ename \
+  --rest $rest
 
 set +x
 
