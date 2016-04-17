@@ -1,25 +1,12 @@
 #!/bin/bash
 
-set -x
 set -e
 
-runtime=10
-logdir=/tmp/
-pg_nums="128"
-stripe_widths="5"
-queue_depths="4"
-entry_sizes="4096"
-pool=zlog
+# name of results dir
+logdir=$PWD/results.pd.${name}.$(hostname --short).$(date +"%m-%d-%Y_%H-%M-%S")
+mkdir $logdir
 
-# workloads
-wl_11="map_11 bytestream_11"
-wl_n1="map_n1 bytestream_n1_write bytestream_n1_append"
-workloads="$wl_11 $wl_n1"
-
-# i/o interfaces
-map_n1_if="vanilla cls_no_index cls_no_index_wronly cls_full"
-bytestream_n1_write_if="vanilla cls_no_index cls_no_index_wronly cls_full cls_full_hdr_idx cls_full_inline_idx"
-bytestream_n1_append_if="vanilla cls_no_index cls_no_index_wronly cls_check_epoch cls_check_epoch_hdr cls_full cls_full_hdr_idx cls_no_index_wronly_xtn"
+function run_pd() {
 
 # log file dir in container
 guest_logdir=/results
@@ -55,6 +42,8 @@ ename="${ename}_qd-${qdepth}"
 ename="${ename}_rt-${runtime}"
 ename="${ename}_if-${interface}"
 
+set -x
+
 docker run --net=host \
   -v $logdir:$guest_logdir \
   -v /etc/ceph:/etc/ceph \
@@ -69,9 +58,13 @@ docker run --net=host \
   --interface $interface \
   --output $guest_logdir/$ename
 
+set +x
+
 done
 done
 done
 done
 done
 done
+
+}
