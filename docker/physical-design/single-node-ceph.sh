@@ -61,6 +61,8 @@ function prepare() {
     echo "Host *\n  StrictHostKeyChecking no" >> ~/.ssh/config
   fi
   
+  # TODO: don't regenerate ssh keys
+
   # check if password-less ssh works
   if ! ssh -oBatchMode=yes -q localhost exit; then
     ssh-keygen -f $HOME/.ssh/id_rsa -t rsa -N ''
