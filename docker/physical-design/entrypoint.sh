@@ -3,9 +3,6 @@
 set -x
 set -e
 
-# defaults
-deps=false
-
 while [[ $# > 1 ]]; do
   key="$1"
   case $key in
@@ -61,7 +58,7 @@ while [[ $# > 1 ]]; do
 done 
 
 # just want to copy out the ceph dependencies
-if [ "$deps" = "true" ]; then
+if [ ! -z "$deps" ]; then
  cp /usr/lib/rados-classes/libcls_zlog_bench.so $deps
  exit 0
 fi
