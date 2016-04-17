@@ -35,6 +35,7 @@ For instance on Wisconsin Cloud Lab there is an SSD device available at `/dev/sd
 ```bash
 docker run -v /usr/lib/rados-classes/:/deps -it zlog-pd --deps /deps/
 sudo service ceph-osd-all restart
+sudo service ceph-osd-all restart # run again if first time has a problem
 ```
 
 ## run the physical design experiment
