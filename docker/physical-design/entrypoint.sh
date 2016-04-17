@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -x
 set -e
 
 while [[ $# > 1 ]]; do
@@ -63,10 +62,13 @@ if [ ! -z "$deps" ]; then
  exit 0
 fi
 
+set -x
+
 # start with a fresh pool for the experiment
 ceph osd pool delete $pool $pool --yes-i-really-really-mean-it || true
 ceph osd pool create $pool $pgnum $pgnum replicated
 ceph osd pool set $pool size 1
+
 
 # wait for ceph health ok and finished creating
 while true; do
@@ -77,6 +79,8 @@ while true; do
   fi
   sleep 1
 done
+
+set +x
 
 # run experiment
 pushd /src/zlog/src
@@ -100,5 +104,9 @@ args="$args --perf_file $output_path"
 args="$args --runtime $runtime"
 args="$args --interface $interface"
 
+set -x
+
 echo "Running: ./physical-design $args"
 ./physical-design $args
+
+set +x
