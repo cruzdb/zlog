@@ -30,6 +30,8 @@ set -e
 logdir=$PWD/results.pd.${name}.$(hostname --short).$(date +"%m-%d-%Y_%H-%M-%S")
 mkdir $logdir
 
+this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 function run_pd() {
 
 # log file dir in container
@@ -68,6 +70,13 @@ ename="${ename}_rt-${runtime}"
 ename="${ename}_if-${interface}"
 
 set -x
+
+# if reset is set to 'soft' then we will nuke the ceph installation before
+# proceeding. in either case the experiment will ensure it is using a fresh
+# pool configured according to the experiment parameters.
+if [ "x$reset" = "xsoft" ]; then
+  ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev}
+fi
 
 docker run --net=host \
   -v $logdir:$guest_logdir \
