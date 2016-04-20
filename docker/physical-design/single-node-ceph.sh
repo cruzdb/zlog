@@ -58,7 +58,7 @@ function prepare() {
   
   # don't worry about ssh keys
   if ! grep "StrictHostKeyChecking" ~/.ssh/config &> /dev/null; then
-    echo "Host *\n  StrictHostKeyChecking no" >> ~/.ssh/config
+    printf "Host *\n  StrictHostKeyChecking no" >> ~/.ssh/config
   fi
   
   # TODO: don't regenerate ssh keys
@@ -85,8 +85,13 @@ function reset_ceph_soft() {
   sudo stop ceph-osd id=0 || true
   sudo stop ceph-mon id=$host || true
   sudo stop ceph-mon id=$shorthost || true
+  sudo service ceph-osd-all stop || true
+  sudo service ceph-osd-all stop || true
+  sudo service ceph-mon-all stop || true
+  sudo service ceph-mon-all stop || true
   sudo skill -9 ceph-osd || true
   sudo skill -9 ceph-mon || true
+  sleep 5
 
   sudo find /var/lib/ceph -mindepth 1 -maxdepth 2 -type d -exec umount {} \; || true
 
