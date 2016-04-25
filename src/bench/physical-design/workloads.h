@@ -585,4 +585,65 @@ class Map11_Read_Workload : public Workload {
   librados::IoCtx *ioctx_;
 };
 
+/*
+ * MapN1 Read
+ */
+class MapN1_Read_Workload : public Workload {
+ public:
+  MapN1_Read_Workload(librados::IoCtx *ioctx, size_t stripe_width,
+      size_t entry_size, int qdepth, OpHistory *op_history,
+      std::string& prefix, int tp_sec, StorageInterface interface,
+      bool use_stripe_group, int max_seq) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface, max_seq),
+    ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
+  {
+    entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+
+    set_read_workload();
+    assert(interface_ == VANILLA);
+    assert(this->max_seq() == max_seq);
+    assert(!write_workload());
+    assert(!use_stripe_group_);
+  }
+
+  void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
+      ceph::bufferlist& bl, aio_state *ios) {
+
+    // target object (e.g. seq=127 => prefix.log_mapN1.3.omap[127])
+    std::stringstream oid;
+    size_t stripe_index = seq % stripe_width_;
+    oid << prefix_ << "log_mapN1." << stripe_index;
+
+    // target omap key (key = seq)
+    std::stringstream key;
+    key << seq;
+
+    //  submit the io
+    *submitted_ns = getns();
+
+    // omap read operation
+    librados::ObjectReadOperation op;
+    std::set<std::string> keys;
+    keys.insert(key.str());
+
+    op.omap_get_vals_by_keys(keys, &ios->keymap, NULL);
+
+    int ret = ioctx_->aio_operate(oid.str(), rc, &op, NULL);
+    assert(ret == 0);
+
+#ifdef BENCH_DEBUG
+    std::cout << "workload=mapN1read" << " "
+              << "seq=" << seq << " "
+              << "obj=" << oid.str() << " "
+              << std::endl;
+#endif
+  }
+
+ private:
+  librados::IoCtx *ioctx_;
+  size_t stripe_width_;
+  size_t entries_per_stripe_group_;
+  bool use_stripe_group_;
+};
+
 #endif

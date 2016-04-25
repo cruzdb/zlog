@@ -184,6 +184,37 @@ int main(int argc, char **argv)
         entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups);
 
   /*
+   * =================== map/n1/read ======================
+   */
+  } else if (experiment == "map_n1_read") {
+
+    if (stripe_width <= 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
+    if (interface != VANILLA) {
+      std::cerr << "experiment map/n1/read: doesn't support interface "
+        << interface_name << std::endl;
+      return -1;
+    }
+
+    if (use_stripe_groups) {
+      std::cerr << "stripe groups not yet supported for this experiment" << std::endl;
+      return -1;
+    }
+
+    if (max_seq == 0) {
+      std::cerr << "max seq required for read workloads" << std::endl;
+      return -1;
+    }
+
+    workload = new MapN1_Read_Workload(&ioctx, stripe_width,
+        entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups,
+        max_seq);
+
+  /*
    *
    * =================== stream/11 ======================
    */
