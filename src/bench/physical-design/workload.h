@@ -27,6 +27,7 @@ class Workload {
     uint64_t submitted_ns;
     Workload *workload;
     std::map<std::string, ceph::bufferlist> keymap;
+    ceph::bufferlist outbl;
   };
  public:
   Workload(OpHistory *op_history, int qdepth, size_t entry_size,
@@ -161,7 +162,13 @@ class Workload {
     io->workload->io_lock.lock();
     io->workload->outstanding_ios--;
     io->workload->io_lock.unlock();
-    if (io->rc->get_return_value()) {
+    if (io->rc->get_return_value() > 0) {
+      if (io->outbl.length() != io->rc->get_return_value()) {
+        std::cerr << "aio rv: " << io->rc->get_return_value() << std::endl;
+        assert(io->rc->get_return_value() == 0);
+      }
+      assert(io->rc->get_return_value() == io->workload->entry_size_);
+    } else if (io->rc->get_return_value() < 0) {
       std::cerr << "aio rv: " << io->rc->get_return_value() << std::endl;
       assert(io->rc->get_return_value() == 0);
     }

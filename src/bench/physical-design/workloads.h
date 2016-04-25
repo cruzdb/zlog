@@ -646,4 +646,43 @@ class MapN1_Read_Workload : public Workload {
   bool use_stripe_group_;
 };
 
+class ByteStream11_Read_Workload : public Workload {
+ public:
+  ByteStream11_Read_Workload(librados::IoCtx *ioctx, size_t entry_size,
+      int qdepth, OpHistory *op_history, std::string& prefix,
+      int tp_sec, StorageInterface interface, int max_seq) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface, max_seq),
+    ioctx_(ioctx)
+  {
+    set_read_workload();
+    assert(interface_ == VANILLA);
+    assert(this->max_seq() == max_seq);
+    assert(!write_workload());
+  }
+
+  void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
+      ceph::bufferlist& bl, aio_state *ios) {
+
+    // target object (e.g. seq=127 => prefix.log_bytestream11.127)
+    std::stringstream oid;
+    oid << prefix_ << "log_bytestream11." << seq;
+
+#ifdef BENCH_DEBUG
+    std::cout << "workload=bytestream11read" << " "
+              << "seq=" << seq << " "
+              << "obj=" << oid.str() << " "
+              << "off=0 (read 11 mapping)" << " "
+              << std::endl;
+#endif
+
+    //  submit the io
+    *submitted_ns = getns();
+    int ret = ioctx_->aio_read(oid.str(), rc, &ios->outbl, entry_size_, 0);
+    assert(ret == 0);
+  }
+
+ private:
+  librados::IoCtx *ioctx_;
+};
+
 #endif
