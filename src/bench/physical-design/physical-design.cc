@@ -268,7 +268,6 @@ int main(int argc, char **argv)
         qdepth, op_history, prefix, tp_sec, interface, max_seq);
 
   /*
-   *
    * =================== stream/n1/write ======================
    */
   } else if (experiment == "bytestream_n1_write") {
@@ -300,6 +299,36 @@ int main(int argc, char **argv)
 
     workload = new ByteStreamN1Write_Workload(&ioctx, stripe_width,
         entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups);
+
+  /*
+   * =================== stream/n1/read ======================
+   */
+  } else if (experiment == "bytestream_n1_read") {
+
+    if (stripe_width <= 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
+    if (interface != VANILLA) {
+      std::cerr << "experiment bytestream/n1/read: doesn't support interface "
+        << interface_name << std::endl;
+      return -1;
+    }
+
+    if (use_stripe_groups) {
+      std::cerr << "stripe groups not yet supported for this experiment" << std::endl;
+      return -1;
+    }
+
+    if (max_seq == 0) {
+      std::cerr << "max seq required for read workloads" << std::endl;
+      return -1;
+    }
+
+    workload = new ByteStreamN1_Read_Workload(&ioctx, stripe_width,
+        entry_size, qdepth, op_history, prefix, tp_sec, interface, use_stripe_groups, max_seq);
 
   /*
    * =================== stream/n1/append ======================
@@ -349,7 +378,8 @@ int main(int argc, char **argv)
   // only print for write workloads
   if (experiment != "map_11_read" &&
       experiment != "map_n1_read" &&
-      experiment != "bytestream_11_read") {
+      experiment != "bytestream_11_read" &&
+      experiment != "bytestream_n1_read") {
     std::cout << "maxseq " << workload->max_seq() << std::endl;
   }
 

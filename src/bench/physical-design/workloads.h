@@ -685,4 +685,56 @@ class ByteStream11_Read_Workload : public Workload {
   librados::IoCtx *ioctx_;
 };
 
+class ByteStreamN1_Read_Workload : public Workload {
+ public:
+  ByteStreamN1_Read_Workload(librados::IoCtx *ioctx, size_t stripe_width,
+      size_t entry_size, int qdepth, OpHistory *op_history,
+      std::string& prefix, int tp_sec, StorageInterface interface,
+      bool use_stripe_group, int max_seq) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface, max_seq),
+    ioctx_(ioctx), stripe_width_(stripe_width), use_stripe_group_(use_stripe_group)
+  {
+    entries_per_stripe_group_ = (MAX_OBJECT_SIZE / entry_size_) * stripe_width_;
+
+    set_read_workload();
+    assert(interface_ == VANILLA);
+    assert(this->max_seq() == max_seq);
+    assert(!write_workload());
+    assert(!use_stripe_group_);
+  }
+
+  void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
+      ceph::bufferlist& bl, aio_state *ios) {
+
+    // target object (e.g. seq=127 => prefix.log_mapN1.3)
+    std::stringstream oid;
+    size_t stripe_index = seq % stripe_width_;
+    oid << prefix_ << "log_bytestreamN1write." << stripe_index;
+
+    // compute offset within object
+    uint64_t offset = seq / stripe_width_ * entry_size_;
+
+#ifdef BENCH_DEBUG
+    std::cout << "workload=bytestreamN1read" << " "
+              << "seq=" << seq << " "
+              << "obj=" << oid.str() << " "
+              << "off=" << offset << " "
+              << "len=" << entry_size_
+              << std::endl;
+#endif
+
+    //  submit the io
+    *submitted_ns = getns();
+
+    int ret = ioctx_->aio_read(oid.str(), rc, &ios->outbl, entry_size_, offset);
+    assert(ret == 0);
+  }
+
+ private:
+  librados::IoCtx *ioctx_;
+  size_t stripe_width_;
+  size_t entries_per_stripe_group_;
+  bool use_stripe_group_;
+};
+
 #endif
