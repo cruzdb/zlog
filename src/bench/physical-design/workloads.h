@@ -48,7 +48,7 @@ class MapN1_Workload : public Workload {
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
-      ceph::bufferlist& bl) {
+      ceph::bufferlist& bl, aio_state *ios) {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3.omap[127])
     std::stringstream oid;
@@ -159,7 +159,7 @@ class Map11_Workload : public Workload {
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
-      ceph::bufferlist& bl) {
+      ceph::bufferlist& bl, aio_state *ios) {
 
     // target object (e.g. seq=127 => prefix.log_map11.127)
     std::stringstream oid;
@@ -216,7 +216,7 @@ class ByteStream11_Workload : public Workload {
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
-      ceph::bufferlist& bl) {
+      ceph::bufferlist& bl, aio_state *ios) {
 
     // target object (e.g. seq=127 => prefix.log_bytestream11.127)
     std::stringstream oid;
@@ -289,7 +289,7 @@ class ByteStreamN1Write_Workload : public Workload {
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
-      ceph::bufferlist& bl) {
+      ceph::bufferlist& bl, aio_state *ios) {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3)
     std::stringstream oid;
@@ -433,7 +433,7 @@ class ByteStreamN1Append_Workload : public Workload {
   }
 
   void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
-      ceph::bufferlist& bl) {
+      ceph::bufferlist& bl, aio_state *ios) {
 
     // target object (e.g. seq=127 => prefix.log_mapN1.3)
     std::stringstream oid;
@@ -539,6 +539,50 @@ class ByteStreamN1Append_Workload : public Workload {
   size_t stripe_width_;
   size_t entries_per_stripe_group_;
   bool use_stripe_group_;
+};
+
+class Map11_Read_Workload : public Workload {
+ public:
+  Map11_Read_Workload(librados::IoCtx *ioctx, size_t entry_size,
+      int qdepth, OpHistory *op_history, std::string& prefix,
+      int tp_sec, StorageInterface interface, int max_seq) :
+    Workload(op_history, qdepth, entry_size, prefix, tp_sec, interface, max_seq),
+    ioctx_(ioctx)
+  {
+    set_read_workload();
+    assert(interface_ == VANILLA);
+    assert(this->max_seq() == max_seq);
+    assert(!write_workload());
+  }
+
+  void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
+      ceph::bufferlist& bl, aio_state *ios) {
+
+    // target object (e.g. seq=127 => prefix.log_map11.127)
+    std::stringstream oid;
+    oid << prefix_ << "log_map11." << seq;
+
+    // omap read operation
+    librados::ObjectReadOperation op;
+    std::set<std::string> keys;
+    keys.insert("entry");
+
+    op.omap_get_vals_by_keys(keys, &ios->keymap, NULL);
+
+    //  submit the io
+    *submitted_ns = getns();
+    int ret = ioctx_->aio_operate(oid.str(), rc, &op, NULL);
+    assert(ret == 0);
+
+#ifdef BENCH_DEBUG
+    std::cout << "workload=map11read "
+              << "seq=" << seq << " "
+              << "obj=" << oid.str() << std::endl;
+#endif
+  }
+
+ private:
+  librados::IoCtx *ioctx_;
 };
 
 #endif

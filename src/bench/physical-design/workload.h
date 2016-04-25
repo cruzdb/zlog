@@ -21,12 +21,21 @@ enum StorageInterface {
  * Workload Generator
  */
 class Workload {
+ protected:
+  struct aio_state {
+    librados::AioCompletion *rc;
+    uint64_t submitted_ns;
+    Workload *workload;
+    std::map<std::string, ceph::bufferlist> keymap;
+  };
  public:
   Workload(OpHistory *op_history, int qdepth, size_t entry_size,
-      std::string& prefix, int tp_sec, StorageInterface interface) :
+      std::string& prefix, int tp_sec, StorageInterface interface,
+      int max_seq = 0) :
     seq(0), entry_size_(entry_size), outstanding_ios(0),
     op_history_(op_history), qdepth_(qdepth), stop_(0),
-    prefix_(prefix), tp_sec_(tp_sec), interface_(interface)
+    prefix_(prefix), tp_sec_(tp_sec), interface_(interface),
+    read_rng(0), read_gen(0, max_seq), write_workload_(true)
   {
     if (prefix_ != "")
       prefix_ = prefix_ + ".";
@@ -43,10 +52,20 @@ class Workload {
         rand_buf_size_ - entry_size_ - 1);
   }
 
+  void set_read_workload() {
+    write_workload_ = false;
+  }
+
+  bool write_workload() {
+    return write_workload_;
+  }
+
   virtual void gen_op(librados::AioCompletion *rc, uint64_t *submitted_ns,
-      ceph::bufferlist& bl) = 0;
+      ceph::bufferlist& bl, aio_state *ios) = 0;
 
  private:
+  bool write_workload_;
+
   void run() {
     std::unique_lock<std::mutex> lock(io_lock);
     for (;;) {
@@ -57,16 +76,23 @@ class Workload {
         io->rc = librados::Rados::aio_create_completion(io, NULL, handle_io_cb);
         assert(io->rc);
 
-        // select random slice of random byte buffer
-        size_t buf_offset = rand_dist(generator);
         ceph::bufferlist bl;
-        bl.append(rand_buf_raw_ + buf_offset, entry_size_);
+
+        // select random slice of random byte buffer
+        if (write_workload_) {
+          size_t buf_offset = rand_dist(generator);
+          bl.append(rand_buf_raw_ + buf_offset, entry_size_);
+        } else {
+          seq = read_gen(read_rng);
+        }
 
         // create operation
-        gen_op(io->rc, &io->submitted_ns, bl);
+        gen_op(io->rc, &io->submitted_ns, bl, io);
 
         outstanding_ios++;
-        seq++;
+
+        if (write_workload_)
+          seq++;
       }
 
       io_cond.wait(lock, [&]{ return outstanding_ios < qdepth_ || stop_; });
@@ -86,6 +112,17 @@ class Workload {
   }
 
  public:
+  int max_seq() {
+    if (write_workload_) {
+      auto ret = seq - qdepth_;
+      // sanity check range
+      assert(ret > 0 && ret < 1000000000);
+      return (int)ret;
+    } else {
+      return read_gen.b();
+    }
+  }
+
   void start() {
     runner_thread_ = std::thread(&Workload::run, this);
     stats_thread_ = std::thread(&Workload::print_stats, this);
@@ -108,14 +145,10 @@ class Workload {
   std::atomic_ullong seq;
   std::string prefix_;
   StorageInterface interface_;
+  std::mt19937 read_rng;
+  std::uniform_int_distribution<int> read_gen;
 
  private:
-  struct aio_state {
-    librados::AioCompletion *rc;
-    uint64_t submitted_ns;
-    Workload *workload;
-  };
-
   static void handle_io_cb(librados::completion_t cb, void *arg)
   {
     aio_state *io = (aio_state*)arg;
@@ -128,7 +161,10 @@ class Workload {
     io->workload->io_lock.lock();
     io->workload->outstanding_ios--;
     io->workload->io_lock.unlock();
-    assert(io->rc->get_return_value() == 0);
+    if (io->rc->get_return_value()) {
+      std::cerr << "aio rv: " << io->rc->get_return_value() << std::endl;
+      assert(io->rc->get_return_value() == 0);
+    }
     io->rc->release();
     io->workload->io_cond.notify_one();
 

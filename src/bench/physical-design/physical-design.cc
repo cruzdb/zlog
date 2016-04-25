@@ -22,6 +22,7 @@ int main(int argc, char **argv)
   std::string prefix;
   int tp_sec;
   int runtime;
+  int max_seq;
 
   std::string interface_name;
   StorageInterface interface;
@@ -41,6 +42,7 @@ int main(int argc, char **argv)
     ("runtime", po::value<int>(&runtime)->default_value(30), "Runtime (sec)")
     ("interface", po::value<std::string>(&interface_name)->default_value("vanilla"), "Storage interface")
     ("use_stripe_group", po::value<bool>(&use_stripe_groups)->default_value(false), "Use stripe groups")
+    ("max_seq", po::value<int>(&max_seq)->default_value(0), "max read seq")
   ;
 
   po::variables_map vm;
@@ -125,7 +127,35 @@ int main(int argc, char **argv)
         qdepth, op_history, prefix, tp_sec, interface);
 
   /*
-   *
+   * =================== map/11/read ======================
+   */
+  } else if (experiment == "map_11_read") {
+
+    if (stripe_width != 0) {
+      std::cerr << "(--stripe_width): invalid stripe width " << stripe_width
+        << " for experiment " << experiment << std::endl;
+      return -1;
+    }
+
+    if (interface != VANILLA) {
+      std::cerr << "experiment map/11/read: only supports vanilla i/o interface" << std::endl;
+      return -1;
+    }
+
+    if (use_stripe_groups) {
+      std::cerr << "cannot use stripe groups with 1:1 workloads" << std::endl;
+      return -1;
+    }
+
+    if (max_seq == 0) {
+      std::cerr << "max seq required for read workloads" << std::endl;
+      return -1;
+    }
+
+    workload = new Map11_Read_Workload(&ioctx, entry_size,
+        qdepth, op_history, prefix, tp_sec, interface, max_seq);
+
+  /*
    * =================== map/n1 ======================
    */
   } else if (experiment == "map_n1") {
@@ -256,6 +286,11 @@ int main(int argc, char **argv)
   workload->start();
   sleep(runtime);
   workload->stop();
+
+  // only print for write workloads
+  if (experiment != "map_11_read") {
+    std::cout << "maxseq " << workload->max_seq() << std::endl;
+  }
 
   return 0;
 }
