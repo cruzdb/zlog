@@ -26,6 +26,13 @@ set -e
 # run_pd
 #
 
+if [ "x$reads" = "xyes" ]; then
+  if [ "$(whoami)" != "root" ]; then
+    echo "root needed for reads to drop caches"
+    exit 1
+  fi
+fi
+
 # name of results dir
 logdir=$PWD/results.pd.${name}.$(hostname --short).$(date +"%m-%d-%Y_%H-%M-%S")
 mkdir $logdir
@@ -68,6 +75,7 @@ ename="${ename}_qd-${qdepth}"
 ename="${ename}_pg-${pgnum}"
 ename="${ename}_rt-${runtime}"
 ename="${ename}_if-${interface}"
+ename="${ename}_ms-0"
 
 set -x
 
@@ -78,9 +86,12 @@ if [ "x$reset" = "xsoft" ]; then
   ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev}
 fi
 
+set +x
+
 #
 # This is always a write workload
 #
+maxseq_tmpfile=`mktemp`
 stdbuf -oL docker run --net=host \
   -v $logdir:$guest_logdir \
   -v /etc/ceph:/etc/ceph \
@@ -94,15 +105,25 @@ stdbuf -oL docker run --net=host \
   --runtime $runtime \
   --interface $interface \
   --output $guest_logdir/$ename \
-  --rest $rest | while IFS= read -r line
+  --rest $rest | { while IFS= read -r line
 do
   if [[ $line =~ maxseq\ ([0-9]+) ]]; then
     maxseq=${BASH_REMATCH[1]}
   fi
   echo $line
 done
+echo $maxseq > $maxseq_tmpfile
+}
 
-echo "FOUND THE MAX: $maxseq"
+maxseq=$(cat $maxseq_tmpfile)
+rm $maxseq_tmpfile
+
+if ! [[ $maxseq =~ ^[0-9]+$ ]]; then
+  echo "maxseq is not a number / not found"
+  exit 1
+fi
+
+set -x
 
 #
 # If we have requested a read workload we should do that now after we have
@@ -110,47 +131,60 @@ echo "FOUND THE MAX: $maxseq"
 # requested then we run the same read workload for each write experiment that
 # supports it.
 #
-#read_expr="dne"
-#if [ "x$reads" = "xyes" ]; then
-#
-#  if [ "$workload" = "map_11" ]; then
-#    read_expr="map_11_read"
-#  elif [ "$workload" = "bytestream_11" ]; then
-#    read_expr="bytestream_11_read"
-#  elif [ "$workload" = "map_n1" ]; then
-#    read_expr="map_n1_read"
-#  elif [ "$workload" = "bytestream_n1_write" ]; then
-#    read_expr="bytestream_n1_read"
-#  else
-#    if [ "$workload" != "bytestream_n1_append" ]; then
-#      echo "very bad thing... read workload not found"
-#      exit 1
-#    fi
-#  fi
-#fi
-#
-#if [ ${read_expr} != "dne" ]; then
-#
-#  clear cache
-#  test sudo early for read case
-#  parse out max seq
-#
-#docker run --net=host \
-#  -v $logdir:$guest_logdir \
-#  -v /etc/ceph:/etc/ceph \
-#  -it zlog-pd \
-#  --pool $pool \
-#  --pgnum $pgnum \
-#  --workload $workload \
-#  --stripe-width $stripe_width \
-#  --entry-size $entry_size \
-#  --queue-depth $qdepth \
-#  --runtime $runtime \
-#  --interface vanilla \
-#  --output $guest_logdir/$ename \
-#  --rest $rest
-#
-#fi
+read_expr="dne"
+if [ "x$reads" = "xyes" ]; then
+
+  if [ "$workload" = "map_11" ]; then
+    read_expr="map_11_read"
+  elif [ "$workload" = "bytestream_11" ]; then
+    read_expr="bytestream_11_read"
+  elif [ "$workload" = "map_n1" ]; then
+    read_expr="map_n1_read"
+  elif [ "$workload" = "bytestream_n1_write" ]; then
+    read_expr="bytestream_n1_read"
+  else
+    if [ "$workload" != "bytestream_n1_append" ]; then
+      echo "very bad thing... read workload not found"
+      exit 1
+    fi
+  fi
+fi
+
+if [ ${read_expr} != "dne" ]; then
+
+ename="pool-${pool}_expr-${read_expr}"
+ename="${ename}_sw-${stripe_width}"
+ename="${ename}_es-${entry_size}"
+ename="${ename}_qd-${qdepth}"
+ename="${ename}_pg-${pgnum}"
+ename="${ename}_rt-${read_runtime}"
+ename="${ename}_if-${interface}"
+ename="${ename}_ms-${maxseq}"
+
+stop ceph-osd id=0 || true
+stop ceph-osd id=0 || true
+service ceph-osd-all stop || true
+service ceph-osd-all stop || true
+sync
+echo 3 > /proc/sys/vm/drop_caches
+start ceph-osd id=0 || true
+service ceph-osd-all start || true
+
+docker run --net=host \
+  -v $logdir:$guest_logdir \
+  -v /etc/ceph:/etc/ceph \
+  -it zlog-pd \
+  --pool $pool \
+  --workload ${read_expr} \
+  --stripe-width $stripe_width \
+  --entry-size $entry_size \
+  --queue-depth $qdepth \
+  --runtime $read_runtime \
+  --interface vanilla \
+  --output $guest_logdir/$ename \
+  --maxseq $maxseq
+
+fi
 
 set +x
 

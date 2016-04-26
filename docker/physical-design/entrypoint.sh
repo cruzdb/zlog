@@ -53,6 +53,10 @@ while [[ $# > 1 ]]; do
       rest=$2
       shift
       ;;
+    --maxseq)
+      maxseq=$2
+      shift
+      ;;
     *)
       # unknown option
       ;;
@@ -68,10 +72,15 @@ fi
 
 set -x
 
-# start with a fresh pool for the experiment
-ceph osd pool delete $pool $pool --yes-i-really-really-mean-it || true
-ceph osd pool create $pool $pgnum $pgnum replicated
-ceph osd pool set $pool size 1
+# if maxseq is specified then this is a read workload and we won't
+# create a new pool because the assumption is that we have been
+# configured to read stuff out of the pool.
+if [ -z "$maxseq" ]; then
+  # start with a fresh pool for the experiment
+  ceph osd pool delete $pool $pool --yes-i-really-really-mean-it || true
+  ceph osd pool create $pool $pgnum $pgnum replicated
+  ceph osd pool set $pool size 1
+fi
 
 # wait for ceph health ok and finished creating
 while true; do
@@ -111,6 +120,9 @@ args="$args --tp 5"
 args="$args --perf_file $output_path"
 args="$args --runtime $runtime"
 args="$args --interface $interface"
+if [ ! -z "$maxseq" ]; then
+args="$args --max_seq $maxseq"
+fi
 
 set -x
 
