@@ -78,7 +78,10 @@ if [ "x$reset" = "xsoft" ]; then
   ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev}
 fi
 
-docker run --net=host \
+#
+# This is always a write workload
+#
+stdbuf -oL docker run --net=host \
   -v $logdir:$guest_logdir \
   -v /etc/ceph:/etc/ceph \
   -it zlog-pd \
@@ -91,7 +94,63 @@ docker run --net=host \
   --runtime $runtime \
   --interface $interface \
   --output $guest_logdir/$ename \
-  --rest $rest
+  --rest $rest | while IFS= read -r line
+do
+  if [[ $line =~ maxseq\ ([0-9]+) ]]; then
+    maxseq=${BASH_REMATCH[1]}
+  fi
+  echo $line
+done
+
+echo "FOUND THE MAX: $maxseq"
+
+#
+# If we have requested a read workload we should do that now after we have
+# filled up the osd. The setup is currently very simple: if reads are
+# requested then we run the same read workload for each write experiment that
+# supports it.
+#
+#read_expr="dne"
+#if [ "x$reads" = "xyes" ]; then
+#
+#  if [ "$workload" = "map_11" ]; then
+#    read_expr="map_11_read"
+#  elif [ "$workload" = "bytestream_11" ]; then
+#    read_expr="bytestream_11_read"
+#  elif [ "$workload" = "map_n1" ]; then
+#    read_expr="map_n1_read"
+#  elif [ "$workload" = "bytestream_n1_write" ]; then
+#    read_expr="bytestream_n1_read"
+#  else
+#    if [ "$workload" != "bytestream_n1_append" ]; then
+#      echo "very bad thing... read workload not found"
+#      exit 1
+#    fi
+#  fi
+#fi
+#
+#if [ ${read_expr} != "dne" ]; then
+#
+#  clear cache
+#  test sudo early for read case
+#  parse out max seq
+#
+#docker run --net=host \
+#  -v $logdir:$guest_logdir \
+#  -v /etc/ceph:/etc/ceph \
+#  -it zlog-pd \
+#  --pool $pool \
+#  --pgnum $pgnum \
+#  --workload $workload \
+#  --stripe-width $stripe_width \
+#  --entry-size $entry_size \
+#  --queue-depth $qdepth \
+#  --runtime $runtime \
+#  --interface vanilla \
+#  --output $guest_logdir/$ename \
+#  --rest $rest
+#
+#fi
 
 set +x
 
