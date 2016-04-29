@@ -95,27 +95,16 @@ function reset_ceph_soft() {
 
   sudo find /var/lib/ceph -mindepth 1 -maxdepth 2 -type d -exec umount {} \; || true
 
-  sudo rm -rf /etc/ceph
-  sudo rm -rf /var/log/ceph
-  sudo rm -rf /var/lib/ceph/mon
-  sudo rm -rf /var/lib/ceph/tmp
-  sudo rm -rf /var/lib/ceph/osd
-  sudo rm -rf /var/lib/ceph/bootstrap-osd
-  sudo rm -rf /var/lib/ceph/radosgw
-  sudo rm -rf /var/lib/ceph/mds
-  sudo rm -rf /var/lib/ceph/bootstrap-mds
-  sudo rm -rf /var/lib/ceph/bootstrap-rgw
-  
-  sudo mkdir /etc/ceph/
-  sudo mkdir /var/log/ceph/
-  sudo mkdir /var/lib/ceph/mon/
-  sudo mkdir /var/lib/ceph/tmp/
-  sudo mkdir /var/lib/ceph/osd/
-  sudo mkdir /var/lib/ceph/bootstrap-osd/
-  sudo mkdir /var/lib/ceph/radosgw/
-  sudo mkdir /var/lib/ceph/mds/
-  sudo mkdir /var/lib/ceph/bootstrap-mds/
-  sudo mkdir /var/lib/ceph/bootstrap-rgw
+  sudo find /etc/ceph/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/log/ceph/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/mon/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/tmp/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/osd/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/bootstrap-osd/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/radosgw/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/mds/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/bootstrap-mds/ -mindepth 1 -exec rm -rf {} \; || true
+  sudo find /var/lib/ceph/bootstrap-rgw/ -mindepth 1 -exec rm -rf {} \; || true
 }
 
 function create_ceph_and_start() {
@@ -158,6 +147,11 @@ function create_ceph_and_start() {
   else
     ceph-deploy osd create $host:$data_dev
   fi
+
+  sudo stop ceph-osd id=0 || true
+  sudo stop ceph-osd id=0 || true
+  sudo chown ceph:ceph /var/log/ceph/ceph-osd.0.log
+  sudo start ceph-osd id=0 || true
 
   popd
 }
