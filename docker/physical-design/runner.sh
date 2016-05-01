@@ -26,12 +26,12 @@ set -e
 # run_pd
 #
 
-if [ "x$reads" = "xyes" ]; then
-  if [ "$(whoami)" != "root" ]; then
-    echo "root needed for reads to drop caches"
-    exit 1
-  fi
-fi
+#if [ "x$reads" = "xyes" ]; then
+#  if [ "$(whoami)" != "root" ]; then
+#    echo "root needed for reads to drop caches"
+#    exit 1
+#  fi
+#fi
 
 # name of results dir
 logdir=$PWD/results.pd.${name}.$(hostname --short).$(date +"%m-%d-%Y_%H-%M-%S")
@@ -161,14 +161,14 @@ ename="${ename}_rt-${read_runtime}"
 ename="${ename}_if-${interface}"
 ename="${ename}_ms-${maxseq}"
 
-stop ceph-osd id=0 || true
-stop ceph-osd id=0 || true
-service ceph-osd-all stop || true
-service ceph-osd-all stop || true
-sync
-echo 3 > /proc/sys/vm/drop_caches
-start ceph-osd id=0 || true
-service ceph-osd-all start || true
+sudo stop ceph-osd id=0 || true
+sudo stop ceph-osd id=0 || true
+sudo service ceph-osd-all stop || true
+sudo service ceph-osd-all stop || true
+sudo sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+sudo start ceph-osd id=0 || true
+sudo service ceph-osd-all start || true
 
 docker run --net=host \
   -v $logdir:$guest_logdir \
