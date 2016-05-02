@@ -88,6 +88,9 @@ fi
 
 set +x
 
+cat /sys/fs/cgroup/blkio/blkio.throttle.write_iops_device
+cat /sys/fs/cgroup/blkio/blkio.throttle.read_iops_device
+
 #
 # This is always a write workload
 #
@@ -169,6 +172,9 @@ sudo sync
 echo 3 | sudo tee /proc/sys/vm/drop_caches
 sudo start ceph-osd id=0 || true
 sudo service ceph-osd-all start || true
+
+cat /sys/fs/cgroup/blkio/blkio.throttle.write_iops_device
+cat /sys/fs/cgroup/blkio/blkio.throttle.read_iops_device
 
 docker run --net=host \
   -v $logdir:$guest_logdir \
