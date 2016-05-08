@@ -45,6 +45,9 @@ static void sigint_handler(int sig) {
   stop = 1;
 }
 
+static uint64_t run_start_ns;
+static uint64_t run_end_ns;
+
 static inline uint64_t __getns(clockid_t clock)
 {
   struct timespec ts;
@@ -246,6 +249,62 @@ class FakeSeqrClient : public zlog::SeqrClient {
   uint64_t epoch_;
 };
 
+static void do_cdf(std::string filename)
+{
+  // sort latencies by latency value
+  const size_t num_latencies = latencies.size();
+  std::sort(latencies.begin(), latencies.end(),
+      [](const std::pair<uint64_t, uint64_t>& a,
+        const std::pair<uint64_t, uint64_t>& b) {
+      return a.second < b.second;
+      });
+
+  // compute cdf
+  std::vector<double> ecdf;
+  ecdf.reserve(num_latencies);
+  for (size_t count = 0; count < num_latencies; count++) {
+    double p = (double)count / (double)num_latencies;
+    ecdf.push_back(p);
+  }
+
+  // the cdf might have duplicate latencies. we'll take the min of those
+  // ranges, and also include the largest value.
+  std::map<uint64_t, size_t> pts;
+  for (size_t i = 0; i < num_latencies; i++) {
+    auto lat = latencies[i].second;
+    auto it = pts.find(lat);
+    if (it == pts.end())
+      pts[lat] = i;
+  }
+
+  // fixup end point
+  uint64_t max_lat = latencies[num_latencies-1].second;
+  assert(pts.find(max_lat) != pts.end());
+  pts[max_lat] = num_latencies - 1;
+
+  // iops
+  uint64_t ios = num_latencies;
+  uint64_t dur_ns = run_end_ns - run_start_ns;
+  double iops = (double)(ios * 1000000000ULL) / (double)dur_ns;
+
+  int fd = 0;
+  fd = open(filename.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0644);
+  assert(fd > 0);
+
+  // average throughput
+  dprintf(fd, "%f\n", iops);
+
+  // latency cdf
+  for (auto it = pts.begin(); it != pts.end(); it++) {
+    auto lat = latencies[it->second].second;
+    auto pct = ecdf[it->second];
+    dprintf(fd, "%llu,%f\n", (unsigned long long)lat, pct);
+  }
+
+  fsync(fd);
+  close(fd);
+}
+
 int main(int argc, char **argv)
 {
   int width;
@@ -261,6 +320,8 @@ int main(int argc, char **argv)
   std::string outfile;
   bool testseqr;
   bool append;
+  bool cdf;
+  int runtime;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -275,8 +336,10 @@ int main(int argc, char **argv)
     ("port", po::value<std::string>(&port)->default_value("-1"), "Server port")
     ("latency", po::value<bool>(&track_latency)->default_value(false), "Track latencies")
     ("outfile", po::value<std::string>(&outfile)->default_value(""), "Output file")
+    ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
     ("testseqr", po::value<bool>(&testseqr)->default_value(false), "Measure seqr throughput")
     ("append", po::value<bool>(&append)->default_value(false), "Append benchmark")
+    ("cdf", po::value<bool>(&cdf)->default_value(false), "dump cdf")
   ;
 
   po::variables_map vm;
@@ -383,17 +446,30 @@ int main(int argc, char **argv)
   latency_us = 0;
 
   if (track_latency)
-    latencies.reserve(1<<22);
+    latencies.reserve(20000000);
 
   char iobuf[iosize];
 
   std::thread reporting_thread(report);
+
+  std::thread stopper{[&] {
+    if (runtime) {
+      sleep(runtime);
+      stop = 1;
+    }
+  }};
 
   start_monotonic_ns = getns();
   start_realtime_ns = __getns(CLOCK_REALTIME);
 
   if (testseqr) {
     std::cout << "seqr throughput mode" << std::endl;
+    for (int i = 0; i < 10; i++) {
+      uint64_t pos;
+      int ret = log->CheckTail(&pos, true);
+      assert(ret == 0);
+    }
+    run_start_ns = getns();
     while (!stop) {
       uint64_t pos;
       uint64_t start_ns = getns();
@@ -406,6 +482,7 @@ int main(int argc, char **argv)
       ios_completed++;
       ios_completed_total++;
     }
+    run_end_ns = getns();
   } else if (sync) {
     std::cout << "sync mode: ignoring qdepth (qdepth=1)" << std::endl;
 
@@ -508,9 +585,14 @@ int main(int argc, char **argv)
     }
   }
 
+  stopper.join();
   reporting_thread.join();
 
-  if (track_latency) {
+  if (cdf) {
+    assert(track_latency);
+    assert(outfile.size());
+    do_cdf(outfile);
+  } else if (track_latency) {
     if (outfile.length()) {
       char hostname[1024];
       int ret = gethostname(hostname, sizeof(hostname));
