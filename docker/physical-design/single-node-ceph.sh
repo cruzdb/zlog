@@ -29,6 +29,10 @@ while [[ $# > 1 ]]; do
       noop_devs="$noop_devs $2"
       shift # past argument
       ;;
+    -v|--version)
+      ceph_version="$2"
+      shift
+      ;;
     *)
       # unknown option
       ;;
@@ -40,6 +44,15 @@ if [ -z $data_dev ]; then
   echo "must supply a data device (--data-dev)"
   exit 1
 fi
+
+echo "====================================="
+echo "              CONFIG"
+echo "====================================="
+echo "DATA-DEV: $data_dev"
+echo "JRNL-DEV: $journal_dev"
+echo "NOOP-DEV: $noop_devs"
+echo " VERSION: $ceph_version"
+echo "====================================="
 
 function prepare() {
   # install ceph-deploy
@@ -61,8 +74,6 @@ function prepare() {
     printf "Host *\n  StrictHostKeyChecking no" >> ~/.ssh/config
   fi
   
-  # TODO: don't regenerate ssh keys
-
   # check if password-less ssh works
   if ! ssh -oBatchMode=yes -q localhost exit; then
     ssh-keygen -f $HOME/.ssh/id_rsa -t rsa -N ''
@@ -91,6 +102,7 @@ function reset_ceph_soft() {
   sudo service ceph-mon-all stop || true
   sudo skill -9 ceph-osd || true
   sudo skill -9 ceph-mon || true
+  sudo /etc/init.d/ceph stop || true
   sleep 5
 
   sudo find /var/lib/ceph -mindepth 1 -maxdepth 2 -type d -exec umount {} \; || true
@@ -108,6 +120,17 @@ function reset_ceph_soft() {
 }
 
 function create_ceph_and_start() {
+  # base ceph conf
+  conf_extra="__dne__"
+  if [ "$ceph_version" == "jewel" ]; then
+    conf_extra=${this_dir}/jewel.conf
+  elif [ "$ceph_version" == "firefly" ]; then
+    conf_extra=${this_dir}/firefly.conf
+  else
+    echo "invalid version $ceph_version"
+    exit 1
+  fi
+
   cdir=`mktemp -d`
   pushd $cdir
 
@@ -117,13 +140,8 @@ function create_ceph_and_start() {
   # removes the auth lines which we'll put back next
   sed -i '/auth_.*_required = cephx/d' ./ceph.conf
   
-  # add in our ceph configuration bits
-  if [ "$ceph_version" == "jewel" ]; then
-    cat ${this_dir}/jewel.conf >> ceph.conf
-  else
-    echo "invalid version $ceph_version"
-    exit 1
-  fi
+  # add in our stuff
+  cat $conf_extra >> ceph.conf
   
   # setup monitor
   ceph-deploy mon create-initial
@@ -150,8 +168,12 @@ function create_ceph_and_start() {
 
   sudo stop ceph-osd id=0 || true
   sudo stop ceph-osd id=0 || true
-  sudo chown ceph:ceph /var/log/ceph/ceph-osd.0.log
+  sudo chown ceph:ceph /var/log/ceph/ceph-osd.0.log || true
   sudo start ceph-osd id=0 || true
+
+  # created in firefly
+  ceph osd pool delete data data --yes-i-really-really-mean-it || true
+  ceph osd pool delete metadata metadata --yes-i-really-really-mean-it || true
 
   popd
 }
