@@ -1,7 +1,12 @@
 #ifndef ZLOG_SRC_BENCH_WORKLOADS_H
 #define ZLOG_SRC_BENCH_WORKLOADS_H
 #include "workload.h"
-#include <rados/cls_zlog_bench_client.h>
+
+#ifdef WITH_CLS_ZLOG_BENCH
+# include <rados/cls_zlog_bench_client.h>
+#else
+# include "cls_zlog_bench_client_bug.h"
+#endif
 
 //#define BENCH_DEBUG
 

@@ -39,6 +39,12 @@ AC_ARG_WITH([cls-zlog],
     [with_cls_zlog=yes])
 AM_CONDITIONAL(WITH_CLS_ZLOG, test "$with_cls_zlog" = "yes")
 
+AC_ARG_WITH([cls-zlog-bench],
+    [AS_HELP_STRING([--with-cls-zlog-bench], [build with cls_zlog_bench support])],
+    [],
+    [with_cls_zlog_bench=yes; AC_DEFINE([WITH_CLS_ZLOG_BENCH], [1])])
+
+
 AC_LANG([C++])
 
 AS_IF([test "$with_cls_zlog" = "yes"], [
