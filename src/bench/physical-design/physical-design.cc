@@ -61,6 +61,7 @@ int main(int argc, char **argv)
 
   if (interface_name == "vanilla") {
     interface = VANILLA;
+#ifdef WITH_CLS_ZLOG_BENCH
   } else if (interface_name == "cls_no_index") {
     interface = CLS_NO_INDEX;
   } else if (interface_name == "cls_check_epoch") {
@@ -77,6 +78,7 @@ int main(int argc, char **argv)
     interface = CLS_NO_INDEX_WRONLY;
   } else if (interface_name == "cls_no_index_wronly_xtn") {
     interface = CLS_NO_INDEX_WRONLY_XTN;
+#endif
   } else {
     std::cerr << "invalid storage interface " << interface_name << std::endl;
     return -1;
