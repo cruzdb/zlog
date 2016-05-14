@@ -1,6 +1,9 @@
 FROM ubuntu:14.04
-
 MAINTAINER Noah Watkins <noahwatkins@gmail.com>
+
+# if firefly, set --without-cls-zlog-bench configuration option on zlog.
+# ENV CEPH_VERSION firefly
+ENV CEPH_VERSION jewel
 
 ### base dependencies
 RUN apt-get update && apt-get install -y git wget vim tmux \
@@ -27,7 +30,7 @@ RUN cd /src/ceph-deploy && ./bootstrap
 RUN ln -s /src/ceph-deploy/ceph-deploy /usr/bin/ceph-deploy
 
 ### install ceph base and librados
-RUN ceph-deploy install --release jewel `hostname`
+RUN ceph-deploy install --release ${CEPH_VERSION} `hostname`
 RUN ceph-deploy pkg --install librados-dev `hostname`
 
 ### fetch, build, and install cls_zlog bits
@@ -46,6 +49,10 @@ RUN cd /src/ceph/src && \
 
 ### fetch zlog and build
 RUN git clone --branch=physical-design https://github.com/noahdesu/zlog.git /src/zlog
+
+# for firefly
+#RUN cd /src/zlog && ./makeconf.sh && ./configure --without-cls-zlog --without-cls-zlog-bench && make
+# for jewel
 RUN cd /src/zlog && ./makeconf.sh && ./configure --without-cls-zlog && make
 
 ADD entrypoint.sh /entrypoint.sh
