@@ -83,13 +83,17 @@ set -x
 # proceeding. in either case the experiment will ensure it is using a fresh
 # pool configured according to the experiment parameters.
 if [ "x$reset" = "xsoft" ]; then
-  ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev}
+  if [ -z ${ceph_version+x} ]; then
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev}
+  else
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev} --version ${ceph_version}
+  fi
 fi
 
 set +x
 
-cat /sys/fs/cgroup/blkio/blkio.throttle.write_iops_device
-cat /sys/fs/cgroup/blkio/blkio.throttle.read_iops_device
+cat /sys/fs/cgroup/blkio/blkio.throttle.write_iops_device || true
+cat /sys/fs/cgroup/blkio/blkio.throttle.read_iops_device || true
 
 #
 # This is always a write workload
@@ -173,8 +177,8 @@ echo 3 | sudo tee /proc/sys/vm/drop_caches
 sudo start ceph-osd id=0 || true
 sudo service ceph-osd-all start || true
 
-cat /sys/fs/cgroup/blkio/blkio.throttle.write_iops_device
-cat /sys/fs/cgroup/blkio/blkio.throttle.read_iops_device
+cat /sys/fs/cgroup/blkio/blkio.throttle.write_iops_device || true
+cat /sys/fs/cgroup/blkio/blkio.throttle.read_iops_device || true
 
 docker run --net=host \
   -v $logdir:$guest_logdir \
