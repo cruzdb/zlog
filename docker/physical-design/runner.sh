@@ -83,10 +83,16 @@ set -x
 # proceeding. in either case the experiment will ensure it is using a fresh
 # pool configured according to the experiment parameters.
 if [ "x$reset" = "xsoft" ]; then
-  if [ -z ${ceph_version+x} ]; then
-    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev}
+  if [ -z ${noop_dev+x} ]; then
+    noop_dev_opt=""
   else
-    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} --noop ${data_dev} --version ${ceph_version}
+    noop_dev_opt="--noop ${data_dev}"
+  fi
+
+  if [ -z ${ceph_version+x} ]; then
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${noop_dev_opt}
+  else
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${noop_dev_opt} --version ${ceph_version}
   fi
 fi
 
