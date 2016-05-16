@@ -71,7 +71,7 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
   int ret = ioctx.operate(metalog_oid, &op);
   if (ret) {
-    std::cerr << "Failed to create log " << name << " ret "
+    std::cerr << "Failed to create log" << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
     return ret;
   }
