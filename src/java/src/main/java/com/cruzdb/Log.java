@@ -123,4 +123,5 @@ public class Log extends ZObject {
   private native void fill(long handle, long position) throws LogException;
   private native void trim(long handle, long position) throws LogException;
   private native long tail(long handle) throws LogException;
+  private native long kv_insert(long handle)...
 }

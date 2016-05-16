@@ -109,7 +109,7 @@ int main(int argc, char **argv)
   client->Connect();
 
   zlog::Log *log;
-  ret = zlog::Log::OpenOrCreate(ioctx, log_name, client, &log);
+  ret = zlog::Log::Create(ioctx, log_name, client, &log);
   assert(ret == 0);
 
   std::thread check_thread(check_appends, pool, server, port, log_name);
