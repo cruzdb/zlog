@@ -86,13 +86,19 @@ if [ "x$reset" = "xsoft" ]; then
   if [ -z ${noop_dev+x} ]; then
     noop_dev_opt=""
   else
-    noop_dev_opt="--noop ${data_dev}"
+    noop_dev_opt="--noop ${noop_dev}"
+  fi
+
+  if [ -z ${journal_dev+x} ]; then
+    journal_dev_opt=""
+  else
+    journal_dev_opt="--journal-dev ${journal_dev}"
   fi
 
   if [ -z ${ceph_version+x} ]; then
-    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${noop_dev_opt}
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${journal_dev_opt} ${noop_dev_opt}
   else
-    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${noop_dev_opt} --version ${ceph_version}
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${journal_dev_opt} ${noop_dev_opt} --version ${ceph_version}
   fi
 fi
 
