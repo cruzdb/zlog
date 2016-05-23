@@ -33,6 +33,10 @@ while [[ $# > 1 ]]; do
       ceph_version="$2"
       shift
       ;;
+    -o|--osd-create)
+      osd_create_opts="$2"
+      shift
+      ;;
     *)
       # unknown option
       ;;
@@ -123,13 +127,17 @@ function create_ceph_and_start() {
   # base ceph conf
   conf_extra="__dne__"
   if [ "$ceph_version" == "jewel" ]; then
-    conf_extra=${this_dir}/jewel.conf
+    conf_extra=${this_dir}/jewel
   elif [ "$ceph_version" == "firefly" ]; then
-    conf_extra=${this_dir}/firefly.conf
+    conf_extra=${this_dir}/firefly
   else
     echo "invalid version $ceph_version"
     exit 1
   fi
+  if [[ "$osd_create_opts" == *"bluestore"* ]]; then
+    conf_extra=${conf_extra}-bluestore
+  fi
+  conf_extra=${conf_extra}.conf
 
   cdir=`mktemp -d`
   pushd $cdir
@@ -161,9 +169,9 @@ function create_ceph_and_start() {
   
   # create osd
   if [ "$journal_dev" != "none" ]; then
-    ceph-deploy osd create $host:$data_dev:$journal_dev
+    ceph-deploy osd create $osd_create_opts $host:$data_dev:$journal_dev
   else
-    ceph-deploy osd create $host:$data_dev
+    ceph-deploy osd create $osd_create_opts $host:$data_dev
   fi
 
   sudo stop ceph-osd id=0 || true
