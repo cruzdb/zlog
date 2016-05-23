@@ -33,8 +33,8 @@ while [[ $# > 1 ]]; do
       ceph_version="$2"
       shift
       ;;
-    -o|--osd-create)
-      osd_create_opts="$2"
+    -b|--bluestore)
+      bluestore=yes
       shift
       ;;
     *)
@@ -52,10 +52,11 @@ fi
 echo "====================================="
 echo "              CONFIG"
 echo "====================================="
-echo "DATA-DEV: $data_dev"
-echo "JRNL-DEV: $journal_dev"
-echo "NOOP-DEV: $noop_devs"
-echo " VERSION: $ceph_version"
+echo " DATA-DEV: $data_dev"
+echo " JRNL-DEV: $journal_dev"
+echo " NOOP-DEV: $noop_devs"
+echo "  VERSION: $ceph_version"
+echo "BLUESTORE: $bluestore"
 echo "====================================="
 
 function prepare() {
@@ -86,7 +87,11 @@ function prepare() {
   fi
   
   if ! which ceph &> /dev/null; then
-    ceph-deploy install --release ${ceph_version} `hostname`
+    if [ "${ceph_version}" == "master" ]; then
+      ceph-deploy install --dev ${ceph_version} `hostname`
+    else
+      ceph-deploy install --release ${ceph_version} `hostname`
+    fi
   fi
   
   if [ ! -e "/usr/include/rados/librados.hpp" ]; then
@@ -128,14 +133,17 @@ function create_ceph_and_start() {
   conf_extra="__dne__"
   if [ "$ceph_version" == "jewel" ]; then
     conf_extra=${this_dir}/jewel
+  elif [ "$ceph_version" == "master" ]; then
+    conf_extra=${this_dir}/jewel
   elif [ "$ceph_version" == "firefly" ]; then
     conf_extra=${this_dir}/firefly
   else
     echo "invalid version $ceph_version"
     exit 1
   fi
-  if [[ "$osd_create_opts" == *"bluestore"* ]]; then
+  if [ "x$bluestore" == "xyes" ]; then
     conf_extra=${conf_extra}-bluestore
+    osd_create_opts="--bluestore"
   fi
   conf_extra=${conf_extra}.conf
 
@@ -166,7 +174,7 @@ function create_ceph_and_start() {
     echo noop | sudo tee /sys/block/$dev/queue/scheduler
     echo "Scheduler ($dev): $(cat /sys/block/$dev/queue/scheduler)"
   done
-  
+
   # create osd
   if [ "$journal_dev" != "none" ]; then
     ceph-deploy osd create $osd_create_opts $host:$data_dev:$journal_dev

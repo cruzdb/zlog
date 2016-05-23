@@ -95,16 +95,16 @@ if [ "x$reset" = "xsoft" ]; then
     journal_dev_opt="--journal-dev ${journal_dev}"
   fi
 
-   if [ -z ${osd_create+x} ]; then
-    osd_create_opt=""
+  if [ -z ${bluestore+x} ]; then
+    bluestore=""
   else
-    osd_create_opt="--osd-create ${osd_create}"
+    bluestore="--bluestore true"
   fi
 
   if [ -z ${ceph_version+x} ]; then
-    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${journal_dev_opt} ${noop_dev_opt} ${osd_create_opt}
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${journal_dev_opt} ${noop_dev_opt} ${bluestore}
   else
-    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${journal_dev_opt} ${noop_dev_opt} ${osd_create_opt} --version ${ceph_version}
+    ${this_dir}/single-node-ceph.sh --data-dev ${data_dev} ${journal_dev_opt} ${noop_dev_opt} ${bluestore} --version ${ceph_version}
   fi
 fi
 
