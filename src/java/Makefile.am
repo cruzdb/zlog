@@ -26,15 +26,15 @@ libzlogjni_la_LIBADD = $(LIBZLOG)
 libzlogjni_la_CPPFLAGS = -I$(srcdir)/java/include $(JNI_CPPFLAGS) $(AM_CPPFLAGS)
 libzlogjni_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
-$(ZLOG_JAR): libzlogjni.la
+java/target/$(ZLOG_JAR): libzlogjni.la
 	cp $(builddir)/.libs/libzlogjni.so java/target
 	cd java/target; $(JAR) -cf $(ZLOG_JAR) libzlogjni.so
 	cd java/target/classes; $(JAR) -uf ../$(ZLOG_JAR) com/cruzdb/*.class
 
 javadir = $(datadir)/java
-java_DATA = $(ZLOG_JAR)
+java_DATA = java/target/$(ZLOG_JAR)
 
-hello: $(ZLOG_JAR) java/ZlogHello.java
+hello: java/target/$(ZLOG_JAR) java/ZlogHello.java
 	$(JAVAC) -cp java/target/$(ZLOG_JAR) java/ZlogHello.java
 	java -cp java/target/$(ZLOG_JAR):java -Xcheck:jni ZlogHello
 
@@ -65,7 +65,7 @@ test-java-deps:
 	test -s "$(JAVA_JUNIT_JAR)" || curl -k -L -o $(JAVA_JUNIT_JAR) http://search.maven.org/remotecontent?filepath=junit/junit/4.12/junit-4.12.jar
 	test -s "$(JAVA_HAMCR_JAR)" || curl -k -L -o $(JAVA_HAMCR_JAR) http://search.maven.org/remotecontent?filepath=org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar
 
-test-java: $(ZLOG_JAR) test-java-deps
+test-java: java/target/$(ZLOG_JAR) test-java-deps
 	rm -rf $(TEST_CLASSES)
 	mkdir -p $(TEST_CLASSES)
 	$(JAVAC) -cp $(JAVA_TESTCLASSPATH):$(OUTPUT)/$(ZLOG_JAR) -d $(TEST_CLASSES) $(TEST_SRC)/com/cruzdb/*.java
