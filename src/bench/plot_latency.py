@@ -23,16 +23,19 @@ def plot_throughput(traces):
     else:
         agg_fn = "multi_" + `len(tps)` + ".log"
     
-    plt.figure()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
     for fn, trace in tps:
-        plt.plot(trace.completed, trace.latency, label=fn)
-    plt.gca().xaxis.set_major_formatter(ScalarFormatter())
-    plt.title('I/O Throughput')
-    plt.ylabel('IOs per Second')
-    plt.xlabel('Time')
-    lgd = plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.savefig(agg_fn + '_iops.png', format='png',
-            bbox_extra_artists=(lgd,), bbox_inches='tight')
+        ax.plot(trace.completed, trace.latency, label=fn)
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.set_title('I/O Throughput: ' + agg_fn)
+    ax.set_ylabel('IOs per Second')
+    ax.set_xlabel('Time')
+    fig.savefig(agg_fn + '_iops.png', format='png')
+    #lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    #fig.savefig(agg_fn + '_iops.png', format='png',
+    #        bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.close(fig)
 
 def plot_latency_ecdf(traces):
     cdfs = []
@@ -46,35 +49,34 @@ def plot_latency_ecdf(traces):
     else:
         agg_fn = "multi_" + `len(cdfs)` + ".log"
     
-    plt.figure()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
     for fn, sorted_latency, yvals in cdfs:
-        plt.plot(sorted_latency, yvals, label=fn)
-    plt.gca().xaxis.set_major_formatter(ScalarFormatter())
-    plt.title('I/O Latency CDF')
-    plt.xlabel('Latency (ms)')
-    plt.ylabel('Frequency')
-    lgd = plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.savefig(agg_fn + '_ecdf.png', format='png',
-            bbox_extra_artists=(lgd,), bbox_inches='tight')
-    
-    plt.figure()
-    for fn, sorted_latency, yvals in cdfs:
-        plt.plot(sorted_latency, yvals, label=fn)
-    plt.xscale('log')
-    plt.gca().xaxis.set_major_formatter(ScalarFormatter())
-    plt.title('I/O Latency CDF')
-    plt.xlabel('Latency (ms)')
-    plt.ylabel('Frequency')
-    lgd = plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.savefig(agg_fn + '_ecdf_logx.png', format='png',
-            bbox_extra_artists=(lgd,), bbox_inches='tight')
+        ax.plot(sorted_latency, yvals, label=fn)
+    ax.set_xscale('log')
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.set_title('I/O Latency CDF: ' + agg_fn)
+    ax.set_xlabel('Latency (ms)')
+    ax.set_ylabel('Frequency')
+    fig.savefig(agg_fn + '_ecdf_logx.png', format='png')
+    #lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    #fig.savefig(agg_fn + '_ecdf_logx.png', format='png',
+    #        bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.close(fig)
+    return
 
-def plot_combos(traces):
-    for trace in traces:
-        plot_latency_ecdf([trace])
-        plot_throughput([trace])
-    plot_latency_ecdf(traces)
-    plot_throughput(traces)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for fn, sorted_latency, yvals in cdfs:
+        ax.plot(sorted_latency, yvals, label=fn)
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.set_title('I/O Latency CDF')
+    ax.set_xlabel('Latency (ms)')
+    ax.set_ylabel('Frequency')
+    lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    fig.savefig(agg_fn + '_ecdf.png', format='png',
+            bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.close(fig)
 
 def read_trace(filename):
     trace = pd.read_table(filename, sep=" ", header=None,
@@ -86,12 +88,15 @@ def read_trace(filename):
     trace.sort_values(by='completed', ascending=True, inplace=True)
     return trace
 
-def read_traces(filenames):
-    return [(os.path.basename(fn), read_trace(fn)) for fn in filenames]
+def plot_traces(traces):
+    for fn in traces:
+        df = read_trace(fn)
+        name = os.path.basename(fn)
+        plot_latency_ecdf([(name, df)])
+        plot_throughput([(name, df)])
 
 if __name__ == '__main__':
     traces = []
     for arg in sys.argv[1:]:
         traces += glob.glob(arg)
-    traces = read_traces(traces)
-    plot_combos(traces)
+    plot_traces(traces)

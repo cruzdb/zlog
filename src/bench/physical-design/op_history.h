@@ -4,6 +4,7 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
+#include <chrono>
 #include <condition_variable>
 #include <vector>
 #include <sys/types.h>
@@ -32,15 +33,26 @@ class OpHistory {
       flush_cond_.notify_one();
   }
 
+  void add_iops(uint64_t timestamp, unsigned iops) {
+    std::lock_guard<std::mutex> l(lock_);
+    history_.emplace_back(op{timestamp, iops});
+    if (history_.size() > flush_level_)
+      flush_cond_.notify_one();
+  }
+
   void stop() {
     lock_.lock();
     stop_ = true;
-    flush_cond_.notify_one();
     lock_.unlock();
+    flush_cond_.notify_one();
     flusher_.join();
   }
 
  private:
+  /*
+   * This tracks IOPS too in which case start_ns is a timestamp, and
+   * latency_ns is the number of iops in the previous period.
+   */
   struct op {
     uint64_t start_ns;
     uint64_t latency_ns;
@@ -64,7 +76,8 @@ class OpHistory {
 
     for (;;) {
       // wait for something to do
-      flush_cond_.wait(lock,
+      auto now = std::chrono::system_clock::now();
+      flush_cond_.wait_until(lock, now + std::chrono::minutes(5),
           [&]{ return ((history_.size() > flush_level_) || stop_); });
 
       // grab the current history and replace it
@@ -75,14 +88,18 @@ class OpHistory {
 
       lock.unlock();
 
+      uint64_t flushed_entries = 0;
       for (auto& e : tmp_history) {
         dprintf(fd, "%llu %llu\n",
             (unsigned long long)e.start_ns,
             (unsigned long long)e.latency_ns);
         entries_written_++;
+        flushed_entries++;
       }
 
       lock.lock();
+
+      std::cout << "flushed " << flushed_entries << " entries" << std::endl;
 
       if (stop_ && history_.empty())
         break;
@@ -93,7 +110,7 @@ class OpHistory {
     if (close_fd)
       close(fd);
 
-    std::cout << "wrote " << entries_written_ << " entries" << std::endl;
+    std::cout << "wrote a total of " << entries_written_ << " entries" << std::endl;
   }
 
   size_t capacity_;
