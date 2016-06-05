@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-MON="c220g2-011327.wisc.cloudlab.us"
-OSDS="c220g2-011331.wisc.cloudlab.us c220g2-011330.wisc.cloudlab.us"
+MON="mon0"
+OSDS="mon0 osd0 client0"
 DDEV=sdb
 JDEV=sdc
 NOOP_DEVS="sdc"
@@ -101,12 +101,11 @@ function setup_ceph() {
   # setup monitor
   ceph-deploy mon create-initial
 
-  cd_osd_list="{$(echo $OSDS | sed "s/ /,/g")}"
-
   # nuke osd disks
-  ceph-deploy disk zap $cd_osd_list:$DDEV
+  zap_cmd="ceph-deploy disk zap {$(echo $OSDS | sed "s/ /,/g")}"
+  eval "$zap_cmd:$DDEV"
   if [ -n "$JDEV" ]; then
-    ceph-deploy disk zap $cd_osd_list:$JDEV
+    eval "$zap_cmd:$JDEV"
   fi
 
   # set noop sched
@@ -116,16 +115,21 @@ function setup_ceph() {
     done
   done
 
-  cd_osd_devs="$DDEV"
+  # create osds
+  osd_cmd="ceph-deploy osd create {$(echo $OSDS | sed "s/ /,/g")}:$DDEV"
   if [ -n "$JDEV" ]; then
-    cd_osd_devs="$cd_osd_devs:$JDEV"
+    osd_cmd="$osd_cmd:$JDEV"
   fi
+  eval $osd_cmd
 
-  ceph-deploy osd create $cd_osd_list:$cd_osd_devs
+  # make life easy
+  eval "ceph-deploy admin {$(echo "$MON $OSDS" | sed "s/ /,/g")}"
+  for host in $MON $OSDS; do
+    ssh $host sudo chmod a+r /etc/ceph/ceph.client.admin.keyring
+  done
 }
 
 function wait_healthy() {
-ssh $MON <<-'ENDSSH'
   while true; do
     if ceph status | tee /dev/tty | grep -q HEALTH_OK; then
       if ! ceph status | grep -q creating &> /dev/null; then
@@ -134,7 +138,6 @@ ssh $MON <<-'ENDSSH'
     fi
     sleep 1
   done
-ENDSSH
 }
 
 prepare
