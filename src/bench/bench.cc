@@ -2,6 +2,7 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <sstream>
@@ -63,8 +64,23 @@ static void handle_aio_cb(aio_state *io)
   delete io;
 }
 
-static void workload(zlog::Log *log, const int qdepth)
+static void workload(zlog::Log *log, const int qdepth, int entry_size)
 {
+  // create random data to use for payloads
+  size_t rand_buf_size = 1ULL<<23;
+  std::string rand_buf;
+  rand_buf.reserve(rand_buf_size);
+  std::ifstream ifs("/dev/urandom", std::ios::binary | std::ios::in);
+  std::copy_n(std::istreambuf_iterator<char>(ifs),
+      rand_buf_size, std::back_inserter(rand_buf));
+  const char *rand_buf_raw = rand_buf.c_str();
+
+  // grab random slices from the random bytes
+  std::default_random_engine generator;
+  std::uniform_int_distribution<int> rand_dist;
+  rand_dist = std::uniform_int_distribution<int>(0,
+      rand_buf_size - entry_size - 1);
+
   outstanding_ios = 0;
   std::unique_lock<std::mutex> lock(io_lock);
   for (;;) {
@@ -76,8 +92,12 @@ static void workload(zlog::Log *log, const int qdepth)
           std::bind(handle_aio_cb, io));
       assert(io->c);
 
-      // queue aio append operation
+      // fill with random data
       ceph::bufferlist bl;
+      size_t buf_offset = rand_dist(generator);
+      bl.append(rand_buf_raw + buf_offset, entry_size);
+
+      // queue aio append operation
       int ret = log->AioAppend(io->c, bl);
       assert(ret == 0);
 
@@ -151,6 +171,7 @@ int main(int argc, char **argv)
   int stats_window;
   int qdepth;
   std::string tp_log_fn;
+  int entry_size;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -162,6 +183,7 @@ int main(int argc, char **argv)
     ("window", po::value<int>(&stats_window)->default_value(2), "stats collection period")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
     ("iops-log", po::value<std::string>(&tp_log_fn)->default_value(""), "throughput log file")
+    ("entry-size", po::value<int>(&entry_size)->default_value(1024), "Entry size")
   ;
 
   po::variables_map vm;
@@ -176,19 +198,21 @@ int main(int argc, char **argv)
     logname = ss.str();
   }
 
-  std::cout << "     pool: " << pool << std::endl;
-  std::cout << "  logname: " << logname << std::endl;
-  std::cout << "seqr-host: " << server << std::endl;
-  std::cout << "seqr-port: " << port << std::endl;
-  std::cout << "  runtime: " << runtime << std::endl;
-  std::cout << " stat win: " << stats_window << std::endl;
-  std::cout << "   qdepth: " << qdepth << std::endl;
-  std::cout << " iops log: " << tp_log_fn << std::endl;
+  std::cout << "      pool: " << pool << std::endl;
+  std::cout << "   logname: " << logname << std::endl;
+  std::cout << " seqr-host: " << server << std::endl;
+  std::cout << " seqr-port: " << port << std::endl;
+  std::cout << "   runtime: " << runtime << std::endl;
+  std::cout << "  stat win: " << stats_window << std::endl;
+  std::cout << "    qdepth: " << qdepth << std::endl;
+  std::cout << "  iops log: " << tp_log_fn << std::endl;
+  std::cout << "entry size: " << entry_size << std::endl;
 
   assert(!pool.empty());
   assert(runtime >= 0);
   assert(stats_window > 0);
   assert(qdepth > 0);
+  assert(entry_size >= 0);
 
   // connect to rados
   librados::Rados cluster;
@@ -223,7 +247,7 @@ int main(int argc, char **argv)
   stop = 0;
 
   std::thread report_runner(report, stats_window, tp_log_fn);
-  std::thread workload_runner(workload, log, qdepth);
+  std::thread workload_runner(workload, log, qdepth, entry_size);
 
   if (runtime) {
     sleep(runtime);
