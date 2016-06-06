@@ -98,10 +98,17 @@ static void workload(zlog::Log *log, const int qdepth)
   }
 }
 
-static void report(int stats_window)
+static void report(int stats_window, const std::string tp_log_fn)
 {
   ios_completed = 0;
   uint64_t window_start = getns();
+
+  // open the output stream
+  int fd = -1;
+  if (!tp_log_fn.empty()) {
+    fd = open(tp_log_fn.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0440);
+    assert(fd != -1);
+  }
 
   while (!stop) {
     sleep(stats_window);
@@ -119,7 +126,18 @@ static void report(int stats_window)
     if (stop)
       break;
 
+    if (fd != -1) {
+      dprintf(fd, "time %llu iops %llu\n",
+          (unsigned long long)now,
+          (unsigned long long)iops);
+    }
+
     std::cout << "time " << now << " iops " << (int)iops << std::endl;
+  }
+
+  if (fd != -1) {
+    fsync(fd);
+    close(fd);
   }
 }
 
@@ -132,6 +150,7 @@ int main(int argc, char **argv)
   int runtime;
   int stats_window;
   int qdepth;
+  std::string tp_log_fn;
 
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -142,6 +161,7 @@ int main(int argc, char **argv)
     ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
     ("window", po::value<int>(&stats_window)->default_value(2), "stats collection period")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
+    ("iops-log", po::value<std::string>(&tp_log_fn)->default_value(""), "throughput log file")
   ;
 
   po::variables_map vm;
@@ -163,6 +183,7 @@ int main(int argc, char **argv)
   std::cout << "  runtime: " << runtime << std::endl;
   std::cout << " stat win: " << stats_window << std::endl;
   std::cout << "   qdepth: " << qdepth << std::endl;
+  std::cout << " iops log: " << tp_log_fn << std::endl;
 
   assert(!pool.empty());
   assert(runtime >= 0);
@@ -201,7 +222,7 @@ int main(int argc, char **argv)
 
   stop = 0;
 
-  std::thread report_runner(report, stats_window);
+  std::thread report_runner(report, stats_window, tp_log_fn);
   std::thread workload_runner(workload, log, qdepth);
 
   if (runtime) {
