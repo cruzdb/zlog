@@ -53,17 +53,42 @@ function prepare() {
       echo "OK"
     fi
   done
+
+  # extract and install Ceph plugin bits
+  sudo ./install-docker.sh
+
+  plugin_dir=`mktemp -d`
+  trap 'rm -rf "$plugin_dir"' EXIT
+
+  sudo docker pull zlog/zlog:jewel
+  sudo docker run --rm -it -v $plugin_dir:/tmp/foo zlog/zlog:jewel \
+    cp /usr/lib/rados-classes/libcls_zlog.so /tmp/foo
+
+  for host in $OSDS; do
+    echo -n "checking for zlog plugin on $host... "
+    if ! ssh $host stat /usr/lib/rados-classes/libcls_zlog.so &> /dev/null; then
+      echo "installing libcls_zlog.so plugin"
+      rsync -av -e ssh --rsync-path="sudo rsync" $plugin_dir/libcls_zlog.so \
+        ${host}:/usr/lib/rados-classes/libcls_zlog.so
+    else
+      echo "OK"
+    fi
+  done
 }
 
-# TODO: figure out the id=0 etc...
 function reset_ceph() {
 for host in $MON $OSDS; do
 ssh $host <<-'ENDSSH' &> /dev/null
   host=`hostname`
   shorthost=`hostname --short`
+
   sudo stop ceph-all || true
   sudo stop ceph-all || true
-  sudo stop ceph-osd id=0 || true
+
+  for id in `ps aux | grep '[c]eph-osd' | sed -n 's/.*ceph-osd.* -i \([0-9]\+\).*/\1/p'`; do
+    sudo stop ceph-osd id=$id || true
+  done
+
   sudo stop ceph-mon id=$host || true
   sudo stop ceph-mon id=$shorthost || true
   sudo service ceph-osd-all stop || true
