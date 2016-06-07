@@ -14,6 +14,8 @@
 
 namespace po = boost::program_options;
 
+static bool stream_support;
+
 static int report_sec;
 
 static uint64_t get_time(void)
@@ -307,7 +309,7 @@ class LogManager {
      * more dynamic and efficient during a later rewrite of the streaming
      * interface.
      */
-    if (position > 0) {
+    if (stream_support && position > 0) {
       assert(position > 0);
       uint64_t tail = position;
       std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
@@ -602,6 +604,16 @@ class Session {
            * request for incrementing the log tail.
            */
 
+          /*
+           * this is very rude... well, the current support for streams
+           * contains some cases that cause major delays while processing log
+           * entries and stream support is pre-alpha stage, so we've added a
+           * mode that assumes no clients with use the stream api.
+           *
+           * consider yourself warned.
+           */
+          assert(stream_support);
+
           // batch stream requests not yet supported
           assert(req_.count() == 1);
 
@@ -751,6 +763,7 @@ int main(int argc, char* argv[])
     ("nthreads", po::value<int>(&nthreads)->default_value(1), "Num threads")
     ("report-sec", po::value<int>(&report_sec)->default_value(0), "Time between rate reports")
     ("daemon,d", "Run in background")
+    ("streams", po::bool_switch(&stream_support)->default_value(false), "support streams")
   ;
 
   po::variables_map vm;
