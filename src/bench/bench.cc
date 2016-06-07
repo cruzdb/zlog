@@ -15,7 +15,7 @@
 #include <signal.h>
 #include <time.h>
 #include <rados/librados.hpp>
-#include "../include/zlog/log.h"
+#include "../libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 
@@ -64,7 +64,7 @@ static void handle_aio_cb(aio_state *io)
   delete io;
 }
 
-static void workload(zlog::Log *log, const int qdepth, int entry_size)
+static void append_workload_func(zlog::Log *log, const int qdepth, int entry_size)
 {
   // create random data to use for payloads
   size_t rand_buf_size = 1ULL<<23;
@@ -118,6 +118,17 @@ static void workload(zlog::Log *log, const int qdepth, int entry_size)
   }
 }
 
+static void nextseq_workload_func(zlog::LogImpl *log_impl)
+{
+  while (!stop) {
+    uint64_t tail;
+    int ret = log_impl->CheckTail(&tail, true);
+    assert(ret == 0);
+
+    ios_completed++;
+  }
+}
+
 static void report(int stats_window, const std::string tp_log_fn)
 {
   ios_completed = 0;
@@ -161,6 +172,16 @@ static void report(int stats_window, const std::string tp_log_fn)
   }
 }
 
+static void conflict(const po::variables_map& vm,
+    const std::string& opt1, const std::string& opt2)
+{
+  if (vm.count(opt1) && !vm[opt1].defaulted() &&
+      vm.count(opt2) && !vm[opt2].defaulted()) {
+    throw std::logic_error(std::string("Conflicting options '") +
+        opt1 + "' and '" + opt2 + "'.");
+  }
+}
+
 int main(int argc, char **argv)
 {
   std::string pool;
@@ -173,21 +194,47 @@ int main(int argc, char **argv)
   std::string tp_log_fn;
   int entry_size;
 
-  po::options_description desc("Allowed options");
-  desc.add_options()
-    ("pool", po::value<std::string>(&pool)->required(), "Pool name")
-    ("logname", po::value<std::string>(&logname)->default_value(""), "Log name")
-    ("server", po::value<std::string>(&server)->default_value("localhost"), "Server host")
-    ("port", po::value<std::string>(&port)->default_value("5678"), "Server port")
-    ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
+  bool append_workload;
+  bool nextseq_workload;
+
+  po::options_description gen_opts("General options");
+  gen_opts.add_options()
+    ("help,h", "show help message")
+    ("append,a", po::bool_switch(&append_workload)->default_value(true), "append workload")
+    ("nextseq,n", po::bool_switch(&nextseq_workload)->default_value(false), "next seq workload")
+    ("logname,l", po::value<std::string>(&logname)->default_value(""), "Log name")
+    ("server,s", po::value<std::string>(&server)->default_value("localhost"), "Server host")
+    ("port,p", po::value<std::string>(&port)->default_value("5678"), "Server port")
+    ("runtime,r", po::value<int>(&runtime)->default_value(0), "runtime")
     ("window", po::value<int>(&stats_window)->default_value(2), "stats collection period")
-    ("qdepth", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
+    ("pool,p", po::value<std::string>(&pool)->required(), "Pool name")
     ("iops-log", po::value<std::string>(&tp_log_fn)->default_value(""), "throughput log file")
-    ("entry-size", po::value<int>(&entry_size)->default_value(1024), "Entry size")
   ;
 
+  po::options_description append_opts("Append workload options");
+  append_opts.add_options()
+    ("entry-size,e", po::value<int>(&entry_size)->default_value(1024), "Entry size")
+    ("qdepth,q", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
+  ;
+
+  po::options_description all_opts("Allowed options");
+  all_opts.add(gen_opts).add(append_opts);
+
   po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::store(po::parse_command_line(argc, argv, all_opts), vm);
+
+  if (vm.count("help")) {
+    std::cout << all_opts << std::endl;
+    return 1;
+  }
+
+  // choose only one workload
+  conflict(vm, "append", "nextseq");
+
+  // sequencer workload doesn't perform appends
+  conflict(vm, "nextseq", "entry-size");
+  conflict(vm, "nextseq", "qdepth");
+
   po::notify(vm);
 
   if (logname.empty()) {
@@ -198,6 +245,18 @@ int main(int argc, char **argv)
     logname = ss.str();
   }
 
+  if (nextseq_workload)
+    append_workload = false;
+
+  std::string workload_name;
+  if (append_workload)
+    workload_name = "append";
+  else if (nextseq_workload)
+    workload_name = "next seq";
+  else
+    assert(0);
+
+  std::cout << "  workload: " << workload_name << std::endl;
   std::cout << "      pool: " << pool << std::endl;
   std::cout << "   logname: " << logname << std::endl;
   std::cout << " seqr-host: " << server << std::endl;
@@ -235,6 +294,9 @@ int main(int argc, char **argv)
   ret = zlog::Log::OpenOrCreate(ioctx, logname, &client, &log);
   assert(ret == 0);
 
+  // used to access the low-level sequencer checktail interface
+  zlog::LogImpl *log_impl = reinterpret_cast<zlog::LogImpl*>(log);
+
   // this is a little hack that refreshes the epoch we are storing so that
   // when we send out of a bunch of async requests they don't all initially
   // fail due to an old epoch. TODO: this should probably be handled when we
@@ -247,7 +309,16 @@ int main(int argc, char **argv)
   stop = 0;
 
   std::thread report_runner(report, stats_window, tp_log_fn);
-  std::thread workload_runner(workload, log, qdepth, entry_size);
+
+  std::vector<std::thread> workload_runners;
+  if (append_workload) {
+    workload_runners.push_back(std::thread(
+          append_workload_func, log, qdepth, entry_size));
+  } else if (nextseq_workload) {
+    workload_runners.push_back(std::thread(
+          nextseq_workload_func, log_impl));
+  } else
+    assert(0);
 
   if (runtime) {
     sleep(runtime);
@@ -255,7 +326,8 @@ int main(int argc, char **argv)
   }
 
   report_runner.join();
-  workload_runner.join();
+  std::for_each(workload_runners.begin(),
+      workload_runners.end(), [](std::thread& t) { t.join(); });
 
   ioctx.close();
   cluster.shutdown();
