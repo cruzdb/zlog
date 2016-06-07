@@ -1,11 +1,61 @@
 #!/bin/bash
 set -e
 
-MON="mon0"
-OSDS="mon0 osd0 client0"
-DDEV=sdb
-JDEV=sdc
-NOOP_DEVS="sdc"
+while [[ $# > 1 ]]; do
+  key="$1"
+  case $key in
+    -m|--mon)
+      MON="$2"
+      shift # past argument
+      ;;
+    -o|--osd)
+      if [ -z "$OSDS" ]; then OSDS="$2";
+      else OSDS="$OSDS $2"; fi
+      shift
+      ;;
+    -d|--data-dev)
+      DDEV="$2"
+      shift
+      ;;
+    -j|--journal-dev)
+      JDEV="$2"
+      shift
+      ;;
+    -n|--noop-dev)
+      if [ -z "$NOOP_DEVS" ]; then NOOP_DEVS="$2";
+      else NOOP_DEVS="$NOOP_DEVS $2"; fi
+      shift
+      ;;
+    *)
+      echo "Unknown option $2"
+      exit 1
+      ;;
+  esac
+  shift # past argument or value
+done 
+
+echo "######## SETTINGS ########"
+echo " MON: $MON"
+echo "OSDS: $OSDS"
+echo "DDEV: $DDEV"
+echo "JDEV: $JDEV"
+echo "NOOP: $NOOP_DEVS"
+echo "##########################"
+
+if [ -z "$MON" ]; then
+  echo "No monitor specified"
+  exit 1
+fi
+
+if [ -z "$OSDS" ]; then
+  echo "No OSDs specified"
+  exit 1
+fi
+
+if [ -z "$DDEV" ]; then
+  echo "No data device specified"
+  exit 1
+fi
 
 function prepare() {
   # install ceph-deploy
