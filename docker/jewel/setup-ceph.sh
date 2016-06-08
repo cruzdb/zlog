@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 while [[ $# > 1 ]]; do
   key="$1"
   case $key in
@@ -24,6 +26,11 @@ while [[ $# > 1 ]]; do
     -n|--noop-dev)
       if [ -z "$NOOP_DEVS" ]; then NOOP_DEVS="$2";
       else NOOP_DEVS="$NOOP_DEVS $2"; fi
+      shift
+      ;;
+    -a|--admin)
+      if [ -z "$ADMIN_NODES" ]; then ADMIN_NODES="$2";
+      else ADMIN_NODES="$ADMIN_NODES $2"; fi
       shift
       ;;
     *)
@@ -77,7 +84,7 @@ function prepare() {
   fi
 
   # make sure hosts support password-less ssh
-  for host in $MON $OSDS; do
+  for host in $MON $OSDS $ADMIN_NODES; do
     echo -n "testing password-less ssh for $host... "
     if ! ssh -oBatchMode=yes -q $host exit; then
       echo "\npassword-less ssh not setup for $host"
@@ -87,7 +94,7 @@ function prepare() {
   done
 
   # install ceph
-  for host in $MON $OSDS; do
+  for host in $MON $OSDS $ADMIN_NODES; do
     echo -n "checking ceph installation on $host... "
     if ! ssh $host which ceph &> /dev/null; then
       echo "installing ceph"
@@ -105,7 +112,7 @@ function prepare() {
   done
 
   # extract and install Ceph plugin bits
-  sudo ./install-docker.sh
+  sudo ${this_dir}/install-docker.sh
 
   plugin_dir=`mktemp -d`
   trap 'rm -rf "$plugin_dir"' EXIT
@@ -127,8 +134,8 @@ function prepare() {
 }
 
 function reset_ceph() {
-for host in $MON $OSDS; do
-ssh $host <<-'ENDSSH' &> /dev/null
+for host in $MON $OSDS $ADMIN_NODES; do
+ssh $host <<-'ENDSSH' 2> /dev/null
   host=`hostname`
   shorthost=`hostname --short`
 
@@ -139,6 +146,7 @@ ssh $host <<-'ENDSSH' &> /dev/null
     sudo stop ceph-osd id=$id || true
   done
 
+  echo "$host: shutting down services"
   sudo stop ceph-mon id=$host || true
   sudo stop ceph-mon id=$shorthost || true
   sudo service ceph-osd-all stop || true
@@ -150,8 +158,10 @@ ssh $host <<-'ENDSSH' &> /dev/null
   sudo /etc/init.d/ceph stop || true
   sleep 5
 
+  echo "$host: unmounting"
   sudo find /var/lib/ceph -mindepth 1 -maxdepth 2 -type d -exec umount {} \; || true
 
+  echo "$host: cleaning up dirs"
   sudo find /etc/ceph/ -mindepth 1 -exec rm -rf {} \; || true
   sudo find /var/log/ceph/ -mindepth 1 -exec rm -rf {} \; || true
   sudo find /var/lib/ceph/mon/ -mindepth 1 -exec rm -rf {} \; || true
@@ -173,15 +183,23 @@ function setup_ceph() {
   # start new ceph cluster
   ceph-deploy new $MON
 
+  # removes the auth lines which we'll put back next
+  cp ceph.conf ceph.conf.orig
+  #sed -i '/auth_.*_required = cephx/d' ./ceph.conf
+
+  ## add in our stuff
+  cat ${this_dir}/jewel.ceph.conf >> ceph.conf
+
   # setup monitor
   ceph-deploy mon create-initial
 
   # nuke osd disks
-  zap_cmd="ceph-deploy disk zap {$(echo $OSDS | sed "s/ /,/g")}"
-  eval "$zap_cmd:$DDEV"
-  if [ -n "$JDEV" ]; then
-    eval "$zap_cmd:$JDEV"
-  fi
+  for host in $OSDS; do
+    ceph-deploy disk zap $host:$DDEV
+    if [ -n "$JDEV" ]; then
+      ceph-deploy disk zap $host:$JDEV
+    fi
+  done
 
   # set noop sched
   for host in $OSDS; do
@@ -191,15 +209,17 @@ function setup_ceph() {
   done
 
   # create osds
-  osd_cmd="ceph-deploy osd create {$(echo $OSDS | sed "s/ /,/g")}:$DDEV"
-  if [ -n "$JDEV" ]; then
-    osd_cmd="$osd_cmd:$JDEV"
-  fi
-  eval $osd_cmd
+  for host in $OSDS; do
+    osd_cmd="ceph-deploy osd create $host:$DDEV"
+    if [ -n "$JDEV" ]; then
+      osd_cmd="$osd_cmd:$JDEV"
+    fi
+    eval $osd_cmd
+  done
 
   # make life easy
-  eval "ceph-deploy admin {$(echo "$MON $OSDS" | sed "s/ /,/g")}"
-  for host in $MON $OSDS; do
+  for host in $MON $OSDS $ADMIN_NODES; do
+    ceph-deploy admin $host
     ssh $host sudo chmod a+r /etc/ceph/ceph.client.admin.keyring
   done
 }
