@@ -33,6 +33,18 @@ while [[ $# > 1 ]]; do
       else ADMIN_NODES="$ADMIN_NODES $2"; fi
       shift
       ;;
+    --pool)
+      POOL="$2"
+      shift
+      ;;
+    --numpgs)
+      NUM_PGS="$2"
+      shift
+      ;;
+    --repl)
+      REPL="$2"
+      shift
+      ;;
     *)
       echo "Unknown option $2"
       exit 1
@@ -47,6 +59,9 @@ echo "OSDS: $OSDS"
 echo "DDEV: $DDEV"
 echo "JDEV: $JDEV"
 echo "NOOP: $NOOP_DEVS"
+echo "POOL: $POOL"
+echo "NPGS: $NUM_PGS"
+echo "REPL: $REPL"
 echo "##########################"
 
 if [ -z "$MON" ]; then
@@ -61,6 +76,21 @@ fi
 
 if [ -z "$DDEV" ]; then
   echo "No data device specified"
+  exit 1
+fi
+
+if [ -z "$POOL" ]; then
+  echo "No pool specified"
+  exit 1
+fi
+
+if [ -z "$NUM_PGS" ]; then
+  echo "Num PGs not specified"
+  exit 1
+fi
+
+if [ -z "$REPL" ]; then
+  echo "Replication factor not specified"
   exit 1
 fi
 
@@ -222,6 +252,18 @@ function setup_ceph() {
     ceph-deploy admin $host
     ssh $host sudo chmod a+r /etc/ceph/ceph.client.admin.keyring
   done
+
+  # remove existing pools
+  ceph osd pool delete data data --yes-i-really-really-mean-it || true
+  ceph osd pool delete metadata metadata --yes-i-really-really-mean-it || true
+  ceph osd pool delete rbd rbd --yes-i-really-really-mean-it || true
+
+  # make target pool
+  ceph osd pool create $POOL $NUM_PGS $NUM_PGS replicated
+  ceph osd pool set $POOL size $REPL
+  ceph osd pool set $POOL min_size $REPL
+
+  popd
 }
 
 function wait_healthy() {

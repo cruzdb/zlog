@@ -46,6 +46,10 @@ while [[ $# > 1 ]]; do
       OUTDIR="$2"
       shift
       ;;
+    --context)
+      CONTEXT="$2"
+      shift
+      ;;
     *)
       echo "Unknown option $2"
       exit 1
@@ -166,9 +170,16 @@ bench_seq seq-iops.log 60
 test_wait 60
 collect seq-iops.log "seqtest_rt-60"
 
+
+prefix="append"
+if [ -n "$CONTEXT" ]; then
+  prefix="${prefix}_${CONTEXT}"
+fi
+prefix="${prefix}_rt-${RUNTIME}_p-${POOL}_qd-${QDEPTH}_ln-${LOGNAME}_es-${ENTRY_SIZE}"
+
 # run append test
 append append-iops.log
 test_wait $RUNTIME
-collect append-iops.log "append_rt-${RUNTIME}_p-${POOL}_qd-${QDEPTH}_ln-${LOGNAME}_es-${ENTRY_SIZE}"
+collect append-iops.log $prefix
 
 stop_seq
