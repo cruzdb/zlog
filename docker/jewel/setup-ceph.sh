@@ -3,6 +3,8 @@ set -e
 
 this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+PULL_DOCKER=false
+
 while [[ $# > 1 ]]; do
   key="$1"
   case $key in
@@ -28,9 +30,9 @@ while [[ $# > 1 ]]; do
       else NOOP_DEVS="$NOOP_DEVS $2"; fi
       shift
       ;;
-    -a|--admin)
-      if [ -z "$ADMIN_NODES" ]; then ADMIN_NODES="$2";
-      else ADMIN_NODES="$ADMIN_NODES $2"; fi
+    -c|--ceph-node)
+      if [ -z "$CEPH_NODES" ]; then CEPH_NODES="$2";
+      else CEPH_NODES="$CEPH_NODES $2"; fi
       shift
       ;;
     --pool)
@@ -45,6 +47,9 @@ while [[ $# > 1 ]]; do
       REPL="$2"
       shift
       ;;
+    --pull-image)
+      PULL_DOCKER=true
+      ;;
     *)
       echo "Unknown option $2"
       exit 1
@@ -52,6 +57,9 @@ while [[ $# > 1 ]]; do
   esac
   shift # past argument or value
 done 
+
+# create list of ceph nodes without duplicates
+CEPH_NODES=$(echo "$MON $OSDS $CEPH_NODES" | xargs -n1 | sort -u | xargs)
 
 echo "######## SETTINGS ########"
 echo " MON: $MON"
@@ -62,6 +70,8 @@ echo "NOOP: $NOOP_DEVS"
 echo "POOL: $POOL"
 echo "NPGS: $NUM_PGS"
 echo "REPL: $REPL"
+echo "CEPH NODES: $CEPH_NODES"
+echo "PULL DOCKER: $PULL_DOCKER"
 echo "##########################"
 
 if [ -z "$MON" ]; then
@@ -94,6 +104,11 @@ if [ -z "$REPL" ]; then
   exit 1
 fi
 
+if [ -z "$CEPH_NODES" ]; then
+  echo "Looks like nothing to do..."
+  exit 1
+fi
+
 function prepare() {
   # install ceph-deploy
   if ! which ceph-deploy &> /dev/null; then
@@ -114,7 +129,7 @@ function prepare() {
   fi
 
   # make sure hosts support password-less ssh
-  for host in $MON $OSDS $ADMIN_NODES; do
+  for host in $CEPH_NODES; do
     echo -n "testing password-less ssh for $host... "
     if ! ssh -oBatchMode=yes -q $host exit; then
       echo "\npassword-less ssh not setup for $host"
@@ -124,7 +139,7 @@ function prepare() {
   done
 
   # install ceph
-  for host in $MON $OSDS $ADMIN_NODES; do
+  for host in $CEPH_NODES; do
     echo -n "checking ceph installation on $host... "
     if ! ssh $host which ceph &> /dev/null; then
       echo "installing ceph"
@@ -147,7 +162,12 @@ function prepare() {
   plugin_dir=`mktemp -d`
   trap 'rm -rf "$plugin_dir"' EXIT
 
-  sudo docker pull zlog/zlog:jewel
+  # TODO: this flag should also force refresh the cls plugin below
+  if [ "$PULL_DOCKER" = true ]; then
+    echo "Pulling fresh docker image"
+    sudo docker pull zlog/zlog:jewel
+  fi
+
   sudo docker run --rm -it -v $plugin_dir:/tmp/foo zlog/zlog:jewel \
     cp /usr/lib/rados-classes/libcls_zlog.so /tmp/foo
 
@@ -164,8 +184,8 @@ function prepare() {
 }
 
 function reset_ceph() {
-for host in $MON $OSDS $ADMIN_NODES; do
-ssh $host <<-'ENDSSH' 2> /dev/null
+for host in $CEPH_NODES; do
+ssh $host <<-'ENDSSH'
   host=`hostname`
   shorthost=`hostname --short`
 
@@ -248,7 +268,7 @@ function setup_ceph() {
   done
 
   # make life easy
-  for host in $MON $OSDS $ADMIN_NODES; do
+  for host in $CEPH_NODES; do
     ceph-deploy admin $host
     ssh $host sudo chmod a+r /etc/ceph/ceph.client.admin.keyring
   done
