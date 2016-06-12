@@ -12,6 +12,7 @@ add_library(libzlog SHARED
     libzlog/aio.cc
     libzlog/stripe_history.cc
     libzlog/log_mapper.cc
+    libzlog/backend.cc
 )
 
 target_include_directories(libzlog
