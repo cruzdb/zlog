@@ -5,12 +5,13 @@
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
 #include "log_mapper.h"
+#include "backend.h"
 
 namespace zlog {
 
 class LogImpl : public Log {
  public:
-  LogImpl() {}
+  LogImpl() : backend(NULL) {}
 
   /*
    * Create cut.
@@ -115,6 +116,14 @@ class LogImpl : public Log {
   std::string name_;
   std::string metalog_oid_;
   SeqrClient *seqr;
+
+  Backend *backend;
+
+  void set_backend_v2() {
+    assert(backend);
+    delete backend;
+    backend = Backend::CreateV2();
+  }
 
   /*
    *

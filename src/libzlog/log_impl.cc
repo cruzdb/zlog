@@ -8,7 +8,6 @@
 #include <vector>
 
 #include <rados/librados.hpp>
-#include <rados/cls_zlog_client.h>
 
 #include "proto/zlog.pb.h"
 #include "proto/protobuf_bufferlist_adapter.h"
@@ -16,6 +15,7 @@
 #include "include/zlog/capi.h"
 
 #include "stripe_history.h"
+#include "backend.h"
 
 /*
  * We can use Ceph API to query and make some intelligent decisiosn about what
@@ -66,7 +66,7 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
    */
   librados::ObjectWriteOperation op;
   op.create(true); // exclusive create
-  cls_zlog_set_projection(op, 0, bl);
+  Backend::set_projection(op, 0, bl);
 
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
   int ret = ioctx.operate(metalog_oid, &op);
@@ -84,6 +84,12 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   impl->metalog_oid_ = metalog_oid;
   impl->seqr = seqr;
   impl->mapper_.SetName(name);
+
+  // default backend. this can be changed using LogImpl::set_backend_vN
+  // interface immediately after this call and before any log I/O occurs. It
+  // is up to the client to make sure that the correct version is used and
+  // that no version mixing occurs.
+  impl->backend = Backend::CreateV1();
 
   ret = impl->RefreshProjection();
   if (ret) {
@@ -125,6 +131,12 @@ int Log::Open(librados::IoCtx& ioctx, const std::string& name,
   impl->seqr = seqr;
   impl->mapper_.SetName(name);
 
+  // default backend. this can be changed using LogImpl::set_backend_vN
+  // interface immediately after this call and before any log I/O occurs. It
+  // is up to the client to make sure that the correct version is used and
+  // that no version mixing occurs.
+  impl->backend = Backend::CreateV1();
+
   ret = impl->RefreshProjection();
   if (ret) {
     delete impl;
@@ -146,7 +158,7 @@ int LogImpl::SetStripeWidth(int width)
   uint64_t epoch;
   ceph::bufferlist in_bl;
   librados::ObjectReadOperation get_op;
-  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &in_bl);
+  Backend::get_latest_projection(get_op, &rv, &epoch, &in_bl);
 
   ceph::bufferlist unused;
   int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
@@ -183,7 +195,7 @@ int LogImpl::SetStripeWidth(int width)
    * Propose the updated projection for the next epoch.
    */
   librados::ObjectWriteOperation set_op;
-  cls_zlog_set_projection(set_op, next_epoch, out_bl);
+  Backend::set_projection(set_op, next_epoch, out_bl);
   ret = ioctx_->operate(metalog_oid_, &set_op);
   if (ret) {
     std::cerr << "failed to set new epoch " << next_epoch
@@ -204,7 +216,7 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
   uint64_t epoch;
   ceph::bufferlist bl;
   librados::ObjectReadOperation get_op;
-  cls_zlog_get_latest_projection(get_op, &rv, &epoch, &bl);
+  Backend::get_latest_projection(get_op, &rv, &epoch, &bl);
 
   ceph::bufferlist unused;
   int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
@@ -238,7 +250,7 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    */
   uint64_t next_epoch = epoch + 1;
   librados::ObjectWriteOperation set_op;
-  cls_zlog_set_projection(set_op, next_epoch, bl);
+  Backend::set_projection(set_op, next_epoch, bl);
   ret = ioctx_->operate(metalog_oid_, &set_op);
   if (ret) {
     std::cerr << "failed to set new epoch " << next_epoch
@@ -260,9 +272,9 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
    */
   for (const auto& oid : objects) {
     librados::ObjectWriteOperation seal_op;
-    cls_zlog_seal(seal_op, epoch);
+    backend->seal(seal_op, epoch);
     int ret = ioctx_->operate(oid, &seal_op);
-    if (ret != zlog::CLS_ZLOG_OK) {
+    if (ret != Backend::CLS_ZLOG_OK) {
       std::cerr << "failed to seal object" << std::endl;
       return ret;
     }
@@ -280,7 +292,7 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
     int op_ret;
     uint64_t this_pos;
     librados::ObjectReadOperation op;
-    cls_zlog_max_position(op, epoch, &this_pos, &op_ret);
+    backend->max_position(op, epoch, &this_pos, &op_ret);
 
     /*
      * The max_position function should only be called on objects that have
@@ -290,12 +302,12 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
      */
     ceph::bufferlist unused;
     int ret = ioctx_->operate(oid, &op, &unused);
-    if (ret != zlog::CLS_ZLOG_OK) {
+    if (ret != Backend::CLS_ZLOG_OK) {
       std::cerr << "failed to find max pos ret " << ret << std::endl;
       return ret;
     }
 
-    if (op_ret != zlog::CLS_ZLOG_OK) {
+    if (op_ret != Backend::CLS_ZLOG_OK) {
       std::cerr << "failed to find max pos op_ret " << ret << std::endl;
       return ret;
     }
@@ -321,7 +333,7 @@ int LogImpl::RefreshProjection()
     uint64_t epoch;
     ceph::bufferlist bl;
     librados::ObjectReadOperation op;
-    cls_zlog_get_latest_projection(op, &rv, &epoch, &bl);
+    Backend::get_latest_projection(op, &rv, &epoch, &bl);
 
     ceph::bufferlist unused;
     int ret = ioctx_->operate(metalog_oid_, &op, &unused);
@@ -449,7 +461,7 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
       return ret;
 
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write(op, epoch_, position, data);
+    backend->write(op, epoch_, position, data);
 
     std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
@@ -458,13 +470,13 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK) {
+    if (ret == Backend::CLS_ZLOG_OK) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       sleep(1); // avoid spinning in this loop
       ret = RefreshProjection();
       if (ret)
@@ -472,7 +484,7 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
       continue;
     }
 
-    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
   }
   assert(0);
 }
@@ -481,7 +493,7 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
 {
   for (;;) {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_fill(op, epoch, position);
+    backend->fill(op, epoch, position);
 
     std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
@@ -490,17 +502,17 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK)
       return 0;
 
-    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
       continue;
     }
 
-    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
     return -EROFS;
   }
 }
@@ -509,7 +521,7 @@ int LogImpl::Fill(uint64_t position)
 {
   for (;;) {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_fill(op, epoch_, position);
+    backend->fill(op, epoch_, position);
 
     std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
@@ -518,17 +530,17 @@ int LogImpl::Fill(uint64_t position)
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK)
       return 0;
 
-    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
       continue;
     }
 
-    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
     return -EROFS;
   }
 }
@@ -537,7 +549,7 @@ int LogImpl::Trim(uint64_t position)
 {
   for (;;) {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_trim(op, epoch_, position);
+    backend->trim(op, epoch_, position);
 
     std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op);
@@ -546,10 +558,10 @@ int LogImpl::Trim(uint64_t position)
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK)
       return 0;
 
-    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -564,7 +576,7 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read(op, epoch, position);
+    backend->read(op, epoch, position);
 
     std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op, &bl);
@@ -573,13 +585,13 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK)
       return 0;
-    else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN)
+    else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN)
       return -ENODEV;
-    else if (ret == zlog::CLS_ZLOG_INVALIDATED)
+    else if (ret == Backend::CLS_ZLOG_INVALIDATED)
       return -EFAULT;
-    else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -596,7 +608,7 @@ int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read(op, epoch_, position);
+    backend->read(op, epoch_, position);
 
     std::string oid = mapper_.FindObject(position);
     int ret = ioctx_->operate(oid, &op, &bl);
@@ -605,13 +617,13 @@ int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK)
       return 0;
-    else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN)
+    else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN)
       return -ENODEV;
-    else if (ret == zlog::CLS_ZLOG_INVALIDATED)
+    else if (ret == Backend::CLS_ZLOG_INVALIDATED)
       return -EFAULT;
-    else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;

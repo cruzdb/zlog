@@ -8,7 +8,9 @@ libzlog_la_SOURCES = \
 	libzlog/stripe_history.cc \
 	libzlog/stripe_history.h \
 	libzlog/log_mapper.cc \
-	libzlog/log_mapper.h
+	libzlog/log_mapper.h \
+	libzlog/backend.cc \
+	libzlog/backend.h
 
 libzlog_la_CPPFLAGS = $(BOOST_CPPFLAGS) $(AM_CPPFLAGS)
 libzlog_la_LDFLAGS = $(BOOST_SYSTEM_LDFLAGS)

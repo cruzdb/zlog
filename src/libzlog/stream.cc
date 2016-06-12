@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <rados/librados.hpp>
-#include <rados/cls_zlog_client.h>
 
 #include "proto/zlog.pb.h"
 #include "proto/protobuf_bufferlist_adapter.h"
@@ -50,7 +49,7 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
     bl.append(data.c_str(), data.length());
 
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write(op, epoch_, position, bl);
+    backend->write(op, epoch_, position, bl);
 
     std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
@@ -59,20 +58,20 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
       return ret;
     }
 
-    if (ret == zlog::CLS_ZLOG_OK) {
+    if (ret == Backend::CLS_ZLOG_OK) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
       continue;
     }
 
-    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
   }
   assert(0);
 }

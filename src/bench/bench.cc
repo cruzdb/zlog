@@ -193,6 +193,7 @@ int main(int argc, char **argv)
   int qdepth;
   std::string tp_log_fn;
   int entry_size;
+  int bev;
 
   bool append_workload;
   bool nextseq_workload;
@@ -209,6 +210,7 @@ int main(int argc, char **argv)
     ("window", po::value<int>(&stats_window)->default_value(2), "stats collection period")
     ("pool,p", po::value<std::string>(&pool)->required(), "Pool name")
     ("iops-log", po::value<std::string>(&tp_log_fn)->default_value(""), "throughput log file")
+    ("store-ver", po::value<int>(&bev)->default_value(1), "backend version")
   ;
 
   po::options_description append_opts("Append workload options");
@@ -266,12 +268,14 @@ int main(int argc, char **argv)
   std::cout << "    qdepth: " << qdepth << std::endl;
   std::cout << "  iops log: " << tp_log_fn << std::endl;
   std::cout << "entry size: " << entry_size << std::endl;
+  std::cout << " store ver: " << bev << std::endl;
 
   assert(!pool.empty());
   assert(runtime >= 0);
   assert(stats_window > 0);
   assert(qdepth > 0);
   assert(entry_size >= 0);
+  assert(bev == 1 || bev == 2);
 
   // connect to rados
   librados::Rados cluster;
@@ -296,6 +300,23 @@ int main(int argc, char **argv)
 
   // used to access the low-level sequencer checktail interface
   zlog::LogImpl *log_impl = reinterpret_cast<zlog::LogImpl*>(log);
+
+  // using a different backend version is a development feature and we don't
+  // want to expose it through the public api yet. here we set the backend
+  // version on the LogImpl object directly. All clients of the log must
+  // choose the same version for every interaction with the log, and the
+  // version must be set before any log I/O is performed by a client.
+  switch (bev) {
+    case 1:
+      // this is the default case
+      break;
+    case 2:
+      log_impl->set_backend_v2();
+      break;
+    default:
+      assert(0);
+      exit(1);
+  }
 
   // this is a little hack that refreshes the epoch we are storing so that
   // when we send out of a bunch of async requests they don't all initially

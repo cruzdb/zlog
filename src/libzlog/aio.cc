@@ -3,7 +3,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <rados/librados.hpp>
-#include <rados/cls_zlog_client.h>
+#include "backend.h"
 
 namespace zlog {
 
@@ -126,7 +126,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
 
   assert(impl->type == ZLOG_AIO_READ);
 
-  if (ret == zlog::CLS_ZLOG_OK) {
+  if (ret == Backend::CLS_ZLOG_OK) {
     /*
      * Read was successful. We're done.
      */
@@ -135,7 +135,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
     }
     ret = 0;
     finish = true;
-  } else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+  } else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
     /*
      * We'll need to try again with a new epoch.
      */
@@ -147,10 +147,10 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
      * Encountered a RADOS error.
      */
     finish = true;
-  } else if (ret == zlog::CLS_ZLOG_NOT_WRITTEN) {
+  } else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN) {
     ret = -ENODEV;
     finish = true;
-  } else if (ret == zlog::CLS_ZLOG_INVALIDATED) {
+  } else if (ret == Backend::CLS_ZLOG_INVALIDATED) {
     ret = -EFAULT;
     finish = true;
   } else {
@@ -169,7 +169,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
     // build and submit new op
     std::string oid = impl->log->mapper_.FindObject(impl->position);
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read(op, impl->log->epoch_, impl->position);
+    impl->log->backend->read(op, impl->log->epoch_, impl->position);
     ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
     if (ret)
       finish = true;
@@ -209,7 +209,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
 
   assert(impl->type == ZLOG_AIO_APPEND);
 
-  if (ret == zlog::CLS_ZLOG_OK) {
+  if (ret == Backend::CLS_ZLOG_OK) {
     /*
      * Append was successful. We're done.
      */
@@ -218,7 +218,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
     }
     ret = 0;
     finish = true;
-  } else if (ret == zlog::CLS_ZLOG_STALE_EPOCH) {
+  } else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
     /*
      * We'll need to try again with a new epoch.
      */
@@ -231,7 +231,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
      */
     finish = true;
   } else {
-    assert(ret == zlog::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
   }
 
   /*
@@ -256,7 +256,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
       // build and submit new op
       std::string oid = impl->log->mapper_.FindObject(impl->position);
       librados::ObjectWriteOperation op;
-      zlog::cls_zlog_write(op, impl->log->epoch_, impl->position, impl->bl);
+      impl->log->backend->write(op, impl->log->epoch_, impl->position, impl->bl);
       ret = impl->ioctx->aio_operate(oid, impl->c, &op);
       if (ret)
         finish = true;
@@ -359,7 +359,7 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   assert(impl->c);
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch_, position, data);
+  backend->write(op, epoch_, position, data);
 
   std::string oid = mapper_.FindObject(position);
   ret = ioctx_->aio_operate(oid, impl->c, &op);
@@ -392,7 +392,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   assert(impl->c);
 
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch_, position);
+  backend->read(op, epoch_, position);
 
   std::string oid = mapper_.FindObject(position);
   int ret = ioctx_->aio_operate(oid, impl->c, &op, &impl->bl);
