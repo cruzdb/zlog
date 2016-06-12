@@ -5,6 +5,7 @@ this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 PORT=5678
 OUTDIR=$PWD
+CLIENT_INSTANCES=1
 
 while [[ $# > 1 ]]; do
   key="$1"
@@ -14,8 +15,11 @@ while [[ $# > 1 ]]; do
       shift # past argument
       ;;
     -c|--client)
-      if [ -z "$CLIENTS" ]; then CLIENTS="$2";
-      else CLIENTS="$CLIENTS $2"; fi
+      CLIENT="$2"
+      shift
+      ;;
+    --client-instances)
+      CLIENT_INSTANCES="$2"
       shift
       ;;
     --pool)
@@ -59,21 +63,44 @@ while [[ $# > 1 ]]; do
 done 
 
 echo "########### SETTINGS ##########"
-echo "       SEQ: $SEQ"
-echo "      PORT: $PORT"
-echo "   CLIENTS: $CLIENTS"
-echo "      POOL: $POOL"
-echo "  LOG NAME: $LOGNAME"
-echo "ENTRY SIZE: $ENTRY_SIZE"
-echo "   Q DEPTH: $QDEPTH"
-echo "   RUNTIME: $RUNTIME"
-echo "    OUTDIR: $OUTDIR"
+echo "         SEQ: $SEQ"
+echo "        PORT: $PORT"
+echo "      CLIENT: $CLIENT"
+echo "        POOL: $POOL"
+echo "    LOG NAME: $LOGNAME"
+echo "  ENTRY SIZE: $ENTRY_SIZE"
+echo "     Q DEPTH: $QDEPTH"
+echo "     RUNTIME: $RUNTIME"
+echo "      OUTDIR: $OUTDIR"
+echo "CLIENT INSTS: $CLIENT_INSTANCES"
 echo "###############################"
+
+if [ $CLIENT_INSTANCES -gt 10 ]; then
+  echo "Client instances too large. Max 10"
+  exit 1
+fi
+
+# create container names for this experiment
+i=0
+client_cont_names=()
+while [ $i -lt $CLIENT_INSTANCES ]; do
+  client_cont_names+=("zlog_bench_$i")
+  i=$(($i+1))
+done
+
+# create all possible cont names to make
+# cleanup easier
+i=0
+all_client_cont_names=()
+while [ $i -lt 10 ]; do
+  all_client_cont_names+=("zlog_bench_$i")
+  i=$(($i+1))
+done
 
 # install docker and zlog image
 function install_docker() {
   install_docker_script=`base64 -w0 ${this_dir}/install-docker.sh`
-  for host in $SEQ $CLIENTS; do
+  for host in $SEQ $CLIENT; do
     ssh $host "echo $install_docker_script | base64 -d | sudo bash"
   
     # perhaps make the pull optional to reduce amount of chances we have network
@@ -84,7 +111,7 @@ function install_docker() {
 
 # ntp refresh
 function time_sync() {
-  for host in $SEQ $CLIENTS; do
+  for host in $SEQ $CLIENT; do
     ssh $host sudo service ntp stop
     ssh $host sudo ntpd -gq
     ssh $host sudo service ntp start
@@ -101,10 +128,10 @@ function start_seq() {
 
 # sequencer benchmark
 function bench_seq() {
-  for host in $CLIENTS; do 
-    ssh $host sudo docker kill zlog || true
-    ssh $host sudo docker rm zlog || true
-    ssh $host sudo docker run -d --name zlog -v /etc/ceph:/etc/ceph --net=host \
+  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
+  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
+  for cont_name in ${client_cont_names[@]}; do
+    ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
       -it zlog/zlog:jewel zlog-bench --nextseq --pool $POOL --server $SEQ --port $PORT \
       --runtime $2 --logname ${LOGNAME}_seqtest --iops-log /$1
   done
@@ -116,10 +143,12 @@ function test_wait() {
   while [ 1 ]; do
     echo "Posting logs from sequencer on host $SEQ"
     ssh $SEQ sudo docker logs --tail=10 seqr
-    for host in $CLIENTS; do
-      echo "Posting logs from client on host $host"
-      ssh $host sudo docker logs --tail=10 zlog
+
+    for cont_name in ${client_cont_names[@]}; do
+      echo "Posting logs from client instance ${cont_name} on host $CLIENT"
+      ssh $CLIENT sudo docker logs --tail=10 ${cont_name}
     done
+
     sleep 10
   
     now=`date +%s`
@@ -132,22 +161,20 @@ function test_wait() {
 
 # collect data and clean-up containers
 function collect() {
-  for host in $CLIENTS; do
-    fn="${2}_h-${host}.log"
-    ssh $host sudo docker kill zlog || true
-    ssh $host sudo docker cp zlog:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
-    ssh $host sudo docker rm zlog || true
+  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
+  for cont_name in ${client_cont_names[@]}; do
+    fn="${2}_h-${CLIENT}_ci-${cont_name}.log"
+    ssh $CLIENT sudo docker cp ${cont_name}:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
   done
+  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
 }
 
-# start the append clients
-#   - this won't work with multiple clients running per node. to fix for this
-#   case avoid --name and stash the container id in an array for each host
+# run some clients
 function append() {
-  for host in $CLIENTS; do
-    ssh $host sudo docker kill zlog || true
-    ssh $host sudo docker rm zlog || true
-    ssh $host sudo docker run -d --name zlog -v /etc/ceph:/etc/ceph --net=host \
+  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
+  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
+  for cont_name in ${client_cont_names[@]}; do
+    ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
       -it zlog/zlog:jewel zlog-bench --append --pool $POOL --server $SEQ --port $PORT \
       --runtime $RUNTIME --qdepth $QDEPTH --entry-size $ENTRY_SIZE --logname $LOGNAME \
       --iops-log /$1
@@ -166,10 +193,9 @@ install_docker
 start_seq
 
 # short sequencer benchmark
-bench_seq seq-iops.log 60
-test_wait 60
-collect seq-iops.log "seqtest_rt-60"
-
+#bench_seq seq-iops.log 60
+#test_wait 60
+#collect seq-iops.log "seqtest_rt-60"
 
 prefix="append"
 if [ -n "$CONTEXT" ]; then
