@@ -6,6 +6,7 @@ this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PORT=5678
 OUTDIR=$PWD
 CLIENT_INSTANCES=1
+STORE_VER=1
 
 while [[ $# > 1 ]]; do
   key="$1"
@@ -52,6 +53,10 @@ while [[ $# > 1 ]]; do
       ;;
     --context)
       CONTEXT="$2"
+      shift
+      ;;
+    --store-ver)
+      STORE_VER="$2"
       shift
       ;;
     *)
@@ -123,7 +128,7 @@ function start_seq() {
   ssh $SEQ sudo docker kill seqr || true
   ssh $SEQ sudo docker rm seqr || true
   ssh $SEQ sudo docker run -d --name=seqr -v /etc/ceph:/etc/ceph \
-    --net=host -it zlog/zlog:jewel zlog-seqr --port $PORT --report-sec 2
+    --net=host -it zlog/zlog:jewel zlog-seqr --port $PORT --report-sec 5
 }
 
 # sequencer benchmark
@@ -177,7 +182,7 @@ function append() {
     ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
       -it zlog/zlog:jewel zlog-bench --append --pool $POOL --server $SEQ --port $PORT \
       --runtime $RUNTIME --qdepth $QDEPTH --entry-size $ENTRY_SIZE --logname $LOGNAME \
-      --iops-log /$1
+      --store-ver $STORE_VER --iops-log /$1
   done
 }
 
