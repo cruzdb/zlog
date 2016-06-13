@@ -27,3 +27,10 @@ std::string LogMapper::FindObject(uint64_t position) const
   int slot = position % stripe.width;
   return SlotToOid(slot);
 }
+
+int LogMapper::CurrentStripeWidth() const
+{
+  assert(!history_.Empty());
+  const StripeHistory::Stripe stripe = history_.LatestStripe();
+  return stripe.width;
+}

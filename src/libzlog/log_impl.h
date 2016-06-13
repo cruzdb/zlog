@@ -110,6 +110,7 @@ class LogImpl : public Log {
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);
 
+  int StripeWidth() const;
 
   librados::IoCtx *ioctx_;
   std::string pool_;

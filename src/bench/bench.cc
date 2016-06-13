@@ -194,6 +194,7 @@ int main(int argc, char **argv)
   std::string tp_log_fn;
   int entry_size;
   int bev;
+  int stripe_width;
 
   bool append_workload;
   bool nextseq_workload;
@@ -211,6 +212,7 @@ int main(int argc, char **argv)
     ("pool,p", po::value<std::string>(&pool)->required(), "Pool name")
     ("iops-log", po::value<std::string>(&tp_log_fn)->default_value(""), "throughput log file")
     ("store-ver", po::value<int>(&bev)->default_value(1), "backend version")
+    ("stripe-width", po::value<int>(&stripe_width)->default_value(-1), "stripe width")
   ;
 
   po::options_description append_opts("Append workload options");
@@ -269,6 +271,7 @@ int main(int argc, char **argv)
   std::cout << "  iops log: " << tp_log_fn << std::endl;
   std::cout << "entry size: " << entry_size << std::endl;
   std::cout << " store ver: " << bev << std::endl;
+  std::cout << "strp width: " << stripe_width << std::endl;
 
   assert(!pool.empty());
   assert(runtime >= 0);
@@ -276,6 +279,7 @@ int main(int argc, char **argv)
   assert(qdepth > 0);
   assert(entry_size >= 0);
   assert(bev == 1 || bev == 2);
+  assert(stripe_width == -1 || stripe_width > 0);
 
   // connect to rados
   librados::Rados cluster;
@@ -295,7 +299,16 @@ int main(int argc, char **argv)
 
   // open log
   zlog::Log *log;
-  ret = zlog::Log::OpenOrCreate(ioctx, logname, &client, &log);
+  if (stripe_width == -1) {
+    // default stripe width
+    ret = zlog::Log::OpenOrCreate(ioctx, logname, &client, &log);
+  } else {
+    ret = zlog::Log::Open(ioctx, logname, &client, &log);
+    if (ret == -ENOENT)
+      ret = zlog::Log::CreateWithStripeWidth(ioctx, logname, &client, stripe_width, &log);
+    if (ret == 0)
+      assert(log->StripeWidth() == stripe_width);
+  }
   assert(ret == 0);
 
   // used to access the low-level sequencer checktail interface

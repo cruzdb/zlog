@@ -19,6 +19,8 @@ class LogMapper {
     history_ = history;
   }
 
+  int CurrentStripeWidth() const;
+
  private:
   std::string SlotToOid(int slot) const;
 

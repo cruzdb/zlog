@@ -34,11 +34,9 @@ std::string LogImpl::metalog_oid_from_name(const std::string& name)
   return ss.str();
 }
 
-int Log::Create(librados::IoCtx& ioctx, const std::string& name,
-    SeqrClient *seqr, Log **logptr)
+int Log::CreateWithStripeWidth(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, int stripe_size, Log **logptr)
 {
-  const int stripe_size = DEFAULT_STRIPE_SIZE;
-
   if (stripe_size <= 0) {
     std::cerr << "Invalid stripe size (" << stripe_size << " <= 0)" << std::endl;
     return -EINVAL;
@@ -102,6 +100,12 @@ int Log::Create(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
+int Log::Create(librados::IoCtx& ioctx, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
+{
+  return CreateWithStripeWidth(ioctx, name, seqr, DEFAULT_STRIPE_SIZE, logptr);
+}
+
 int Log::Open(librados::IoCtx& ioctx, const std::string& name,
     SeqrClient *seqr, Log **logptr)
 {
@@ -146,6 +150,11 @@ int Log::Open(librados::IoCtx& ioctx, const std::string& name,
   *logptr = impl;
 
   return 0;
+}
+
+int LogImpl::StripeWidth() const
+{
+  return mapper_.CurrentStripeWidth();
 }
 
 int LogImpl::SetStripeWidth(int width)
