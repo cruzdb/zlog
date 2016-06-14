@@ -135,7 +135,8 @@ function start_seq() {
   ssh $SEQ sudo docker kill seqr || true
   ssh $SEQ sudo docker rm seqr || true
   ssh $SEQ sudo docker run -d --name=seqr -v /etc/ceph:/etc/ceph \
-    --net=host -it zlog/zlog:jewel zlog-seqr --port $PORT --report-sec 20
+    --net=host -it zlog/zlog:jewel zlog-seqr --port $PORT \
+    --report-sec 5 --iops-logfile /$1
 }
 
 # sequencer benchmark
@@ -193,8 +194,10 @@ function append() {
   done
 }
 
-function stop_seq() {
+function stop_collect_seq() {
   ssh $SEQ sudo docker kill seqr || true
+  fn="${2}_h-${SEQ}.log"
+  ssh $CLIENT sudo docker cp seqr:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
   ssh $SEQ sudo docker rm seqr || true
 }
 
@@ -202,22 +205,27 @@ function stop_seq() {
 install_docker
 #time_sync
 
-start_seq
+prefix=""
+if [ -n "$CONTEXT" ]; then
+  prefix="${CONTEXT}_"
+fi
+prefix="${prefix}rt-${RUNTIME}_p-${POOL}_qd-${QDEPTH}_ln-${LOGNAME}_es-${ENTRY_SIZE}_iv-${STORE_VER}_sw-${STRIPE_WIDTH}"
 
+start_seq seq-iops.log
+
+# NOTICE: if you re-enable the sequencer benchmark here then consider that we
+# save the performance logs of the seqeuencer during the real benchmark but
+# don't actually restart the sequencer ensuring that the log will only
+# represent the throughput of the benchmark...
+#
 # short sequencer benchmark
 #bench_seq seq-iops.log 60
 #test_wait 60
 #collect seq-iops.log "seqtest_rt-60"
 
-prefix="append"
-if [ -n "$CONTEXT" ]; then
-  prefix="${prefix}_${CONTEXT}"
-fi
-prefix="${prefix}_rt-${RUNTIME}_p-${POOL}_qd-${QDEPTH}_ln-${LOGNAME}_es-${ENTRY_SIZE}_iv-${STORE_VER}_sw-${STRIPE_WIDTH}"
-
 # run append test
 append append-iops.log
 test_wait $RUNTIME
-collect append-iops.log $prefix
+collect append-iops.log "append_${prefix}"
 
-stop_seq
+stop_collect_seq seq-iops.log "seqr_${prefix}"
