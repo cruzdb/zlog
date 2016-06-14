@@ -16,6 +16,8 @@ namespace po = boost::program_options;
 
 static bool stream_support;
 
+static std::string iops_logfile;
+
 static int report_sec;
 
 static uint64_t get_time(void)
@@ -380,6 +382,13 @@ class LogManager {
    * are registered during the sleep period.
    */
   void BenchMonitor() {
+    // open the output stream
+    int fd = -1;
+    if (!iops_logfile.empty()) {
+      fd = open(iops_logfile.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0440);
+      assert(fd != -1);
+    }
+
     for (;;) {
       uint64_t start_ns;
       uint64_t start_seq;
@@ -411,7 +420,6 @@ class LogManager {
       {
         std::unique_lock<std::mutex> g(lock_);
 
-        end_ns = get_time();
         end_seq = 0;
         num_logs = logs_.size();
 
@@ -419,15 +427,32 @@ class LogManager {
         for (it = logs_.begin(); it != logs_.end(); it++) {
           end_seq += it->second.seq->read();
         }
+
+        end_ns = get_time();
       }
 
       uint64_t elapsed_ns = end_ns - start_ns;
       uint64_t total_seqs = end_seq - start_seq;
       uint64_t rate = (total_seqs * 1000000000ULL) / elapsed_ns;
-      if (num_logs_start == num_logs)
-        std::cout << "seqr rate = " << rate << " seqs/sec" << std::endl;
-      else
+
+      double iops = (double)(total_seqs * 1000000000ULL) / (double)elapsed_ns;
+      time_t now = time(NULL);
+
+      if (num_logs_start == num_logs) {
+        std::cout << "seqr rate = " << rate << " (" << iops << ") seqs/sec" << std::endl;
+        if (fd != -1) {
+          dprintf(fd, "%llu %llu\n",
+              (unsigned long long)now,
+              (unsigned long long)iops);
+          fsync(fd);
+        }
+      } else
         std::cout << "seqr rate = " << rate << " seqs/sec (warn: log count change)" << std::endl;
+    }
+
+    if (fd != -1) {
+      fsync(fd);
+      close(fd);
     }
   }
 
@@ -764,6 +789,7 @@ int main(int argc, char* argv[])
     ("report-sec", po::value<int>(&report_sec)->default_value(0), "Time between rate reports")
     ("daemon,d", "Run in background")
     ("streams", po::bool_switch(&stream_support)->default_value(false), "support streams")
+    ("iops-logfile", po::value<std::string>(&iops_logfile)->default_value(""), "iops log file")
   ;
 
   po::variables_map vm;
