@@ -7,6 +7,7 @@ PORT=5678
 OUTDIR=$PWD
 CLIENT_INSTANCES=1
 STORE_VER=1
+STRIPE_WIDTH="-1"
 
 while [[ $# > 1 ]]; do
   key="$1"
@@ -59,6 +60,10 @@ while [[ $# > 1 ]]; do
       STORE_VER="$2"
       shift
       ;;
+    --stripe-width)
+      STRIPE_WIDTH="$2"
+      shift
+      ;;
     *)
       echo "Unknown option $2"
       exit 1
@@ -78,6 +83,8 @@ echo "     Q DEPTH: $QDEPTH"
 echo "     RUNTIME: $RUNTIME"
 echo "      OUTDIR: $OUTDIR"
 echo "CLIENT INSTS: $CLIENT_INSTANCES"
+echo "STORE VERSIN: $STORE_VER"
+echo "STRIPE WIDTH: $STRIPE_WIDTH"
 echo "###############################"
 
 if [ $CLIENT_INSTANCES -gt 10 ]; then
@@ -128,7 +135,7 @@ function start_seq() {
   ssh $SEQ sudo docker kill seqr || true
   ssh $SEQ sudo docker rm seqr || true
   ssh $SEQ sudo docker run -d --name=seqr -v /etc/ceph:/etc/ceph \
-    --net=host -it zlog/zlog:jewel zlog-seqr --port $PORT --report-sec 5
+    --net=host -it zlog/zlog:jewel zlog-seqr --port $PORT --report-sec 20
 }
 
 # sequencer benchmark
@@ -182,7 +189,7 @@ function append() {
     ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
       -it zlog/zlog:jewel zlog-bench --append --pool $POOL --server $SEQ --port $PORT \
       --runtime $RUNTIME --qdepth $QDEPTH --entry-size $ENTRY_SIZE --logname $LOGNAME \
-      --store-ver $STORE_VER --iops-log /$1
+      --store-ver $STORE_VER --stripe-width $STRIPE_WIDTH --iops-log /$1
   done
 }
 
@@ -206,7 +213,7 @@ prefix="append"
 if [ -n "$CONTEXT" ]; then
   prefix="${prefix}_${CONTEXT}"
 fi
-prefix="${prefix}_rt-${RUNTIME}_p-${POOL}_qd-${QDEPTH}_ln-${LOGNAME}_es-${ENTRY_SIZE}"
+prefix="${prefix}_rt-${RUNTIME}_p-${POOL}_qd-${QDEPTH}_ln-${LOGNAME}_es-${ENTRY_SIZE}_iv-${STORE_VER}_sw-${STRIPE_WIDTH}"
 
 # run append test
 append append-iops.log
