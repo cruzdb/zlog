@@ -8,6 +8,7 @@ OUTDIR=$PWD
 CLIENT_INSTANCES=1
 STORE_VER=1
 STRIPE_WIDTH="-1"
+CLIENT_NODES=()
 
 while [[ $# > 1 ]]; do
   key="$1"
@@ -17,7 +18,7 @@ while [[ $# > 1 ]]; do
       shift # past argument
       ;;
     -c|--client)
-      CLIENT="$2"
+      CLIENT_NODES+=($2)
       shift
       ;;
     --client-instances)
@@ -75,7 +76,7 @@ done
 echo "########### SETTINGS ##########"
 echo "         SEQ: $SEQ"
 echo "        PORT: $PORT"
-echo "      CLIENT: $CLIENT"
+echo "CLIENT NODES: ${CLIENT_NODES[@]}"
 echo "        POOL: $POOL"
 echo "    LOG NAME: $LOGNAME"
 echo "  ENTRY SIZE: $ENTRY_SIZE"
@@ -112,7 +113,7 @@ done
 # install docker and zlog image
 function install_docker() {
   install_docker_script=`base64 -w0 ${this_dir}/install-docker.sh`
-  for host in $SEQ $CLIENT; do
+  for host in $SEQ ${CLIENT_NODES[@]}; do
     ssh $host "echo $install_docker_script | base64 -d | sudo bash"
   
     # perhaps make the pull optional to reduce amount of chances we have network
@@ -122,13 +123,13 @@ function install_docker() {
 }
 
 # ntp refresh
-function time_sync() {
-  for host in $SEQ $CLIENT; do
-    ssh $host sudo service ntp stop
-    ssh $host sudo ntpd -gq
-    ssh $host sudo service ntp start
-  done
-}
+#function time_sync() {
+#  for host in $SEQ $CLIENTS; do
+#    ssh $host sudo service ntp stop
+#    ssh $host sudo ntpd -gq
+#    ssh $host sudo service ntp start
+#  done
+#}
 
 # start the sequencer
 function start_seq() {
@@ -140,15 +141,15 @@ function start_seq() {
 }
 
 # sequencer benchmark
-function bench_seq() {
-  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
-  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
-  for cont_name in ${client_cont_names[@]}; do
-    ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
-      -it zlog/zlog:jewel zlog-bench --nextseq --pool $POOL --server $SEQ --port $PORT \
-      --runtime $2 --logname ${LOGNAME}_seqtest --iops-log /$1
-  done
-}
+#function bench_seq() {
+#  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
+#  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
+#  for cont_name in ${client_cont_names[@]}; do
+#    ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
+#      -it zlog/zlog:jewel zlog-bench --nextseq --pool $POOL --server $SEQ --port $PORT \
+#      --runtime $2 --logname ${LOGNAME}_seqtest --iops-log /$1
+#  done
+#}
 
 # post log tail from each container
 function test_wait() {
@@ -157,12 +158,14 @@ function test_wait() {
     echo "Posting logs from sequencer on host $SEQ"
     ssh $SEQ sudo docker logs --tail=10 seqr
 
-    for cont_name in ${client_cont_names[@]}; do
-      echo "Posting logs from client instance ${cont_name} on host $CLIENT"
-      ssh $CLIENT sudo docker logs --tail=10 ${cont_name}
+    for host in ${CLIENT_NODES[@]}; do
+      for cont_name in ${client_cont_names[@]}; do
+        echo "Posting logs from client instance ${cont_name} on host $host"
+        ssh $host sudo docker logs --tail=5 ${cont_name}
+      done
     done
 
-    sleep 10
+    sleep 30
   
     now=`date +%s`
     tgt=$(( $start + $1 ))
@@ -174,30 +177,45 @@ function test_wait() {
 
 # collect data and clean-up containers
 function collect() {
-  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
-  for cont_name in ${client_cont_names[@]}; do
-    fn="${2}_h-${CLIENT}_ci-${cont_name}.log"
-    ssh $CLIENT sudo docker cp ${cont_name}:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
+  for host in ${CLIENT_NODES[@]}; do
+    ssh $host sudo docker kill ${all_client_cont_names[@]} || true
   done
-  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
+
+  for host in ${CLIENT_NODES[@]}; do
+    for cont_name in ${client_cont_names[@]}; do
+      fn="${2}_h-${host}_ci-${cont_name}.log"
+      ssh $host sudo docker cp ${cont_name}:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
+    done
+  done
+
+  for host in ${CLIENT_NODES[@]}; do
+    ssh $host sudo docker rm ${all_client_cont_names[@]} || true
+  done
 }
 
 # run some clients
 function append() {
-  ssh $CLIENT sudo docker kill ${all_client_cont_names[@]} || true
-  ssh $CLIENT sudo docker rm ${all_client_cont_names[@]} || true
-  for cont_name in ${client_cont_names[@]}; do
-    ssh $CLIENT sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
-      -it zlog/zlog:jewel zlog-bench --append --pool $POOL --server $SEQ --port $PORT \
-      --runtime $RUNTIME --qdepth $QDEPTH --entry-size $ENTRY_SIZE --logname $LOGNAME \
-      --store-ver $STORE_VER --stripe-width $STRIPE_WIDTH --iops-log /$1
+  # shutdown any existing containers
+  for host in ${CLIENT_NODES[@]}; do
+    ssh $host sudo docker kill ${all_client_cont_names[@]} || true
+    ssh $host sudo docker rm ${all_client_cont_names[@]} || true
+  done
+
+  # start benchmark instances on each client node
+  for host in ${CLIENT_NODES[@]}; do
+    for cont_name in ${client_cont_names[@]}; do
+      ssh $host sudo docker run -d --name ${cont_name} -v /etc/ceph:/etc/ceph --net=host \
+        -it zlog/zlog:jewel zlog-bench --append --pool $POOL --server $SEQ --port $PORT \
+        --runtime $RUNTIME --qdepth $QDEPTH --entry-size $ENTRY_SIZE --logname $LOGNAME \
+        --store-ver $STORE_VER --stripe-width $STRIPE_WIDTH --iops-log /$1
+    done
   done
 }
 
 function stop_collect_seq() {
   ssh $SEQ sudo docker kill seqr || true
   fn="${2}_h-${SEQ}.log"
-  ssh $CLIENT sudo docker cp seqr:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
+  ssh $SEQ sudo docker cp seqr:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
   ssh $SEQ sudo docker rm seqr || true
 }
 
