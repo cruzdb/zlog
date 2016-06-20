@@ -118,6 +118,40 @@ static void append_workload_func(zlog::Log *log, const int qdepth, int entry_siz
   }
 }
 
+static void append_workload_sync_func(zlog::Log *log, int entry_size)
+{
+  // create random data to use for payloads
+  size_t rand_buf_size = 1ULL<<23;
+  std::string rand_buf;
+  rand_buf.reserve(rand_buf_size);
+  std::ifstream ifs("/dev/urandom", std::ios::binary | std::ios::in);
+  std::copy_n(std::istreambuf_iterator<char>(ifs),
+      rand_buf_size, std::back_inserter(rand_buf));
+  const char *rand_buf_raw = rand_buf.c_str();
+
+  // grab random slices from the random bytes
+  std::default_random_engine generator;
+  std::uniform_int_distribution<int> rand_dist;
+  rand_dist = std::uniform_int_distribution<int>(0,
+      rand_buf_size - entry_size - 1);
+
+  for (;;) {
+    // fill with random data
+    ceph::bufferlist bl;
+    size_t buf_offset = rand_dist(generator);
+    bl.append(rand_buf_raw + buf_offset, entry_size);
+
+    uint64_t pos;
+    int ret = log->Append(bl, &pos);
+    assert(ret == 0);
+
+    ios_completed++;
+
+    if (stop)
+      break;
+  }
+}
+
 static void nextseq_workload_func(zlog::LogImpl *log_impl)
 {
   while (!stop) {
@@ -195,6 +229,7 @@ int main(int argc, char **argv)
   int entry_size;
   int bev;
   int stripe_width;
+  bool sync;
 
   bool append_workload;
   bool nextseq_workload;
@@ -213,6 +248,7 @@ int main(int argc, char **argv)
     ("iops-log", po::value<std::string>(&tp_log_fn)->default_value(""), "throughput log file")
     ("store-ver", po::value<int>(&bev)->default_value(1), "backend version")
     ("stripe-width", po::value<int>(&stripe_width)->default_value(-1), "stripe width")
+    ("sync", po::bool_switch(&sync)->default_value(false), "use sync io")
   ;
 
   po::options_description append_opts("Append workload options");
@@ -272,6 +308,7 @@ int main(int argc, char **argv)
   std::cout << "entry size: " << entry_size << std::endl;
   std::cout << " store ver: " << bev << std::endl;
   std::cout << "strp width: " << stripe_width << std::endl;
+  std::cout << "   sync io: " << sync << std::endl;
 
   assert(!pool.empty());
   assert(runtime >= 0);
@@ -346,8 +383,15 @@ int main(int argc, char **argv)
 
   std::vector<std::thread> workload_runners;
   if (append_workload) {
-    workload_runners.push_back(std::thread(
-          append_workload_func, log, qdepth, entry_size));
+    if (sync) {
+      for (int i = 0; i < qdepth; i++) {
+        workload_runners.push_back(std::thread(
+              append_workload_sync_func, log, entry_size));
+      }
+    } else {
+      workload_runners.push_back(std::thread(
+            append_workload_func, log, qdepth, entry_size));
+    }
   } else if (nextseq_workload) {
     workload_runners.push_back(std::thread(
           nextseq_workload_func, log_impl));
