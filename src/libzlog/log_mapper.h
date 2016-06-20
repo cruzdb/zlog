@@ -22,7 +22,7 @@ class LogMapper {
   int CurrentStripeWidth() const;
 
  private:
-  std::string SlotToOid(int slot) const;
+  std::string SlotToOid(uint64_t epoch, int slot) const;
 
   std::string log_name_;
   StripeHistory history_;

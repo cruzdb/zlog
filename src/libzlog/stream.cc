@@ -53,7 +53,7 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
 
     std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
-    if (ret < 0) {
+    if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
     }
@@ -65,6 +65,15 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
     }
 
     if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    if (ret == -EFBIG) {
+      assert(backend_ver == 2);
+      CreateNewStripe();
       ret = RefreshProjection();
       if (ret)
         return ret;

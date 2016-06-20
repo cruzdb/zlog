@@ -11,6 +11,7 @@ class StripeHistory {
   };
 
   void AddStripe(uint64_t position, uint64_t epoch, int width);
+  void CloneLatestStripe(uint64_t position, uint64_t epoch);
 
   Stripe FindStripe(uint64_t position) const;
   Stripe LatestStripe() const;

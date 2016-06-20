@@ -225,6 +225,12 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
+  } else if (ret == -EFBIG) {
+    assert(impl->log->backend_ver == 2);
+    impl->log->CreateNewStripe();
+    ret = impl->log->RefreshProjection();
+    if (ret)
+      finish = true;
   } else if (ret < 0) {
     /*
      * Encountered a RADOS error.

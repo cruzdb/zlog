@@ -11,7 +11,7 @@ namespace zlog {
 
 class LogImpl : public Log {
  public:
-  LogImpl() : backend(NULL) {}
+  LogImpl() : backend(NULL), backend_ver(2) {}
 
   /*
    * Create cut.
@@ -22,6 +22,11 @@ class LogImpl : public Log {
    * Set log stripe width
    */
   int SetStripeWidth(int width);
+
+  /*
+   * (v2 only): adds a new empty stripe
+   */
+  int CreateNewStripe();
 
   /*
    * Find and optionally increment the current tail position.
@@ -119,11 +124,13 @@ class LogImpl : public Log {
   SeqrClient *seqr;
 
   Backend *backend;
+  int backend_ver;
 
   void set_backend_v2() {
     assert(backend);
     delete backend;
     backend = Backend::CreateV2();
+    backend_ver = 2;
   }
 
   /*

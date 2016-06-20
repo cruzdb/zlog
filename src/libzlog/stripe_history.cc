@@ -55,6 +55,17 @@ void StripeHistory::AddStripe(uint64_t position, uint64_t epoch, int width)
   history_[position] = stripe;
 }
 
+void StripeHistory::CloneLatestStripe(uint64_t position, uint64_t epoch)
+{
+  const auto it = history_.lower_bound(position);
+  assert(it == history_.end());
+
+  Stripe latest = LatestStripe();
+  latest.epoch = epoch;
+
+  history_[position] = latest;
+}
+
 StripeHistory::Stripe StripeHistory::FindStripe(uint64_t position) const
 {
   assert(!history_.empty());

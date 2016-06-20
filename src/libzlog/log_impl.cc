@@ -157,6 +157,73 @@ int LogImpl::StripeWidth() const
   return mapper_.CurrentStripeWidth();
 }
 
+/*
+ * Create a new stripe empty stripe.
+ *
+ * TODO:
+ *   CreateNewStripe, CreateCut, SetStripeWidth are all nearly identical
+ *   methods that could be unified.
+ */
+int LogImpl::CreateNewStripe()
+{
+  assert(backend_ver == 2);
+
+  /*
+   * Get the current projection. We'll add the new striping width when we
+   * propose the next projection/epoch.
+   */
+  int rv;
+  uint64_t epoch;
+  ceph::bufferlist in_bl;
+  librados::ObjectReadOperation get_op;
+  Backend::get_latest_projection(get_op, &rv, &epoch, &in_bl);
+
+  ceph::bufferlist unused;
+  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
+  if (ret || rv) {
+    std::cerr << "failed to get projection ret " << ret
+      << " rv " << rv << std::endl;
+    if (ret)
+      return ret;
+    if (rv)
+      return rv;
+  }
+
+  StripeHistory hist;
+  ret = hist.Deserialize(in_bl);
+  if (ret)
+    return ret;
+  assert(!hist.Empty());
+
+  std::vector<std::string> objects;
+  mapper_.LatestObjectSet(objects, hist);
+
+  uint64_t max_position;
+  ret = Seal(objects, epoch, &max_position);
+  if (ret) {
+    std::cerr << "failed to seal " << ret << std::endl;
+    return ret;
+  }
+
+  uint64_t next_epoch = epoch + 1;
+  hist.CloneLatestStripe(max_position, next_epoch);
+  ceph::bufferlist out_bl = hist.Serialize();
+
+  /*
+   * Propose the updated projection for the next epoch.
+   */
+  librados::ObjectWriteOperation set_op;
+  Backend::set_projection(set_op, next_epoch, out_bl);
+  ret = ioctx_->operate(metalog_oid_, &set_op);
+  if (ret) {
+    std::cerr << "failed to set new epoch " << next_epoch
+      << " ret " << ret << std::endl;
+    return ret;
+  }
+
+  return 0;
+}
+
 int LogImpl::SetStripeWidth(int width)
 {
   /*
@@ -474,7 +541,7 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
 
     std::string oid = mapper_.FindObject(position);
     ret = ioctx_->operate(oid, &op);
-    if (ret < 0) {
+    if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
     }
@@ -487,6 +554,21 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
 
     if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
       sleep(1); // avoid spinning in this loop
+      ret = RefreshProjection();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    /*
+     * When an object becomes too large we seal the entire stripe and create a
+     * new stripe of empty objects. First we refresh the projection and try
+     * the append again if the projection changed. Otherwise we will attempt
+     * to create the new stripe.
+     */
+    if (ret == -EFBIG) {
+      assert(backend_ver == 2);
+      CreateNewStripe();
       ret = RefreshProjection();
       if (ret)
         return ret;
