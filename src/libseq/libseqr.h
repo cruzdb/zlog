@@ -1,6 +1,8 @@
 #ifndef LIBSEQR_H
 #define LIBSEQR_H
 #include <set>
+#include <vector>
+#include <mutex>
 #include <boost/asio.hpp>
 
 namespace zlog {
@@ -8,8 +10,19 @@ namespace zlog {
 class SeqrClient {
  public:
   SeqrClient(const char *host, const char *port) :
-    socket_(io_service_), host_(host), port_(port)
-  {}
+    host_(host), port_(port)
+  {
+    num_channels_ = 5;
+    next_channel_ = 0;
+    for (int i = 0; i < num_channels_; i++) {
+      channels_.push_back(new channel);
+    }
+  }
+
+  ~SeqrClient() {
+    for (channel *chan : channels_)
+      delete chan;
+  }
 
   virtual void Connect();
 
@@ -25,11 +38,21 @@ class SeqrClient {
       uint64_t *position, bool next);
 
  private:
-  boost::asio::io_service io_service_;
-  boost::asio::ip::tcp::socket socket_;
+  struct channel {
+    channel() : socket_(io_service_) {}
+    boost::asio::io_service io_service_;
+    boost::asio::ip::tcp::socket socket_;
+    char buffer[1024];
+    std::mutex lock_;
+  };
+
+  std::vector<channel*> channels_;
+
   std::string host_;
   std::string port_;
-  char buffer[1024];
+
+  int num_channels_;
+  std::atomic<int> next_channel_;
 };
 
 }

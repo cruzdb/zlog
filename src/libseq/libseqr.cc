@@ -1,5 +1,6 @@
 #include <set>
 #include <map>
+#include <mutex>
 #include <boost/asio.hpp>
 #include "libseqr.h"
 #include "proto/zlog.pb.h"
@@ -7,11 +8,13 @@
 namespace zlog {
 
 void SeqrClient::Connect() {
-  boost::asio::ip::tcp::resolver resolver(io_service_);
-  boost::asio::ip::tcp::resolver::query query(
-      boost::asio::ip::tcp::v4(), host_.c_str(), port_);
-  boost::asio::ip::tcp::resolver::iterator iterator = resolver.resolve(query);
-  socket_.connect(*iterator);
+  for (channel *chan : channels_) {
+    boost::asio::ip::tcp::resolver resolver(chan->io_service_);
+    boost::asio::ip::tcp::resolver::query query(
+        boost::asio::ip::tcp::v4(), host_.c_str(), port_);
+    boost::asio::ip::tcp::resolver::iterator iterator = resolver.resolve(query);
+    chan->socket_.connect(*iterator);
+  }
 }
 
 int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
@@ -24,31 +27,34 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   req.set_pool(pool);
   req.set_count(1);
 
+  channel *chan = channels_[next_channel_++ % num_channels_];
+  std::lock_guard<std::mutex> l(chan->lock_);
+
   // serialize header and protobuf message
   uint32_t msg_size = req.ByteSize();
   uint32_t be_msg_size = htonl(msg_size);
   uint32_t total_msg_size = msg_size + sizeof(be_msg_size);
-  assert(total_msg_size <= sizeof(buffer));
+  assert(total_msg_size <= sizeof(chan->buffer));
 
   // add header
-  memcpy(buffer, &be_msg_size, sizeof(be_msg_size));
+  memcpy(chan->buffer, &be_msg_size, sizeof(be_msg_size));
 
   // add protobuf msg
   assert(req.IsInitialized());
-  assert(req.SerializeToArray(buffer + sizeof(be_msg_size), msg_size));
+  assert(req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size));
 
   // send
-  boost::asio::write(socket_, boost::asio::buffer(buffer, total_msg_size));
+  boost::asio::write(chan->socket_, boost::asio::buffer(chan->buffer, total_msg_size));
 
   // get reply
-  boost::asio::read(socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
+  boost::asio::read(chan->socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
   msg_size = ntohl(be_msg_size);
-  assert(msg_size < sizeof(buffer));
-  boost::asio::read(socket_, boost::asio::buffer(buffer, msg_size));
+  assert(msg_size < sizeof(chan->buffer));
+  boost::asio::read(chan->socket_, boost::asio::buffer(chan->buffer, msg_size));
 
   // deserialize
   zlog_proto::MSeqReply reply;
-  assert(reply.ParseFromArray(buffer, msg_size));
+  assert(reply.ParseFromArray(chan->buffer, msg_size));
   assert(reply.IsInitialized());
 
   if (reply.status() == zlog_proto::MSeqReply::INIT_LOG)
@@ -78,31 +84,34 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   req.set_next(true);
   req.set_count(count);
 
+  channel *chan = channels_[next_channel_++ % num_channels_];
+  std::lock_guard<std::mutex> l(chan->lock_);
+
   // serialize header and protobuf message
   uint32_t msg_size = req.ByteSize();
   uint32_t be_msg_size = htonl(msg_size);
   uint32_t total_msg_size = msg_size + sizeof(be_msg_size);
-  assert(total_msg_size <= sizeof(buffer));
+  assert(total_msg_size <= sizeof(chan->buffer));
 
   // add header
-  memcpy(buffer, &be_msg_size, sizeof(be_msg_size));
+  memcpy(chan->buffer, &be_msg_size, sizeof(be_msg_size));
 
   // add protobuf msg
   assert(req.IsInitialized());
-  assert(req.SerializeToArray(buffer + sizeof(be_msg_size), msg_size));
+  assert(req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size));
 
   // send
-  boost::asio::write(socket_, boost::asio::buffer(buffer, total_msg_size));
+  boost::asio::write(chan->socket_, boost::asio::buffer(chan->buffer, total_msg_size));
 
   // get reply
-  boost::asio::read(socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
+  boost::asio::read(chan->socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
   msg_size = ntohl(be_msg_size);
-  assert(msg_size < sizeof(buffer));
-  boost::asio::read(socket_, boost::asio::buffer(buffer, msg_size));
+  assert(msg_size < sizeof(chan->buffer));
+  boost::asio::read(chan->socket_, boost::asio::buffer(chan->buffer, msg_size));
 
   // deserialize
   zlog_proto::MSeqReply reply;
-  assert(reply.ParseFromArray(buffer, msg_size));
+  assert(reply.ParseFromArray(chan->buffer, msg_size));
   assert(reply.IsInitialized());
 
   if (reply.status() == zlog_proto::MSeqReply::INIT_LOG)
@@ -140,31 +149,34 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
     req.add_stream_ids(pos);
   }
 
+  channel *chan = channels_[next_channel_++ % num_channels_];
+  std::lock_guard<std::mutex> l(chan->lock_);
+
   // serialize header and protobuf message
   uint32_t msg_size = req.ByteSize();
   uint32_t be_msg_size = htonl(msg_size);
   uint32_t total_msg_size = msg_size + sizeof(be_msg_size);
-  assert(total_msg_size <= sizeof(buffer));
+  assert(total_msg_size <= sizeof(chan->buffer));
 
   // add header
-  memcpy(buffer, &be_msg_size, sizeof(be_msg_size));
+  memcpy(chan->buffer, &be_msg_size, sizeof(be_msg_size));
 
   // add protobuf msg
   assert(req.IsInitialized());
-  assert(req.SerializeToArray(buffer + sizeof(be_msg_size), msg_size));
+  assert(req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size));
 
   // send
-  boost::asio::write(socket_, boost::asio::buffer(buffer, total_msg_size));
+  boost::asio::write(chan->socket_, boost::asio::buffer(chan->buffer, total_msg_size));
 
   // get reply
-  boost::asio::read(socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
+  boost::asio::read(chan->socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
   msg_size = ntohl(be_msg_size);
-  assert(msg_size < sizeof(buffer));
-  boost::asio::read(socket_, boost::asio::buffer(buffer, msg_size));
+  assert(msg_size < sizeof(chan->buffer));
+  boost::asio::read(chan->socket_, boost::asio::buffer(chan->buffer, msg_size));
 
   // deserialize
   zlog_proto::MSeqReply reply;
-  assert(reply.ParseFromArray(buffer, msg_size));
+  assert(reply.ParseFromArray(chan->buffer, msg_size));
   assert(reply.IsInitialized());
 
   if (reply.status() == zlog_proto::MSeqReply::INIT_LOG)
