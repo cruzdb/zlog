@@ -273,7 +273,6 @@ int main(int argc, char **argv)
 
   // sequencer workload doesn't perform appends
   conflict(vm, "nextseq", "entry-size");
-  conflict(vm, "nextseq", "qdepth");
 
   po::notify(vm);
 
@@ -393,8 +392,10 @@ int main(int argc, char **argv)
             append_workload_func, log, qdepth, entry_size));
     }
   } else if (nextseq_workload) {
-    workload_runners.push_back(std::thread(
-          nextseq_workload_func, log_impl));
+      for (int i = 0; i < qdepth; i++) {
+        workload_runners.push_back(std::thread(
+              nextseq_workload_func, log_impl));
+      }
   } else
     assert(0);
 
