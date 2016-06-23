@@ -166,10 +166,13 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
     assert(impl->c);
     // don't need impl->get(): reuse reference
 
+    uint64_t epoch;
+    std::string oid;
+    impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+
     // build and submit new op
-    std::string oid = impl->log->mapper_.FindObject(impl->position);
     librados::ObjectReadOperation op;
-    impl->log->backend->read(op, impl->log->epoch_, impl->position);
+    impl->log->backend->read(op, epoch, impl->position);
     ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
     if (ret)
       finish = true;
@@ -259,10 +262,13 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
       assert(impl->c);
       // don't need impl->get(): reuse reference
 
+      uint64_t epoch;
+      std::string oid;
+      impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+
       // build and submit new op
-      std::string oid = impl->log->mapper_.FindObject(impl->position);
       librados::ObjectWriteOperation op;
-      impl->log->backend->write(op, impl->log->epoch_, impl->position, impl->bl);
+      impl->log->backend->write(op, epoch, impl->position, impl->bl);
       ret = impl->ioctx->aio_operate(oid, impl->c, &op);
       if (ret)
         finish = true;
@@ -364,10 +370,13 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
       AioCompletionImpl::aio_safe_cb_append);
   assert(impl->c);
 
-  librados::ObjectWriteOperation op;
-  backend->write(op, epoch_, position, data);
+  uint64_t epoch;
+  std::string oid;
+  mapper_.FindObject(position, &oid, &epoch);
 
-  std::string oid = mapper_.FindObject(position);
+  librados::ObjectWriteOperation op;
+  backend->write(op, epoch, position, data);
+
   ret = ioctx_->aio_operate(oid, impl->c, &op);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -397,10 +406,13 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
       AioCompletionImpl::aio_safe_cb_read);
   assert(impl->c);
 
-  librados::ObjectReadOperation op;
-  backend->read(op, epoch_, position);
+  uint64_t epoch;
+  std::string oid;
+  mapper_.FindObject(position, &oid, &epoch);
 
-  std::string oid = mapper_.FindObject(position);
+  librados::ObjectReadOperation op;
+  backend->read(op, epoch, position);
+
   int ret = ioctx_->aio_operate(oid, impl->c, &op, &impl->bl);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

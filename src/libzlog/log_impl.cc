@@ -2,7 +2,6 @@
 
 #include <cerrno>
 #include <iostream>
-#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -152,7 +151,7 @@ int Log::Open(librados::IoCtx& ioctx, const std::string& name,
   return 0;
 }
 
-int LogImpl::StripeWidth() const
+int LogImpl::StripeWidth()
 {
   return mapper_.CurrentStripeWidth();
 }
@@ -205,6 +204,11 @@ int LogImpl::CreateNewStripe()
     return ret;
   }
 
+  /*
+   * When we create a new empty stripe we have sealed the previous stripe and
+   * gotten the max_position for that stripe. However, if no writes occurred
+   * to the new stripe then max_position will be zero.
+   */
   uint64_t next_epoch = epoch + 1;
   hist.CloneLatestStripe(max_position, next_epoch);
   ceph::bufferlist out_bl = hist.Serialize();
@@ -426,10 +430,7 @@ int LogImpl::RefreshProjection()
       return ret;
     assert(!hist.Empty());
 
-    std::lock_guard<std::mutex> l(lock_);
-
-    epoch_ = epoch;
-    mapper_.SetHistory(hist);
+    mapper_.SetHistory(hist, epoch);
 
     break;
   }
@@ -440,7 +441,7 @@ int LogImpl::RefreshProjection()
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(epoch_, pool_, name_, pposition, increment);
+    int ret = seqr->CheckTail(mapper_.Epoch(), pool_, name_, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
@@ -469,7 +470,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 
   for (;;) {
     std::vector<uint64_t> result;
-    int ret = seqr->CheckTail(epoch_, pool_, name_, result, count);
+    int ret = seqr->CheckTail(mapper_.Epoch(), pool_, name_, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
@@ -493,7 +494,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(epoch_, pool_, name_, stream_ids,
+    int ret = seqr->CheckTail(mapper_.Epoch(), pool_, name_, stream_ids,
         stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
@@ -536,10 +537,13 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
     if (ret)
       return ret;
 
-    librados::ObjectWriteOperation op;
-    backend->write(op, epoch_, position, data);
+    uint64_t epoch;
+    std::string oid;
+    mapper_.FindObject(position, &oid, &epoch);
 
-    std::string oid = mapper_.FindObject(position);
+    librados::ObjectWriteOperation op;
+    backend->write(op, epoch, position, data);
+
     ret = ioctx_->operate(oid, &op);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
@@ -586,7 +590,9 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
     librados::ObjectWriteOperation op;
     backend->fill(op, epoch, position);
 
-    std::string oid = mapper_.FindObject(position);
+    std::string oid;
+    mapper_.FindObject(position, &oid, NULL);
+
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
@@ -611,10 +617,13 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
 int LogImpl::Fill(uint64_t position)
 {
   for (;;) {
-    librados::ObjectWriteOperation op;
-    backend->fill(op, epoch_, position);
+    uint64_t epoch;
+    std::string oid;
+    mapper_.FindObject(position, &oid, &epoch);
 
-    std::string oid = mapper_.FindObject(position);
+    librados::ObjectWriteOperation op;
+    backend->fill(op, epoch, position);
+
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
@@ -639,10 +648,13 @@ int LogImpl::Fill(uint64_t position)
 int LogImpl::Trim(uint64_t position)
 {
   for (;;) {
-    librados::ObjectWriteOperation op;
-    backend->trim(op, epoch_, position);
+    uint64_t epoch;
+    std::string oid;
+    mapper_.FindObject(position, &oid, &epoch);
 
-    std::string oid = mapper_.FindObject(position);
+    librados::ObjectWriteOperation op;
+    backend->trim(op, epoch, position);
+
     int ret = ioctx_->operate(oid, &op);
     if (ret < 0) {
       std::cerr << "trim: failed ret " << ret << std::endl;
@@ -669,7 +681,9 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     backend->read(op, epoch, position);
 
-    std::string oid = mapper_.FindObject(position);
+    std::string oid;
+    mapper_.FindObject(position, &oid, NULL);
+
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
@@ -698,10 +712,13 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
 int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
 {
   for (;;) {
-    librados::ObjectReadOperation op;
-    backend->read(op, epoch_, position);
+    uint64_t epoch;
+    std::string oid;
+    mapper_.FindObject(position, &oid, &epoch);
 
-    std::string oid = mapper_.FindObject(position);
+    librados::ObjectReadOperation op;
+    backend->read(op, epoch, position);
+
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;

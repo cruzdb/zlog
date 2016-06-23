@@ -49,7 +49,7 @@ class Log {
    * Log Management
    */
 
-  virtual int StripeWidth() const = 0;
+  virtual int StripeWidth() = 0;
 
   static int CreateWithStripeWidth(librados::IoCtx& ioctx, const std::string& name,
       SeqrClient *seqr, int stripe_width, Log **logptr);

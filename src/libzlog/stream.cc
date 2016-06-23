@@ -48,10 +48,13 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
     pack_msg_hdr<zlog_proto::EntryHeader>(bl, hdr);
     bl.append(data.c_str(), data.length());
 
-    librados::ObjectWriteOperation op;
-    backend->write(op, epoch_, position, bl);
+    uint64_t epoch;
+    std::string oid;
+    mapper_.FindObject(position, &oid, &epoch);
 
-    std::string oid = mapper_.FindObject(position);
+    librados::ObjectWriteOperation op;
+    backend->write(op, epoch, position, bl);
+
     ret = ioctx_->operate(oid, &op);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;

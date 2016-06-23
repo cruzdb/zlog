@@ -1,6 +1,5 @@
 #ifndef LIBZLOG_INTERNAL_HPP
 #define LIBZLOG_INTERNAL_HPP
-#include <mutex>
 #include <rados/librados.h>
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
@@ -115,7 +114,7 @@ class LogImpl : public Log {
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);
 
-  int StripeWidth() const;
+  int StripeWidth();
 
   librados::IoCtx *ioctx_;
   std::string pool_;
@@ -133,12 +132,7 @@ class LogImpl : public Log {
     backend_ver = 2;
   }
 
-  /*
-   *
-   */
-  std::mutex lock_;
   LogMapper mapper_;
-  uint64_t epoch_;
 };
 
 struct zlog_log_ctx {

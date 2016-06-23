@@ -1,4 +1,5 @@
 #include "log_mapper.h"
+#include <mutex>
 #include <sstream>
 #include "stripe_history.h"
 
@@ -9,9 +10,21 @@ std::string LogMapper::SlotToOid(uint64_t epoch, int slot) const
     return oid.str();
 }
 
+uint64_t LogMapper::Epoch() {
+  return epoch_;
+}
+
+void LogMapper::SetHistory(const StripeHistory& history, uint64_t epoch) {
+  std::lock_guard<std::mutex> l(lock_);
+  assert(!history.Empty());
+  history_ = history;
+  epoch_ = epoch;
+}
+
 void LogMapper::LatestObjectSet(std::vector<std::string>& objects,
-    const StripeHistory& history) const
+    const StripeHistory& history)
 {
+  std::lock_guard<std::mutex> l(lock_);
   const StripeHistory::Stripe stripe = history.LatestStripe();
   std::vector<std::string> result;
   for (int slot = 0; slot < stripe.width; slot++) {
@@ -20,16 +33,20 @@ void LogMapper::LatestObjectSet(std::vector<std::string>& objects,
   objects.swap(result);
 }
 
-std::string LogMapper::FindObject(uint64_t position) const
+void LogMapper::FindObject(uint64_t position, std::string *oid, uint64_t *epoch)
 {
+  std::lock_guard<std::mutex> l(lock_);
   assert(!history_.Empty());
   const StripeHistory::Stripe stripe = history_.FindStripe(position);
   int slot = position % stripe.width;
-  return SlotToOid(stripe.epoch, slot);
+  *oid = SlotToOid(stripe.epoch, slot);
+  if (epoch)
+    *epoch = epoch_;
 }
 
-int LogMapper::CurrentStripeWidth() const
+int LogMapper::CurrentStripeWidth()
 {
+  std::lock_guard<std::mutex> l(lock_);
   assert(!history_.Empty());
   const StripeHistory::Stripe stripe = history_.LatestStripe();
   return stripe.width;
