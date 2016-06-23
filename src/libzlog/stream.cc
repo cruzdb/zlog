@@ -76,7 +76,7 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
 
     if (ret == -EFBIG) {
       assert(backend_ver == 2);
-      CreateNewStripe();
+      CreateNewStripe(epoch);
       ret = RefreshProjection();
       if (ret)
         return ret;

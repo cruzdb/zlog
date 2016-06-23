@@ -54,6 +54,7 @@ class AioCompletionImpl {
    *  - final append position
    */
   uint64_t *pposition;
+  uint64_t epoch;
 
   /*
    * AioRead
@@ -230,7 +231,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
       finish = true;
   } else if (ret == -EFBIG) {
     assert(impl->log->backend_ver == 2);
-    impl->log->CreateNewStripe();
+    impl->log->CreateNewStripe(impl->epoch);
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
@@ -258,13 +259,16 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
 
     // we are still good. build a new aio
     if (!finish) {
-      impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb_append);
-      assert(impl->c);
-      // don't need impl->get(): reuse reference
-
       uint64_t epoch;
       std::string oid;
       impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+
+      // refresh
+      impl->epoch = epoch;
+
+      impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb_append);
+      assert(impl->c);
+      // don't need impl->get(): reuse reference
 
       // build and submit new op
       librados::ObjectWriteOperation op;
@@ -365,14 +369,19 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   impl->ioctx = ioctx_;
   impl->type = ZLOG_AIO_APPEND;
 
+  uint64_t epoch;
+  std::string oid;
+  mapper_.FindObject(position, &oid, &epoch);
+
+  // used to identify if state changes have occurred since dispatching the
+  // request in order to avoid reconfiguration later (important when lots of
+  // threads or contexts try to do the same thing).
+  impl->epoch = epoch;
+
   impl->get(); // rados aio now has a reference
   impl->c = librados::Rados::aio_create_completion(impl, NULL,
       AioCompletionImpl::aio_safe_cb_append);
   assert(impl->c);
-
-  uint64_t epoch;
-  std::string oid;
-  mapper_.FindObject(position, &oid, &epoch);
 
   librados::ObjectWriteOperation op;
   backend->write(op, epoch, position, data);

@@ -1,5 +1,7 @@
 #ifndef LIBZLOG_INTERNAL_HPP
 #define LIBZLOG_INTERNAL_HPP
+#include <condition_variable>
+#include <mutex>
 #include <rados/librados.h>
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
@@ -10,7 +12,7 @@ namespace zlog {
 
 class LogImpl : public Log {
  public:
-  LogImpl() : backend(NULL), backend_ver(2) {}
+  LogImpl() : backend(NULL), backend_ver(2), new_stripe_pending_(false) {}
 
   /*
    * Create cut.
@@ -25,7 +27,7 @@ class LogImpl : public Log {
   /*
    * (v2 only): adds a new empty stripe
    */
-  int CreateNewStripe();
+  int CreateNewStripe(uint64_t last_epoch);
 
   /*
    * Find and optionally increment the current tail position.
@@ -133,6 +135,10 @@ class LogImpl : public Log {
   }
 
   LogMapper mapper_;
+
+  bool new_stripe_pending_;
+  std::condition_variable new_stripe_cond_;
+  std::mutex lock_;
 };
 
 struct zlog_log_ctx {

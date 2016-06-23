@@ -1,7 +1,9 @@
 #include "log_impl.h"
 
 #include <cerrno>
+#include <condition_variable>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -156,6 +158,24 @@ int LogImpl::StripeWidth()
   return mapper_.CurrentStripeWidth();
 }
 
+class new_stripe_notifier {
+ public:
+  new_stripe_notifier(std::mutex *lock, std::condition_variable *cond, bool *pred) :
+    lock_(lock), cond_(cond), pred_(pred)
+  {}
+
+  ~new_stripe_notifier() {
+    std::unique_lock<std::mutex> l(*lock_);
+    *pred_ = false;
+    cond_->notify_all();
+  }
+
+ private:
+  std::mutex *lock_;
+  std::condition_variable *cond_;
+  bool *pred_;
+};
+
 /*
  * Create a new stripe empty stripe.
  *
@@ -163,9 +183,45 @@ int LogImpl::StripeWidth()
  *   CreateNewStripe, CreateCut, SetStripeWidth are all nearly identical
  *   methods that could be unified.
  */
-int LogImpl::CreateNewStripe()
+int LogImpl::CreateNewStripe(uint64_t last_epoch)
 {
   assert(backend_ver == 2);
+
+  /*
+   * If creation of a new stripe is pending then we will block on the
+   * condition variable until the creating thread has completed or there was
+   * an error.
+   *
+   * There are two ways that we rate limit new stripe creation. The first is
+   * blocking if a new stripe is pending, and the second is that we retry if
+   * once we start we notice that a new stripe was created since we began. The
+   * second case is important for cases in which a bunch of contexts are
+   * trying to create a new stripe but they never actually interact through
+   * the pending flag.
+   */
+#if 1
+  std::unique_lock<std::mutex> l(lock_);
+
+  if (new_stripe_pending_) {
+    //std::cout << "new stripe pending. waiting..." << std::endl;
+    bool done = new_stripe_cond_.wait_for(l, std::chrono::seconds(1),
+        [this](){ return !new_stripe_pending_; });
+    if (!done)
+      std::cerr << "waiting on new stripe: timeout!" << std::endl;
+    return 0;
+  }
+
+  new_stripe_pending_ = true;
+  l.unlock();
+
+  new_stripe_notifier completed(&lock_,
+      &new_stripe_cond_, &new_stripe_pending_);
+
+  if (mapper_.Epoch() > last_epoch) {
+    //std::cout << "    update occurred... trying again" << std::endl;
+    return 0;
+  }
+#endif
 
   /*
    * Get the current projection. We'll add the new striping width when we
@@ -187,6 +243,19 @@ int LogImpl::CreateNewStripe()
     if (rv)
       return rv;
   }
+
+  /*
+   * Each call to CreateNewStripe is followed by a projection refresh. If this
+   * case holds then the projection will get an update relative to the last
+   * update that triggered the stripe creation so we can return in this case
+   * too!
+   */
+  if (epoch > last_epoch) {
+    //std::cout << "    update occurred... trying again" << std::endl;
+    return 0;
+  }
+
+  //std::cout << "creating new stripe!" << std::endl;
 
   StripeHistory hist;
   ret = hist.Deserialize(in_bl);
@@ -572,7 +641,7 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
      */
     if (ret == -EFBIG) {
       assert(backend_ver == 2);
-      CreateNewStripe();
+      CreateNewStripe(epoch);
       ret = RefreshProjection();
       if (ret)
         return ret;
