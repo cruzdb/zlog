@@ -55,7 +55,12 @@ static void handle_aio_cb(aio_state *io)
   io_cond.notify_one();
 
   // clean-up
-  assert(io->c->ReturnValue() == 0);
+  if (io->c->ReturnValue()) {
+    std::cout << "error: io retval = " << io->c->ReturnValue() << std::endl;
+    assert(io->c->ReturnValue() == 0);
+    stop = 1;
+    exit(1);
+  }
   delete io->c;
   io->c = NULL;
 
