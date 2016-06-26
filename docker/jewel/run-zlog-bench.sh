@@ -183,8 +183,9 @@ function collect() {
 
   for host in ${CLIENT_NODES[@]}; do
     for cont_name in ${client_cont_names[@]}; do
-      fn="${2}_h-${host}_ci-${cont_name}.log"
-      ssh $host sudo docker cp ${cont_name}:/$1 - | tar -xOf - $1 > ${OUTDIR}/$fn
+      fn="${2}_h-${host}_ci-${cont_name}"
+      ssh $host sudo docker cp ${cont_name}:/$1 - | tar -xOf - $1 > ${OUTDIR}/${fn}.log
+      ssh $host sudo docker logs ${cont_name} > ${OUTDIR}/${fn}.cont.log
     done
   done
 
