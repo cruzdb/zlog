@@ -12,12 +12,12 @@ class PTree {
  public:
   PTree();
 
-  bool insert(T elem);
+  PTree<T> insert(T elem);
 
   std::set<T> stl_set() {
     std::set<T> set;
-    NodePtr node = roots_.back();
-    if (node == nil_)
+    NodePtr node = root_;
+    if (node == nil())
       return set;
     std::stack<NodePtr> stack;
     stack.push(node);
@@ -26,9 +26,9 @@ class PTree {
       stack.pop();
       auto ret = set.emplace(node->elem);
       assert(ret.second);
-      if (node->right != nil_)
+      if (node->right != nil())
         stack.push(node->right);
-      if (node->left != nil_)
+      if (node->left != nil())
         stack.push(node->left);
     }
     return set;
@@ -50,8 +50,8 @@ class PTree {
   };
 
   NodePtr copy_node(NodePtr node) const {
-    if (node == nil_)
-      return nil_;
+    if (node == nil())
+      return nil();
     return std::make_shared<Node>(node->elem, node->red,
         node->left, node->right);
   }
@@ -61,17 +61,21 @@ class PTree {
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodePtr& parent, NodePtr& nn,
-      std::deque<NodePtr>& path, ChildA, ChildB);
+      std::deque<NodePtr>& path, ChildA, ChildB, NodePtr& root);
 
   template <typename ChildA, typename ChildB >
   NodePtr rotate(NodePtr parent, NodePtr child,
-      ChildA child_a, ChildB child_b);
+      ChildA child_a, ChildB child_b, NodePtr& root);
 
   void print_path(std::deque<NodePtr>& path);
   void print_node(NodePtr node);
 
-  const NodePtr nil_;
-  std::deque<NodePtr> roots_;
+  static NodePtr nil() {
+    static NodePtr node = std::make_shared<Node>(T(), false, nullptr, nullptr);
+    return node;
+  }
+
+  NodePtr root_;
 
   static NodePtr& left(NodePtr n) { return n->left; };
   static NodePtr& right(NodePtr n) { return n->right; };
@@ -84,19 +88,18 @@ class PTree {
 };
 
 template<typename T>
-PTree<T>::PTree() :
-  nil_(std::make_shared<Node>(T(), false, nullptr, nullptr))
+PTree<T>::PTree()
 {
-  roots_.push_back(nil_);
+  root_ = nil();
 }
 
 template<typename T>
 typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
     T elem, NodePtr node)
 {
-  if (node == nil_) {
+  if (node == nil()) {
     // in C++17 replace with `return path.emplace_back(...)`
-    auto nn = std::make_shared<Node>(elem, true, nil_, nil_);
+    auto nn = std::make_shared<Node>(elem, true, nil(), nil());
     path.push_back(nn);
     return nn;
   }
@@ -128,14 +131,13 @@ typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
 template<typename T>
 template<typename ChildA, typename ChildB >
 typename PTree<T>::NodePtr PTree<T>::rotate(NodePtr parent,
-    NodePtr child, ChildA child_a, ChildB child_b)
+    NodePtr child, ChildA child_a, ChildB child_b, NodePtr& root)
 {
   NodePtr grand_child = child_b(child);
   child_b(child) = child_a(grand_child);
 
-  if (roots_.back() == child) {
-    roots_.pop_back();
-    roots_.push_back(grand_child);
+  if (root == child) {
+    root = grand_child;
   } else if (child_a(parent) == child)
     child_a(parent) = grand_child;
   else
@@ -149,9 +151,10 @@ typename PTree<T>::NodePtr PTree<T>::rotate(NodePtr parent,
 template<typename T>
 template<typename ChildA, typename ChildB>
 void PTree<T>::insert_balance(NodePtr& parent, NodePtr& nn,
-    std::deque<NodePtr>& path, ChildA child_a, ChildB child_b)
+    std::deque<NodePtr>& path, ChildA child_a, ChildB child_b,
+    NodePtr& root)
 {
-  assert(path.front() != nil_);
+  assert(path.front() != nil());
   NodePtr& uncle = child_b(path.front());
   if (uncle->red) {
     uncle = copy_node(uncle);
@@ -163,25 +166,24 @@ void PTree<T>::insert_balance(NodePtr& parent, NodePtr& nn,
   } else {
     if (nn == child_b(parent)) {
       std::swap(nn, parent);
-      rotate(path.front(), nn, child_a, child_b);
+      rotate(path.front(), nn, child_a, child_b, root);
     }
     auto grand_parent = pop_front(path);
     std::swap(grand_parent->red, parent->red);
-    rotate(path.front(), grand_parent, child_b, child_a);
+    rotate(path.front(), grand_parent, child_b, child_a, root);
   }
 }
 
 template<typename T>
-bool PTree<T>::insert(T elem)
+PTree<T> PTree<T>::insert(T elem)
 {
   std::deque<NodePtr> path;
 
-  auto root = insert_recursive(path, elem, roots_.back());
+  auto root = insert_recursive(path, elem, root_);
   if (root == nullptr)
-    return false;
+    return *this;
 
-  roots_.push_back(root);
-  path.push_back(nil_);
+  path.push_back(nil());
 
   std::cout << "new-root: ";
   print_node(root);
@@ -197,20 +199,22 @@ bool PTree<T>::insert(T elem)
     assert(!path.empty());
     auto grand_parent = path.front();
     if (grand_parent->left == parent)
-      insert_balance(parent, nn, path, left, right);
+      insert_balance(parent, nn, path, left, right, root);
     else
-      insert_balance(parent, nn, path, right, left);
+      insert_balance(parent, nn, path, right, left, root);
   }
 
-  roots_.back()->red = false;
+  root->red = false;
 
-  return true;
+  PTree<T> tree;
+  tree.root_ = root;
+  return tree;
 }
 
 template<typename T>
 void PTree<T>::print_node(NodePtr node)
 {
-  if (node == nil_)
+  if (node == nil())
     std::cout << "nil:" << (node->red ? "r" : "b");
   else
     std::cout << node->elem << ":" << (node->red ? "r" : "b");
@@ -225,7 +229,7 @@ void PTree<T>::print_path(std::deque<NodePtr>& path)
   } else {
     std::cout << "[";
     for (auto node : path) {
-      if (node == nil_)
+      if (node == nil())
         std::cout << "nil:" << (node->red ? "r " : "b ");
       else
         std::cout << node->elem << ":" << (node->red ? "r " : "b ");
@@ -238,14 +242,28 @@ void PTree<T>::print_path(std::deque<NodePtr>& path)
 int main(int argc, char **argv)
 {
   while (1) {
-    PTree<int> tree;
+    std::vector<std::set<int>> truth_history;
     std::set<int> truth;
-    std::srand(0);
+    truth_history.push_back(truth);
+
+    std::vector<PTree<int>> tree_history;
+    PTree<int> tree;
+    tree_history.push_back(tree);
+
     for (int i = 0; i < 1000; i++) {
       int val = std::rand();
+
       truth.insert(val);
-      tree.insert(val);
+      truth_history.push_back(truth);
+
+      tree = tree.insert(val);
+      tree_history.push_back(tree);
     }
-    assert(truth == tree.stl_set());
+
+    assert(truth_history.size() == tree_history.size());
+    for (unsigned i = 0; i < truth_history.size(); i++)
+      assert(truth_history[i] == tree_history[i].stl_set());
   }
+
+  return 0;
 }
