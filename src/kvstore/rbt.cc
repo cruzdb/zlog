@@ -54,7 +54,8 @@ class PTree {
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodePtr node, uint64_t& nullcount, bool scoped);
   void write_dot_null(std::ostream& out, NodePtr node, uint64_t& nullcount);
-  void write_dot_node(std::ostream& out, NodePtr parent, NodePtr child);
+  void write_dot_node(std::ostream& out, NodePtr parent,
+      NodePtr child, const std::string& dir);
   void _write_dot(std::ostream& out, uint64_t& nullcount, bool scoped = false);
 
   int _validate_rb_tree(NodePtr root);
@@ -131,9 +132,9 @@ void PTree<T>::write_dot_null(std::ostream& out,
 
 template<typename T>
 void PTree<T>::write_dot_node(std::ostream& out,
-    NodePtr parent, NodePtr child)
+    NodePtr parent, NodePtr child, const std::string& dir)
 {
-  out << "\"" << parent << "\" -> ";
+  out << "\"" << parent << "\":" << dir << " -> ";
   out << "\"" << child << "\"" << std::endl;
 }
 
@@ -153,14 +154,14 @@ void PTree<T>::write_dot_recursive(std::ostream& out, uint64_t rid,
   if (node->left == nil())
     write_dot_null(out, node, nullcount);
   else {
-    write_dot_node(out, node, node->left);
+    write_dot_node(out, node, node->left, "sw");
     write_dot_recursive(out, rid, node->left, nullcount, scoped);
   }
 
   if (node->right == nil())
     write_dot_null(out, node, nullcount);
   else {
-    write_dot_node(out, node, node->right);
+    write_dot_node(out, node, node->right, "se");
     write_dot_recursive(out, rid, node->right, nullcount, scoped);
   }
 }
@@ -186,10 +187,14 @@ template<typename T>
 void PTree<T>::write_dot(std::ostream& out,
     std::vector<PTree<T>>& versions)
 {
+  uint64_t trees = 0;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  for (auto version : versions)
+  for (auto version : versions) {
+    out << "subgraph cluster_" << trees++ << " {" << std::endl;
     version._write_dot(out, nullcount, true);
+    out << "}" << std::endl;
+  }
   out << "}" << std::endl;
 }
 
