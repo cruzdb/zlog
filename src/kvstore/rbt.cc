@@ -43,25 +43,45 @@ class PTree {
     bool red;
     NodePtr left;
     NodePtr right;
+    uint64_t rid;
 
-    Node(T elem, bool red, NodePtr left, NodePtr right) :
-      elem(elem), red(red), left(left), right(right)
+    Node(T elem, bool red, NodePtr left, NodePtr right,
+        uint64_t rid) :
+      elem(elem), red(red), left(left), right(right), rid(rid)
     {}
   };
 
-  NodePtr copy_node(NodePtr node) const {
+  void write_dot_recursive(std::ostream& out, uint64_t rid,
+      NodePtr node, uint64_t& nullcount, bool scoped);
+  void write_dot_null(std::ostream& out, NodePtr node, uint64_t& nullcount);
+  void write_dot_node(std::ostream& out, NodePtr parent, NodePtr child);
+  void _write_dot(std::ostream& out, uint64_t& nullcount, bool scoped = false);
+
+  int _validate_rb_tree(NodePtr root);
+
+ public:
+  bool validate_rb_tree();
+  void write_dot(std::ostream& out, bool scoped = false);
+  void write_dot(std::ostream& out,
+      std::vector<PTree<T>>& versions);
+
+ private:
+  NodePtr copy_node(NodePtr node, uint64_t rid) const {
     if (node == nil())
       return nil();
-    return std::make_shared<Node>(node->elem, node->red,
-        node->left, node->right);
+    auto n = std::make_shared<Node>(node->elem, node->red,
+        node->left, node->right, rid);
+    std::cerr << "copy-node: " << n << " : " << node->elem << std::endl;
+    return n;
   }
 
   NodePtr insert_recursive(std::deque<NodePtr>& path,
-      T elem, NodePtr node);
+      T elem, NodePtr& node, uint64_t rid);
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodePtr& parent, NodePtr& nn,
-      std::deque<NodePtr>& path, ChildA, ChildB, NodePtr& root);
+      std::deque<NodePtr>& path, ChildA, ChildB, NodePtr& root,
+      uint64_t rid);
 
   template <typename ChildA, typename ChildB >
   NodePtr rotate(NodePtr parent, NodePtr child,
@@ -71,11 +91,13 @@ class PTree {
   void print_node(NodePtr node);
 
   static NodePtr nil() {
-    static NodePtr node = std::make_shared<Node>(T(), false, nullptr, nullptr);
+    static NodePtr node = std::make_shared<Node>(T(), false, nullptr, nullptr, 0);
     return node;
   }
 
   NodePtr root_;
+
+  static uint64_t root_id_;
 
   static NodePtr& left(NodePtr n) { return n->left; };
   static NodePtr& right(NodePtr n) { return n->right; };
@@ -94,13 +116,93 @@ PTree<T>::PTree()
 }
 
 template<typename T>
-typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
-    T elem, NodePtr node)
+uint64_t PTree<T>::root_id_ = 1;
+
+template<typename T>
+void PTree<T>::write_dot_null(std::ostream& out,
+    NodePtr node, uint64_t& nullcount)
 {
+  nullcount++;
+  out << "null" << nullcount << " [shape=point];"
+    << std::endl;
+  out << "\"" << node << "\" -> " << "null"
+    << nullcount << ";" << std::endl;
+}
+
+template<typename T>
+void PTree<T>::write_dot_node(std::ostream& out,
+    NodePtr parent, NodePtr child)
+{
+  out << "\"" << parent << "\" -> ";
+  out << "\"" << child << "\"" << std::endl;
+}
+
+template<typename T>
+void PTree<T>::write_dot_recursive(std::ostream& out, uint64_t rid,
+    NodePtr node, uint64_t& nullcount, bool scoped)
+{
+  if (scoped && node->rid != rid)
+    return;
+
+  out << "\"" << node << "\" ["
+    << "label=" << node->elem << ",style=filled,"
+    << "fillcolor=" << (node->red ? "red" :
+        "black,fontcolor=white")
+    << "]" << std::endl;
+
+  if (node->left == nil())
+    write_dot_null(out, node, nullcount);
+  else {
+    write_dot_node(out, node, node->left);
+    write_dot_recursive(out, rid, node->left, nullcount, scoped);
+  }
+
+  if (node->right == nil())
+    write_dot_null(out, node, nullcount);
+  else {
+    write_dot_node(out, node, node->right);
+    write_dot_recursive(out, rid, node->right, nullcount, scoped);
+  }
+}
+
+template<typename T>
+void PTree<T>::_write_dot(std::ostream& out,
+    uint64_t& nullcount, bool scoped)
+{
+  write_dot_recursive(out, root_->rid,
+      root_, nullcount, scoped);
+}
+
+template<typename T>
+void PTree<T>::write_dot(std::ostream& out, bool scoped)
+{
+  uint64_t nullcount = 0;
+  out << "digraph ptree {" << std::endl;
+  _write_dot(out, nullcount, scoped);
+  out << "}" << std::endl;
+}
+
+template<typename T>
+void PTree<T>::write_dot(std::ostream& out,
+    std::vector<PTree<T>>& versions)
+{
+  uint64_t nullcount = 0;
+  out << "digraph ptree {" << std::endl;
+  for (auto version : versions)
+    version._write_dot(out, nullcount, true);
+  out << "}" << std::endl;
+}
+
+template<typename T>
+typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
+    T elem, NodePtr& node, uint64_t rid)
+{
+  std::cerr << "insert_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
   if (node == nil()) {
     // in C++17 replace with `return path.emplace_back(...)`
-    auto nn = std::make_shared<Node>(elem, true, nil(), nil());
+    auto nn = std::make_shared<Node>(elem, true, nil(), nil(), rid);
     path.push_back(nn);
+    std::cerr << "make-node: " << nn << " : " << elem << std::endl;
     return nn;
   }
 
@@ -111,12 +213,13 @@ typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
     return nullptr;
 
   auto child = insert_recursive(path, elem,
-      (less ? node->left : node->right));
+      (less ? node->left : node->right),
+      rid);
 
   if (child == nullptr)
     return child;
 
-  auto copy = copy_node(node);
+  auto copy = copy_node(node, rid);
 
   if (less)
     copy->left = child;
@@ -152,12 +255,13 @@ template<typename T>
 template<typename ChildA, typename ChildB>
 void PTree<T>::insert_balance(NodePtr& parent, NodePtr& nn,
     std::deque<NodePtr>& path, ChildA child_a, ChildB child_b,
-    NodePtr& root)
+    NodePtr& root, uint64_t rid)
 {
   assert(path.front() != nil());
   NodePtr& uncle = child_b(path.front());
   if (uncle->red) {
-    uncle = copy_node(uncle);
+    std::cerr << "unclde red" << std::endl;
+    uncle = copy_node(uncle, rid);
     parent->red = false;
     uncle->red = false;
     path.front()->red = true;
@@ -177,18 +281,15 @@ void PTree<T>::insert_balance(NodePtr& parent, NodePtr& nn,
 template<typename T>
 PTree<T> PTree<T>::insert(T elem)
 {
+  uint64_t rid = root_id_++;
+
   std::deque<NodePtr> path;
 
-  auto root = insert_recursive(path, elem, root_);
+  auto root = insert_recursive(path, elem, root_, rid);
   if (root == nullptr)
     return *this;
 
   path.push_back(nil());
-
-  std::cout << "new-root: ";
-  print_node(root);
-  std::cout << std::endl;
-  print_path(path);
 
   assert(path.size() >= 2);
 
@@ -199,9 +300,9 @@ PTree<T> PTree<T>::insert(T elem)
     assert(!path.empty());
     auto grand_parent = path.front();
     if (grand_parent->left == parent)
-      insert_balance(parent, nn, path, left, right, root);
+      insert_balance(parent, nn, path, left, right, root, rid);
     else
-      insert_balance(parent, nn, path, right, left, root);
+      insert_balance(parent, nn, path, right, left, root, rid);
   }
 
   root->red = false;
@@ -239,8 +340,59 @@ void PTree<T>::print_path(std::deque<NodePtr>& path)
   std::cout << std::endl;
 }
 
+template<typename T>
+bool PTree<T>::validate_rb_tree()
+{
+  return _validate_rb_tree(root_) != 0;
+}
+
+template<typename T>
+int PTree<T>::_validate_rb_tree(PTree<T>::NodePtr root)
+{
+  if (root == nil())
+    return 1;
+
+  NodePtr ln = root->left;
+  NodePtr rn = root->right;
+
+  if (root->red && (ln->red || rn->red))
+    return 0;
+
+  int lh = _validate_rb_tree(ln);
+  int rh = _validate_rb_tree(rn);
+
+  if ((ln != nil() && ln->elem >= root->elem) ||
+      (rn != nil() && rn->elem <= root->elem))
+    return 0;
+
+  if (lh != 0 && rh != 0 && lh != rh)
+    return 0;
+
+  if (lh != 0 && rh != 0)
+    return root->red ? lh : lh + 1;
+
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
+#if 1
+  PTree<int> tree;
+
+  std::vector<PTree<int>> versions;
+  for (int i = 0; i < 5; i++) {
+    int val = std::rand() % 200;
+    tree = tree.insert(val);
+    tree.validate_rb_tree();
+    std::cerr << val << std::endl;
+    versions.push_back(tree);
+  }
+
+  //tree.write_dot(std::cout, true)
+  tree.write_dot(std::cout, versions);
+#endif
+
+#if 0
   while (1) {
     std::vector<std::set<int>> truth_history;
     std::set<int> truth;
@@ -261,9 +413,12 @@ int main(int argc, char **argv)
     }
 
     assert(truth_history.size() == tree_history.size());
-    for (unsigned i = 0; i < truth_history.size(); i++)
+    for (unsigned i = 0; i < truth_history.size(); i++) {
+      assert(tree_history[i].validate_rb_tree());
       assert(truth_history[i] == tree_history[i].stl_set());
+    }
   }
+#endif
 
   return 0;
 }
