@@ -17,10 +17,10 @@ class PTree {
 
   std::set<T> stl_set() {
     std::set<T> set;
-    NodePtr node = root_;
+    NodeRef node = root_;
     if (node == nil())
       return set;
-    std::stack<NodePtr> stack;
+    std::stack<NodeRef> stack;
     stack.push(node);
     while (!stack.empty()) {
       node = stack.top();
@@ -37,29 +37,29 @@ class PTree {
 
  private:
   struct Node;
-  using NodePtr = std::shared_ptr<Node>;
+  using NodeRef = std::shared_ptr<Node>;
 
   struct Node {
     T elem;
     bool red;
-    NodePtr left;
-    NodePtr right;
+    NodeRef left;
+    NodeRef right;
     uint64_t rid;
 
-    Node(T elem, bool red, NodePtr left, NodePtr right,
+    Node(T elem, bool red, NodeRef left, NodeRef right,
         uint64_t rid) :
       elem(elem), red(red), left(left), right(right), rid(rid)
     {}
   };
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
-      NodePtr node, uint64_t& nullcount, bool scoped);
-  void write_dot_null(std::ostream& out, NodePtr node, uint64_t& nullcount);
-  void write_dot_node(std::ostream& out, NodePtr parent,
-      NodePtr child, const std::string& dir);
+      NodeRef node, uint64_t& nullcount, bool scoped);
+  void write_dot_null(std::ostream& out, NodeRef node, uint64_t& nullcount);
+  void write_dot_node(std::ostream& out, NodeRef parent,
+      NodeRef child, const std::string& dir);
   void _write_dot(std::ostream& out, uint64_t& nullcount, bool scoped = false);
 
-  int _validate_rb_tree(NodePtr root);
+  int _validate_rb_tree(NodeRef root);
 
  public:
   bool validate_rb_tree();
@@ -68,7 +68,7 @@ class PTree {
       std::vector<PTree<T>>& versions);
 
  private:
-  NodePtr copy_node(NodePtr node, uint64_t rid) const {
+  NodeRef copy_node(NodeRef node, uint64_t rid) const {
     if (node == nil())
       return nil();
     auto n = std::make_shared<Node>(node->elem, node->red,
@@ -77,34 +77,34 @@ class PTree {
     return n;
   }
 
-  NodePtr insert_recursive(std::deque<NodePtr>& path,
-      T elem, NodePtr& node, uint64_t rid);
+  NodeRef insert_recursive(std::deque<NodeRef>& path,
+      T elem, NodeRef& node, uint64_t rid);
 
   template<typename ChildA, typename ChildB>
-  void insert_balance(NodePtr& parent, NodePtr& nn,
-      std::deque<NodePtr>& path, ChildA, ChildB, NodePtr& root,
+  void insert_balance(NodeRef& parent, NodeRef& nn,
+      std::deque<NodeRef>& path, ChildA, ChildB, NodeRef& root,
       uint64_t rid);
 
   template <typename ChildA, typename ChildB >
-  NodePtr rotate(NodePtr parent, NodePtr child,
-      ChildA child_a, ChildB child_b, NodePtr& root);
+  NodeRef rotate(NodeRef parent, NodeRef child,
+      ChildA child_a, ChildB child_b, NodeRef& root);
 
-  void print_path(std::deque<NodePtr>& path);
-  void print_node(NodePtr node);
+  void print_path(std::deque<NodeRef>& path);
+  void print_node(NodeRef node);
 
-  static NodePtr nil() {
-    static NodePtr node = std::make_shared<Node>(T(), false, nullptr, nullptr, 0);
+  static NodeRef nil() {
+    static NodeRef node = std::make_shared<Node>(T(), false, nullptr, nullptr, 0);
     return node;
   }
 
-  NodePtr root_;
+  NodeRef root_;
 
   static uint64_t root_id_;
 
-  static NodePtr& left(NodePtr n) { return n->left; };
-  static NodePtr& right(NodePtr n) { return n->right; };
+  static NodeRef& left(NodeRef n) { return n->left; };
+  static NodeRef& right(NodeRef n) { return n->right; };
 
-  static NodePtr pop_front(std::deque<NodePtr>& d) {
+  static NodeRef pop_front(std::deque<NodeRef>& d) {
     auto front = d.front();
     d.pop_front();
     return front;
@@ -122,7 +122,7 @@ uint64_t PTree<T>::root_id_ = 1;
 
 template<typename T>
 void PTree<T>::write_dot_null(std::ostream& out,
-    NodePtr node, uint64_t& nullcount)
+    NodeRef node, uint64_t& nullcount)
 {
   nullcount++;
   out << "null" << nullcount << " [shape=point];"
@@ -133,7 +133,7 @@ void PTree<T>::write_dot_null(std::ostream& out,
 
 template<typename T>
 void PTree<T>::write_dot_node(std::ostream& out,
-    NodePtr parent, NodePtr child, const std::string& dir)
+    NodeRef parent, NodeRef child, const std::string& dir)
 {
   out << "\"" << parent << "\":" << dir << " -> ";
   out << "\"" << child << "\"" << std::endl;
@@ -141,7 +141,7 @@ void PTree<T>::write_dot_node(std::ostream& out,
 
 template<typename T>
 void PTree<T>::write_dot_recursive(std::ostream& out, uint64_t rid,
-    NodePtr node, uint64_t& nullcount, bool scoped)
+    NodeRef node, uint64_t& nullcount, bool scoped)
 {
   if (scoped && node->rid != rid)
     return;
@@ -200,8 +200,8 @@ void PTree<T>::write_dot(std::ostream& out,
 }
 
 template<typename T>
-typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
-    T elem, NodePtr& node, uint64_t rid)
+typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
+    T elem, NodeRef& node, uint64_t rid)
 {
   std::cerr << "insert_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
   if (node == nil()) {
@@ -239,10 +239,10 @@ typename PTree<T>::NodePtr PTree<T>::insert_recursive(std::deque<NodePtr>& path,
 
 template<typename T>
 template<typename ChildA, typename ChildB >
-typename PTree<T>::NodePtr PTree<T>::rotate(NodePtr parent,
-    NodePtr child, ChildA child_a, ChildB child_b, NodePtr& root)
+typename PTree<T>::NodeRef PTree<T>::rotate(NodeRef parent,
+    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root)
 {
-  NodePtr grand_child = child_b(child);
+  NodeRef grand_child = child_b(child);
   child_b(child) = child_a(grand_child);
 
   if (root == child) {
@@ -259,12 +259,12 @@ typename PTree<T>::NodePtr PTree<T>::rotate(NodePtr parent,
 
 template<typename T>
 template<typename ChildA, typename ChildB>
-void PTree<T>::insert_balance(NodePtr& parent, NodePtr& nn,
-    std::deque<NodePtr>& path, ChildA child_a, ChildB child_b,
-    NodePtr& root, uint64_t rid)
+void PTree<T>::insert_balance(NodeRef& parent, NodeRef& nn,
+    std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
+    NodeRef& root, uint64_t rid)
 {
   assert(path.front() != nil());
-  NodePtr& uncle = child_b(path.front());
+  NodeRef& uncle = child_b(path.front());
   if (uncle->red) {
     std::cerr << "unclde red" << std::endl;
     uncle = copy_node(uncle, rid);
@@ -289,7 +289,7 @@ PTree<T> PTree<T>::insert(T elem)
 {
   uint64_t rid = root_id_++;
 
-  std::deque<NodePtr> path;
+  std::deque<NodeRef> path;
 
   auto root = insert_recursive(path, elem, root_, rid);
   if (root == nullptr)
@@ -300,7 +300,7 @@ PTree<T> PTree<T>::insert(T elem)
   assert(path.size() >= 2);
 
   auto nn = pop_front(path);
-  NodePtr parent = pop_front(path);
+  auto parent = pop_front(path);
 
   while (parent->red) {
     assert(!path.empty());
@@ -319,7 +319,7 @@ PTree<T> PTree<T>::insert(T elem)
 }
 
 template<typename T>
-void PTree<T>::print_node(NodePtr node)
+void PTree<T>::print_node(NodeRef node)
 {
   if (node == nil())
     std::cout << "nil:" << (node->red ? "r" : "b");
@@ -328,7 +328,7 @@ void PTree<T>::print_node(NodePtr node)
 }
 
 template<typename T>
-void PTree<T>::print_path(std::deque<NodePtr>& path)
+void PTree<T>::print_path(std::deque<NodeRef>& path)
 {
   std::cout << "path: ";
   if (path.empty()) {
@@ -353,13 +353,13 @@ bool PTree<T>::validate_rb_tree()
 }
 
 template<typename T>
-int PTree<T>::_validate_rb_tree(PTree<T>::NodePtr root)
+int PTree<T>::_validate_rb_tree(PTree<T>::NodeRef root)
 {
   if (root == nil())
     return 1;
 
-  NodePtr ln = root->left;
-  NodePtr rn = root->right;
+  NodeRef ln = root->left;
+  NodeRef rn = root->right;
 
   if (root->red && (ln->red || rn->red))
     return 0;
