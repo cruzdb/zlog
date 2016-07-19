@@ -7,11 +7,12 @@
 #include <memory>
 #include <stack>
 #include <vector>
+#include "kvstore.pb.h"
 
 template<typename T>
 class PTree {
  public:
-  PTree();
+  explicit PTree(std::vector<std::string> *db);
 
   PTree<T> insert(T elem);
 
@@ -52,14 +53,126 @@ class PTree {
     NodePtr right;
     uint64_t rid;
 
+    int field_index;
+
     Node(T elem, bool red, NodeRef left_ref, NodeRef right_ref,
         uint64_t rid) :
       elem(elem), red(red), rid(rid)
     {
       this->left.ref = left_ref;
       this->right.ref = right_ref;
+      field_index = -1;
     }
   };
+
+  // a node in an intention contains pointers that are:
+  //
+  // 1. nil
+  // 2. targets outside this intention
+  // 3. targets within this intention
+  // 4. targets within this intention to the newly created node
+  //
+  // If (1) then csn/off are ignored, so nothing special is required.
+  //
+  // If (2) then the pointer was copied from a previous version of the tree,
+  // in which case the csn/off was also copied over.
+  //
+  //    NOTE: need ot make sure this is reflected in the balance/rotate logic
+  //    so that we aren't JUST copying the shared_ptr.
+  //
+  // If (3) then the pointer needs to have its csn set to 0 and its offset
+  // updated correctly.
+  //
+  // if (4), then same as (3).
+
+  void serialize_node(kvstore_proto::Node *n, NodeRef node,
+      uint64_t rid, int field_index) {
+
+    n->set_red(node->red);
+    n->set_value(node->elem);
+
+    assert(node->field_index == -1);
+    node->field_index = field_index;
+    assert(node->field_index >= 0);
+
+    if (node->left.ref == nil()) {
+      n->mutable_left()->set_nil(true);
+      n->mutable_left()->set_self(false);
+      n->mutable_left()->set_csn(0);
+      n->mutable_left()->set_off(0);
+    } else if (node->left.ref->rid == rid) {
+      n->mutable_left()->set_nil(false);
+      n->mutable_left()->set_self(true);
+      n->mutable_left()->set_csn(0);
+      assert(node->left.ref->field_index >= 0);
+      n->mutable_left()->set_off(node->left.ref->field_index);
+    } else {
+      n->mutable_left()->set_nil(false);
+      n->mutable_left()->set_self(false);
+      n->mutable_left()->set_csn(node->left.csn);
+      n->mutable_left()->set_off(node->left.offset);
+    }
+
+    if (node->right.ref == nil()) {
+      n->mutable_right()->set_nil(true);
+      n->mutable_right()->set_self(false);
+      n->mutable_right()->set_csn(0);
+      n->mutable_right()->set_off(0);
+    } else if (node->right.ref->rid == rid) {
+      n->mutable_right()->set_nil(false);
+      n->mutable_right()->set_self(true);
+      n->mutable_right()->set_csn(0);
+      assert(node->right.ref->field_index >= 0);
+      n->mutable_right()->set_off(node->right.ref->field_index);
+    } else {
+      n->mutable_right()->set_nil(false);
+      n->mutable_right()->set_self(false);
+      n->mutable_right()->set_csn(node->right.csn);
+      n->mutable_right()->set_off(node->right.offset);
+    }
+  }
+
+  void serialize_intention_recursive(kvstore_proto::Intention& i,
+      uint64_t rid, NodeRef node, int& field_index) {
+
+    if (node == nil() || node->rid != rid)
+      return;
+
+    serialize_intention_recursive(i, rid, node->left.ref, field_index);
+    serialize_intention_recursive(i, rid, node->right.ref, field_index);
+
+    // new serialized node in the intention
+    kvstore_proto::Node *n = i.add_tree();
+    serialize_node(n, node, rid, field_index);
+    field_index++;
+  }
+
+  void serialize_intention(kvstore_proto::Intention& i, NodeRef node) {
+    int field_index = 0;
+    serialize_intention_recursive(i, node->rid, node, field_index);
+  }
+
+  void set_intention_self_csn_recursive(uint64_t rid,
+      NodeRef node, uint64_t pos) {
+
+    if (node == nil() || node->rid != rid)
+      return;
+
+    if (node->right.ref != nil() && node->right.ref->rid == rid) {
+      node->right.csn = pos;
+    }
+
+    if (node->left.ref != nil() && node->left.ref->rid == rid) {
+      node->left.csn = pos;
+    }
+
+    set_intention_self_csn_recursive(rid, node->right.ref, pos);
+    set_intention_self_csn_recursive(rid, node->left.ref, pos);
+  }
+
+  void set_intention_self_csn(NodeRef root, uint64_t pos) {
+    set_intention_self_csn_recursive(root->rid, root, pos);
+  }
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
@@ -78,11 +191,21 @@ class PTree {
 
  private:
   NodeRef copy_node(NodeRef node, uint64_t rid) const {
+
     if (node == nil())
       return nil();
+
     auto n = std::make_shared<Node>(node->elem, node->red,
         node->left.ref, node->right.ref, rid);
+
+    n->left.csn = node->left.csn;
+    n->left.offset = node->left.offset;
+
+    n->right.csn = node->right.csn;
+    n->right.offset = node->right.offset;
+
     std::cerr << "copy-node: " << n << " : " << node->elem << std::endl;
+
     return n;
   }
 
@@ -96,7 +219,8 @@ class PTree {
 
   template <typename ChildA, typename ChildB >
   NodeRef rotate(NodeRef parent, NodeRef child,
-      ChildA child_a, ChildB child_b, NodeRef& root);
+      ChildA child_a, ChildB child_b, NodeRef& root,
+      uint64_t rid);
 
   void print_path(std::deque<NodeRef>& path);
   void print_node(NodeRef node);
@@ -108,10 +232,13 @@ class PTree {
 
   NodeRef root_;
 
+  PTree() {}
+  std::vector<std::string> *db_;
+
   static uint64_t root_id_;
 
-  static NodeRef& left(NodeRef n) { return n->left.ref; };
-  static NodeRef& right(NodeRef n) { return n->right.ref; };
+  static NodePtr& left(NodeRef n) { return n->left; };
+  static NodePtr& right(NodeRef n) { return n->right; };
 
   static NodeRef pop_front(std::deque<NodeRef>& d) {
     auto front = d.front();
@@ -121,7 +248,8 @@ class PTree {
 };
 
 template<typename T>
-PTree<T>::PTree()
+PTree<T>::PTree(std::vector<std::string> *db) :
+  db_(db)
 {
   root_ = nil();
 }
@@ -234,6 +362,12 @@ typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
   if (child == nullptr)
     return child;
 
+  /*
+   * the copy_node operation will copy the child node references, as well as
+   * the csn/offset for each child node reference. however below the reference
+   * is updated without updating the csn/offset, which are fixed later when
+   * the intention is build.
+   */
   auto copy = copy_node(node, rid);
 
   if (less)
@@ -249,21 +383,28 @@ typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
 template<typename T>
 template<typename ChildA, typename ChildB >
 typename PTree<T>::NodeRef PTree<T>::rotate(NodeRef parent,
-    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root)
+    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root,
+    uint64_t rid)
 {
-  NodeRef grand_child = child_b(child);
-  child_b(child) = child_a(grand_child);
+  // copy over ref and csn/off because we might be moving a pointer that
+  // points outside of the current intentino.
+  NodePtr grand_child = child_b(child);
+  child_b(child) = child_a(grand_child.ref);
 
   if (root == child) {
-    root = grand_child;
-  } else if (child_a(parent) == child)
+    root = grand_child.ref;
+  } else if (child_a(parent).ref == child)
     child_a(parent) = grand_child;
   else
     child_b(parent) = grand_child;
 
-  child_a(grand_child) = child;
+  // we do not update csn/off here because child is always a pointer to a node
+  // in the current intention so its csn/off will be updated during intention
+  // serialization step.
+  assert(child->rid == rid);
+  child_a(grand_child.ref).ref = child;
 
-  return grand_child;
+  return grand_child.ref;
 }
 
 template<typename T>
@@ -273,23 +414,23 @@ void PTree<T>::insert_balance(NodeRef& parent, NodeRef& nn,
     NodeRef& root, uint64_t rid)
 {
   assert(path.front() != nil());
-  NodeRef& uncle = child_b(path.front());
-  if (uncle->red) {
-    std::cerr << "unclde red" << std::endl;
-    uncle = copy_node(uncle, rid);
+  NodePtr& uncle = child_b(path.front());
+  if (uncle.ref->red) {
+    std::cerr << "uncle red" << std::endl;
+    uncle.ref = copy_node(uncle.ref, rid);
     parent->red = false;
-    uncle->red = false;
+    uncle.ref->red = false;
     path.front()->red = true;
     nn = pop_front(path);
     parent = pop_front(path);
   } else {
-    if (nn == child_b(parent)) {
+    if (nn == child_b(parent).ref) {
       std::swap(nn, parent);
-      rotate(path.front(), nn, child_a, child_b, root);
+      rotate(path.front(), nn, child_a, child_b, root, rid);
     }
     auto grand_parent = pop_front(path);
     std::swap(grand_parent->red, parent->red);
-    rotate(path.front(), grand_parent, child_b, child_a, root);
+    rotate(path.front(), grand_parent, child_b, child_a, root, rid);
   }
 }
 
@@ -322,8 +463,25 @@ PTree<T> PTree<T>::insert(T elem)
 
   root->red = false;
 
+#if 1
+  // build an intention for the new tree
+  kvstore_proto::Intention intention;
+  serialize_intention(intention, root);
+
+  // append to the database log
+  std::string blob;
+  assert(intention.IsInitialized());
+  assert(intention.SerializeToString(&blob));
+  db_->push_back(blob);
+  uint64_t pos = db_->size() - 1;
+
+  // update the in-memory intention ptrs
+  set_intention_self_csn(root, pos);
+#endif
+
   PTree<T> tree;
   tree.root_ = root;
+  tree.db_ = db_;
   return tree;
 }
 

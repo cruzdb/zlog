@@ -2,7 +2,8 @@
 
 int main(int argc, char **argv)
 {
-  PTree<int> tree;
+  std::vector<std::string> db;
+  PTree<int> tree(&db);
 
   std::vector<PTree<int>> versions;
   for (int i = 0; i < 5; i++) {
