@@ -27,10 +27,10 @@ class PTree {
       stack.pop();
       auto ret = set.emplace(node->elem);
       assert(ret.second);
-      if (node->right != nil())
-        stack.push(node->right);
-      if (node->left != nil())
-        stack.push(node->left);
+      if (node->right.ref != nil())
+        stack.push(node->right.ref);
+      if (node->left.ref != nil())
+        stack.push(node->left.ref);
     }
     return set;
   }
@@ -39,17 +39,26 @@ class PTree {
   struct Node;
   using NodeRef = std::shared_ptr<Node>;
 
+  struct NodePtr {
+    uint64_t csn;
+    int offset;
+    NodeRef ref;
+  };
+
   struct Node {
     T elem;
     bool red;
-    NodeRef left;
-    NodeRef right;
+    NodePtr left;
+    NodePtr right;
     uint64_t rid;
 
-    Node(T elem, bool red, NodeRef left, NodeRef right,
+    Node(T elem, bool red, NodeRef left_ref, NodeRef right_ref,
         uint64_t rid) :
-      elem(elem), red(red), left(left), right(right), rid(rid)
-    {}
+      elem(elem), red(red), rid(rid)
+    {
+      this->left.ref = left_ref;
+      this->right.ref = right_ref;
+    }
   };
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
@@ -72,7 +81,7 @@ class PTree {
     if (node == nil())
       return nil();
     auto n = std::make_shared<Node>(node->elem, node->red,
-        node->left, node->right, rid);
+        node->left.ref, node->right.ref, rid);
     std::cerr << "copy-node: " << n << " : " << node->elem << std::endl;
     return n;
   }
@@ -101,8 +110,8 @@ class PTree {
 
   static uint64_t root_id_;
 
-  static NodeRef& left(NodeRef n) { return n->left; };
-  static NodeRef& right(NodeRef n) { return n->right; };
+  static NodeRef& left(NodeRef n) { return n->left.ref; };
+  static NodeRef& right(NodeRef n) { return n->right.ref; };
 
   static NodeRef pop_front(std::deque<NodeRef>& d) {
     auto front = d.front();
@@ -152,18 +161,18 @@ void PTree<T>::write_dot_recursive(std::ostream& out, uint64_t rid,
         "black,fontcolor=white")
     << "]" << std::endl;
 
-  if (node->left == nil())
+  if (node->left.ref == nil())
     write_dot_null(out, node, nullcount);
   else {
-    write_dot_node(out, node, node->left, "sw");
-    write_dot_recursive(out, rid, node->left, nullcount, scoped);
+    write_dot_node(out, node, node->left.ref, "sw");
+    write_dot_recursive(out, rid, node->left.ref, nullcount, scoped);
   }
 
-  if (node->right == nil())
+  if (node->right.ref == nil())
     write_dot_null(out, node, nullcount);
   else {
-    write_dot_node(out, node, node->right, "se");
-    write_dot_recursive(out, rid, node->right, nullcount, scoped);
+    write_dot_node(out, node, node->right.ref, "se");
+    write_dot_recursive(out, rid, node->right.ref, nullcount, scoped);
   }
 }
 
@@ -219,7 +228,7 @@ typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
     return nullptr;
 
   auto child = insert_recursive(path, elem,
-      (less ? node->left : node->right),
+      (less ? node->left.ref : node->right.ref),
       rid);
 
   if (child == nullptr)
@@ -228,9 +237,9 @@ typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
   auto copy = copy_node(node, rid);
 
   if (less)
-    copy->left = child;
+    copy->left.ref = child;
   else
-    copy->right = child;
+    copy->right.ref = child;
 
   path.push_back(copy);
 
@@ -305,7 +314,7 @@ PTree<T> PTree<T>::insert(T elem)
   while (parent->red) {
     assert(!path.empty());
     auto grand_parent = path.front();
-    if (grand_parent->left == parent)
+    if (grand_parent->left.ref == parent)
       insert_balance(parent, nn, path, left, right, root, rid);
     else
       insert_balance(parent, nn, path, right, left, root, rid);
@@ -358,8 +367,8 @@ int PTree<T>::_validate_rb_tree(PTree<T>::NodeRef root)
   if (root == nil())
     return 1;
 
-  NodeRef ln = root->left;
-  NodeRef rn = root->right;
+  NodeRef ln = root->left.ref;
+  NodeRef rn = root->right.ref;
 
   if (root->red && (ln->red || rn->red))
     return 0;
