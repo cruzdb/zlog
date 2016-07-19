@@ -28,10 +28,16 @@ class PTree {
       stack.pop();
       auto ret = set.emplace(node->elem);
       assert(ret.second);
-      if (node->right.ref != nil())
+      if (node->right.ref != nil()) {
+        if (node->right.ref == nullptr)
+          node_cache_get_(node->right);
         stack.push(node->right.ref);
-      if (node->left.ref != nil())
+      }
+      if (node->left.ref != nil()) {
+        if (node->left.ref == nullptr)
+          node_cache_get_(node->left);
         stack.push(node->left.ref);
+      }
     }
     return set;
   }
@@ -44,6 +50,7 @@ class PTree {
     uint64_t csn;
     int offset;
     NodeRef ref;
+    NodePtr() : offset(-1) {}
   };
 
   struct Node {
@@ -93,6 +100,7 @@ class PTree {
 
     assert(node->field_index == -1);
     node->field_index = field_index;
+    std::cerr << "serialize_node: setting field index " << field_index << std::endl;
     assert(node->field_index >= 0);
 
     if (node->left.ref == nil()) {
@@ -107,11 +115,14 @@ class PTree {
       assert(node->left.ref->field_index >= 0);
       n->mutable_left()->set_off(node->left.ref->field_index);
     } else {
+      assert(node->left.ref != nullptr);
       n->mutable_left()->set_nil(false);
       n->mutable_left()->set_self(false);
       n->mutable_left()->set_csn(node->left.csn);
       n->mutable_left()->set_off(node->left.offset);
     }
+
+    std::cerr << "serialize_node: left offset " << n->mutable_left()->off() << std::endl;
 
     if (node->right.ref == nil()) {
       n->mutable_right()->set_nil(true);
@@ -125,11 +136,14 @@ class PTree {
       assert(node->right.ref->field_index >= 0);
       n->mutable_right()->set_off(node->right.ref->field_index);
     } else {
+      assert(node->right.ref != nullptr);
       n->mutable_right()->set_nil(false);
       n->mutable_right()->set_self(false);
       n->mutable_right()->set_csn(node->right.csn);
       n->mutable_right()->set_off(node->right.offset);
     }
+
+    std::cerr << "serialize_node: right offset " << n->mutable_right()->off() << std::endl;
   }
 
   void serialize_intention_recursive(kvstore_proto::Intention& i,
@@ -189,6 +203,55 @@ class PTree {
   void write_dot(std::ostream& out,
       std::vector<PTree<T>>& versions);
 
+  void restore() {
+    assert(node_cache_);
+    assert(db_->size());
+    int pos = db_->size() - 1;
+    std::string snapshot = db_->at(pos);
+
+    kvstore_proto::Intention i;
+    assert(i.ParseFromString(snapshot));
+    assert(i.IsInitialized());
+
+    uint64_t rid = root_id_++;
+    for (int idx = 0; idx < i.tree_size(); idx++) {
+      const kvstore_proto::Node& n = i.tree(idx);
+      auto nn = std::make_shared<Node>(n.value(), n.red(), nil(), nil(), rid);
+      nn->field_index = idx;
+      if (!n.left().nil()) {
+        nn->left.ref = nullptr;
+        nn->left.offset = n.left().off();
+        if (n.left().self()) {
+          nn->left.csn = pos;
+        } else {
+          nn->left.csn = n.left().csn();
+        }
+      }
+      if (!n.right().nil()) {
+        nn->right.ref = nullptr;
+        nn->right.offset = n.right().off();
+        if (n.right().self()) {
+          nn->right.csn = pos;
+        } else {
+          nn->right.csn = n.right().csn();
+        }
+      }
+
+      std::cerr << "restore: node_cache insert: pos " << pos
+        << " idx  " << idx
+        << " nn.left.nil " << (nn->left.ref == nil())
+        << " nn.left.off " << nn->left.offset
+        << " nn.right.nil " << (nn->right.ref == nil())
+        << " nn.right.off " << nn->right.offset
+        << std::endl;
+
+      node_cache_->insert(std::make_pair(std::make_pair(pos, idx), nn));
+
+      if (idx == (i.tree_size() - 1))
+        root_ = nn;
+    }
+  }
+
  private:
   NodeRef copy_node(NodeRef node, uint64_t rid) const {
 
@@ -198,13 +261,20 @@ class PTree {
     auto n = std::make_shared<Node>(node->elem, node->red,
         node->left.ref, node->right.ref, rid);
 
-    n->left.csn = node->left.csn;
-    n->left.offset = node->left.offset;
+    if (node->left.ref != nil()) {
+      n->left.csn = node->left.csn;
+      n->left.offset = node->left.offset;
+    }
 
-    n->right.csn = node->right.csn;
-    n->right.offset = node->right.offset;
+    if (node->right.ref != nil()) {
+      n->right.csn = node->right.csn;
+      n->right.offset = node->right.offset;
+    }
 
-    std::cerr << "copy-node: " << n << " : " << node->elem << std::endl;
+    std::cerr << "copy-node: " << n << " : " << node->elem
+      << " left-offset " << n->left.offset
+      << " right-offset " << n->right.offset
+      << std::endl;
 
     return n;
   }
@@ -235,6 +305,15 @@ class PTree {
   PTree() {}
   std::vector<std::string> *db_;
 
+  // this is created by the first tree instance made when the db is supplied
+  // and then it is passed along after each insert. this is pretty ugly. the
+  // node cache needs to be a stand-alone thing.
+  std::map<std::pair<uint64_t, int>, NodeRef> *node_cache_;
+
+  void node_cache_get_(NodePtr& ptr) {
+    std::cerr << "node_cache_get_: csn " << ptr.csn << " off " << ptr.offset << std::endl;
+  }
+
   static uint64_t root_id_;
 
   static NodePtr& left(NodeRef n) { return n->left; };
@@ -249,13 +328,15 @@ class PTree {
 
 template<typename T>
 PTree<T>::PTree(std::vector<std::string> *db) :
-  db_(db)
+  db_(db), node_cache_(NULL)
 {
+  // TODO: inistialize an empty db with an append at pos 0 of an empty tree?
   root_ = nil();
+  node_cache_ = new std::map<std::pair<uint64_t, int>, NodeRef>();
 }
 
 template<typename T>
-uint64_t PTree<T>::root_id_ = 1;
+uint64_t PTree<T>::root_id_ = 928734;
 
 template<typename T>
 void PTree<T>::write_dot_null(std::ostream& out,
@@ -482,6 +563,7 @@ PTree<T> PTree<T>::insert(T elem)
   PTree<T> tree;
   tree.root_ = root;
   tree.db_ = db_;
+  tree.node_cache_ = node_cache_;
   return tree;
 }
 
