@@ -58,19 +58,20 @@ struct Node {
 template<typename T>
 std::ostream& operator<<(std::ostream& out, const NodeRef<T>& n)
 {
-  out << "node(" << n.get() << "): ";
+  out << "node(" << n.get() << "):" << n->elem << ": ";
   out << (n->red ? "red " : "blk ");
-  out << "left=[" << n->left.csn << "," << n->left.offset << ",";
+  out << "fi " << n->field_index << " ";
+  out << "left=[p" << n->left.csn << ",o" << n->left.offset << ",";
   out << n->left.ref.get() << "] ";
-  out << "right=[" << n->right.csn << "," << n->right.offset << ",";
+  out << "right=[p" << n->right.csn << ",o" << n->right.offset << ",";
   out << n->right.ref.get() << "] ";
   return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p)
 {
-  out << "[" << p.nil() << "," << p.self()
-    << "," << p.csn() << "," << p.off() << "]";
+  out << "[n" << p.nil() << ",s" << p.self()
+    << ",p" << p.csn() << ",o" << p.off() << "]";
   return out;
 }
 
@@ -84,7 +85,7 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Node& n)
 
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i)
 {
-  out << "intention tree_size = " << i.tree_size() << std::endl;
+  out << "- intention tree_size = " << i.tree_size() << std::endl;
   for (int idx = 0; idx < i.tree_size(); idx++) {
     out << "  " << idx << ": " << i.tree(idx) << std::endl;
   }
@@ -148,57 +149,69 @@ class PTree {
   void serialize_node(kvstore_proto::Node *n, NodeRef<T> node,
       uint64_t rid, int field_index) {
 
-    std::cerr << node << std::endl;
-
     n->set_red(node->red);
     n->set_value(node->elem);
 
     assert(node->field_index == -1);
     node->field_index = field_index;
-    std::cerr << "serialize_node: setting field index " << field_index << std::endl;
     assert(node->field_index >= 0);
+
+    std::cerr << "serialize_node: " << node << std::endl;
 
     if (node->left.ref == Node<T>::nil()) {
       n->mutable_left()->set_nil(true);
       n->mutable_left()->set_self(false);
       n->mutable_left()->set_csn(0);
       n->mutable_left()->set_off(0);
+      std::cerr << " - serialize_node: left nil" << std::endl;
     } else if (node->left.ref->rid == rid) {
       n->mutable_left()->set_nil(false);
       n->mutable_left()->set_self(true);
       n->mutable_left()->set_csn(0);
       assert(node->left.ref->field_index >= 0);
       n->mutable_left()->set_off(node->left.ref->field_index);
+      node->left.offset = node->left.ref->field_index;
+      std::cerr << " - serialize_node: left internal csn " <<
+        n->mutable_left()->csn() << " off " << n->mutable_left()->off()
+        << std::endl;
     } else {
       assert(node->left.ref != nullptr);
       n->mutable_left()->set_nil(false);
       n->mutable_left()->set_self(false);
       n->mutable_left()->set_csn(node->left.csn);
       n->mutable_left()->set_off(node->left.offset);
+      std::cerr << " - serialize_node: left external csn " <<
+        n->mutable_left()->csn() << " off " << n->mutable_left()->off()
+        << std::endl;
     }
-
-    std::cerr << "serialize_node: left offset " << n->mutable_left()->off() << std::endl;
 
     if (node->right.ref == Node<T>::nil()) {
       n->mutable_right()->set_nil(true);
       n->mutable_right()->set_self(false);
       n->mutable_right()->set_csn(0);
       n->mutable_right()->set_off(0);
+      std::cerr << " - serialize_node: right nil" << std::endl;
     } else if (node->right.ref->rid == rid) {
       n->mutable_right()->set_nil(false);
       n->mutable_right()->set_self(true);
       n->mutable_right()->set_csn(0);
       assert(node->right.ref->field_index >= 0);
       n->mutable_right()->set_off(node->right.ref->field_index);
+      node->right.offset = node->right.ref->field_index;
+      std::cerr << " - serialize_node: right internal csn " <<
+        n->mutable_right()->csn() << " off " << n->mutable_right()->off()
+        << std::endl;
     } else {
       assert(node->right.ref != nullptr);
       n->mutable_right()->set_nil(false);
       n->mutable_right()->set_self(false);
       n->mutable_right()->set_csn(node->right.csn);
       n->mutable_right()->set_off(node->right.offset);
+      std::cerr << " - serialize_node: right external csn " <<
+        n->mutable_right()->csn() << " off " << n->mutable_right()->off()
+        << std::endl;
     }
 
-    std::cerr << "serialize_node: right offset " << n->mutable_right()->off() << std::endl;
   }
 
   void serialize_intention_recursive(kvstore_proto::Intention& i,
@@ -247,7 +260,7 @@ class PTree {
       NodeRef<T> node, uint64_t& nullcount, bool scoped);
   void write_dot_null(std::ostream& out, NodeRef<T> node, uint64_t& nullcount);
   void write_dot_node(std::ostream& out, NodeRef<T> parent,
-      NodeRef<T> child, const std::string& dir);
+      NodePtr<T>& child, const std::string& dir);
   void _write_dot(std::ostream& out, uint64_t& nullcount, bool scoped = false);
 
   int _validate_rb_tree(NodeRef<T> root);
@@ -268,12 +281,12 @@ class PTree {
     assert(i.ParseFromString(snapshot));
     assert(i.IsInitialized());
 
-    uint64_t rid = root_id_++;
+    uint64_t rid = pos;
     for (int idx = 0; idx < i.tree_size(); idx++) {
       const kvstore_proto::Node& n = i.tree(idx);
       auto nn = std::make_shared<Node<T>>(n.value(), n.red(), Node<T>::nil(), Node<T>::nil(), rid);
       nn->field_index = idx;
-      if (!n.left().Node<T>::nil()) {
+      if (!n.left().nil()) {
         nn->left.ref = nullptr;
         nn->left.offset = n.left().off();
         if (n.left().self()) {
@@ -282,7 +295,7 @@ class PTree {
           nn->left.csn = n.left().csn();
         }
       }
-      if (!n.right().Node<T>::nil()) {
+      if (!n.right().nil()) {
         nn->right.ref = nullptr;
         nn->right.offset = n.right().off();
         if (n.right().self()) {
@@ -316,20 +329,15 @@ class PTree {
     auto n = std::make_shared<Node<T>>(node->elem, node->red,
         node->left.ref, node->right.ref, rid);
 
-    if (node->left.ref != Node<T>::nil()) {
-      n->left.csn = node->left.csn;
-      n->left.offset = node->left.offset;
-    }
+    //assert(node->left.ref == Node<T>::nil() || node->left.offset >= 0);
 
-    if (node->right.ref != Node<T>::nil()) {
-      n->right.csn = node->right.csn;
-      n->right.offset = node->right.offset;
-    }
+    n->left.csn = node->left.csn;
+    n->left.offset = node->left.offset;
 
-    std::cerr << "copy-node: " << n << " : " << node->elem
-      << " left-offset " << n->left.offset
-      << " right-offset " << n->right.offset
-      << std::endl;
+    n->right.csn = node->right.csn;
+    n->right.offset = node->right.offset;
+
+    std::cerr << "copy_node: src " << node << " dst " << n << std::endl;
 
     return n;
   }
@@ -361,7 +369,52 @@ class PTree {
   std::map<std::pair<uint64_t, int>, NodeRef<T>> *node_cache_;
 
   void node_cache_get_(NodePtr<T>& ptr) {
+    assert(ptr.ref == nullptr);
     std::cerr << "node_cache_get_: csn " << ptr.csn << " off " << ptr.offset << std::endl;
+    auto it = node_cache_->find(std::make_pair(ptr.csn, ptr.offset));
+    bool cached = it != node_cache_->end();
+    if (cached) {
+      ptr.ref = it->second;
+      return;
+    }
+
+    // read and deserialize intention from log
+    std::string snapshot = db_->at(ptr.csn);
+    kvstore_proto::Intention i;
+    assert(i.ParseFromString(snapshot));
+    assert(i.IsInitialized());
+
+    const kvstore_proto::Node& n = i.tree(ptr.offset);
+
+    // here we use rid == log offset. itd be nice to have something uniquely
+    // generated in memory as a safety net. we can use a csn->rid map to
+    // handle this.
+    auto nn = std::make_shared<Node<T>>(n.value(), n.red(),
+        Node<T>::nil(), Node<T>::nil(), ptr.csn);
+
+    nn->field_index = ptr.offset;
+    if (!n.left().nil()) {
+      nn->left.ref = nullptr;
+      nn->left.offset = n.left().off();
+      if (n.left().self()) {
+        nn->left.csn = ptr.csn;
+      } else {
+        nn->left.csn = n.left().csn();
+      }
+    }
+    if (!n.right().nil()) {
+      nn->right.ref = nullptr;
+      nn->right.offset = n.right().off();
+      if (n.right().self()) {
+        nn->right.csn = ptr.csn;
+      } else {
+        nn->right.csn = n.right().csn();
+      }
+    }
+
+    node_cache_->insert(std::make_pair(std::make_pair(ptr.csn, ptr.offset), nn));
+
+    ptr.ref = nn;
   }
 
   static uint64_t root_id_;
@@ -396,15 +449,17 @@ void PTree<T>::write_dot_null(std::ostream& out,
   out << "null" << nullcount << " [shape=point];"
     << std::endl;
   out << "\"" << node.get() << "\" -> " << "null"
-    << nullcount << ";" << std::endl;
+    << nullcount << " [label=\"nil\"];" << std::endl;
 }
 
 template<typename T>
 void PTree<T>::write_dot_node(std::ostream& out,
-    NodeRef<T> parent, NodeRef<T> child, const std::string& dir)
+    NodeRef<T> parent, NodePtr<T>& child, const std::string& dir)
 {
   out << "\"" << parent.get() << "\":" << dir << " -> ";
-  out << "\"" << child.get() << "\"" << std::endl;
+  out << "\"" << child.ref.get() << "\"";
+  out << " [label=\"" << child.csn << ":"
+    << child.offset << "\"];" << std::endl;
 }
 
 template<typename T>
@@ -423,14 +478,14 @@ void PTree<T>::write_dot_recursive(std::ostream& out, uint64_t rid,
   if (node->left.ref == Node<T>::nil())
     write_dot_null(out, node, nullcount);
   else {
-    write_dot_node(out, node, node->left.ref, "sw");
+    write_dot_node(out, node, node->left, "sw");
     write_dot_recursive(out, rid, node->left.ref, nullcount, scoped);
   }
 
   if (node->right.ref == Node<T>::nil())
     write_dot_null(out, node, nullcount);
   else {
-    write_dot_node(out, node, node->right.ref, "se");
+    write_dot_node(out, node, node->right, "se");
     write_dot_recursive(out, rid, node->right.ref, nullcount, scoped);
   }
 }
@@ -547,7 +602,7 @@ void PTree<T>::insert_balance(NodeRef<T>& parent, NodeRef<T>& nn,
   assert(path.front() != Node<T>::nil());
   NodePtr<T>& uncle = child_b(path.front());
   if (uncle.ref->red) {
-    std::cerr << "uncle red" << std::endl;
+    std::cerr << "insert_balance: copy uncle " << uncle.ref << std::endl;
     uncle.ref = copy_node(uncle.ref, rid);
     parent->red = false;
     uncle.ref->red = false;
@@ -594,12 +649,9 @@ PTree<T> PTree<T>::insert(T elem)
 
   root->red = false;
 
-#if 1
   // build an intention for the new tree
   kvstore_proto::Intention intention;
   serialize_intention(intention, root);
-
-  std::cerr << intention << std::endl;
 
   // append to the database log
   std::string blob;
@@ -610,7 +662,8 @@ PTree<T> PTree<T>::insert(T elem)
 
   // update the in-memory intention ptrs
   set_intention_self_csn(root, pos);
-#endif
+
+  std::cerr << intention << std::endl;
 
   PTree<T> tree;
   tree.root_ = root;
