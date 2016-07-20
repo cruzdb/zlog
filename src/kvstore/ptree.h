@@ -67,6 +67,30 @@ std::ostream& operator<<(std::ostream& out, const NodeRef<T>& n)
   return out;
 }
 
+std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p)
+{
+  out << "[" << p.nil() << "," << p.self()
+    << "," << p.csn() << "," << p.off() << "]";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const kvstore_proto::Node& n)
+{
+  out << "val " << n.value() << " ";
+  out << (n.red() ? "red" : "blk") << " ";
+  out << "left " << n.left() << " right " << n.right();
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i)
+{
+  out << "intention tree_size = " << i.tree_size() << std::endl;
+  for (int idx = 0; idx < i.tree_size(); idx++) {
+    out << "  " << idx << ": " << i.tree(idx) << std::endl;
+  }
+  return out;
+}
+
 template<typename T>
 class PTree {
  public:
@@ -574,6 +598,8 @@ PTree<T> PTree<T>::insert(T elem)
   // build an intention for the new tree
   kvstore_proto::Intention intention;
   serialize_intention(intention, root);
+
+  std::cerr << intention << std::endl;
 
   // append to the database log
   std::string blob;
