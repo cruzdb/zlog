@@ -271,15 +271,21 @@ class PTree {
   void write_dot(std::ostream& out,
       std::vector<PTree<T>>& versions);
 
-  void restore() {
+  void restore(std::vector<std::string> *db, int pos = -1) {
+    db_ = db;
     assert(node_cache_);
+    assert(node_cache_->empty());
     assert(db_->size());
-    int pos = db_->size() - 1;
+    if (pos == -1)
+      pos = db_->size() - 1;
     std::string snapshot = db_->at(pos);
 
     kvstore_proto::Intention i;
     assert(i.ParseFromString(snapshot));
     assert(i.IsInitialized());
+
+    if (i.tree_size() == 0)
+      root_ = Node<T>::nil();
 
     uint64_t rid = pos;
     for (int idx = 0; idx < i.tree_size(); idx++) {
@@ -433,9 +439,16 @@ template<typename T>
 PTree<T>::PTree(std::vector<std::string> *db) :
   db_(db), node_cache_(NULL)
 {
-  // TODO: inistialize an empty db with an append at pos 0 of an empty tree?
   root_ = Node<T>::nil();
   node_cache_ = new std::map<std::pair<uint64_t, int>, NodeRef<T>>();
+  if (db_) {
+    // initial empty tree
+    std::string blob;
+    kvstore_proto::Intention intention;
+    assert(intention.IsInitialized());
+    assert(intention.SerializeToString(&blob));
+    db_->push_back(blob);
+  }
 }
 
 template<typename T>

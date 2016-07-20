@@ -2,23 +2,67 @@
 
 int main(int argc, char **argv)
 {
-  // this is the database "log"
+  std::srand(0);
+  while (1) {
+
+  // database log history
   std::vector<std::string> db;
 
-  // build a tree. each insert will append a delta to the database log. after
-  // we construct the tree we'll compare it to a tree constructed by reading
-  // from the log database.
+  // truth and ptree history
+  std::vector<std::set<int>> truth_history;
+  std::vector<PTree<int>> tree_history;
+
+  // initially empty truth
+  std::set<int> truth;
+  truth_history.push_back(truth);
+
+  // initially empty ptree
   PTree<int> tree(&db);
-  for (int i = 0; i < 5; i++) {
+  tree_history.push_back(tree);
+
+  for (int i = 0; i < 200; i++) {
     int val = std::rand();
+
+    // update truth and save snapshot
+    truth.insert(val);
+    truth_history.push_back(truth);
+
+    // update tree and save snapshot
     tree = tree.insert(val);
+    tree_history.push_back(tree);
   }
 
-#if 1
-  PTree<int> tree_restored(&db);
-  tree_restored.restore();
+  assert(truth_history.size() == tree_history.size());
+  assert(db.size() == truth_history.size());
 
-  assert(tree.stl_set() == tree_restored.stl_set());
-#endif
+  // each of the truth and tree history snapshot points match
+  for (unsigned i = 0; i < truth_history.size(); i++) {
+    assert(tree_history[i].validate_rb_tree());
+    assert(truth_history[i] == tree_history[i].stl_set());
+  }
+
+  // each of the truths match the tree if we deserialize it
+  for (unsigned i = 0; i < truth_history.size(); i++) {
+    PTree<int> tree_restored(NULL);
+    tree_restored.restore(&db, i);
+    assert(truth_history[i] == tree_restored.stl_set());
+  }
+
+  // and it works in reverse
+  for (int i = truth_history.size() - 1; i >= 0; i--) {
+    PTree<int> tree_restored(NULL);
+    tree_restored.restore(&db, i);
+    assert(truth_history[i] == tree_restored.stl_set());
+  }
+
+  // and some random access
+  for (int x = 0; x < std::min(100, (int)truth_history.size()); x++) {
+    int i = std::rand() % truth_history.size();
+    PTree<int> tree_restored(NULL);
+    tree_restored.restore(&db, i);
+    assert(truth_history[i] == tree_restored.stl_set());
+  }
+  }
+
   return 0;
 }
