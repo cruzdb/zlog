@@ -10,6 +10,60 @@
 #include "kvstore.pb.h"
 
 template<typename T>
+struct Node;
+
+template<typename T>
+using NodeRef = std::shared_ptr<Node<T>>;
+
+/*
+ *
+ */
+template<typename T>
+struct NodePtr {
+  NodeRef<T> ref;
+  int64_t csn;
+  int offset;
+
+  NodePtr() :
+    ref(nullptr), csn(-1), offset(-1)
+  {}
+
+  explicit NodePtr(NodeRef<T> ref) :
+    ref(ref), csn(-1), offset(-1)
+  {}
+};
+
+/*
+ *
+ */
+template<typename T>
+struct Node {
+  T elem;
+  bool red;
+  NodePtr<T> left;
+  NodePtr<T> right;
+
+  uint64_t rid;
+  int field_index;
+
+  Node(T elem, bool red, NodeRef<T> lr, NodeRef<T> rr, uint64_t rid) :
+    elem(elem), red(red), left(lr), right(rr), rid(rid), field_index(-1)
+  {}
+};
+
+template<typename T>
+std::ostream& operator<<(std::ostream& out, const NodeRef<T>& n)
+{
+  out << "node(" << n.get() << "): ";
+  out << (n->red ? "red " : "blk ");
+  out << "left=[" << n->left.csn << "," << n->left.offset << ",";
+  out << n->left.ref.get() << "] ";
+  out << "right=[" << n->right.csn << "," << n->right.offset << ",";
+  out << n->right.ref.get() << "] ";
+  return out;
+}
+
+template<typename T>
 class PTree {
  public:
   explicit PTree(std::vector<std::string> *db);
@@ -18,10 +72,10 @@ class PTree {
 
   std::set<T> stl_set() {
     std::set<T> set;
-    NodeRef node = root_;
+    NodeRef<T> node = root_;
     if (node == nil())
       return set;
-    std::stack<NodeRef> stack;
+    std::stack<NodeRef<T>> stack;
     stack.push(node);
     while (!stack.empty()) {
       node = stack.top();
@@ -43,35 +97,6 @@ class PTree {
   }
 
  private:
-  struct Node;
-  using NodeRef = std::shared_ptr<Node>;
-
-  struct NodePtr {
-    uint64_t csn;
-    int offset;
-    NodeRef ref;
-    NodePtr() : offset(-1) {}
-  };
-
-  struct Node {
-    T elem;
-    bool red;
-    NodePtr left;
-    NodePtr right;
-    uint64_t rid;
-
-    int field_index;
-
-    Node(T elem, bool red, NodeRef left_ref, NodeRef right_ref,
-        uint64_t rid) :
-      elem(elem), red(red), rid(rid)
-    {
-      this->left.ref = left_ref;
-      this->right.ref = right_ref;
-      field_index = -1;
-    }
-  };
-
   // a node in an intention contains pointers that are:
   //
   // 1. nil
@@ -92,8 +117,10 @@ class PTree {
   //
   // if (4), then same as (3).
 
-  void serialize_node(kvstore_proto::Node *n, NodeRef node,
+  void serialize_node(kvstore_proto::Node *n, NodeRef<T> node,
       uint64_t rid, int field_index) {
+
+    std::cout << node << std::endl;
 
     n->set_red(node->red);
     n->set_value(node->elem);
@@ -147,7 +174,7 @@ class PTree {
   }
 
   void serialize_intention_recursive(kvstore_proto::Intention& i,
-      uint64_t rid, NodeRef node, int& field_index) {
+      uint64_t rid, NodeRef<T> node, int& field_index) {
 
     if (node == nil() || node->rid != rid)
       return;
@@ -161,13 +188,13 @@ class PTree {
     field_index++;
   }
 
-  void serialize_intention(kvstore_proto::Intention& i, NodeRef node) {
+  void serialize_intention(kvstore_proto::Intention& i, NodeRef<T> node) {
     int field_index = 0;
     serialize_intention_recursive(i, node->rid, node, field_index);
   }
 
   void set_intention_self_csn_recursive(uint64_t rid,
-      NodeRef node, uint64_t pos) {
+      NodeRef<T> node, uint64_t pos) {
 
     if (node == nil() || node->rid != rid)
       return;
@@ -184,18 +211,18 @@ class PTree {
     set_intention_self_csn_recursive(rid, node->left.ref, pos);
   }
 
-  void set_intention_self_csn(NodeRef root, uint64_t pos) {
+  void set_intention_self_csn(NodeRef<T> root, uint64_t pos) {
     set_intention_self_csn_recursive(root->rid, root, pos);
   }
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
-      NodeRef node, uint64_t& nullcount, bool scoped);
-  void write_dot_null(std::ostream& out, NodeRef node, uint64_t& nullcount);
-  void write_dot_node(std::ostream& out, NodeRef parent,
-      NodeRef child, const std::string& dir);
+      NodeRef<T> node, uint64_t& nullcount, bool scoped);
+  void write_dot_null(std::ostream& out, NodeRef<T> node, uint64_t& nullcount);
+  void write_dot_node(std::ostream& out, NodeRef<T> parent,
+      NodeRef<T> child, const std::string& dir);
   void _write_dot(std::ostream& out, uint64_t& nullcount, bool scoped = false);
 
-  int _validate_rb_tree(NodeRef root);
+  int _validate_rb_tree(NodeRef<T> root);
 
  public:
   bool validate_rb_tree();
@@ -216,7 +243,7 @@ class PTree {
     uint64_t rid = root_id_++;
     for (int idx = 0; idx < i.tree_size(); idx++) {
       const kvstore_proto::Node& n = i.tree(idx);
-      auto nn = std::make_shared<Node>(n.value(), n.red(), nil(), nil(), rid);
+      auto nn = std::make_shared<Node<T>>(n.value(), n.red(), nil(), nil(), rid);
       nn->field_index = idx;
       if (!n.left().nil()) {
         nn->left.ref = nullptr;
@@ -253,12 +280,12 @@ class PTree {
   }
 
  private:
-  NodeRef copy_node(NodeRef node, uint64_t rid) const {
+  NodeRef<T> copy_node(NodeRef<T> node, uint64_t rid) const {
 
     if (node == nil())
       return nil();
 
-    auto n = std::make_shared<Node>(node->elem, node->red,
+    auto n = std::make_shared<Node<T>>(node->elem, node->red,
         node->left.ref, node->right.ref, rid);
 
     if (node->left.ref != nil()) {
@@ -279,28 +306,28 @@ class PTree {
     return n;
   }
 
-  NodeRef insert_recursive(std::deque<NodeRef>& path,
-      T elem, NodeRef& node, uint64_t rid);
+  NodeRef<T> insert_recursive(std::deque<NodeRef<T>>& path,
+      T elem, NodeRef<T>& node, uint64_t rid);
 
   template<typename ChildA, typename ChildB>
-  void insert_balance(NodeRef& parent, NodeRef& nn,
-      std::deque<NodeRef>& path, ChildA, ChildB, NodeRef& root,
+  void insert_balance(NodeRef<T>& parent, NodeRef<T>& nn,
+      std::deque<NodeRef<T>>& path, ChildA, ChildB, NodeRef<T>& root,
       uint64_t rid);
 
   template <typename ChildA, typename ChildB >
-  NodeRef rotate(NodeRef parent, NodeRef child,
-      ChildA child_a, ChildB child_b, NodeRef& root,
+  NodeRef<T> rotate(NodeRef<T> parent, NodeRef<T> child,
+      ChildA child_a, ChildB child_b, NodeRef<T>& root,
       uint64_t rid);
 
-  void print_path(std::deque<NodeRef>& path);
-  void print_node(NodeRef node);
+  void print_path(std::deque<NodeRef<T>>& path);
+  void print_node(NodeRef<T> node);
 
-  static NodeRef nil() {
-    static NodeRef node = std::make_shared<Node>(T(), false, nullptr, nullptr, 0);
+  static NodeRef<T> nil() {
+    static NodeRef<T> node = std::make_shared<Node<T>>(T(), false, nullptr, nullptr, 0);
     return node;
   }
 
-  NodeRef root_;
+  NodeRef<T> root_;
 
   PTree() {}
   std::vector<std::string> *db_;
@@ -308,18 +335,18 @@ class PTree {
   // this is created by the first tree instance made when the db is supplied
   // and then it is passed along after each insert. this is pretty ugly. the
   // node cache needs to be a stand-alone thing.
-  std::map<std::pair<uint64_t, int>, NodeRef> *node_cache_;
+  std::map<std::pair<uint64_t, int>, NodeRef<T>> *node_cache_;
 
-  void node_cache_get_(NodePtr& ptr) {
+  void node_cache_get_(NodePtr<T>& ptr) {
     std::cerr << "node_cache_get_: csn " << ptr.csn << " off " << ptr.offset << std::endl;
   }
 
   static uint64_t root_id_;
 
-  static NodePtr& left(NodeRef n) { return n->left; };
-  static NodePtr& right(NodeRef n) { return n->right; };
+  static NodePtr<T>& left(NodeRef<T> n) { return n->left; };
+  static NodePtr<T>& right(NodeRef<T> n) { return n->right; };
 
-  static NodeRef pop_front(std::deque<NodeRef>& d) {
+  static NodeRef<T> pop_front(std::deque<NodeRef<T>>& d) {
     auto front = d.front();
     d.pop_front();
     return front;
@@ -332,7 +359,7 @@ PTree<T>::PTree(std::vector<std::string> *db) :
 {
   // TODO: inistialize an empty db with an append at pos 0 of an empty tree?
   root_ = nil();
-  node_cache_ = new std::map<std::pair<uint64_t, int>, NodeRef>();
+  node_cache_ = new std::map<std::pair<uint64_t, int>, NodeRef<T>>();
 }
 
 template<typename T>
@@ -340,7 +367,7 @@ uint64_t PTree<T>::root_id_ = 928734;
 
 template<typename T>
 void PTree<T>::write_dot_null(std::ostream& out,
-    NodeRef node, uint64_t& nullcount)
+    NodeRef<T> node, uint64_t& nullcount)
 {
   nullcount++;
   out << "null" << nullcount << " [shape=point];"
@@ -351,7 +378,7 @@ void PTree<T>::write_dot_null(std::ostream& out,
 
 template<typename T>
 void PTree<T>::write_dot_node(std::ostream& out,
-    NodeRef parent, NodeRef child, const std::string& dir)
+    NodeRef<T> parent, NodeRef<T> child, const std::string& dir)
 {
   out << "\"" << parent << "\":" << dir << " -> ";
   out << "\"" << child << "\"" << std::endl;
@@ -359,7 +386,7 @@ void PTree<T>::write_dot_node(std::ostream& out,
 
 template<typename T>
 void PTree<T>::write_dot_recursive(std::ostream& out, uint64_t rid,
-    NodeRef node, uint64_t& nullcount, bool scoped)
+    NodeRef<T> node, uint64_t& nullcount, bool scoped)
 {
   if (scoped && node->rid != rid)
     return;
@@ -418,13 +445,13 @@ void PTree<T>::write_dot(std::ostream& out,
 }
 
 template<typename T>
-typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
-    T elem, NodeRef& node, uint64_t rid)
+NodeRef<T> PTree<T>::insert_recursive(std::deque<NodeRef<T>>& path,
+    T elem, NodeRef<T>& node, uint64_t rid)
 {
   std::cerr << "insert_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
   if (node == nil()) {
     // in C++17 replace with `return path.emplace_back(...)`
-    auto nn = std::make_shared<Node>(elem, true, nil(), nil(), rid);
+    auto nn = std::make_shared<Node<T>>(elem, true, nil(), nil(), rid);
     path.push_back(nn);
     std::cerr << "make-node: " << nn << " : " << elem << std::endl;
     return nn;
@@ -463,13 +490,13 @@ typename PTree<T>::NodeRef PTree<T>::insert_recursive(std::deque<NodeRef>& path,
 
 template<typename T>
 template<typename ChildA, typename ChildB >
-typename PTree<T>::NodeRef PTree<T>::rotate(NodeRef parent,
-    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root,
+NodeRef<T> PTree<T>::rotate(NodeRef<T> parent,
+    NodeRef<T> child, ChildA child_a, ChildB child_b, NodeRef<T>& root,
     uint64_t rid)
 {
   // copy over ref and csn/off because we might be moving a pointer that
   // points outside of the current intentino.
-  NodePtr grand_child = child_b(child);
+  NodePtr<T> grand_child = child_b(child);
   child_b(child) = child_a(grand_child.ref);
 
   if (root == child) {
@@ -490,12 +517,12 @@ typename PTree<T>::NodeRef PTree<T>::rotate(NodeRef parent,
 
 template<typename T>
 template<typename ChildA, typename ChildB>
-void PTree<T>::insert_balance(NodeRef& parent, NodeRef& nn,
-    std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
-    NodeRef& root, uint64_t rid)
+void PTree<T>::insert_balance(NodeRef<T>& parent, NodeRef<T>& nn,
+    std::deque<NodeRef<T>>& path, ChildA child_a, ChildB child_b,
+    NodeRef<T>& root, uint64_t rid)
 {
   assert(path.front() != nil());
-  NodePtr& uncle = child_b(path.front());
+  NodePtr<T>& uncle = child_b(path.front());
   if (uncle.ref->red) {
     std::cerr << "uncle red" << std::endl;
     uncle.ref = copy_node(uncle.ref, rid);
@@ -520,7 +547,7 @@ PTree<T> PTree<T>::insert(T elem)
 {
   uint64_t rid = root_id_++;
 
-  std::deque<NodeRef> path;
+  std::deque<NodeRef<T>> path;
 
   auto root = insert_recursive(path, elem, root_, rid);
   if (root == nullptr)
@@ -568,7 +595,7 @@ PTree<T> PTree<T>::insert(T elem)
 }
 
 template<typename T>
-void PTree<T>::print_node(NodeRef node)
+void PTree<T>::print_node(NodeRef<T> node)
 {
   if (node == nil())
     std::cout << "nil:" << (node->red ? "r" : "b");
@@ -577,7 +604,7 @@ void PTree<T>::print_node(NodeRef node)
 }
 
 template<typename T>
-void PTree<T>::print_path(std::deque<NodeRef>& path)
+void PTree<T>::print_path(std::deque<NodeRef<T>>& path)
 {
   std::cout << "path: ";
   if (path.empty()) {
@@ -602,13 +629,13 @@ bool PTree<T>::validate_rb_tree()
 }
 
 template<typename T>
-int PTree<T>::_validate_rb_tree(PTree<T>::NodeRef root)
+int PTree<T>::_validate_rb_tree(NodeRef<T> root)
 {
   if (root == nil())
     return 1;
 
-  NodeRef ln = root->left.ref;
-  NodeRef rn = root->right.ref;
+  NodeRef<T> ln = root->left.ref;
+  NodeRef<T> rn = root->right.ref;
 
   if (root->red && (ln->red || rn->red))
     return 0;
