@@ -24,9 +24,7 @@ struct NodePtr {
   int64_t csn;
   int offset;
 
-  NodePtr() :
-    ref(nullptr), csn(-1), offset(-1)
-  {}
+  NodePtr() : NodePtr(nullptr) {}
 
   explicit NodePtr(NodeRef<T> ref) :
     ref(ref), csn(-1), offset(-1)
