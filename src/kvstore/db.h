@@ -7,40 +7,9 @@
 #include <memory>
 #include <stack>
 #include <vector>
-#include "transaction.h"
 #include "kvstore.pb.h"
-
-/*
- *
- */
-struct NodePtr {
-  NodeRef ref;
-  int64_t csn;
-  int offset;
-
-  NodePtr() : NodePtr(nullptr) {}
-
-  explicit NodePtr(NodeRef ref) :
-    ref(ref), csn(-1), offset(-1)
-  {}
-};
-
-/*
- *
- */
-struct Node {
-  std::string elem;
-  bool red;
-  NodePtr left;
-  NodePtr right;
-
-  uint64_t rid;
-  int field_index;
-
-  Node(std::string elem, bool red, NodeRef lr, NodeRef rr, uint64_t rid) :
-    elem(elem), red(red), left(lr), right(rr), rid(rid), field_index(-1)
-  {}
-};
+#include "node.h"
+#include "transaction.h"
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
@@ -234,17 +203,6 @@ class DB {
   }
 
   static uint64_t root_id_;
-
- public:
-
-  static NodePtr& left(NodeRef n) { return n->left; };
-  static NodePtr& right(NodeRef n) { return n->right; };
-
-  static NodeRef pop_front(std::deque<NodeRef>& d) {
-    auto front = d.front();
-    d.pop_front();
-    return front;
-  }
 };
 
 #endif

@@ -1,10 +1,8 @@
 #ifndef ZLOG_KVSTORE_TRANSACTION_H
 #define ZLOG_KVSTORE_TRANSACTION_H
-#include "db.h"
+#include <deque>
+#include "node.h"
 #include "kvstore.pb.h"
-
-struct Node;
-using NodeRef = std::shared_ptr<Node>;
 
 class DB;
 
@@ -26,8 +24,16 @@ class Transaction {
   DB *db_;
   NodeRef root_;
   uint64_t rid_;
-
   kvstore_proto::Intention intention_;
+
+  static inline NodePtr& left(NodeRef n) { return n->left; };
+  static inline NodePtr& right(NodeRef n) { return n->right; };
+
+  static inline NodeRef pop_front(std::deque<NodeRef>& d) {
+    auto front = d.front();
+    d.pop_front();
+    return front;
+  }
 
   NodeRef insert_recursive(std::deque<NodeRef>& path,
       std::string elem, NodeRef& node, uint64_t rid);

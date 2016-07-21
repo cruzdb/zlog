@@ -1,5 +1,6 @@
-#include "db.h"
 #include "transaction.h"
+#include <deque>
+#include "db.h"
 
 void Transaction::serialize_node(kvstore_proto::Node *n, NodeRef node,
     uint64_t rid, int field_index) {
@@ -150,14 +151,14 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
     parent->red = false;
     uncle.ref->red = false;
     path.front()->red = true;
-    nn = DB::pop_front(path);
-    parent = DB::pop_front(path);
+    nn = pop_front(path);
+    parent = pop_front(path);
   } else {
     if (nn == child_b(parent).ref) {
       std::swap(nn, parent);
       rotate(path.front(), nn, child_a, child_b, root, rid);
     }
-    auto grand_parent = DB::pop_front(path);
+    auto grand_parent = pop_front(path);
     std::swap(grand_parent->red, parent->red);
     rotate(path.front(), grand_parent, child_b, child_a, root, rid);
   }
@@ -222,16 +223,16 @@ void Transaction::Put(std::string val)
   /*
    * balance the tree
    */
-  auto nn = DB::pop_front(path);
-  auto parent = DB::pop_front(path);
+  auto nn = pop_front(path);
+  auto parent = pop_front(path);
 
   while (parent->red) {
     assert(!path.empty());
     auto grand_parent = path.front();
     if (grand_parent->left.ref == parent)
-      insert_balance(parent, nn, path, DB::left, DB::right, root, rid_);
+      insert_balance(parent, nn, path, left, right, root, rid_);
     else
-      insert_balance(parent, nn, path, DB::right, DB::left, root, rid_);
+      insert_balance(parent, nn, path, right, left, root, rid_);
   }
 
   root->red = false;
