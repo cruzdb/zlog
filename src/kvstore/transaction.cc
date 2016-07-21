@@ -2,6 +2,37 @@
 #include <deque>
 #include "db.h"
 
+void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
+    NodePtr& src, uint64_t rid, const std::string& dir)
+{
+  if (src.ref == Node::Nil()) {
+    dst->set_nil(true);
+    dst->set_self(false);
+    dst->set_csn(0);
+    dst->set_off(0);
+    std::cerr << " - serialize_node: " << dir << " nil" << std::endl;
+  } else if (src.ref->rid == rid) {
+    dst->set_nil(false);
+    dst->set_self(true);
+    dst->set_csn(0);
+    assert(src.ref->field_index >= 0);
+    dst->set_off(src.ref->field_index);
+    src.offset = src.ref->field_index;
+    std::cerr << " - serialize_node: " << dir << " internal csn " <<
+      dst->csn() << " off " << dst->off()
+      << std::endl;
+  } else {
+    assert(src.ref != nullptr);
+    dst->set_nil(false);
+    dst->set_self(false);
+    dst->set_csn(src.csn);
+    dst->set_off(src.offset);
+    std::cerr << " - serialize_node: " << dir << " external csn " <<
+      dst->csn() << " off " << dst->off()
+      << std::endl;
+  }
+}
+
 void Transaction::serialize_node(kvstore_proto::Node *n, NodeRef node,
     uint64_t rid, int field_index) {
 
@@ -14,59 +45,8 @@ void Transaction::serialize_node(kvstore_proto::Node *n, NodeRef node,
 
   std::cerr << "serialize_node: " << node << std::endl;
 
-  if (node->left.ref == Node::Nil()) {
-    n->mutable_left()->set_nil(true);
-    n->mutable_left()->set_self(false);
-    n->mutable_left()->set_csn(0);
-    n->mutable_left()->set_off(0);
-    std::cerr << " - serialize_node: left nil" << std::endl;
-  } else if (node->left.ref->rid == rid) {
-    n->mutable_left()->set_nil(false);
-    n->mutable_left()->set_self(true);
-    n->mutable_left()->set_csn(0);
-    assert(node->left.ref->field_index >= 0);
-    n->mutable_left()->set_off(node->left.ref->field_index);
-    node->left.offset = node->left.ref->field_index;
-    std::cerr << " - serialize_node: left internal csn " <<
-      n->mutable_left()->csn() << " off " << n->mutable_left()->off()
-      << std::endl;
-  } else {
-    assert(node->left.ref != nullptr);
-    n->mutable_left()->set_nil(false);
-    n->mutable_left()->set_self(false);
-    n->mutable_left()->set_csn(node->left.csn);
-    n->mutable_left()->set_off(node->left.offset);
-    std::cerr << " - serialize_node: left external csn " <<
-      n->mutable_left()->csn() << " off " << n->mutable_left()->off()
-      << std::endl;
-  }
-
-  if (node->right.ref == Node::Nil()) {
-    n->mutable_right()->set_nil(true);
-    n->mutable_right()->set_self(false);
-    n->mutable_right()->set_csn(0);
-    n->mutable_right()->set_off(0);
-    std::cerr << " - serialize_node: right nil" << std::endl;
-  } else if (node->right.ref->rid == rid) {
-    n->mutable_right()->set_nil(false);
-    n->mutable_right()->set_self(true);
-    n->mutable_right()->set_csn(0);
-    assert(node->right.ref->field_index >= 0);
-    n->mutable_right()->set_off(node->right.ref->field_index);
-    node->right.offset = node->right.ref->field_index;
-    std::cerr << " - serialize_node: right internal csn " <<
-      n->mutable_right()->csn() << " off " << n->mutable_right()->off()
-      << std::endl;
-  } else {
-    assert(node->right.ref != nullptr);
-    n->mutable_right()->set_nil(false);
-    n->mutable_right()->set_self(false);
-    n->mutable_right()->set_csn(node->right.csn);
-    n->mutable_right()->set_off(node->right.offset);
-    std::cerr << " - serialize_node: right external csn " <<
-      n->mutable_right()->csn() << " off " << n->mutable_right()->off()
-      << std::endl;
-  }
+  serialize_node_ptr(n->mutable_left(), node->left, rid, "left");
+  serialize_node_ptr(n->mutable_right(), node->right, rid, "right");
 }
 
 NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,

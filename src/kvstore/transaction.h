@@ -48,6 +48,9 @@ class Transaction {
       ChildA child_a, ChildB child_b, NodeRef& root,
       uint64_t rid);
 
+  void serialize_node_ptr(kvstore_proto::NodePtr *dst,
+      NodePtr& src, uint64_t rid, const std::string& dir);
+
   void serialize_node(kvstore_proto::Node *n, NodeRef node,
       uint64_t rid, int field_index);
 

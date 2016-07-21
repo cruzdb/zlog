@@ -23,7 +23,7 @@ struct NodePtr {
 };
 
 /*
- *
+ * use signed types here and in protobuf so we can see the initial neg values
  */
 struct Node {
   std::string elem;
