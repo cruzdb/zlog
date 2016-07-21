@@ -1,5 +1,5 @@
-#ifndef ZLOG_KVSTORE_PTREE_H
-#define ZLOG_KVSTORE_PTREE_H
+#ifndef ZLOG_KVSTORE_DB_H
+#define ZLOG_KVSTORE_DB_H
 #include <cassert>
 #include <deque>
 #include <set>
@@ -42,12 +42,6 @@ struct Node {
   Node(std::string elem, bool red, NodeRef lr, NodeRef rr, uint64_t rid) :
     elem(elem), red(red), left(lr), right(rr), rid(rid), field_index(-1)
   {}
-
-  static NodeRef& nil() {
-    static NodeRef node = std::make_shared<Node>(
-        "", false, nullptr, nullptr, 0);
-    return node;
-  }
 };
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
@@ -55,9 +49,9 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Node& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
-class PTree {
+class DB {
  public:
-  PTree();
+  DB();
 
   void insert(std::string elem);
 
@@ -66,6 +60,12 @@ class PTree {
 
   size_t num_roots() {
     return roots_.size();
+  }
+
+  static NodeRef& Nil() {
+    static NodeRef node = std::make_shared<Node>(
+        "", false, nullptr, nullptr, 0);
+    return node;
   }
 
  private:
@@ -91,7 +91,7 @@ class PTree {
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out);
 
-  void restore(PTree& other, int pos = -1) {
+  void restore(DB& other, int pos = -1) {
     // clear all state
     roots_.clear();
     db_.clear();
@@ -112,12 +112,12 @@ class PTree {
     assert(i.IsInitialized());
 
     if (i.tree_size() == 0)
-      roots_.push_back(Node::nil());
+      roots_.push_back(DB::Nil());
 
     uint64_t rid = pos;
     for (int idx = 0; idx < i.tree_size(); idx++) {
       const kvstore_proto::Node& n = i.tree(idx);
-      auto nn = std::make_shared<Node>(n.value(), n.red(), Node::nil(), Node::nil(), rid);
+      auto nn = std::make_shared<Node>(n.value(), n.red(), DB::Nil(), DB::Nil(), rid);
       nn->field_index = idx;
       if (!n.left().nil()) {
         nn->left.ref = nullptr;
@@ -140,9 +140,9 @@ class PTree {
 
       std::cerr << "restore: node_cache insert: pos " << pos
         << " idx  " << idx
-        << " nn.left.nil " << (nn->left.ref == Node::nil())
+        << " nn.left.nil " << (nn->left.ref == DB::Nil())
         << " nn.left.off " << nn->left.offset
-        << " nn.right.nil " << (nn->right.ref == Node::nil())
+        << " nn.right.nil " << (nn->right.ref == DB::Nil())
         << " nn.right.off " << nn->right.offset
         << std::endl;
 
@@ -157,13 +157,13 @@ class PTree {
  private:
   NodeRef copy_node(NodeRef node, uint64_t rid) const {
 
-    if (node == Node::nil())
-      return Node::nil();
+    if (node == DB::Nil())
+      return DB::Nil();
 
     auto n = std::make_shared<Node>(node->elem, node->red,
         node->left.ref, node->right.ref, rid);
 
-    //assert(node->left.ref == Node::nil() || node->left.offset >= 0);
+    //assert(node->left.ref == DB::Nil() || node->left.offset >= 0);
 
     n->left.csn = node->left.csn;
     n->left.offset = node->left.offset;
@@ -218,7 +218,7 @@ class PTree {
     // generated in memory as a safety net. we can use a csn->rid map to
     // handle this.
     auto nn = std::make_shared<Node>(n.value(), n.red(),
-        Node::nil(), Node::nil(), ptr.csn);
+        DB::Nil(), DB::Nil(), ptr.csn);
 
     nn->field_index = ptr.offset;
     if (!n.left().nil()) {

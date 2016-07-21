@@ -1,4 +1,4 @@
-#include "ptree.h"
+#include "db.h"
 #include <sstream>
 #include <iomanip>
 
@@ -11,10 +11,10 @@ static inline std::string tostr(int value)
 
 int main(int argc, char **argv)
 {
-  PTree db;
+  DB db;
 
-  for (int i = 0; i < 5; i++) {
-    int nval = std::rand() % 200;
+  for (int i = 0; i < 30; i++) {
+    int nval = std::rand() % 1000;
     std::string val = tostr(nval);
     db.insert(val);
   }

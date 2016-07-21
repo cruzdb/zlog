@@ -1,4 +1,4 @@
-#include "ptree.h"
+#include "db.h"
 #include <sstream>
 #include <iomanip>
 
@@ -22,7 +22,7 @@ int main(int argc, char **argv)
     truth_history.push_back(truth);
 
     // initially empty ptree
-    PTree db;
+    DB db;
 
     for (int i = 0; i < 1000; i++) {
       int nval = std::rand();
@@ -47,14 +47,14 @@ int main(int argc, char **argv)
 
     // each of the truths match the tree if we deserialize it
     for (unsigned i = 0; i < truth_history.size(); i++) {
-      PTree db2;
+      DB db2;
       db2.restore(db, i);
       assert(truth_history[i] == db2.stl_set());
     }
 
     // and it works in reverse
     for (int i = truth_history.size() - 1; i >= 0; i--) {
-      PTree db2;
+      DB db2;
       db2.restore(db, i);
       assert(truth_history[i] == db2.stl_set());
     }
@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     // and some random access
     for (int x = 0; x < std::min(100, (int)truth_history.size()); x++) {
       int i = std::rand() % truth_history.size();
-      PTree db2;
+      DB db2;
       db2.restore(db, i);
       assert(truth_history[i] == db2.stl_set());
     }

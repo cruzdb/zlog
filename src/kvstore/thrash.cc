@@ -1,4 +1,4 @@
-#include "ptree.h"
+#include "db.h"
 #include <sstream>
 #include <iomanip>
 
@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     std::set<std::string> truth;
     truth_history.push_back(truth);
 
-    PTree db;
+    DB db;
 
     for (int i = 0; i < 10000; i++) {
       int nval = std::rand();
