@@ -1,5 +1,13 @@
 #include "ptree.h"
 #include <sstream>
+#include <iomanip>
+
+static inline std::string tostr(int value)
+{
+  std::stringstream ss;
+  ss << std::setw(3) << std::setfill('0') << value;
+  return ss.str();
+}
 
 int main(int argc, char **argv)
 {
@@ -8,27 +16,22 @@ int main(int argc, char **argv)
     std::set<std::string> truth;
     truth_history.push_back(truth);
 
-    std::vector<PTree> tree_history;
-    std::vector<std::string> db;
-    PTree tree(&db);
-    tree_history.push_back(tree);
+    PTree db;
 
     for (int i = 0; i < 10000; i++) {
-      int val = std::rand();
-      std::stringstream ss;
-      ss << val;
+      int nval = std::rand();
+      std::string val = tostr(nval);
 
-      truth.insert(ss.str());
+      truth.insert(val);
       truth_history.push_back(truth);
 
-      tree = tree.insert(ss.str());
-      tree_history.push_back(tree);
+      db.insert(val);
     }
 
-    assert(truth_history.size() == tree_history.size());
+    db.validate_rb_tree(true);
+    assert(truth_history.size() == db.num_roots());
     for (unsigned i = 0; i < truth_history.size(); i++) {
-      assert(tree_history[i].validate_rb_tree());
-      assert(truth_history[i] == tree_history[i].stl_set());
+      assert(truth_history[i] == db.stl_set(i));
     }
   }
 

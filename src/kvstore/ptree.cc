@@ -1,23 +1,22 @@
 #include "ptree.h"
 
-PTree::PTree(std::vector<std::string> *db) :
-  db_(db), node_cache_(NULL)
+PTree::PTree()
 {
-  root_ = Node::nil();
-  node_cache_ = new std::map<std::pair<uint64_t, int>, NodeRef>();
-  if (db_) {
-    // initial empty tree
-    std::string blob;
-    kvstore_proto::Intention intention;
-    assert(intention.IsInitialized());
-    assert(intention.SerializeToString(&blob));
-    db_->push_back(blob);
-  }
+  roots_.push_back(Node::nil());
+
+  std::string blob;
+  kvstore_proto::Intention intention;
+  assert(intention.IsInitialized());
+  assert(intention.SerializeToString(&blob));
+  db_.push_back(blob);
+
+  // todo: enable/disable debug
+  validate_rb_tree();
 }
 
-std::set<std::string> PTree::stl_set() {
+std::set<std::string> PTree::stl_set(size_t root) {
   std::set<std::string> set;
-  NodeRef node = root_;
+  NodeRef node = roots_.at(root);
   if (node == Node::nil())
     return set;
   std::stack<NodeRef> stack;
@@ -39,6 +38,10 @@ std::set<std::string> PTree::stl_set() {
     }
   }
   return set;
+}
+
+std::set<std::string> PTree::stl_set() {
+  return stl_set(roots_.size() - 1);
 }
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
@@ -212,30 +215,29 @@ void PTree::write_dot_recursive(std::ostream& out, uint64_t rid,
   }
 }
 
-void PTree::_write_dot(std::ostream& out,
+void PTree::_write_dot(std::ostream& out, NodeRef root,
     uint64_t& nullcount, bool scoped)
 {
-  write_dot_recursive(out, root_->rid,
-      root_, nullcount, scoped);
+  write_dot_recursive(out, root->rid,
+      root, nullcount, scoped);
 }
 
 void PTree::write_dot(std::ostream& out, bool scoped)
 {
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  _write_dot(out, nullcount, scoped);
+  _write_dot(out, roots_.back(), nullcount, scoped);
   out << "}" << std::endl;
 }
 
-void PTree::write_dot(std::ostream& out,
-    std::vector<PTree>& versions)
+void PTree::write_dot_history(std::ostream& out)
 {
   uint64_t trees = 0;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  for (auto version : versions) {
+  for (unsigned i = 1; i < roots_.size(); i++) {
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    version._write_dot(out, nullcount, true);
+    _write_dot(out, roots_[i], nullcount, true);
     out << "}" << std::endl;
   }
   out << "}" << std::endl;
@@ -336,15 +338,15 @@ void PTree::insert_balance(NodeRef& parent, NodeRef& nn,
   }
 }
 
-PTree PTree::insert(std::string elem)
+void PTree::insert(std::string elem)
 {
   uint64_t rid = root_id_++;
 
   std::deque<NodeRef> path;
 
-  auto root = insert_recursive(path, elem, root_, rid);
+  auto root = insert_recursive(path, elem, roots_.back(), rid);
   if (root == nullptr)
-    return *this;
+    return;
 
   path.push_back(Node::nil());
 
@@ -372,19 +374,18 @@ PTree PTree::insert(std::string elem)
   std::string blob;
   assert(intention.IsInitialized());
   assert(intention.SerializeToString(&blob));
-  db_->push_back(blob);
-  uint64_t pos = db_->size() - 1;
+  db_.push_back(blob);
+  uint64_t pos = db_.size() - 1;
 
   // update the in-memory intention ptrs
   set_intention_self_csn(root, pos);
 
   std::cerr << intention << std::endl;
 
-  PTree tree;
-  tree.root_ = root;
-  tree.db_ = db_;
-  tree.node_cache_ = node_cache_;
-  return tree;
+  roots_.push_back(root);
+
+  // todo: enable/disable debug mode
+  validate_rb_tree();
 }
 
 void PTree::print_node(NodeRef node)
@@ -413,9 +414,16 @@ void PTree::print_path(std::deque<NodeRef>& path)
   std::cout << std::endl;
 }
 
-bool PTree::validate_rb_tree()
+bool PTree::validate_rb_tree(bool all)
 {
-  return _validate_rb_tree(root_) != 0;
+  if (all) {
+    for (auto root : roots_) {
+      if (_validate_rb_tree(root) == 0)
+        return false;
+    }
+    return true;
+  }
+  return _validate_rb_tree(roots_.back()) != 0;
 }
 
 int PTree::_validate_rb_tree(NodeRef root)

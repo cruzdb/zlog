@@ -57,11 +57,16 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
 class PTree {
  public:
-  explicit PTree(std::vector<std::string> *db);
+  PTree();
 
-  PTree insert(std::string elem);
+  void insert(std::string elem);
 
   std::set<std::string> stl_set();
+  std::set<std::string> stl_set(size_t root);
+
+  size_t num_roots() {
+    return roots_.size();
+  }
 
  private:
   void serialize_node(kvstore_proto::Node *n, NodeRef node, uint64_t rid, int field_index);
@@ -76,31 +81,38 @@ class PTree {
   void write_dot_null(std::ostream& out, NodeRef node, uint64_t& nullcount);
   void write_dot_node(std::ostream& out, NodeRef parent,
       NodePtr& child, const std::string& dir);
-  void _write_dot(std::ostream& out, uint64_t& nullcount, bool scoped = false);
+  void _write_dot(std::ostream& out, NodeRef root, uint64_t& nullcount, bool scoped = false);
 
   int _validate_rb_tree(NodeRef root);
 
  public:
-  bool validate_rb_tree();
-  void write_dot(std::ostream& out, bool scoped = false);
-  void write_dot(std::ostream& out,
-      std::vector<PTree>& versions);
+  bool validate_rb_tree(bool all = false);
 
-  void restore(std::vector<std::string> *db, int pos = -1) {
-    db_ = db;
-    assert(node_cache_);
-    assert(node_cache_->empty());
-    assert(db_->size());
+  void write_dot(std::ostream& out, bool scoped = false);
+  void write_dot_history(std::ostream& out);
+
+  void restore(PTree& other, int pos = -1) {
+    // clear all state
+    roots_.clear();
+    db_.clear();
+    node_cache_.clear();
+
+    // copy just the database
+    db_ = other.db_;
+
+    // start from end or specific pos
+    assert(node_cache_.empty());
+    assert(db_.size());
     if (pos == -1)
-      pos = db_->size() - 1;
-    std::string snapshot = db_->at(pos);
+      pos = db_.size() - 1;
+    std::string snapshot = db_.at(pos);
 
     kvstore_proto::Intention i;
     assert(i.ParseFromString(snapshot));
     assert(i.IsInitialized());
 
     if (i.tree_size() == 0)
-      root_ = Node::nil();
+      roots_.push_back(Node::nil());
 
     uint64_t rid = pos;
     for (int idx = 0; idx < i.tree_size(); idx++) {
@@ -134,10 +146,11 @@ class PTree {
         << " nn.right.off " << nn->right.offset
         << std::endl;
 
-      node_cache_->insert(std::make_pair(std::make_pair(pos, idx), nn));
+      node_cache_.insert(std::make_pair(std::make_pair(pos, idx), nn));
 
+      // FIXME: adding this root is unnatural we are really building a view
       if (idx == (i.tree_size() - 1))
-        root_ = nn;
+        roots_.push_back(nn);
     }
   }
 
@@ -179,28 +192,22 @@ class PTree {
   void print_path(std::deque<NodeRef>& path);
   void print_node(NodeRef node);
 
-  NodeRef root_;
-
-  PTree() {}
-  std::vector<std::string> *db_;
-
-  // this is created by the first tree instance made when the db is supplied
-  // and then it is passed along after each insert. this is pretty ugly. the
-  // node cache needs to be a stand-alone thing.
-  std::map<std::pair<uint64_t, int>, NodeRef> *node_cache_;
+  std::deque<NodeRef> roots_;
+  std::vector<std::string> db_;
+  std::map<std::pair<uint64_t, int>, NodeRef> node_cache_;
 
   void node_cache_get_(NodePtr& ptr) {
     assert(ptr.ref == nullptr);
     std::cerr << "node_cache_get_: csn " << ptr.csn << " off " << ptr.offset << std::endl;
-    auto it = node_cache_->find(std::make_pair(ptr.csn, ptr.offset));
-    bool cached = it != node_cache_->end();
+    auto it = node_cache_.find(std::make_pair(ptr.csn, ptr.offset));
+    bool cached = it != node_cache_.end();
     if (cached) {
       ptr.ref = it->second;
       return;
     }
 
     // read and deserialize intention from log
-    std::string snapshot = db_->at(ptr.csn);
+    std::string snapshot = db_.at(ptr.csn);
     kvstore_proto::Intention i;
     assert(i.ParseFromString(snapshot));
     assert(i.IsInitialized());
@@ -233,7 +240,7 @@ class PTree {
       }
     }
 
-    node_cache_->insert(std::make_pair(std::make_pair(ptr.csn, ptr.offset), nn));
+    node_cache_.insert(std::make_pair(std::make_pair(ptr.csn, ptr.offset), nn));
 
     ptr.ref = nn;
   }

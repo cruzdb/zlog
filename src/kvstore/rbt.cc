@@ -1,24 +1,25 @@
 #include "ptree.h"
 #include <sstream>
+#include <iomanip>
+
+static inline std::string tostr(int value)
+{
+  std::stringstream ss;
+  ss << std::setw(3) << std::setfill('0') << value;
+  return ss.str();
+}
 
 int main(int argc, char **argv)
 {
-  std::vector<std::string> db;
-  PTree tree(&db);
+  PTree db;
 
-  std::vector<PTree> versions;
   for (int i = 0; i < 5; i++) {
-    int val = std::rand() % 200;
-    std::stringstream ss;
-    ss << val;
-    tree = tree.insert(ss.str());
-    tree.validate_rb_tree();
-    std::cerr << val << std::endl;
-    versions.push_back(tree);
+    int nval = std::rand() % 200;
+    std::string val = tostr(nval);
+    db.insert(val);
   }
 
-  //tree.write_dot(std::cout, true)
-  tree.write_dot(std::cout, versions);
+  db.write_dot_history(std::cout);
 
   return 0;
 }
