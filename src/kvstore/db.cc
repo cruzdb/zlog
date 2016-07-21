@@ -3,7 +3,7 @@
 
 DB::DB()
 {
-  roots_.push_back(DB::Nil());
+  roots_.push_back(Node::Nil());
 
   std::string blob;
   kvstore_proto::Intention intention;
@@ -18,7 +18,7 @@ DB::DB()
 std::set<std::string> DB::stl_set(size_t root) {
   std::set<std::string> set;
   NodeRef node = roots_.at(root);
-  if (node == DB::Nil())
+  if (node == Node::Nil())
     return set;
   std::stack<NodeRef> stack;
   stack.push(node);
@@ -27,12 +27,12 @@ std::set<std::string> DB::stl_set(size_t root) {
     stack.pop();
     auto ret = set.emplace(node->elem);
     assert(ret.second);
-    if (node->right.ref != DB::Nil()) {
+    if (node->right.ref != Node::Nil()) {
       if (node->right.ref == nullptr)
         node_cache_get_(node->right);
       stack.push(node->right.ref);
     }
-    if (node->left.ref != DB::Nil()) {
+    if (node->left.ref != Node::Nil()) {
       if (node->left.ref == nullptr)
         node_cache_get_(node->left);
       stack.push(node->left.ref);
@@ -114,14 +114,14 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
         "black,fontcolor=white")
     << "]" << std::endl;
 
-  if (node->left.ref == DB::Nil())
+  if (node->left.ref == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
     write_dot_node(out, node, node->left, "sw");
     write_dot_recursive(out, rid, node->left.ref, nullcount, scoped);
   }
 
-  if (node->right.ref == DB::Nil())
+  if (node->right.ref == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
     write_dot_node(out, node, node->right, "se");
@@ -159,7 +159,7 @@ void DB::write_dot_history(std::ostream& out)
 
 void DB::print_node(NodeRef node)
 {
-  if (node == DB::Nil())
+  if (node == Node::Nil())
     std::cout << "nil:" << (node->red ? "r" : "b");
   else
     std::cout << node->elem << ":" << (node->red ? "r" : "b");
@@ -173,7 +173,7 @@ void DB::print_path(std::deque<NodeRef>& path)
   } else {
     std::cout << "[";
     for (auto node : path) {
-      if (node == DB::Nil())
+      if (node == Node::Nil())
         std::cout << "nil:" << (node->red ? "r " : "b ");
       else
         std::cout << node->elem << ":" << (node->red ? "r " : "b ");
@@ -197,7 +197,7 @@ bool DB::validate_rb_tree(bool all)
 
 int DB::_validate_rb_tree(NodeRef root)
 {
-  if (root == DB::Nil())
+  if (root == Node::Nil())
     return 1;
 
   NodeRef ln = root->left.ref;
@@ -209,8 +209,8 @@ int DB::_validate_rb_tree(NodeRef root)
   int lh = _validate_rb_tree(ln);
   int rh = _validate_rb_tree(rn);
 
-  if ((ln != DB::Nil() && ln->elem >= root->elem) ||
-      (rn != DB::Nil() && rn->elem <= root->elem))
+  if ((ln != Node::Nil() && ln->elem >= root->elem) ||
+      (rn != Node::Nil() && rn->elem <= root->elem))
     return 0;
 
   if (lh != 0 && rh != 0 && lh != rh)

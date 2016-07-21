@@ -29,12 +29,6 @@ class DB {
     return roots_.size();
   }
 
-  static NodeRef& Nil() {
-    static NodeRef node = std::make_shared<Node>(
-        "", false, nullptr, nullptr, 0);
-    return node;
-  }
-
  private:
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
@@ -72,12 +66,12 @@ class DB {
     assert(i.IsInitialized());
 
     if (i.tree_size() == 0)
-      roots_.push_back(DB::Nil());
+      roots_.push_back(Node::Nil());
 
     uint64_t rid = pos;
     for (int idx = 0; idx < i.tree_size(); idx++) {
       const kvstore_proto::Node& n = i.tree(idx);
-      auto nn = std::make_shared<Node>(n.value(), n.red(), DB::Nil(), DB::Nil(), rid);
+      auto nn = std::make_shared<Node>(n.value(), n.red(), Node::Nil(), Node::Nil(), rid);
       nn->field_index = idx;
       if (!n.left().nil()) {
         nn->left.ref = nullptr;
@@ -100,9 +94,9 @@ class DB {
 
       std::cerr << "restore: node_cache insert: pos " << pos
         << " idx  " << idx
-        << " nn.left.nil " << (nn->left.ref == DB::Nil())
+        << " nn.left.nil " << (nn->left.ref == Node::Nil())
         << " nn.left.off " << nn->left.offset
-        << " nn.right.nil " << (nn->right.ref == DB::Nil())
+        << " nn.right.nil " << (nn->right.ref == Node::Nil())
         << " nn.right.off " << nn->right.offset
         << std::endl;
 
@@ -112,27 +106,6 @@ class DB {
       if (idx == (i.tree_size() - 1))
         roots_.push_back(nn);
     }
-  }
-
-  static NodeRef copy_node(NodeRef node, uint64_t rid) {
-
-    if (node == DB::Nil())
-      return DB::Nil();
-
-    auto n = std::make_shared<Node>(node->elem, node->red,
-        node->left.ref, node->right.ref, rid);
-
-    //assert(node->left.ref == DB::Nil() || node->left.offset >= 0);
-
-    n->left.csn = node->left.csn;
-    n->left.offset = node->left.offset;
-
-    n->right.csn = node->right.csn;
-    n->right.offset = node->right.offset;
-
-    std::cerr << "copy_node: src " << node << " dst " << n << std::endl;
-
-    return n;
   }
 
   size_t db_log_append(std::string blob) {
@@ -175,7 +148,7 @@ class DB {
     // generated in memory as a safety net. we can use a csn->rid map to
     // handle this.
     auto nn = std::make_shared<Node>(n.value(), n.red(),
-        DB::Nil(), DB::Nil(), ptr.csn);
+        Node::Nil(), Node::Nil(), ptr.csn);
 
     nn->field_index = ptr.offset;
     if (!n.left().nil()) {

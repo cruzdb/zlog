@@ -14,7 +14,7 @@ void Transaction::serialize_node(kvstore_proto::Node *n, NodeRef node,
 
   std::cerr << "serialize_node: " << node << std::endl;
 
-  if (node->left.ref == DB::Nil()) {
+  if (node->left.ref == Node::Nil()) {
     n->mutable_left()->set_nil(true);
     n->mutable_left()->set_self(false);
     n->mutable_left()->set_csn(0);
@@ -41,7 +41,7 @@ void Transaction::serialize_node(kvstore_proto::Node *n, NodeRef node,
       << std::endl;
   }
 
-  if (node->right.ref == DB::Nil()) {
+  if (node->right.ref == Node::Nil()) {
     n->mutable_right()->set_nil(true);
     n->mutable_right()->set_self(false);
     n->mutable_right()->set_csn(0);
@@ -73,9 +73,9 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
     std::string elem, NodeRef& node, uint64_t rid)
 {
   std::cerr << "insert_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
-  if (node == DB::Nil()) {
+  if (node == Node::Nil()) {
     // in C++17 replace with `return path.emplace_back(...)`
-    auto nn = std::make_shared<Node>(elem, true, DB::Nil(), DB::Nil(), rid);
+    auto nn = std::make_shared<Node>(elem, true, Node::Nil(), Node::Nil(), rid);
     path.push_back(nn);
     std::cerr << "make-node: " << nn << " : " << elem << std::endl;
     return nn;
@@ -100,7 +100,7 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
    * is updated without updating the csn/offset, which are fixed later when
    * the intention is build.
    */
-  auto copy = DB::copy_node(node, rid);
+  auto copy = Node::Copy(node, rid);
 
   if (less)
     copy->left.ref = child;
@@ -143,11 +143,11 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
     std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
     NodeRef& root, uint64_t rid)
 {
-  assert(path.front() != DB::Nil());
+  assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
   if (uncle.ref->red) {
     std::cerr << "insert_balance: copy uncle " << uncle.ref << std::endl;
-    uncle.ref = DB::copy_node(uncle.ref, rid);
+    uncle.ref = Node::Copy(uncle.ref, rid);
     parent->red = false;
     uncle.ref->red = false;
     path.front()->red = true;
@@ -167,7 +167,7 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
 void Transaction::serialize_intention_recursive(kvstore_proto::Intention& i,
     uint64_t rid, NodeRef node, int& field_index) {
 
-  if (node == DB::Nil() || node->rid != rid)
+  if (node == Node::Nil() || node->rid != rid)
     return;
 
   serialize_intention_recursive(i, rid, node->left.ref, field_index);
@@ -187,14 +187,14 @@ void Transaction::serialize_intention(kvstore_proto::Intention& i, NodeRef node)
 void Transaction::set_intention_self_csn_recursive(uint64_t rid,
     NodeRef node, uint64_t pos) {
 
-  if (node == DB::Nil() || node->rid != rid)
+  if (node == Node::Nil() || node->rid != rid)
     return;
 
-  if (node->right.ref != DB::Nil() && node->right.ref->rid == rid) {
+  if (node->right.ref != Node::Nil() && node->right.ref->rid == rid) {
     node->right.csn = pos;
   }
 
-  if (node->left.ref != DB::Nil() && node->left.ref->rid == rid) {
+  if (node->left.ref != Node::Nil() && node->left.ref->rid == rid) {
     node->left.csn = pos;
   }
 
@@ -217,7 +217,7 @@ void Transaction::Put(std::string val)
   if (root == nullptr)
     return;
 
-  path.push_back(DB::Nil());
+  path.push_back(Node::Nil());
   assert(path.size() >= 2);
 
   /*
