@@ -25,7 +25,9 @@ int main(int argc, char **argv)
       truth.insert(val);
       truth_history.push_back(truth);
 
-      db.insert(val);
+      auto txn = db.BeginTransaction();
+      txn.Put(val);
+      txn.Commit();
     }
 
     db.validate_rb_tree(true);

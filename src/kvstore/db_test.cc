@@ -33,7 +33,9 @@ int main(int argc, char **argv)
       truth_history.push_back(truth);
 
       // update tree and save snapshot
-      db.insert(val);
+      auto txn = db.BeginTransaction();
+      txn.Put(val);
+      txn.Commit();
     }
 
     db.validate_rb_tree(true);

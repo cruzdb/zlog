@@ -7,10 +7,8 @@
 #include <memory>
 #include <stack>
 #include <vector>
+#include "transaction.h"
 #include "kvstore.pb.h"
-
-struct Node;
-using NodeRef = std::shared_ptr<Node>;
 
 /*
  *
@@ -53,7 +51,7 @@ class DB {
  public:
   DB();
 
-  void insert(std::string elem);
+  Transaction BeginTransaction();
 
   std::set<std::string> stl_set();
   std::set<std::string> stl_set(size_t root);
@@ -69,13 +67,6 @@ class DB {
   }
 
  private:
-  void serialize_node(kvstore_proto::Node *n, NodeRef node, uint64_t rid, int field_index);
-  void serialize_intention_recursive(kvstore_proto::Intention& i, uint64_t rid, NodeRef node, int& field_index);
-  void serialize_intention(kvstore_proto::Intention& i, NodeRef node);
-
-  void set_intention_self_csn_recursive(uint64_t rid, NodeRef node, uint64_t pos);
-  void set_intention_self_csn(NodeRef root, uint64_t pos);
-
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
   void write_dot_null(std::ostream& out, NodeRef node, uint64_t& nullcount);
@@ -154,8 +145,7 @@ class DB {
     }
   }
 
- private:
-  NodeRef copy_node(NodeRef node, uint64_t rid) const {
+  static NodeRef copy_node(NodeRef node, uint64_t rid) {
 
     if (node == DB::Nil())
       return DB::Nil();
@@ -176,18 +166,16 @@ class DB {
     return n;
   }
 
-  NodeRef insert_recursive(std::deque<NodeRef>& path,
-      std::string elem, NodeRef& node, uint64_t rid);
+  size_t db_log_append(std::string blob) {
+    db_.push_back(blob);
+    return db_.size() - 1;
+  }
 
-  template<typename ChildA, typename ChildB>
-  void insert_balance(NodeRef& parent, NodeRef& nn,
-      std::deque<NodeRef>& path, ChildA, ChildB, NodeRef& root,
-      uint64_t rid);
+  void db_roots_append(NodeRef root) {
+    roots_.push_back(root);
+  }
 
-  template <typename ChildA, typename ChildB >
-  NodeRef rotate(NodeRef parent, NodeRef child,
-      ChildA child_a, ChildB child_b, NodeRef& root,
-      uint64_t rid);
+ private:
 
   void print_path(std::deque<NodeRef>& path);
   void print_node(NodeRef node);
@@ -246,6 +234,8 @@ class DB {
   }
 
   static uint64_t root_id_;
+
+ public:
 
   static NodePtr& left(NodeRef n) { return n->left; };
   static NodePtr& right(NodeRef n) { return n->right; };

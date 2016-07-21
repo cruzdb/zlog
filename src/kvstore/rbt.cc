@@ -13,10 +13,15 @@ int main(int argc, char **argv)
 {
   DB db;
 
-  for (int i = 0; i < 30; i++) {
+  for (int i = 0; i < 6; i++) {
+    // generate value
     int nval = std::rand() % 1000;
     std::string val = tostr(nval);
-    db.insert(val);
+
+    // run txn
+    auto txn = db.BeginTransaction();
+    txn.Put(val);
+    txn.Commit();
   }
 
   db.write_dot_history(std::cout);
