@@ -1,14 +1,17 @@
 #include "ptree.h"
+#include <sstream>
 
 int main(int argc, char **argv)
 {
   std::vector<std::string> db;
-  PTree<int> tree(&db);
+  PTree tree(&db);
 
-  std::vector<PTree<int>> versions;
+  std::vector<PTree> versions;
   for (int i = 0; i < 5; i++) {
     int val = std::rand() % 200;
-    tree = tree.insert(val);
+    std::stringstream ss;
+    ss << val;
+    tree = tree.insert(ss.str());
     tree.validate_rb_tree();
     std::cerr << val << std::endl;
     versions.push_back(tree);

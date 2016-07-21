@@ -11,7 +11,7 @@ message NodePtr {
 
 message Node {
     required bool red = 1;
-    required int32 value = 2;
+    required string value = 2;
     required NodePtr left = 3;
     required NodePtr right = 4;
 }

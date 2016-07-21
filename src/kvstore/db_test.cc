@@ -1,4 +1,5 @@
 #include "ptree.h"
+#include <sstream>
 
 int main(int argc, char **argv)
 {
@@ -9,26 +10,28 @@ int main(int argc, char **argv)
   std::vector<std::string> db;
 
   // truth and ptree history
-  std::vector<std::set<int>> truth_history;
-  std::vector<PTree<int>> tree_history;
+  std::vector<std::set<std::string>> truth_history;
+  std::vector<PTree> tree_history;
 
   // initially empty truth
-  std::set<int> truth;
+  std::set<std::string> truth;
   truth_history.push_back(truth);
 
   // initially empty ptree
-  PTree<int> tree(&db);
+  PTree tree(&db);
   tree_history.push_back(tree);
 
   for (int i = 0; i < 200; i++) {
     int val = std::rand();
+    std::stringstream ss;
+    ss << val;
 
     // update truth and save snapshot
-    truth.insert(val);
+    truth.insert(ss.str());
     truth_history.push_back(truth);
 
     // update tree and save snapshot
-    tree = tree.insert(val);
+    tree = tree.insert(ss.str());
     tree_history.push_back(tree);
   }
 
@@ -43,14 +46,14 @@ int main(int argc, char **argv)
 
   // each of the truths match the tree if we deserialize it
   for (unsigned i = 0; i < truth_history.size(); i++) {
-    PTree<int> tree_restored(NULL);
+    PTree tree_restored(NULL);
     tree_restored.restore(&db, i);
     assert(truth_history[i] == tree_restored.stl_set());
   }
 
   // and it works in reverse
   for (int i = truth_history.size() - 1; i >= 0; i--) {
-    PTree<int> tree_restored(NULL);
+    PTree tree_restored(NULL);
     tree_restored.restore(&db, i);
     assert(truth_history[i] == tree_restored.stl_set());
   }
@@ -58,7 +61,7 @@ int main(int argc, char **argv)
   // and some random access
   for (int x = 0; x < std::min(100, (int)truth_history.size()); x++) {
     int i = std::rand() % truth_history.size();
-    PTree<int> tree_restored(NULL);
+    PTree tree_restored(NULL);
     tree_restored.restore(&db, i);
     assert(truth_history[i] == tree_restored.stl_set());
   }
