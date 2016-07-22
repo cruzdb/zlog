@@ -231,6 +231,9 @@ void Transaction::Commit()
   //  then wait for the db to roll forward to find out if the txn commits.
   //  rather here we just take a short cut during development and do all of
   //  the work.
+  //
+  //  first simplification to work torwards this goal is to model meld, but
+  //  only handle the serial case which makes its implementation trivial.
 
   std::cerr << intention_ << std::endl;
 
