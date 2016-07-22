@@ -23,7 +23,7 @@ class Transaction {
  private:
   DB *db_;
   NodeRef root_;
-  uint64_t rid_;
+  const uint64_t rid_;
   kvstore_proto::Intention intention_;
 
   static inline NodePtr& left(NodeRef n) { return n->left; };
@@ -36,28 +36,21 @@ class Transaction {
   }
 
   NodeRef insert_recursive(std::deque<NodeRef>& path,
-      std::string elem, NodeRef& node, uint64_t rid);
+      std::string elem, NodeRef& node);
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodeRef& parent, NodeRef& nn,
-      std::deque<NodeRef>& path, ChildA, ChildB, NodeRef& root,
-      uint64_t rid);
+      std::deque<NodeRef>& path, ChildA, ChildB, NodeRef& root);
 
   template <typename ChildA, typename ChildB >
   NodeRef rotate(NodeRef parent, NodeRef child,
-      ChildA child_a, ChildB child_b, NodeRef& root,
-      uint64_t rid);
+      ChildA child_a, ChildB child_b, NodeRef& root);
 
-  void serialize_node_ptr(kvstore_proto::NodePtr *dst,
-      NodePtr& src, uint64_t rid, const std::string& dir);
-
-  void serialize_node(kvstore_proto::Node *n, NodeRef node,
-      uint64_t rid, int field_index);
-
-  void serialize_intention_recursive(kvstore_proto::Intention& i,
-      uint64_t rid, NodeRef node, int& field_index);
-
-  void serialize_intention(kvstore_proto::Intention& i, NodeRef node);
+  // turn a transaction into a serialized protocol buffer
+  void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,
+      const std::string& dir);
+  void serialize_node(kvstore_proto::Node *dst, NodeRef node, int field_index);
+  void serialize_intention(NodeRef node, int& field_index);
 
   void set_intention_self_csn_recursive(uint64_t rid, NodeRef node,
       uint64_t pos);

@@ -3,7 +3,7 @@
 #include "db.h"
 
 void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
-    NodePtr& src, uint64_t rid, const std::string& dir)
+    NodePtr& src, const std::string& dir)
 {
   if (src.ref == Node::Nil()) {
     dst->set_nil(true);
@@ -11,7 +11,7 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     dst->set_csn(0);
     dst->set_off(0);
     std::cerr << " - serialize_node: " << dir << " nil" << std::endl;
-  } else if (src.ref->rid == rid) {
+  } else if (src.ref->rid == rid_) {
     dst->set_nil(false);
     dst->set_self(true);
     dst->set_csn(0);
@@ -33,29 +33,27 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
   }
 }
 
-void Transaction::serialize_node(kvstore_proto::Node *n, NodeRef node,
-    uint64_t rid, int field_index) {
-
-  n->set_red(node->red);
-  n->set_value(node->elem);
+void Transaction::serialize_node(kvstore_proto::Node *dst,
+    NodeRef node, int field_index)
+{
+  dst->set_red(node->red);
+  dst->set_value(node->elem);
 
   assert(node->field_index == -1);
   node->field_index = field_index;
   assert(node->field_index >= 0);
 
-  std::cerr << "serialize_node: " << node << std::endl;
-
-  serialize_node_ptr(n->mutable_left(), node->left, rid, "left");
-  serialize_node_ptr(n->mutable_right(), node->right, rid, "right");
+  serialize_node_ptr(dst->mutable_left(), node->left, "left");
+  serialize_node_ptr(dst->mutable_right(), node->right, "right");
 }
 
 NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
-    std::string elem, NodeRef& node, uint64_t rid)
+    std::string elem, NodeRef& node)
 {
   std::cerr << "insert_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
   if (node == Node::Nil()) {
     // in C++17 replace with `return path.emplace_back(...)`
-    auto nn = std::make_shared<Node>(elem, true, Node::Nil(), Node::Nil(), rid);
+    auto nn = std::make_shared<Node>(elem, true, Node::Nil(), Node::Nil(), rid_);
     path.push_back(nn);
     std::cerr << "make-node: " << nn << " : " << elem << std::endl;
     return nn;
@@ -68,8 +66,7 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
     return nullptr;
 
   auto child = insert_recursive(path, elem,
-      (less ? node->left.ref : node->right.ref),
-      rid);
+      (less ? node->left.ref : node->right.ref));
 
   if (child == nullptr)
     return child;
@@ -80,7 +77,7 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
    * is updated without updating the csn/offset, which are fixed later when
    * the intention is build.
    */
-  auto copy = Node::Copy(node, rid);
+  auto copy = Node::Copy(node, rid_);
 
   if (less)
     copy->left.ref = child;
@@ -94,8 +91,7 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
 
 template<typename ChildA, typename ChildB >
 NodeRef Transaction::rotate(NodeRef parent,
-    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root,
-    uint64_t rid)
+    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root)
 {
   // copy over ref and csn/off because we might be moving a pointer that
   // points outside of the current intentino.
@@ -112,7 +108,7 @@ NodeRef Transaction::rotate(NodeRef parent,
   // we do not update csn/off here because child is always a pointer to a node
   // in the current intention so its csn/off will be updated during intention
   // serialization step.
-  assert(child->rid == rid);
+  assert(child->rid == rid_);
   child_a(grand_child.ref).ref = child;
 
   return grand_child.ref;
@@ -121,13 +117,13 @@ NodeRef Transaction::rotate(NodeRef parent,
 template<typename ChildA, typename ChildB>
 void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
     std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
-    NodeRef& root, uint64_t rid)
+    NodeRef& root)
 {
   assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
   if (uncle.ref->red) {
     std::cerr << "insert_balance: copy uncle " << uncle.ref << std::endl;
-    uncle.ref = Node::Copy(uncle.ref, rid);
+    uncle.ref = Node::Copy(uncle.ref, rid_);
     parent->red = false;
     uncle.ref->red = false;
     path.front()->red = true;
@@ -136,32 +132,26 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
   } else {
     if (nn == child_b(parent).ref) {
       std::swap(nn, parent);
-      rotate(path.front(), nn, child_a, child_b, root, rid);
+      rotate(path.front(), nn, child_a, child_b, root);
     }
     auto grand_parent = pop_front(path);
     std::swap(grand_parent->red, parent->red);
-    rotate(path.front(), grand_parent, child_b, child_a, root, rid);
+    rotate(path.front(), grand_parent, child_b, child_a, root);
   }
 }
 
-void Transaction::serialize_intention_recursive(kvstore_proto::Intention& i,
-    uint64_t rid, NodeRef node, int& field_index) {
+void Transaction::serialize_intention(NodeRef node, int& field_index) {
 
-  if (node == Node::Nil() || node->rid != rid)
+  if (node == Node::Nil() || node->rid != rid_)
     return;
 
-  serialize_intention_recursive(i, rid, node->left.ref, field_index);
-  serialize_intention_recursive(i, rid, node->right.ref, field_index);
+  serialize_intention(node->left.ref, field_index);
+  serialize_intention(node->right.ref, field_index);
 
   // new serialized node in the intention
-  kvstore_proto::Node *n = i.add_tree();
-  serialize_node(n, node, rid, field_index);
+  kvstore_proto::Node *dst = intention_.add_tree();
+  serialize_node(dst, node, field_index);
   field_index++;
-}
-
-void Transaction::serialize_intention(kvstore_proto::Intention& i, NodeRef node) {
-  int field_index = 0;
-  serialize_intention_recursive(i, node->rid, node, field_index);
 }
 
 void Transaction::set_intention_self_csn_recursive(uint64_t rid,
@@ -193,7 +183,7 @@ void Transaction::Put(std::string val)
    */
   std::deque<NodeRef> path;
 
-  auto root = insert_recursive(path, val, root_, rid_);
+  auto root = insert_recursive(path, val, root_);
   if (root == nullptr)
     return;
 
@@ -210,9 +200,9 @@ void Transaction::Put(std::string val)
     assert(!path.empty());
     auto grand_parent = path.front();
     if (grand_parent->left.ref == parent)
-      insert_balance(parent, nn, path, left, right, root, rid_);
+      insert_balance(parent, nn, path, left, right, root);
     else
-      insert_balance(parent, nn, path, right, left, root, rid_);
+      insert_balance(parent, nn, path, right, left, root);
   }
 
   root->red = false;
@@ -224,7 +214,9 @@ void Transaction::Put(std::string val)
 void Transaction::Commit()
 {
   // build the intention and fixup field offsets
-  serialize_intention(intention_, root_);
+  int field_index = 0;
+  assert(root_->rid == rid_);
+  serialize_intention(root_, field_index);
 
   // append to the database log
   std::string blob;
