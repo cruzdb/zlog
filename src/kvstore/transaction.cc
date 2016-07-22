@@ -3,7 +3,7 @@
 #include "db.h"
 
 void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
-    NodePtr& src, const std::string& dir)
+    NodePtr& src, const std::string& dir) const
 {
   if (src.ref == Node::Nil()) {
     dst->set_nil(true);
@@ -34,7 +34,7 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
 }
 
 void Transaction::serialize_node(kvstore_proto::Node *dst,
-    NodeRef node, int field_index)
+    NodeRef node, int field_index) const
 {
   dst->set_red(node->red);
   dst->set_value(node->elem);
@@ -140,8 +140,8 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
   }
 }
 
-void Transaction::serialize_intention(NodeRef node, int& field_index) {
-
+void Transaction::serialize_intention(NodeRef node, int& field_index)
+{
   if (node == Node::Nil() || node->rid != rid_)
     return;
 

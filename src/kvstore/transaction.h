@@ -48,8 +48,9 @@ class Transaction {
 
   // turn a transaction into a serialized protocol buffer
   void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,
-      const std::string& dir);
-  void serialize_node(kvstore_proto::Node *dst, NodeRef node, int field_index);
+      const std::string& dir) const;
+  void serialize_node(kvstore_proto::Node *dst, NodeRef node,
+      int field_index) const;
   void serialize_intention(NodeRef node, int& field_index);
 
   void set_intention_self_csn_recursive(uint64_t rid, NodeRef node,
