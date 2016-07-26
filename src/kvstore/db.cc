@@ -1,7 +1,8 @@
 #include "db.h"
 #include "transaction.h"
 
-DB::DB()
+DB::DB() :
+  cache_(db_)
 {
   roots_[0] = Node::Nil();
 
@@ -21,7 +22,8 @@ DB::DB()
   log_processor_ = std::thread(&DB::process_log_entry, this);
 }
 
-DB::DB(std::vector<std::string> db)
+DB::DB(std::vector<std::string> db) :
+  cache_(db_)
 {
   roots_[0] = Node::Nil();
 
@@ -56,13 +58,11 @@ std::set<std::string> DB::stl_set(Snapshot snapshot) {
     auto ret = set.emplace(node->elem);
     assert(ret.second);
     if (node->right.ref != Node::Nil()) {
-      if (node->right.ref == nullptr)
-        node_cache_get_(node->right);
+      cache_.ResolveNodePtr(node->right);
       stack.push(node->right.ref);
     }
     if (node->left.ref != Node::Nil()) {
-      if (node->left.ref == nullptr)
-        node_cache_get_(node->left);
+      cache_.ResolveNodePtr(node->left);
       stack.push(node->left.ref);
     }
   }
@@ -141,6 +141,9 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
     << "fillcolor=" << (node->red ? "red" :
         "black,fontcolor=white")
     << "]" << std::endl;
+
+  cache_.ResolveNodePtr(node->left);
+  cache_.ResolveNodePtr(node->right);
 
   assert(node->left.ref != nullptr);
   if (node->left.ref == Node::Nil())
@@ -234,8 +237,16 @@ bool DB::validate_rb_tree(bool all)
 
 int DB::_validate_rb_tree(NodeRef root)
 {
+  assert(root != nullptr);
+
   if (root == Node::Nil())
     return 1;
+
+  cache_.ResolveNodePtr(root->left);
+  cache_.ResolveNodePtr(root->right);
+
+  assert(root->left.ref);
+  assert(root->right.ref);
 
   NodeRef ln = root->left.ref;
   NodeRef rn = root->right.ref;
@@ -288,6 +299,7 @@ void DB::process_log_entry()
     uint64_t next = last_pos_ + 1;
     assert(next <= tail);
 
+    // TODO: intention cache here that sits on top of DB
     // read and deserialize intention from log
     std::string i_snapshot = db_.at(next);
     l.unlock();
@@ -301,48 +313,8 @@ void DB::process_log_entry()
     if (i.snapshot() != -1) assert(next > 0);
     if (i.snapshot() == (int64_t)last_pos_) {
 
-      if (i.tree_size() == 0) {
-        l.lock();
-        roots_[next] = Node::Nil();
-        l.unlock();
-      }
-
-      uint64_t rid = next;
-      for (int idx = 0; idx < i.tree_size(); idx++) {
-        const kvstore_proto::Node& n = i.tree(idx);
-
-        auto nn = std::make_shared<Node>(n.value(), n.red(), Node::Nil(), Node::Nil(), rid);
-        nn->field_index = idx;
-        if (!n.left().nil()) {
-          nn->left.ref = nullptr;
-          nn->left.offset = n.left().off();
-          if (n.left().self()) {
-            nn->left.csn = next;
-          } else {
-            nn->left.csn = n.left().csn();
-          }
-          node_cache_get_(nn->left);
-        }
-        if (!n.right().nil()) {
-          nn->right.ref = nullptr;
-          nn->right.offset = n.right().off();
-          if (n.right().self()) {
-            nn->right.csn = next;
-          } else {
-            nn->right.csn = n.right().csn();
-          }
-          node_cache_get_(nn->right);
-        }
-
-        l.lock();
-
-        node_cache_.insert(std::make_pair(std::make_pair(next, idx), nn));
-
-        if (idx == (i.tree_size() - 1))
-          roots_[next] = nn;
-
-        l.unlock();
-      }
+      auto root = cache_.CacheIntention(i, next);
+      roots_[next] = root;
 
       std::cerr << "commiting serial txn: pos " << next << std::endl;
       l.lock();

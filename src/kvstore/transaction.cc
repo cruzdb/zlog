@@ -56,10 +56,6 @@ void Transaction::serialize_node(kvstore_proto::Node *dst,
 NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
     std::string elem, const NodeRef& node)
 {
-  // this could happen because we don't resolve pointers within the db in this
-  // context. all the pointers need to be valid and cached when we do a
-  // transaction. this is definitely bunk. we should resolve them here because
-  // we can't always keep everything in memory... TODO
   assert(node != nullptr);
 
 #if 0
@@ -80,6 +76,9 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
 
   if (equal)
     return nullptr;
+
+  db_->cache_.ResolveNodePtr(node->left);
+  db_->cache_.ResolveNodePtr(node->right);
 
   auto child = insert_recursive(path, elem,
       (less ? node->left.ref : node->right.ref));
@@ -160,8 +159,13 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
 
 void Transaction::serialize_intention(NodeRef node, int& field_index)
 {
+  assert(node != nullptr);
+
   if (node == Node::Nil() || node->rid != rid_)
     return;
+
+  db_->cache_.ResolveNodePtr(node->left);
+  db_->cache_.ResolveNodePtr(node->right);
 
   serialize_intention(node->left.ref, field_index);
   serialize_intention(node->right.ref, field_index);
@@ -196,7 +200,6 @@ void Transaction::set_intention_self_csn(NodeRef root, uint64_t pos) {
 
 void Transaction::Put(std::string val)
 {
-  std::cerr << "put: " << val << std::endl;
   /*
    * build copy of path to new node
    */

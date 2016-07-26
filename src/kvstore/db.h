@@ -14,6 +14,7 @@
 #include "kvstore.pb.h"
 #include "node.h"
 #include "transaction.h"
+#include "node_cache.h"
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
@@ -48,6 +49,8 @@ class DB {
   }
 
  private:
+  friend class Transaction;
+
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
   void write_dot_null(std::ostream& out, NodeRef node, uint64_t& nullcount);
@@ -80,7 +83,7 @@ class DB {
   std::map<uint64_t, NodeRef> roots_;
 
   std::vector<std::string> db_;
-  std::map<std::pair<uint64_t, int>, NodeRef> node_cache_;
+  NodeCache cache_;
 
   uint64_t last_pos_;
   std::thread log_processor_;
@@ -90,66 +93,11 @@ class DB {
 
   volatile bool stop_;
 
+  // polling vs cond var vs hybrid
   std::condition_variable cv_;
   std::condition_variable result_cv_;
 
   std::unordered_map<uint64_t, bool> committed_;
-
-  void node_cache_get_(NodePtr& ptr) {
-    assert(ptr.ref == nullptr);
-#if 0
-    std::cerr << "node_cache_get_: csn " << ptr.csn << " off " << ptr.offset << std::endl;
-#endif
-    lock_.lock();
-    auto it = node_cache_.find(std::make_pair(ptr.csn, ptr.offset));
-    bool cached = it != node_cache_.end();
-    if (cached) {
-      ptr.ref = it->second;
-      lock_.unlock();
-      return;
-    }
-
-    // read and deserialize intention from log
-    std::string snapshot = db_.at(ptr.csn);
-    lock_.unlock();
-    kvstore_proto::Intention i;
-    assert(i.ParseFromString(snapshot));
-    assert(i.IsInitialized());
-
-    const kvstore_proto::Node& n = i.tree(ptr.offset);
-
-    // here we use rid == log offset. itd be nice to have something uniquely
-    // generated in memory as a safety net. we can use a csn->rid map to
-    // handle this.
-    auto nn = std::make_shared<Node>(n.value(), n.red(),
-        Node::Nil(), Node::Nil(), ptr.csn);
-
-    nn->field_index = ptr.offset;
-    if (!n.left().nil()) {
-      nn->left.ref = nullptr;
-      nn->left.offset = n.left().off();
-      if (n.left().self()) {
-        nn->left.csn = ptr.csn;
-      } else {
-        nn->left.csn = n.left().csn();
-      }
-    }
-    if (!n.right().nil()) {
-      nn->right.ref = nullptr;
-      nn->right.offset = n.right().off();
-      if (n.right().self()) {
-        nn->right.csn = ptr.csn;
-      } else {
-        nn->right.csn = n.right().csn();
-      }
-    }
-
-    lock_.lock();
-    node_cache_.insert(std::make_pair(std::make_pair(ptr.csn, ptr.offset), nn));
-    lock_.unlock();
-
-    ptr.ref = nn;
-  }
 
   static uint64_t root_id_;
 };

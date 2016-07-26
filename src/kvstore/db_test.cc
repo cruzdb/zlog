@@ -27,7 +27,7 @@ int main(int argc, char **argv)
     std::vector<Snapshot> db_history;
     db_history.push_back(db.GetSnapshot());
 
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 300; i++) {
       int nval = std::rand();
       std::string val = tostr(nval);
 
