@@ -53,19 +53,19 @@ int main(int argc, char **argv)
 
     // each of the truths match the tree if we deserialize it
     for (unsigned i = 0; i < truth_history.size(); i++) {
-      DB db2(db.get_db());
+      DB db2(db.log());
       assert(truth_history[i] == db.stl_set(db_history[i]));
     }
 
     // and it works in reverse
     for (int i = truth_history.size() - 1; i >= 0; i--) {
-      DB db2(db.get_db());
+      DB db2(db.log());
       assert(truth_history[i] == db.stl_set(db_history[i]));
     }
 
     // and some random access
     for (int x = 0; x < std::min(100, (int)truth_history.size()); x++) {
-      DB db2(db.get_db());
+      DB db2(db.log());
       int i = std::rand() % truth_history.size();
       assert(truth_history[i] == db.stl_set(db_history[i]));
     }

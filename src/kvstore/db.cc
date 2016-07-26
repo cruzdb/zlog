@@ -2,7 +2,7 @@
 #include "transaction.h"
 
 DB::DB() :
-  cache_(db_)
+  cache_(this)
 {
   roots_[0] = Node::Nil();
 
@@ -11,7 +11,7 @@ DB::DB() :
   intention.set_snapshot(-1);
   assert(intention.IsInitialized());
   assert(intention.SerializeToString(&blob));
-  db_.push_back(blob);
+  log_append(blob);
 
   last_pos_ = 0;
   stop_ = false;
@@ -22,12 +22,12 @@ DB::DB() :
   log_processor_ = std::thread(&DB::process_log_entry, this);
 }
 
-DB::DB(std::vector<std::string> db) :
-  cache_(db_)
+DB::DB(std::vector<std::string> log) :
+  cache_(this)
 {
   roots_[0] = Node::Nil();
 
-  db_ = db;
+  log_ = log;
   last_pos_ = 0;
   stop_ = false;
 
@@ -40,7 +40,7 @@ DB::DB(std::vector<std::string> db) :
 DB::~DB()
 {
   stop_ = true;
-  cv_.notify_one();
+  log_cond_.notify_all();
   if (log_processor_.joinable())
     log_processor_.join();
 }
@@ -282,11 +282,11 @@ void DB::process_log_entry()
 {
   for (;;) {
     std::unique_lock<std::mutex> l(lock_);
-    uint64_t tail = db_.size() - 1;
+    uint64_t tail = log_tail();
 
     assert(last_pos_ <= tail);
     if (last_pos_ == tail) {
-      cv_.wait_for(l, std::chrono::milliseconds(2000));
+      log_cond_.wait_for(l, std::chrono::milliseconds(2000));
       if (stop_)
         return;
       continue;
@@ -301,7 +301,7 @@ void DB::process_log_entry()
 
     // TODO: intention cache here that sits on top of DB
     // read and deserialize intention from log
-    std::string i_snapshot = db_.at(next);
+    std::string i_snapshot = log_read(next);
     l.unlock();
 
     kvstore_proto::Intention i;
@@ -348,12 +348,26 @@ bool DB::CommitResult(uint64_t pos)
   }
 }
 
-size_t DB::db_log_append(std::string blob)
+size_t DB::log_append(std::string blob)
 {
-  lock_.lock();
-  db_.push_back(blob);
-  size_t res = db_.size() - 1;
-  lock_.unlock();
-  cv_.notify_all();
-  return res;
+  std::lock_guard<std::mutex> l(log_lock_);
+  log_.push_back(blob);
+  log_cond_.notify_all();
+  return log_.size() - 1;
+}
+
+size_t DB::log_tail() {
+  std::lock_guard<std::mutex> l(log_lock_);
+  return log_.size() - 1;
+}
+
+std::vector<std::string> DB::log() {
+  std::lock_guard<std::mutex> l(log_lock_);
+  return log_;
+}
+
+std::string DB::log_read(size_t pos)
+{
+  std::lock_guard<std::mutex> l(log_lock_);
+  return log_.at(pos);
 }

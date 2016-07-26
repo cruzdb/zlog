@@ -7,6 +7,7 @@ target_link_libraries(kvstore_proto
 add_library(libkvstore SHARED
     db.cc
     transaction.cc
+    node_cache.cc
 )
 target_link_libraries(libkvstore kvstore_proto)
 

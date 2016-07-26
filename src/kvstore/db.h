@@ -33,7 +33,7 @@ class Snapshot {
 class DB {
  public:
   DB();
-  DB(std::vector<std::string> db);
+  DB(std::vector<std::string> log);
 
   ~DB();
 
@@ -66,11 +66,10 @@ class DB {
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out);
 
-  std::vector<std::string> get_db() {
-    return db_;
-  }
-
-  size_t db_log_append(std::string blob);
+  size_t log_append(std::string blob);
+  size_t log_tail();
+  std::vector<std::string> log();
+  std::string log_read(size_t pos);
 
   bool CommitResult(uint64_t pos);
 
@@ -82,7 +81,11 @@ class DB {
   // only committed states (root, log position)
   std::map<uint64_t, NodeRef> roots_;
 
-  std::vector<std::string> db_;
+  // fake/simulated log
+  std::vector<std::string> log_;
+  std::condition_variable log_cond_;
+  std::mutex log_lock_;
+
   NodeCache cache_;
 
   uint64_t last_pos_;
@@ -94,7 +97,6 @@ class DB {
   volatile bool stop_;
 
   // polling vs cond var vs hybrid
-  std::condition_variable cv_;
   std::condition_variable result_cv_;
 
   std::unordered_map<uint64_t, bool> committed_;
