@@ -37,3 +37,8 @@ src/append-check
 src/zlog
 src/physical-design
 src/zlog-bench
+
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+*.so
