@@ -3,21 +3,49 @@
 
 DB::DB()
 {
-  roots_.push_back(Node::Nil());
+  roots_[0] = Node::Nil();
 
   std::string blob;
   kvstore_proto::Intention intention;
+  intention.set_snapshot(-1);
   assert(intention.IsInitialized());
   assert(intention.SerializeToString(&blob));
   db_.push_back(blob);
 
+  last_pos_ = 0;
+  stop_ = false;
+
   // todo: enable/disable debug
   validate_rb_tree();
+
+  log_processor_ = std::thread(&DB::process_log_entry, this);
 }
 
-std::set<std::string> DB::stl_set(size_t root) {
+DB::DB(std::vector<std::string> db)
+{
+  roots_[0] = Node::Nil();
+
+  db_ = db;
+  last_pos_ = 0;
+  stop_ = false;
+
+  // todo: enable/disable debug
+  validate_rb_tree();
+
+  log_processor_ = std::thread(&DB::process_log_entry, this);
+}
+
+DB::~DB()
+{
+  stop_ = true;
+  cv_.notify_one();
+  if (log_processor_.joinable())
+    log_processor_.join();
+}
+
+std::set<std::string> DB::stl_set(Snapshot snapshot) {
   std::set<std::string> set;
-  NodeRef node = roots_.at(root);
+  NodeRef node = snapshot.root;
   if (node == Node::Nil())
     return set;
   std::stack<NodeRef> stack;
@@ -42,7 +70,7 @@ std::set<std::string> DB::stl_set(size_t root) {
 }
 
 std::set<std::string> DB::stl_set() {
-  return stl_set(roots_.size() - 1);
+  return stl_set(GetSnapshot());
 }
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
@@ -114,6 +142,7 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
         "black,fontcolor=white")
     << "]" << std::endl;
 
+  assert(node->left.ref != nullptr);
   if (node->left.ref == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
@@ -121,6 +150,7 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
     write_dot_recursive(out, rid, node->left.ref, nullcount, scoped);
   }
 
+  assert(node->right.ref != nullptr);
   if (node->right.ref == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
@@ -132,15 +162,18 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
 void DB::_write_dot(std::ostream& out, NodeRef root,
     uint64_t& nullcount, bool scoped)
 {
+  assert(root != nullptr);
   write_dot_recursive(out, root->rid,
       root, nullcount, scoped);
 }
 
 void DB::write_dot(std::ostream& out, bool scoped)
 {
+  auto root = roots_.crbegin();
+  assert(root != roots_.crend());
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  _write_dot(out, roots_.back(), nullcount, scoped);
+  _write_dot(out, root->second, nullcount, scoped);
   out << "}" << std::endl;
 }
 
@@ -149,9 +182,11 @@ void DB::write_dot_history(std::ostream& out)
   uint64_t trees = 0;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  for (unsigned i = 1; i < roots_.size(); i++) {
+  auto it = roots_.cbegin();
+  it++;
+  for (; it != roots_.cend(); it++) {
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    _write_dot(out, roots_[i], nullcount, true);
+    _write_dot(out, it->second, nullcount, true);
     out << "}" << std::endl;
   }
   out << "}" << std::endl;
@@ -186,13 +221,15 @@ void DB::print_path(std::deque<NodeRef>& path)
 bool DB::validate_rb_tree(bool all)
 {
   if (all) {
-    for (auto root : roots_) {
-      if (_validate_rb_tree(root) == 0)
+    for (auto it = roots_.cbegin(); it != roots_.cend(); it++) {
+      if (_validate_rb_tree(it->second) == 0)
         return false;
     }
     return true;
   }
-  return _validate_rb_tree(roots_.back()) != 0;
+  auto root = roots_.crbegin();
+  assert(root != roots_.crend());
+  return _validate_rb_tree(root->second) != 0;
 }
 
 int DB::_validate_rb_tree(NodeRef root)
@@ -224,5 +261,127 @@ int DB::_validate_rb_tree(NodeRef root)
 
 Transaction DB::BeginTransaction()
 {
-  return Transaction(this, roots_.back(), root_id_++);
+  auto root = roots_.crbegin();
+  assert(root != roots_.crend());
+  std::cerr << "begin txn: snapshot " << root->first << std::endl;
+  return Transaction(this, root->second, root->first, root_id_++);
+}
+
+void DB::process_log_entry()
+{
+  for (;;) {
+    std::unique_lock<std::mutex> l(lock_);
+    uint64_t tail = db_.size() - 1;
+
+    assert(last_pos_ <= tail);
+    if (last_pos_ == tail) {
+      cv_.wait_for(l, std::chrono::milliseconds(2000));
+      if (stop_)
+        return;
+      continue;
+    }
+
+    if (stop_)
+      return;
+
+    // process log in strict serial order
+    uint64_t next = last_pos_ + 1;
+    assert(next <= tail);
+
+    // read and deserialize intention from log
+    std::string i_snapshot = db_.at(next);
+    l.unlock();
+
+    kvstore_proto::Intention i;
+    assert(i.ParseFromString(i_snapshot));
+    assert(i.IsInitialized());
+
+    // meld-subset: only allow serial intentions
+    if (i.snapshot() == -1) assert(next == 0);
+    if (i.snapshot() != -1) assert(next > 0);
+    if (i.snapshot() == (int64_t)last_pos_) {
+
+      if (i.tree_size() == 0) {
+        l.lock();
+        roots_[next] = Node::Nil();
+        l.unlock();
+      }
+
+      uint64_t rid = next;
+      for (int idx = 0; idx < i.tree_size(); idx++) {
+        const kvstore_proto::Node& n = i.tree(idx);
+
+        auto nn = std::make_shared<Node>(n.value(), n.red(), Node::Nil(), Node::Nil(), rid);
+        nn->field_index = idx;
+        if (!n.left().nil()) {
+          nn->left.ref = nullptr;
+          nn->left.offset = n.left().off();
+          if (n.left().self()) {
+            nn->left.csn = next;
+          } else {
+            nn->left.csn = n.left().csn();
+          }
+          node_cache_get_(nn->left);
+        }
+        if (!n.right().nil()) {
+          nn->right.ref = nullptr;
+          nn->right.offset = n.right().off();
+          if (n.right().self()) {
+            nn->right.csn = next;
+          } else {
+            nn->right.csn = n.right().csn();
+          }
+          node_cache_get_(nn->right);
+        }
+
+        l.lock();
+
+        node_cache_.insert(std::make_pair(std::make_pair(next, idx), nn));
+
+        if (idx == (i.tree_size() - 1))
+          roots_[next] = nn;
+
+        l.unlock();
+      }
+
+      std::cerr << "commiting serial txn: pos " << next << std::endl;
+      l.lock();
+      auto res = committed_.emplace(std::make_pair(next, true));
+      assert(res.second);
+      l.unlock();
+
+    } else {
+      std::cerr << "aborting non-serial txn: pos " << next << std::endl;
+      l.lock();
+      auto res = committed_.emplace(std::make_pair(next, false));
+      assert(res.second);
+      l.unlock();
+    }
+
+    result_cv_.notify_all();
+
+    last_pos_ = next;
+  }
+}
+
+bool DB::CommitResult(uint64_t pos)
+{
+  for (;;) {
+    std::unique_lock<std::mutex> l(lock_);
+    auto it = committed_.find(pos);
+    if (it != committed_.end()) {
+      return it->second;
+    }
+    result_cv_.wait(l);
+  }
+}
+
+size_t DB::db_log_append(std::string blob)
+{
+  lock_.lock();
+  db_.push_back(blob);
+  size_t res = db_.size() - 1;
+  lock_.unlock();
+  cv_.notify_all();
+  return res;
 }

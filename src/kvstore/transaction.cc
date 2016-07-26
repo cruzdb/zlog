@@ -10,7 +10,9 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     dst->set_self(false);
     dst->set_csn(0);
     dst->set_off(0);
+#if 0
     std::cerr << " - serialize_node: " << dir << " nil" << std::endl;
+#endif
   } else if (src.ref->rid == rid_) {
     dst->set_nil(false);
     dst->set_self(true);
@@ -18,18 +20,22 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     assert(src.ref->field_index >= 0);
     dst->set_off(src.ref->field_index);
     src.offset = src.ref->field_index;
+#if 0
     std::cerr << " - serialize_node: " << dir << " internal csn " <<
       dst->csn() << " off " << dst->off()
       << std::endl;
+#endif
   } else {
     assert(src.ref != nullptr);
     dst->set_nil(false);
     dst->set_self(false);
     dst->set_csn(src.csn);
     dst->set_off(src.offset);
+#if 0
     std::cerr << " - serialize_node: " << dir << " external csn " <<
       dst->csn() << " off " << dst->off()
       << std::endl;
+#endif
   }
 }
 
@@ -48,14 +54,24 @@ void Transaction::serialize_node(kvstore_proto::Node *dst,
 }
 
 NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
-    std::string elem, NodeRef& node)
+    std::string elem, const NodeRef& node)
 {
+  // this could happen because we don't resolve pointers within the db in this
+  // context. all the pointers need to be valid and cached when we do a
+  // transaction. this is definitely bunk. we should resolve them here because
+  // we can't always keep everything in memory... TODO
+  assert(node != nullptr);
+
+#if 0
   std::cerr << "insert_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
+#endif
   if (node == Node::Nil()) {
     // in C++17 replace with `return path.emplace_back(...)`
     auto nn = std::make_shared<Node>(elem, true, Node::Nil(), Node::Nil(), rid_);
     path.push_back(nn);
+#if 0
     std::cerr << "make-node: " << nn << " : " << elem << std::endl;
+#endif
     return nn;
   }
 
@@ -122,7 +138,9 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
   assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
   if (uncle.ref->red) {
+#if 0
     std::cerr << "insert_balance: copy uncle " << uncle.ref << std::endl;
+#endif
     uncle.ref = Node::Copy(uncle.ref, rid_);
     parent->red = false;
     uncle.ref->red = false;
@@ -178,12 +196,13 @@ void Transaction::set_intention_self_csn(NodeRef root, uint64_t pos) {
 
 void Transaction::Put(std::string val)
 {
+  std::cerr << "put: " << val << std::endl;
   /*
    * build copy of path to new node
    */
   std::deque<NodeRef> path;
 
-  auto root = insert_recursive(path, val, root_);
+  auto root = insert_recursive(path, val, src_root_);
   if (root == nullptr)
     return;
 
@@ -207,16 +226,23 @@ void Transaction::Put(std::string val)
 
   root->red = false;
 
-  // may want to keep the original root pointer around ???
+  assert(root != nullptr);
   root_ = root;
 }
 
 void Transaction::Commit()
 {
+  // nothing to do
+  if (root_ == nullptr) {
+    return;
+  }
+
   // build the intention and fixup field offsets
   int field_index = 0;
+  assert(root_ != nullptr);
   assert(root_->rid == rid_);
   serialize_intention(root_, field_index);
+  intention_.set_snapshot(snapshot_);
 
   // append to the database log
   std::string blob;
@@ -227,15 +253,7 @@ void Transaction::Commit()
   // update the in-memory intention ptrs
   set_intention_self_csn(root_, pos);
 
-  //  this needs to be further separated. here should append to the log and
-  //  then wait for the db to roll forward to find out if the txn commits.
-  //  rather here we just take a short cut during development and do all of
-  //  the work.
-  //
-  //  first simplification to work torwards this goal is to model meld, but
-  //  only handle the serial case which makes its implementation trivial.
-
-  std::cerr << intention_ << std::endl;
-
-  db_->db_roots_append(root_);
+  // wait for result
+  bool committed = db_->CommitResult(pos);
+  assert(committed);
 }

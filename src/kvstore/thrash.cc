@@ -18,7 +18,10 @@ int main(int argc, char **argv)
 
     DB db;
 
-    for (int i = 0; i < 10000; i++) {
+    std::vector<Snapshot> db_history;
+    db_history.push_back(db.GetSnapshot());
+
+    for (int i = 0; i < 500; i++) {
       int nval = std::rand();
       std::string val = tostr(nval);
 
@@ -28,12 +31,14 @@ int main(int argc, char **argv)
       auto txn = db.BeginTransaction();
       txn.Put(val);
       txn.Commit();
+
+      db_history.push_back(db.GetSnapshot());
     }
 
     db.validate_rb_tree(true);
-    assert(truth_history.size() == db.num_roots());
-    for (unsigned i = 0; i < truth_history.size(); i++) {
-      assert(truth_history[i] == db.stl_set(i));
+    assert(truth_history.size() == db_history.size());
+    for (unsigned i = 0; i < db_history.size(); i++) {
+      assert(truth_history[i] == db.stl_set(db_history[i]));
     }
   }
 

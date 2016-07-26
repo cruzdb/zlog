@@ -12,8 +12,8 @@ class DB;
  */
 class Transaction {
  public:
-  Transaction(DB *db, NodeRef root, uint64_t rid) :
-    db_(db), root_(root), rid_(rid)
+  Transaction(DB *db, NodeRef root, uint64_t snapshot, uint64_t rid) :
+    db_(db), src_root_(root), snapshot_(snapshot), rid_(rid), root_(nullptr)
   {}
 
   void Put(std::string val);
@@ -22,8 +22,10 @@ class Transaction {
 
  private:
   DB *db_;
-  NodeRef root_;
+  const NodeRef src_root_;
+  const uint64_t snapshot_;
   const uint64_t rid_;
+  NodeRef root_;
   kvstore_proto::Intention intention_;
 
   static inline NodePtr& left(NodeRef n) { return n->left; };
@@ -36,7 +38,7 @@ class Transaction {
   }
 
   NodeRef insert_recursive(std::deque<NodeRef>& path,
-      std::string elem, NodeRef& node);
+      std::string elem, const NodeRef& node);
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodeRef& parent, NodeRef& nn,

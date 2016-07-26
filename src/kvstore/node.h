@@ -57,7 +57,9 @@ struct Node {
     node->right.csn = src->right.csn;
     node->right.offset = src->right.offset;
 
+#if 0
     std::cerr << "copy_node: src " << src << " dst " << node << std::endl;
+#endif
 
     return node;
   }

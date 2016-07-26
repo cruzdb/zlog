@@ -17,5 +17,6 @@ message Node {
 }
 
 message Intention {
-    repeated Node tree = 1;
+    required int64 snapshot = 1;
+    repeated Node tree = 2;
 }

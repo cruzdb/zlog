@@ -24,6 +24,9 @@ int main(int argc, char **argv)
     // initially empty ptree
     DB db;
 
+    std::vector<Snapshot> db_history;
+    db_history.push_back(db.GetSnapshot());
+
     for (int i = 0; i < 1000; i++) {
       int nval = std::rand();
       std::string val = tostr(nval);
@@ -36,37 +39,35 @@ int main(int argc, char **argv)
       auto txn = db.BeginTransaction();
       txn.Put(val);
       txn.Commit();
+
+      db_history.push_back(db.GetSnapshot());
     }
 
     db.validate_rb_tree(true);
 
-    assert(truth_history.size() == db.num_roots());
+    assert(truth_history.size() == db_history.size());
 
-    // each of the truth and tree history snapshot points match
-    for (unsigned i = 0; i < truth_history.size(); i++) {
-      assert(truth_history[i] == db.stl_set(i));
+    for (unsigned i = 0; i < db_history.size(); i++) {
+      assert(truth_history[i] == db.stl_set(db_history[i]));
     }
 
     // each of the truths match the tree if we deserialize it
     for (unsigned i = 0; i < truth_history.size(); i++) {
-      DB db2;
-      db2.restore(db, i);
-      assert(truth_history[i] == db2.stl_set());
+      DB db2(db.get_db());
+      assert(truth_history[i] == db.stl_set(db_history[i]));
     }
 
     // and it works in reverse
     for (int i = truth_history.size() - 1; i >= 0; i--) {
-      DB db2;
-      db2.restore(db, i);
-      assert(truth_history[i] == db2.stl_set());
+      DB db2(db.get_db());
+      assert(truth_history[i] == db.stl_set(db_history[i]));
     }
 
     // and some random access
     for (int x = 0; x < std::min(100, (int)truth_history.size()); x++) {
+      DB db2(db.get_db());
       int i = std::rand() % truth_history.size();
-      DB db2;
-      db2.restore(db, i);
-      assert(truth_history[i] == db2.stl_set());
+      assert(truth_history[i] == db.stl_set(db_history[i]));
     }
   }
 
