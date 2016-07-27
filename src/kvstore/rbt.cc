@@ -13,16 +13,21 @@ int main(int argc, char **argv)
 {
   DB db;
 
+  std::vector<Snapshot> snapshots;
+  snapshots.push_back(db.GetSnapshot());
+
   {
     auto txn = db.BeginTransaction();
     txn.Put(tostr(76));
     txn.Commit();
+    snapshots.push_back(db.GetSnapshot());
   }
 
   {
     auto txn = db.BeginTransaction();
     txn.Delete(tostr(76));
     txn.Commit();
+    snapshots.push_back(db.GetSnapshot());
   }
 
 
@@ -39,7 +44,7 @@ int main(int argc, char **argv)
   }
 #endif
 
-  db.write_dot_history(std::cout);
+  db.write_dot_history(std::cout, snapshots);
 
   return 0;
 }

@@ -4,7 +4,8 @@
 DB::DB() :
   cache_(this)
 {
-  roots_[0] = Node::Nil();
+  root_ = Node::Nil();
+  root_pos_ = 0;
 
   std::string blob;
   kvstore_proto::Intention intention;
@@ -25,7 +26,8 @@ DB::DB() :
 DB::DB(std::vector<std::string> log) :
   cache_(this)
 {
-  roots_[0] = Node::Nil();
+  root_ = Node::Nil();
+  root_pos_ = 0;
 
   log_ = log;
   last_pos_ = 0;
@@ -180,28 +182,27 @@ void DB::_write_dot(std::ostream& out, NodeRef root,
 
 void DB::write_dot(std::ostream& out, bool scoped)
 {
-  auto root = roots_.crbegin();
-  assert(root != roots_.crend());
+  auto root = root_;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  _write_dot(out, root->second, nullcount, scoped);
+  _write_dot(out, root, nullcount, scoped);
   out << "}" << std::endl;
 }
 
-void DB::write_dot_history(std::ostream& out)
+void DB::write_dot_history(std::ostream& out,
+    std::vector<Snapshot>& snapshots)
 {
   uint64_t trees = 0;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  auto it = roots_.cbegin();
-  for (; it != roots_.cend(); it++) {
+  for (auto it = snapshots.cbegin(); it != snapshots.end(); it++) {
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    if (it->second == Node::Nil()) {
+    if (it->root == Node::Nil()) {
       out << "null" << ++nullcount << " [label=nil];" << std::endl;
-      out << "label = \"root=" << it->first << "\"" << std::endl;
+      out << "label = \"root=" << it->seq << "\"" << std::endl;
     } else {
-      _write_dot(out, it->second, nullcount, true);
-      out << "label = \"root=" << it->first << "\"" << std::endl;
+      _write_dot(out, it->root, nullcount, true);
+      out << "label = \"root=" << it->seq << "\"" << std::endl;
     }
     out << "}" << std::endl;
   }
@@ -236,16 +237,7 @@ void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
 
 bool DB::validate_rb_tree(bool all)
 {
-  if (all) {
-    for (auto it = roots_.cbegin(); it != roots_.cend(); it++) {
-      if (_validate_rb_tree(it->second) == 0)
-        return false;
-    }
-    return true;
-  }
-  auto root = roots_.crbegin();
-  assert(root != roots_.crend());
-  return _validate_rb_tree(root->second) != 0;
+  return _validate_rb_tree(root_) != 0;
 }
 
 int DB::_validate_rb_tree(NodeRef root)
@@ -285,10 +277,9 @@ int DB::_validate_rb_tree(NodeRef root)
 
 Transaction DB::BeginTransaction()
 {
-  auto root = roots_.crbegin();
-  assert(root != roots_.crend());
-  std::cerr << "begin txn: snapshot " << root->first << std::endl;
-  return Transaction(this, root->second, root->first, root_id_++);
+  std::lock_guard<std::mutex> l(lock_);
+  std::cerr << "begin txn: snapshot " << root_pos_ << std::endl;
+  return Transaction(this, root_, root_pos_, root_id_++);
 }
 
 void DB::process_log_entry()
@@ -328,7 +319,8 @@ void DB::process_log_entry()
     if (i.snapshot() == (int64_t)last_pos_) {
 
       auto root = cache_.CacheIntention(i, next);
-      roots_[next] = root;
+      root_ = root;
+      root_pos_ = next;
 
       std::cerr << "commiting serial txn: pos " << next << std::endl;
       l.lock();

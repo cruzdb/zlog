@@ -23,11 +23,12 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
 class Snapshot {
  public:
-  Snapshot(const NodeRef root) :
-    root(root)
+  Snapshot(const NodeRef root, uint64_t seq) :
+    root(root), seq(seq)
   {}
 
   const NodeRef root;
+  const uint64_t seq;
 };
 
 class DB {
@@ -43,9 +44,8 @@ class DB {
   std::set<std::string> stl_set(Snapshot snapshot);
 
   Snapshot GetSnapshot() {
-    auto root = roots_.crbegin();
-    assert(root != roots_.crend());
-    return Snapshot(root->second);
+    std::lock_guard<std::mutex> l(lock_);
+    return Snapshot(root_, root_pos_);
   }
 
  private:
@@ -64,7 +64,8 @@ class DB {
   bool validate_rb_tree(bool all = false);
 
   void write_dot(std::ostream& out, bool scoped = false);
-  void write_dot_history(std::ostream& out);
+  void write_dot_history(std::ostream& out,
+      std::vector<Snapshot>& snapshots);
 
   size_t log_append(std::string blob);
   size_t log_tail();
@@ -79,7 +80,10 @@ class DB {
   void print_node(NodeRef node);
 
   // only committed states (root, log position)
-  std::map<uint64_t, NodeRef> roots_;
+  // std::map<uint64_t, NodeRef> roots_;
+  NodeRef root_;
+  uint64_t root_pos_;
+  std::mutex lock_;
 
   // fake/simulated log
   std::vector<std::string> log_;
