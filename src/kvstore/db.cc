@@ -285,28 +285,27 @@ Transaction DB::BeginTransaction()
 void DB::process_log_entry()
 {
   for (;;) {
-    std::unique_lock<std::mutex> l(log_lock_);
-    uint64_t tail = log_tail();
-
-    assert(last_pos_ <= tail);
-    if (last_pos_ == tail) {
-      log_cond_.wait_for(l, std::chrono::milliseconds(20),
-          [this](){return last_pos_ < log_tail();});
-      if (stop_)
-        return;
-      continue;
-    }
+    std::unique_lock<std::mutex> l(lock_);
 
     if (stop_)
       return;
+
+    uint64_t tail = log_tail();
+    assert(last_pos_ <= tail);
+
+    std::cerr << "process_log_entry: last_pos_ " << last_pos_
+      << " tail " << tail << std::endl;
+
+    if (last_pos_ == tail) {
+      log_cond_.wait(l);
+      continue; // try again
+    }
 
     // process log in strict serial order
     uint64_t next = last_pos_ + 1;
     assert(next <= tail);
 
-    // TODO: intention cache here that sits on top of DB
     // read and deserialize intention from log
-    l.unlock();
     std::string i_snapshot = log_read(next);
 
     kvstore_proto::Intention i;
@@ -317,23 +316,17 @@ void DB::process_log_entry()
     if (i.snapshot() == -1) assert(next == 0);
     if (i.snapshot() != -1) assert(next > 0);
     if (i.snapshot() == (int64_t)last_pos_) {
-
       auto root = cache_.CacheIntention(i, next);
       root_ = root;
       root_pos_ = next;
 
       std::cerr << "commiting serial txn: pos " << next << std::endl;
-      l.lock();
       auto res = committed_.emplace(std::make_pair(next, true));
       assert(res.second);
-      l.unlock();
-
     } else {
       std::cerr << "aborting non-serial txn: pos " << next << std::endl;
-      l.lock();
       auto res = committed_.emplace(std::make_pair(next, false));
       assert(res.second);
-      l.unlock();
     }
 
     result_cv_.notify_all();
@@ -345,7 +338,7 @@ void DB::process_log_entry()
 bool DB::CommitResult(uint64_t pos)
 {
   for (;;) {
-    std::unique_lock<std::mutex> l(log_lock_);
+    std::unique_lock<std::mutex> l(lock_);
     auto it = committed_.find(pos);
     if (it != committed_.end()) {
       return it->second;
@@ -356,7 +349,7 @@ bool DB::CommitResult(uint64_t pos)
 
 size_t DB::log_append(std::string blob)
 {
-  std::lock_guard<std::mutex> l(log_lock_);
+  std::lock_guard<std::mutex> l(lock_);
   log_.push_back(blob);
   log_cond_.notify_all();
   return log_.size() - 1;
@@ -367,12 +360,10 @@ size_t DB::log_tail() {
 }
 
 std::vector<std::string> DB::log() {
-  std::lock_guard<std::mutex> l(log_lock_);
   return log_;
 }
 
 std::string DB::log_read(ssize_t pos)
 {
-  std::lock_guard<std::mutex> l(log_lock_);
   return log_.at(pos);
 }

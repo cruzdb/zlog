@@ -79,16 +79,15 @@ class DB {
   void print_path(std::ostream& out, std::deque<NodeRef>& path);
   void print_node(NodeRef node);
 
-  // only committed states (root, log position)
-  // std::map<uint64_t, NodeRef> roots_;
+  // latest committed state
   NodeRef root_;
   uint64_t root_pos_;
+
   std::mutex lock_;
 
   // fake/simulated log
   std::vector<std::string> log_;
   std::condition_variable log_cond_;
-  std::mutex log_lock_;
 
   NodeCache cache_;
 
