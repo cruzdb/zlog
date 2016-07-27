@@ -479,6 +479,8 @@ void Transaction::Commit()
     std::cerr << "commit: empty tree" << std::endl;
   } else
     assert(root_->rid == rid_);
+
+  std::cerr << "commit: processing non-empty transaction" << std::endl;
   serialize_intention(root_, field_index);
   intention_.set_snapshot(snapshot_);
 

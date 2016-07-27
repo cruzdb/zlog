@@ -341,7 +341,9 @@ bool DB::CommitResult(uint64_t pos)
     std::unique_lock<std::mutex> l(lock_);
     auto it = committed_.find(pos);
     if (it != committed_.end()) {
-      return it->second;
+      bool ret = it->second;
+      committed_.erase(it);
+      return ret;
     }
     result_cv_.wait(l);
   }
