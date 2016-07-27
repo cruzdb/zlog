@@ -16,33 +16,26 @@ int main(int argc, char **argv)
   std::vector<Snapshot> snapshots;
   snapshots.push_back(db.GetSnapshot());
 
-  {
+  // how many transactions
+  for (int i = 0; i < 5; i++) {
+    // number of operations in this transaction
+    int num_ops = std::rand() % 5 + 1;
+
     auto txn = db.BeginTransaction();
-    txn.Put(tostr(76));
+    for (int i = 0; i < num_ops; i++) {
+      int nval = std::rand() % 20;
+      std::string val = tostr(nval);
+      if ((std::rand() % 100) < 80) {
+        std::cerr << "operation: insert: " << val << std::endl;
+        txn.Put(val);
+      } else {
+        std::cerr << "operation: erase: " << val << std::endl;
+        txn.Delete(val);
+      }
+    }
     txn.Commit();
     snapshots.push_back(db.GetSnapshot());
   }
-
-  {
-    auto txn = db.BeginTransaction();
-    txn.Delete(tostr(76));
-    txn.Commit();
-    snapshots.push_back(db.GetSnapshot());
-  }
-
-
-#if 0
-  for (int i = 0; i < 30; i++) {
-    // generate value
-    int nval = std::rand() % 1000;
-    std::string val = tostr(nval);
-
-    // run txn
-    auto txn = db.BeginTransaction();
-    txn.Put(val);
-    txn.Commit();
-  }
-#endif
 
   db.write_dot_history(std::cout, snapshots);
 

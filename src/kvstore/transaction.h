@@ -23,6 +23,7 @@ class Transaction {
 
  private:
   DB *db_;
+  // root that transaction started with
   const NodeRef src_root_;
   const uint64_t snapshot_;
   const uint64_t rid_;
@@ -31,6 +32,8 @@ class Transaction {
 
   static inline NodePtr& left(NodeRef n) { return n->left; };
   static inline NodePtr& right(NodeRef n) { return n->right; };
+
+  std::vector<std::string> description_;
 
   static inline NodeRef pop_front(std::deque<NodeRef>& d) {
     auto front = d.front();

@@ -1,4 +1,5 @@
 #include "db.h"
+#include <sstream>
 #include "transaction.h"
 
 DB::DB() :
@@ -195,15 +196,30 @@ void DB::write_dot_history(std::ostream& out,
   uint64_t trees = 0;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
+  std::string prev_root = "";
   for (auto it = snapshots.cbegin(); it != snapshots.end(); it++) {
+
+    // build sub-graph label
+    std::stringstream label;
+    label << "label = \"root: " << it->seq;
+    for (const auto& s : it->desc)
+      label << "\n" << s;
+    label << "\"";
+
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
     if (it->root == Node::Nil()) {
       out << "null" << ++nullcount << " [label=nil];" << std::endl;
-      out << "label = \"root=" << it->seq << "\"" << std::endl;
     } else {
       _write_dot(out, it->root, nullcount, true);
-      out << "label = \"root=" << it->seq << "\"" << std::endl;
     }
+#if 0
+    if (prev_root != "")
+      out << "\"" << prev_root << "\" -> \"" << it->root.get() << "\" [style=invis];" << std::endl;
+    std::stringstream ss;
+    ss << it->root.get();
+    prev_root = ss.str();
+#endif
+    out << label.str() << std::endl;
     out << "}" << std::endl;
   }
   out << "}" << std::endl;
@@ -319,6 +335,10 @@ void DB::process_log_entry()
       auto root = cache_.CacheIntention(i, next);
       root_ = root;
       root_pos_ = next;
+
+      root_desc_.clear();
+      for (int idx = 0; idx < i.description_size(); idx++)
+        root_desc_.push_back(i.description(idx));
 
       std::cerr << "commiting serial txn: pos " << next << std::endl;
       auto res = committed_.emplace(std::make_pair(next, true));

@@ -23,12 +23,17 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
 class Snapshot {
  public:
-  Snapshot(const NodeRef root, uint64_t seq) :
-    root(root), seq(seq)
+  Snapshot(const NodeRef root, uint64_t seq, std::vector<std::string> desc) :
+    root(root), seq(seq), desc(desc)
   {}
 
   const NodeRef root;
   const uint64_t seq;
+
+  // TODO: remove in favor of some sort of pointer to this state. for example
+  // let's have a special RootNodeRef that has additional metadata or
+  // something along those lines.
+  const std::vector<std::string> desc;
 };
 
 class DB {
@@ -45,7 +50,7 @@ class DB {
 
   Snapshot GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
-    return Snapshot(root_, root_pos_);
+    return Snapshot(root_, root_pos_, root_desc_);
   }
 
  private:
@@ -80,8 +85,12 @@ class DB {
   void print_node(NodeRef node);
 
   // latest committed state
+  // TODO: things like root_desc_ are properties of the transaction that
+  // created the new root. we should encapsulate this metadata in a structure
+  // rather than having it float around freely here.
   NodeRef root_;
   uint64_t root_pos_;
+  std::vector<std::string> root_desc_;
 
   std::mutex lock_;
 
