@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 {
   std::srand(0);
 
-  while (1) {
+  for (int i = 0; i < 10; i++) {
     std::vector<std::set<std::string>> truth_history;
     std::set<std::string> truth;
     truth_history.push_back(truth);

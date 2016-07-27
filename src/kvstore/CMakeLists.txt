@@ -19,3 +19,8 @@ target_link_libraries(db_test libkvstore)
 
 add_executable(rbt rbt.cc)
 target_link_libraries(rbt libkvstore)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    include(CodeCoverage)
+    setup_target_for_coverage(thrash_coverage thrash coverage)
+endif()
