@@ -79,9 +79,17 @@ std::ostream& operator<<(std::ostream& out, const NodeRef& n)
   out << (n->red ? "red " : "blk ");
   out << "fi " << n->field_index << " ";
   out << "left=[p" << n->left.csn << ",o" << n->left.offset << ",";
-  out << n->left.ref.get() << "] ";
+  if (n->left.ref == Node::Nil())
+    out << "nil";
+  else
+    out << n->left.ref.get();
+  out << "] ";
   out << "right=[p" << n->right.csn << ",o" << n->right.offset << ",";
-  out << n->right.ref.get() << "] ";
+  if (n->right.ref == Node::Nil())
+    out << "nil";
+  else
+    out << n->right.ref.get();
+  out << "] ";
   return out;
 }
 
@@ -186,10 +194,15 @@ void DB::write_dot_history(std::ostream& out)
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
   auto it = roots_.cbegin();
-  it++;
   for (; it != roots_.cend(); it++) {
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    _write_dot(out, it->second, nullcount, true);
+    if (it->second == Node::Nil()) {
+      out << "null" << ++nullcount << " [label=nil];" << std::endl;
+      out << "label = \"root=" << it->first << "\"" << std::endl;
+    } else {
+      _write_dot(out, it->second, nullcount, true);
+      out << "label = \"root=" << it->first << "\"" << std::endl;
+    }
     out << "}" << std::endl;
   }
   out << "}" << std::endl;
@@ -203,22 +216,22 @@ void DB::print_node(NodeRef node)
     std::cout << node->elem << ":" << (node->red ? "r" : "b");
 }
 
-void DB::print_path(std::deque<NodeRef>& path)
+void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
 {
-  std::cout << "path: ";
+  out << "path: ";
   if (path.empty()) {
-    std::cout << "<empty>";
+    out << "<empty>";
   } else {
-    std::cout << "[";
+    out << "[";
     for (auto node : path) {
       if (node == Node::Nil())
-        std::cout << "nil:" << (node->red ? "r " : "b ");
+        out << "nil:" << (node->red ? "r " : "b ");
       else
-        std::cout << node->elem << ":" << (node->red ? "r " : "b ");
+        out << node->elem << ":" << (node->red ? "r " : "b ");
     }
-    std::cout << "]";
+    out << "]";
   }
-  std::cout << std::endl;
+  out << std::endl;
 }
 
 bool DB::validate_rb_tree(bool all)
@@ -281,12 +294,13 @@ Transaction DB::BeginTransaction()
 void DB::process_log_entry()
 {
   for (;;) {
-    std::unique_lock<std::mutex> l(lock_);
+    std::unique_lock<std::mutex> l(log_lock_);
     uint64_t tail = log_tail();
 
     assert(last_pos_ <= tail);
     if (last_pos_ == tail) {
-      log_cond_.wait_for(l, std::chrono::milliseconds(2000));
+      log_cond_.wait_for(l, std::chrono::milliseconds(20),
+          [this](){return last_pos_ < log_tail();});
       if (stop_)
         return;
       continue;
@@ -301,8 +315,8 @@ void DB::process_log_entry()
 
     // TODO: intention cache here that sits on top of DB
     // read and deserialize intention from log
-    std::string i_snapshot = log_read(next);
     l.unlock();
+    std::string i_snapshot = log_read(next);
 
     kvstore_proto::Intention i;
     assert(i.ParseFromString(i_snapshot));
@@ -339,7 +353,7 @@ void DB::process_log_entry()
 bool DB::CommitResult(uint64_t pos)
 {
   for (;;) {
-    std::unique_lock<std::mutex> l(lock_);
+    std::unique_lock<std::mutex> l(log_lock_);
     auto it = committed_.find(pos);
     if (it != committed_.end()) {
       return it->second;
@@ -357,7 +371,6 @@ size_t DB::log_append(std::string blob)
 }
 
 size_t DB::log_tail() {
-  std::lock_guard<std::mutex> l(log_lock_);
   return log_.size() - 1;
 }
 
@@ -366,7 +379,7 @@ std::vector<std::string> DB::log() {
   return log_;
 }
 
-std::string DB::log_read(size_t pos)
+std::string DB::log_read(ssize_t pos)
 {
   std::lock_guard<std::mutex> l(log_lock_);
   return log_.at(pos);

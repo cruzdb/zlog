@@ -157,6 +157,171 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
   }
 }
 
+NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
+    std::string elem, const NodeRef& node)
+{
+  assert(node != nullptr);
+
+  std::cerr << "delete_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
+
+  if (node == Node::Nil()) {
+    std::cerr << "delete_recursive: node not found" << std::endl;
+    return nullptr;
+  }
+
+  bool less = elem < node->elem;
+  bool equal = !less && elem == node->elem;
+
+  if (equal) {
+    std::cerr << "delete_recursive: found equal" << std::endl;
+    auto copy = Node::Copy(node, rid_);
+    path.push_back(copy);
+    return copy;
+  }
+
+  db_->cache_.ResolveNodePtr(node->left);
+  db_->cache_.ResolveNodePtr(node->right);
+
+  auto child = delete_recursive(path, elem,
+      (less ? node->left.ref : node->right.ref));
+
+  if (child == nullptr) {
+    std::cerr << "delete_recursive: child is nullptr" << std::endl;
+    return child;
+  }
+
+  /*
+   * the copy_node operation will copy the child node references, as well as
+   * the csn/offset for each child node reference. however below the reference
+   * is updated without updating the csn/offset, which are fixed later when
+   * the intention is build.
+   */
+  auto copy = Node::Copy(node, rid_);
+
+  if (less)
+    copy->left.ref = child;
+  else
+    copy->right.ref = child;
+
+  path.push_back(copy);
+
+  return copy;
+}
+
+void Transaction::transplant(NodeRef parent, NodeRef removed,
+    NodeRef transplanted, NodeRef& root)
+{
+  if (parent == Node::Nil()) {
+    std::cerr << "transplat: patch root" << std::endl;
+    root = transplanted;
+  } else if (parent->left.ref == removed) {
+    std::cerr << "transplat: patch parent left" << std::endl;
+    parent->left.ref = transplanted;
+  } else {
+    std::cerr << "transplat: patch parent right" << std::endl;
+    parent->right.ref = transplanted;
+  }
+}
+
+NodeRef Transaction::build_min_path(NodeRef node, std::deque<NodeRef>& path)
+{
+  assert(node != nullptr);
+  db_->cache_.ResolveNodePtr(node->left);
+  assert(node->left.ref != nullptr);
+  while (node->left.ref != Node::Nil()) {
+    db_->cache_.ResolveNodePtr(node->left);
+    assert(node->left.ref != nullptr);
+    node->left.ref = Node::Copy(node->left.ref, rid_);
+    path.push_front(node);
+    node = node->left.ref;
+    assert(node != nullptr);
+  }
+  return node;
+}
+
+template<typename ChildA, typename ChildB>
+void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
+    std::deque<NodeRef>& path, ChildA child_a, ChildB child_b, NodeRef& root)
+{
+  auto brother_ptr = child_b(parent);
+  db_->cache_.ResolveNodePtr(brother_ptr);
+  NodeRef brother = brother_ptr.ref;
+
+  if (brother->red) {
+    child_b(parent).ref = Node::Copy(brother, rid_);
+    brother = child_b(parent).ref;
+
+    std::swap(brother->red, parent->red);
+    rotate(path.front(), parent, child_a, child_b, root);
+    path.push_front(brother);
+
+    brother_ptr = child_b(parent);
+    db_->cache_.ResolveNodePtr(brother_ptr);
+    brother = brother_ptr.ref;
+  }
+
+  assert(brother != nullptr);
+
+  db_->cache_.ResolveNodePtr(brother->left);
+  db_->cache_.ResolveNodePtr(brother->right);
+  assert(brother->left.ref != nullptr);
+  assert(brother->right.ref != nullptr);
+
+  if (!brother->left.ref->red && !brother->right.ref->red) {
+    child_b(parent).ref = Node::Copy(brother, rid_);
+    brother = child_b(parent).ref;
+
+    brother->red = true;
+    extra_black = parent;
+    parent = pop_front(path);
+  } else {
+    if (!child_b(brother).ref->red) {
+      child_b(parent).ref = Node::Copy(brother, rid_);
+      brother = child_b(parent).ref;
+
+      child_a(brother).ref = Node::Copy(child_a(brother).ref, rid_);
+      std::swap(brother->red, child_a(brother).ref->red);
+      brother = rotate(parent, brother, child_b, child_a, root);
+    }
+
+    child_b(parent).ref = Node::Copy(brother, rid_);
+    brother = child_b(parent).ref;
+
+    child_b(brother).ref = Node::Copy(child_b(brother).ref, rid_);
+    brother->red = parent->red;
+    parent->red = false;
+    child_b(brother).ref->red = false;
+    rotate(path.front(), parent, child_a, child_b, root);
+
+    extra_black = root;
+    parent = Node::Nil();
+  }
+}
+
+void Transaction::balance_delete(NodeRef extra_black,
+    std::deque<NodeRef>& path, NodeRef& root)
+{
+  auto parent = pop_front(path);
+
+  assert(extra_black != nullptr);
+  assert(root != nullptr);
+  assert(parent != nullptr);
+
+  //db_->cache_.ResolveNodePtr(parent->left);
+  //assert(parent->left.ref != nullptr);
+
+  while (extra_black != root && !extra_black->red) {
+    if (parent->left.ref == extra_black)
+      mirror_remove_balance(extra_black, parent, path, left, right, root);
+    else
+      mirror_remove_balance(extra_black, parent, path, right, left, root);
+  }
+
+  auto new_node = Node::Copy(extra_black, rid_);
+  transplant(parent, extra_black, new_node, root);
+  new_node->red = false;
+}
+
 void Transaction::serialize_intention(NodeRef node, int& field_index)
 {
   assert(node != nullptr);
@@ -233,17 +398,87 @@ void Transaction::Put(std::string val)
   root_ = root;
 }
 
+void Transaction::Delete(std::string val)
+{
+  std::deque<NodeRef> path;
+
+  // rename node to root?
+  auto root = delete_recursive(path, val, src_root_);
+  if (root == nullptr) {
+    std::cerr << "delete: not found" << std::endl;
+    return;
+  }
+
+  //roots.push_back(node);
+  path.push_back(Node::Nil());
+  assert(path.size() >= 2);
+
+  std::cerr << "delete " << val << " path: ";
+  db_->print_path(std::cerr, path);
+
+  /*
+   * remove and balance
+   */
+  auto removed = path.front();
+  assert(removed != nullptr);
+  assert(removed->elem == val);
+
+  std::cerr << "removed " << removed << std::endl;
+
+  db_->cache_.ResolveNodePtr(removed->right);
+  auto transplanted = removed->right.ref;
+  assert(transplanted != nullptr);
+
+  if (removed->left.ref == Node::Nil()) {
+    std::cerr << "removed->left.ref == Node::Nil()" << std::endl;
+    path.pop_front();
+    db_->print_path(std::cerr, path);
+    transplant(path.front(), removed, transplanted, root);
+    assert(transplanted != nullptr);
+  } else if (removed->right.ref == Node::Nil()) {
+    std::cerr << "removed->right.ref == Node::Nil()" << std::endl;
+    path.pop_front();
+    db_->cache_.ResolveNodePtr(removed->left);
+    assert(removed->left.ref != nullptr);
+    transplanted = removed->left.ref;
+    transplant(path.front(), removed, transplanted, root);
+    assert(transplanted != nullptr);
+  } else {
+    std::cerr << "removed right/left are not Nil" << std::endl;
+    assert(transplanted != nullptr);
+    auto temp = removed;
+    removed->right.ref = Node::Copy(removed->right.ref, rid_);
+    removed = build_min_path(removed->right.ref, path);
+    db_->cache_.ResolveNodePtr(removed->right);
+    transplanted = removed->right.ref;
+    assert(transplanted != nullptr);
+    temp->elem = std::move(removed->elem);
+    transplant(path.front(), removed, transplanted, root);
+    assert(transplanted != nullptr);
+  }
+
+  if (!removed->red)
+    balance_delete(transplanted, path, root);
+
+  assert(root != nullptr);
+  root_ = root;
+}
+
 void Transaction::Commit()
 {
   // nothing to do
   if (root_ == nullptr) {
+    std::cerr << "commit: empty transaction" << std::endl;
     return;
   }
 
   // build the intention and fixup field offsets
   int field_index = 0;
   assert(root_ != nullptr);
-  assert(root_->rid == rid_);
+  if (root_ == Node::Nil()) {
+    std::cerr << "commit: empty tree" << std::endl;
+  } else
+    assert(root_->rid == rid_);
   serialize_intention(root_, field_index);
   intention_.set_snapshot(snapshot_);
 

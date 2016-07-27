@@ -17,6 +17,7 @@ class Transaction {
   {}
 
   void Put(std::string val);
+  void Delete(std::string val);
 
   void Commit();
 
@@ -47,6 +48,22 @@ class Transaction {
   template <typename ChildA, typename ChildB >
   NodeRef rotate(NodeRef parent, NodeRef child,
       ChildA child_a, ChildB child_b, NodeRef& root);
+
+  NodeRef delete_recursive(std::deque<NodeRef>& path,
+      std::string elem, const NodeRef& node);
+
+  void transplant(NodeRef parent, NodeRef removed,
+      NodeRef transplanted, NodeRef& root);
+
+  NodeRef build_min_path(NodeRef node, std::deque<NodeRef>& path);
+
+  void balance_delete(NodeRef extra_black,
+      std::deque<NodeRef>& path, NodeRef& root);
+
+  template<typename ChildA, typename ChildB>
+  void mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
+      std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
+      NodeRef& root);
 
   // turn a transaction into a serialized protocol buffer
   void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,

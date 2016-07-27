@@ -11,6 +11,8 @@ static inline std::string tostr(int value)
 
 int main(int argc, char **argv)
 {
+  std::srand(0);
+
   while (1) {
     std::vector<std::set<std::string>> truth_history;
     std::set<std::string> truth;
@@ -21,17 +23,27 @@ int main(int argc, char **argv)
     std::vector<Snapshot> db_history;
     db_history.push_back(db.GetSnapshot());
 
-    for (int i = 0; i < 500; i++) {
-      int nval = std::rand();
+    for (int i = 0; i < 50; i++) {
+      int nval = std::rand() % 200;
       std::string val = tostr(nval);
 
-      truth.insert(val);
+      if ((std::rand() % 100) < 50) {
+        std::cout << "      operation: insert: " << val << std::endl;
+        truth.insert(val);
+
+        auto txn = db.BeginTransaction();
+        txn.Put(val);
+        txn.Commit();
+      } else {
+        std::cout << "      operation: erase: " << val << std::endl;
+        truth.erase(val);
+
+        auto txn = db.BeginTransaction();
+        txn.Delete(val);
+        txn.Commit();
+      }
+
       truth_history.push_back(truth);
-
-      auto txn = db.BeginTransaction();
-      txn.Put(val);
-      txn.Commit();
-
       db_history.push_back(db.GetSnapshot());
     }
 

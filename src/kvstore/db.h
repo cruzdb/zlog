@@ -69,13 +69,13 @@ class DB {
   size_t log_append(std::string blob);
   size_t log_tail();
   std::vector<std::string> log();
-  std::string log_read(size_t pos);
+  std::string log_read(ssize_t pos);
 
   bool CommitResult(uint64_t pos);
 
  private:
 
-  void print_path(std::deque<NodeRef>& path);
+  void print_path(std::ostream& out, std::deque<NodeRef>& path);
   void print_node(NodeRef node);
 
   // only committed states (root, log position)
@@ -91,8 +91,6 @@ class DB {
   uint64_t last_pos_;
   std::thread log_processor_;
   void process_log_entry();
-
-  std::mutex lock_;
 
   volatile bool stop_;
 
