@@ -20,6 +20,7 @@ void NodeCache::ResolveNodePtr(NodePtr& ptr)
 
   auto nn = deserialize_node(i, ptr.csn, ptr.offset);
 
+  assert(nn->read_only());
   nodes_.insert(std::make_pair(
         std::make_pair(ptr.csn, ptr.offset), nn));
 
@@ -35,6 +36,8 @@ NodeRef NodeCache::CacheIntention(const kvstore_proto::Intention& i,
   NodeRef nn = nullptr;
   for (int idx = 0; idx < i.tree_size(); idx++) {
     nn = deserialize_node(i, pos, idx);
+
+    assert(nn->read_only());
     nodes_.insert(std::make_pair(std::make_pair(pos, idx), nn));
   }
 
@@ -49,10 +52,12 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
 
   // TODO: replace rid==csn with a lookup table that lets us
   // use random values for more reliable assertions.
-  auto nn = std::make_shared<Node>(n.key(), n.val(),
-      n.red(), Node::Nil(), Node::Nil(), pos);
+  //
+  // TODO: initialize so it can be read-only after creation
+  auto nn = std::make_shared<Node>(n.key(), n.val(), n.red(),
+      Node::Nil(), Node::Nil(), pos, index, false);
 
-  nn->field_index = index;
+  assert(nn->field_index() == index);
   if (!n.left().nil()) {
     nn->left.ref = nullptr;
     nn->left.offset = n.left().off();
@@ -72,6 +77,8 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
       nn->right.csn = n.right().csn();
     }
   }
+
+  nn->set_read_only();
 
   return nn;
 }

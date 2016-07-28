@@ -59,7 +59,7 @@ std::map<std::string, std::string> DB::stl_map(Snapshot snapshot) {
   while (!stack.empty()) {
     node = stack.top();
     stack.pop();
-    auto ret = map.emplace(std::make_pair(node->key, node->val));
+    auto ret = map.emplace(std::make_pair(node->key(), node->val()));
     assert(ret.second);
     if (node->right.ref != Node::Nil()) {
       cache_.ResolveNodePtr(node->right);
@@ -79,9 +79,9 @@ std::map<std::string, std::string> DB::stl_map() {
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
 {
-  out << "node(" << n.get() << "):" << n->key << ": ";
-  out << (n->red ? "red " : "blk ");
-  out << "fi " << n->field_index << " ";
+  out << "node(" << n.get() << "):" << n->key() << ": ";
+  out << (n->red() ? "red " : "blk ");
+  out << "fi " << n->field_index() << " ";
   out << "left=[p" << n->left.csn << ",o" << n->left.offset << ",";
   if (n->left.ref == Node::Nil())
     out << "nil";
@@ -145,12 +145,12 @@ void DB::write_dot_node(std::ostream& out,
 void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
     NodeRef node, uint64_t& nullcount, bool scoped)
 {
-  if (scoped && node->rid != rid)
+  if (scoped && node->rid() != rid)
     return;
 
   out << "\"" << node.get() << "\" ["
-    << "label=\"" << node->key << "_" << node->val << "\",style=filled,"
-    << "fillcolor=" << (node->red ? "red" :
+    << "label=\"" << node->key() << "_" << node->val() << "\",style=filled,"
+    << "fillcolor=" << (node->red() ? "red" :
         "black,fontcolor=white")
     << "]" << std::endl;
 
@@ -178,7 +178,7 @@ void DB::_write_dot(std::ostream& out, NodeRef root,
     uint64_t& nullcount, bool scoped)
 {
   assert(root != nullptr);
-  write_dot_recursive(out, root->rid,
+  write_dot_recursive(out, root->rid(),
       root, nullcount, scoped);
 }
 
@@ -229,9 +229,9 @@ void DB::write_dot_history(std::ostream& out,
 void DB::print_node(NodeRef node)
 {
   if (node == Node::Nil())
-    std::cout << "nil:" << (node->red ? "r" : "b");
+    std::cout << "nil:" << (node->red() ? "r" : "b");
   else
-    std::cout << node->key << ":" << (node->red ? "r" : "b");
+    std::cout << node->key() << ":" << (node->red() ? "r" : "b");
 }
 
 void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
@@ -243,9 +243,9 @@ void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
     out << "[";
     for (auto node : path) {
       if (node == Node::Nil())
-        out << "nil:" << (node->red ? "r " : "b ");
+        out << "nil:" << (node->red() ? "r " : "b ");
       else
-        out << node->key << ":" << (node->red ? "r " : "b ");
+        out << node->key() << ":" << (node->red() ? "r " : "b ");
     }
     out << "]";
   }
@@ -273,21 +273,21 @@ int DB::_validate_rb_tree(NodeRef root)
   NodeRef ln = root->left.ref;
   NodeRef rn = root->right.ref;
 
-  if (root->red && (ln->red || rn->red))
+  if (root->red() && (ln->red() || rn->red()))
     return 0;
 
   int lh = _validate_rb_tree(ln);
   int rh = _validate_rb_tree(rn);
 
-  if ((ln != Node::Nil() && ln->key >= root->key) ||
-      (rn != Node::Nil() && rn->key <= root->key))
+  if ((ln != Node::Nil() && ln->key() >= root->key()) ||
+      (rn != Node::Nil() && rn->key() <= root->key()))
     return 0;
 
   if (lh != 0 && rh != 0 && lh != rh)
     return 0;
 
   if (lh != 0 && rh != 0)
-    return root->red ? lh : lh + 1;
+    return root->red() ? lh : lh + 1;
 
   return 0;
 }

@@ -14,13 +14,13 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
 #if 0
     std::cerr << " - serialize_node: " << dir << " nil" << std::endl;
 #endif
-  } else if (src.ref->rid == rid_) {
+  } else if (src.ref->rid() == rid_) {
     dst->set_nil(false);
     dst->set_self(true);
     dst->set_csn(0);
-    assert(src.ref->field_index >= 0);
-    dst->set_off(src.ref->field_index);
-    src.offset = src.ref->field_index;
+    assert(src.ref->field_index() >= 0);
+    dst->set_off(src.ref->field_index());
+    src.offset = src.ref->field_index();
 #if 0
     std::cerr << " - serialize_node: " << dir << " internal csn " <<
       dst->csn() << " off " << dst->off()
@@ -43,13 +43,16 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
 void Transaction::serialize_node(kvstore_proto::Node *dst,
     NodeRef node, int field_index) const
 {
-  dst->set_red(node->red);
-  dst->set_key(node->key);
-  dst->set_val(node->val);
+  dst->set_red(node->red());
+  dst->set_key(node->key());
+  dst->set_val(node->val());
 
-  assert(node->field_index == -1);
-  node->field_index = field_index;
-  assert(node->field_index >= 0);
+  assert(node->field_index() == -1);
+  // TODO: ideally we could set the field_index when we were
+  // balancing/path-building to avoid this process of fixing up the
+  // transaction state.
+  node->set_field_index(field_index);
+  assert(node->field_index() >= 0);
 
   serialize_node_ptr(dst->mutable_left(), node->left, "left");
   serialize_node_ptr(dst->mutable_right(), node->right, "right");
@@ -61,14 +64,13 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
   assert(node != nullptr);
 
   if (node == Node::Nil()) {
-    auto nn = std::make_shared<Node>(key, val, true,
-        Node::Nil(), Node::Nil(), rid_);
+    auto nn = std::make_shared<Node>(key, val, true, Node::Nil(), Node::Nil(), rid_, -1, false);
     path.push_back(nn);
     return nn;
   }
 
-  bool less = key < node->key;
-  bool equal = !less && key == node->key;
+  bool less = key < node->key();
+  bool equal = !less && key == node->key();
 
   /*
    * How should we handle key/value updates? What about when the values are
@@ -93,7 +95,7 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
    * the intention is build.
    */
   NodeRef copy;
-  if (node->rid == rid_)
+  if (node->rid() == rid_)
     copy = node;
   else
     copy = Node::Copy(node, rid_);
@@ -127,7 +129,7 @@ NodeRef Transaction::rotate(NodeRef parent,
   // we do not update csn/off here because child is always a pointer to a node
   // in the current intention so its csn/off will be updated during intention
   // serialization step.
-  assert(child->rid == rid_);
+  assert(child->rid() == rid_);
   child_a(grand_child.ref).ref = child;
 
   return grand_child.ref;
@@ -140,15 +142,15 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
 {
   assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
-  if (uncle.ref->red) {
+  if (uncle.ref->red()) {
 #if 0
     std::cerr << "insert_balance: copy uncle " << uncle.ref << std::endl;
 #endif
-    if (uncle.ref->rid != rid_)
+    if (uncle.ref->rid() != rid_)
       uncle.ref = Node::Copy(uncle.ref, rid_);
-    parent->red = false;
-    uncle.ref->red = false;
-    path.front()->red = true;
+    parent->set_red(false);
+    uncle.ref->set_red(false);
+    path.front()->set_red(true);
     nn = pop_front(path);
     parent = pop_front(path);
   } else {
@@ -157,7 +159,7 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
       rotate(path.front(), nn, child_a, child_b, root);
     }
     auto grand_parent = pop_front(path);
-    std::swap(grand_parent->red, parent->red);
+    grand_parent->swap_color(parent);
     rotate(path.front(), grand_parent, child_b, child_a, root);
   }
 }
@@ -167,20 +169,20 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
 {
   assert(node != nullptr);
 
-  std::cerr << "delete_recursive(" << key << "): " << node << " : " << node->key << std::endl;
+  std::cerr << "delete_recursive(" << key << "): " << node << " : " << node->key() << std::endl;
 
   if (node == Node::Nil()) {
     std::cerr << "delete_recursive: node not found" << std::endl;
     return nullptr;
   }
 
-  bool less = key < node->key;
-  bool equal = !less && key == node->key;
+  bool less = key < node->key();
+  bool equal = !less && key == node->key();
 
   if (equal) {
     std::cerr << "delete_recursive: found equal" << std::endl;
     NodeRef copy;
-    if (node->rid == rid_)
+    if (node->rid() == rid_)
       copy = node;
     else
       copy = Node::Copy(node, rid_);
@@ -206,7 +208,7 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
    * the intention is build.
    */
   NodeRef copy;
-  if (node->rid == rid_)
+  if (node->rid() == rid_)
     copy = node;
   else
     copy = Node::Copy(node, rid_);
@@ -244,7 +246,7 @@ NodeRef Transaction::build_min_path(NodeRef node, std::deque<NodeRef>& path)
   while (node->left.ref != Node::Nil()) {
     db_->cache_.ResolveNodePtr(node->left);
     assert(node->left.ref != nullptr);
-    if (node->left.ref->rid != rid_)
+    if (node->left.ref->rid() != rid_)
       node->left.ref = Node::Copy(node->left.ref, rid_);
     path.push_front(node);
     node = node->left.ref;
@@ -261,14 +263,14 @@ void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
   db_->cache_.ResolveNodePtr(brother_ptr);
   NodeRef brother = brother_ptr.ref;
 
-  if (brother->red) {
-    if (brother->rid != rid_)
+  if (brother->red()) {
+    if (brother->rid() != rid_)
       child_b(parent).ref = Node::Copy(brother, rid_);
     else
       child_b(parent).ref = brother;
     brother = child_b(parent).ref;
 
-    std::swap(brother->red, parent->red);
+    brother->swap_color(parent);
     rotate(path.front(), parent, child_a, child_b, root);
     path.push_front(brother);
 
@@ -284,41 +286,41 @@ void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
   assert(brother->left.ref != nullptr);
   assert(brother->right.ref != nullptr);
 
-  if (!brother->left.ref->red && !brother->right.ref->red) {
-    if (brother->rid != rid_)
+  if (!brother->left.ref->red() && !brother->right.ref->red()) {
+    if (brother->rid() != rid_)
       child_b(parent).ref = Node::Copy(brother, rid_);
     else
       child_b(parent).ref = brother;
     brother = child_b(parent).ref;
 
-    brother->red = true;
+    brother->set_red(true);
     extra_black = parent;
     parent = pop_front(path);
   } else {
-    if (!child_b(brother).ref->red) {
-      if (brother->rid != rid_)
+    if (!child_b(brother).ref->red()) {
+      if (brother->rid() != rid_)
         child_b(parent).ref = Node::Copy(brother, rid_);
       else
         child_b(parent).ref = brother;
       brother = child_b(parent).ref;
 
-      if (child_a(brother).ref->rid != rid_)
+      if (child_a(brother).ref->rid() != rid_)
         child_a(brother).ref = Node::Copy(child_a(brother).ref, rid_);
-      std::swap(brother->red, child_a(brother).ref->red);
+      brother->swap_color(child_a(brother).ref);
       brother = rotate(parent, brother, child_b, child_a, root);
     }
 
-    if (brother->rid != rid_)
+    if (brother->rid() != rid_)
       child_b(parent).ref = Node::Copy(brother, rid_);
     else
       child_b(parent).ref = brother;
     brother = child_b(parent).ref;
 
-    if (child_b(brother).ref->rid != rid_)
+    if (child_b(brother).ref->rid() != rid_)
       child_b(brother).ref = Node::Copy(child_b(brother).ref, rid_);
-    brother->red = parent->red;
-    parent->red = false;
-    child_b(brother).ref->red = false;
+    brother->set_red(parent->red());
+    parent->set_red(false);
+    child_b(brother).ref->set_red(false);
     rotate(path.front(), parent, child_a, child_b, root);
 
     extra_black = root;
@@ -338,7 +340,7 @@ void Transaction::balance_delete(NodeRef extra_black,
   //db_->cache_.ResolveNodePtr(parent->left);
   //assert(parent->left.ref != nullptr);
 
-  while (extra_black != root && !extra_black->red) {
+  while (extra_black != root && !extra_black->red()) {
     if (parent->left.ref == extra_black)
       mirror_remove_balance(extra_black, parent, path, left, right, root);
     else
@@ -346,19 +348,30 @@ void Transaction::balance_delete(NodeRef extra_black,
   }
 
   NodeRef new_node;
-  if (extra_black->rid == rid_)
+  if (extra_black->rid() == rid_)
     new_node = extra_black;
   else
     new_node = Node::Copy(extra_black, rid_);
   transplant(parent, extra_black, new_node, root);
-  new_node->red = false;
+
+  /*
+   * new_node may point to nil, and this call sets the color to black (nil is
+   * always black, so this is OK). however we treat nil as read-only, so we
+   * only make this call that may throw a non-read-only assertion failure for
+   * non-nil nodes.
+   *
+   * TODO: is there something fundmentally wrong with the algorithm that
+   * new_node may even point to nil?
+   */
+  if (new_node != Node::Nil())
+    new_node->set_red(false);
 }
 
 void Transaction::serialize_intention(NodeRef node, int& field_index)
 {
   assert(node != nullptr);
 
-  if (node == Node::Nil() || node->rid != rid_)
+  if (node == Node::Nil() || node->rid() != rid_)
     return;
 
   db_->cache_.ResolveNodePtr(node->left);
@@ -376,14 +389,14 @@ void Transaction::serialize_intention(NodeRef node, int& field_index)
 void Transaction::set_intention_self_csn_recursive(uint64_t rid,
     NodeRef node, uint64_t pos) {
 
-  if (node == Node::Nil() || node->rid != rid)
+  if (node == Node::Nil() || node->rid() != rid)
     return;
 
-  if (node->right.ref != Node::Nil() && node->right.ref->rid == rid) {
+  if (node->right.ref != Node::Nil() && node->right.ref->rid() == rid) {
     node->right.csn = pos;
   }
 
-  if (node->left.ref != Node::Nil() && node->left.ref->rid == rid) {
+  if (node->left.ref != Node::Nil() && node->left.ref->rid() == rid) {
     node->left.csn = pos;
   }
 
@@ -392,7 +405,7 @@ void Transaction::set_intention_self_csn_recursive(uint64_t rid,
 }
 
 void Transaction::set_intention_self_csn(NodeRef root, uint64_t pos) {
-  set_intention_self_csn_recursive(root->rid, root, pos);
+  set_intention_self_csn_recursive(root->rid(), root, pos);
 }
 
 void Transaction::Put(const std::string& key, const std::string& val)
@@ -431,7 +444,7 @@ void Transaction::Put(const std::string& key, const std::string& val)
   auto nn = pop_front(path);
   auto parent = pop_front(path);
 
-  while (parent->red) {
+  while (parent->red()) {
     assert(!path.empty());
     auto grand_parent = path.front();
     if (grand_parent->left.ref == parent)
@@ -440,7 +453,7 @@ void Transaction::Put(const std::string& key, const std::string& val)
       insert_balance(parent, nn, path, right, left, root);
   }
 
-  root->red = false;
+  root->set_red(false);
 
   assert(root != nullptr);
   root_ = root;
@@ -473,7 +486,7 @@ void Transaction::Delete(std::string key)
    */
   auto removed = path.front();
   assert(removed != nullptr);
-  assert(removed->key == key);
+  assert(removed->key() == key);
 
   std::cerr << "removed " << removed << std::endl;
 
@@ -499,19 +512,22 @@ void Transaction::Delete(std::string key)
     std::cerr << "removed right/left are not Nil" << std::endl;
     assert(transplanted != nullptr);
     auto temp = removed;
-    if (removed->right.ref->rid != rid_)
+    if (removed->right.ref->rid() != rid_)
       removed->right.ref = Node::Copy(removed->right.ref, rid_);
     removed = build_min_path(removed->right.ref, path);
     db_->cache_.ResolveNodePtr(removed->right);
     transplanted = removed->right.ref;
     assert(transplanted != nullptr);
-    temp->key = std::move(removed->key);
-    temp->val = std::move(removed->val);
+
+    //temp->key = std::move(removed->key);
+    //temp->val = std::move(removed->val);
+    temp->steal_payload(removed);
+
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
   }
 
-  if (!removed->red)
+  if (!removed->red())
     balance_delete(transplanted, path, root);
 
   assert(root != nullptr);
@@ -532,7 +548,7 @@ void Transaction::Commit()
   if (root_ == Node::Nil()) {
     std::cerr << "commit: empty tree" << std::endl;
   } else
-    assert(root_->rid == rid_);
+    assert(root_->rid() == rid_);
 
   std::cerr << "commit: processing non-empty transaction" << std::endl;
   serialize_intention(root_, field_index);
