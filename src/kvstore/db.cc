@@ -62,11 +62,9 @@ std::map<std::string, std::string> DB::stl_map(Snapshot snapshot) {
     auto ret = map.emplace(std::make_pair(node->key(), node->val()));
     assert(ret.second);
     if (node->right.ref != Node::Nil()) {
-      cache_.ResolveNodePtr(node->right);
       stack.push(node->right.ref);
     }
     if (node->left.ref != Node::Nil()) {
-      cache_.ResolveNodePtr(node->left);
       stack.push(node->left.ref);
     }
   }
@@ -153,9 +151,6 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
     << "fillcolor=" << (node->red() ? "red" :
         "black,fontcolor=white")
     << "]" << std::endl;
-
-  cache_.ResolveNodePtr(node->left);
-  cache_.ResolveNodePtr(node->right);
 
   assert(node->left.ref != nullptr);
   if (node->left.ref == Node::Nil())
@@ -265,9 +260,6 @@ int DB::_validate_rb_tree(const NodeRef root)
 
   if (root == Node::Nil())
     return 1;
-
-  cache_.ResolveNodePtr(root->left);
-  cache_.ResolveNodePtr(root->right);
 
   assert(root->left.ref);
   assert(root->right.ref);

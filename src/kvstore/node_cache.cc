@@ -66,6 +66,7 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
     } else {
       nn->left.csn = n.left().csn();
     }
+    ResolveNodePtr(nn->left);
   }
 
   if (!n.right().nil()) {
@@ -76,6 +77,7 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
     } else {
       nn->right.csn = n.right().csn();
     }
+    ResolveNodePtr(nn->right);
   }
 
   nn->set_read_only();

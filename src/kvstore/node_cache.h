@@ -14,8 +14,6 @@ class NodeCache {
     db_(db)
   {}
 
-  void ResolveNodePtr(NodePtr& ptr);
-
   NodeRef CacheIntention(const kvstore_proto::Intention& i,
       uint64_t pos);
 
@@ -23,6 +21,8 @@ class NodeCache {
   DB *db_;
   std::mutex lock_;
   std::map<std::pair<uint64_t, int>, NodeRef> nodes_;
+
+  void ResolveNodePtr(NodePtr& ptr);
 
   NodeRef deserialize_node(const kvstore_proto::Intention& i,
       uint64_t pos, int index);

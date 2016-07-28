@@ -79,9 +79,6 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
   if (equal)
     return nullptr;
 
-  db_->cache_.ResolveNodePtr(node->left);
-  db_->cache_.ResolveNodePtr(node->right);
-
   auto child = insert_recursive(path, key, val,
       (less ? node->left.ref : node->right.ref));
 
@@ -190,9 +187,6 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
     return copy;
   }
 
-  db_->cache_.ResolveNodePtr(node->left);
-  db_->cache_.ResolveNodePtr(node->right);
-
   auto child = delete_recursive(path, key,
       (less ? node->left.ref : node->right.ref));
 
@@ -241,10 +235,8 @@ void Transaction::transplant(NodeRef parent, NodeRef removed,
 NodeRef Transaction::build_min_path(NodeRef node, std::deque<NodeRef>& path)
 {
   assert(node != nullptr);
-  db_->cache_.ResolveNodePtr(node->left);
   assert(node->left.ref != nullptr);
   while (node->left.ref != Node::Nil()) {
-    db_->cache_.ResolveNodePtr(node->left);
     assert(node->left.ref != nullptr);
     if (node->left.ref->rid() != rid_)
       node->left.ref = Node::Copy(node->left.ref, rid_);
@@ -260,7 +252,6 @@ void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
     std::deque<NodeRef>& path, ChildA child_a, ChildB child_b, NodeRef& root)
 {
   auto brother_ptr = child_b(parent);
-  db_->cache_.ResolveNodePtr(brother_ptr);
   NodeRef brother = brother_ptr.ref;
 
   if (brother->red()) {
@@ -275,14 +266,11 @@ void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
     path.push_front(brother);
 
     brother_ptr = child_b(parent);
-    db_->cache_.ResolveNodePtr(brother_ptr);
     brother = brother_ptr.ref;
   }
 
   assert(brother != nullptr);
 
-  db_->cache_.ResolveNodePtr(brother->left);
-  db_->cache_.ResolveNodePtr(brother->right);
   assert(brother->left.ref != nullptr);
   assert(brother->right.ref != nullptr);
 
@@ -373,9 +361,6 @@ void Transaction::serialize_intention(NodeRef node, int& field_index)
 
   if (node == Node::Nil() || node->rid() != rid_)
     return;
-
-  db_->cache_.ResolveNodePtr(node->left);
-  db_->cache_.ResolveNodePtr(node->right);
 
   serialize_intention(node->left.ref, field_index);
   serialize_intention(node->right.ref, field_index);
@@ -490,7 +475,6 @@ void Transaction::Delete(std::string key)
 
   std::cerr << "removed " << removed << std::endl;
 
-  db_->cache_.ResolveNodePtr(removed->right);
   auto transplanted = removed->right.ref;
   assert(transplanted != nullptr);
 
@@ -503,7 +487,6 @@ void Transaction::Delete(std::string key)
   } else if (removed->right.ref == Node::Nil()) {
     std::cerr << "removed->right.ref == Node::Nil()" << std::endl;
     path.pop_front();
-    db_->cache_.ResolveNodePtr(removed->left);
     assert(removed->left.ref != nullptr);
     transplanted = removed->left.ref;
     transplant(path.front(), removed, transplanted, root);
@@ -515,7 +498,6 @@ void Transaction::Delete(std::string key)
     if (removed->right.ref->rid() != rid_)
       removed->right.ref = Node::Copy(removed->right.ref, rid_);
     removed = build_min_path(removed->right.ref, path);
-    db_->cache_.ResolveNodePtr(removed->right);
     transplanted = removed->right.ref;
     assert(transplanted != nullptr);
 
