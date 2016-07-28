@@ -36,7 +36,7 @@ int main(int argc, char **argv)
       std::string val = tostr(nval);
 
       // update truth and save snapshot
-      truth.emplace(std::make_pair(key, val));
+      truth[key] = val;
       truth_history.push_back(truth);
 
       // update tree and save snapshot
