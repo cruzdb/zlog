@@ -45,8 +45,8 @@ class DB {
 
   Transaction BeginTransaction();
 
-  std::set<std::string> stl_set();
-  std::set<std::string> stl_set(Snapshot snapshot);
+  std::map<std::string, std::string> stl_map();
+  std::map<std::string, std::string> stl_map(Snapshot snapshot);
 
   Snapshot GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);

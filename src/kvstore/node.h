@@ -26,7 +26,9 @@ struct NodePtr {
  * use signed types here and in protobuf so we can see the initial neg values
  */
 struct Node {
-  std::string elem;
+  std::string key;
+  std::string val;
+
   bool red;
   NodePtr left;
   NodePtr right;
@@ -34,13 +36,15 @@ struct Node {
   uint64_t rid;
   int field_index;
 
-  Node(std::string elem, bool red, NodeRef lr, NodeRef rr, uint64_t rid) :
-    elem(elem), red(red), left(lr), right(rr), rid(rid), field_index(-1)
+  Node(std::string key, std::string val, bool red,
+      NodeRef lr, NodeRef rr, uint64_t rid) :
+    key(key), val(val), red(red), left(lr),
+    right(rr), rid(rid), field_index(-1)
   {}
 
   static NodeRef& Nil() {
     static NodeRef node = std::make_shared<Node>(
-        "", false, nullptr, nullptr, 0);
+        "", "", false, nullptr, nullptr, 0);
     return node;
   }
 
@@ -48,18 +52,14 @@ struct Node {
     if (src == Nil())
       return Nil();
 
-    auto node = std::make_shared<Node>(src->elem, src->red,
-        src->left.ref, src->right.ref, rid);
+    auto node = std::make_shared<Node>(src->key, src->val,
+        src->red, src->left.ref, src->right.ref, rid);
 
     node->left.csn = src->left.csn;
     node->left.offset = src->left.offset;
 
     node->right.csn = src->right.csn;
     node->right.offset = src->right.offset;
-
-#if 0
-    std::cerr << "copy_node: src " << src << " dst " << node << std::endl;
-#endif
 
     return node;
   }

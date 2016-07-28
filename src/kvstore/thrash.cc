@@ -13,34 +13,45 @@ int main(int argc, char **argv)
 {
   std::srand(0);
 
-  for (int i = 0; i < 10; i++) {
-    std::vector<std::set<std::string>> truth_history;
-    std::set<std::string> truth;
+  while (1) {
+    std::vector<std::map<std::string, std::string>> truth_history;
+    std::map<std::string, std::string> truth;
     truth_history.push_back(truth);
 
     DB db;
-
     std::vector<Snapshot> db_history;
     db_history.push_back(db.GetSnapshot());
 
-    // how many transactions
-    for (int i = 0; i < 100; i++) {
+    std::cerr << "############################################" << std::endl;
+    std::cerr << "############################################" << std::endl;
+    std::cerr << "############################################" << std::endl;
+
+    // num txns
+    int num_txns = 20;
+    while (num_txns--) {
 
       // number of operations in this transaction
       int num_ops = std::rand() % 10;
 
       auto txn = db.BeginTransaction();
-      for (int i = 0; i < num_ops; i++) {
-        int nval = std::rand() % 500;
+      while (num_ops--) {
+        // gen key/value pair
+        int nkey = std::rand() % 100;
+        std::string key = tostr(nkey);
+        int nval = std::rand() % 100;
         std::string val = tostr(nval);
+
+        // flip coin to insert or remove
         if ((std::rand() % 100) < 50) {
-          std::cout << "operation: insert: " << val << std::endl;
-          truth.insert(val);
-          txn.Put(val);
+          std::cout << "-----" << num_txns << "-OPERATION: insert: " << key << " " << val << std::endl;
+          truth[key] = val;
+          txn.Put(key, val);
         } else {
-          std::cout << "operation: erase: " << val << std::endl;
-          truth.erase(val);
-          txn.Delete(val);
+          std::cout << "-----" << num_txns << "-OPERATION: erase: " << key << std::endl;
+          auto it = truth.find(key);
+          if (it != truth.end())
+            truth.erase(it);
+          txn.Delete(key);
         }
       }
       txn.Commit();
@@ -52,7 +63,13 @@ int main(int argc, char **argv)
     db.validate_rb_tree(true);
     assert(truth_history.size() == db_history.size());
     for (unsigned i = 0; i < db_history.size(); i++) {
-      assert(truth_history[i] == db.stl_set(db_history[i]));
+      for (auto it : truth_history[i]) {
+        std::cout << "TRUTH-" << i << ": " << it.first << " " << it.second << std::endl;
+      }
+      for (auto it : db.stl_map(db_history[i])) {
+        std::cout << "   DB-" << i << ": " << it.first << " " << it.second << std::endl;
+      }
+      assert(truth_history[i] == db.stl_map(db_history[i]));
     }
   }
 

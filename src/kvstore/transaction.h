@@ -16,8 +16,8 @@ class Transaction {
     db_(db), src_root_(root), snapshot_(snapshot), rid_(rid), root_(nullptr)
   {}
 
-  void Put(std::string val);
-  void Delete(std::string val);
+  void Put(const std::string& key, const std::string& val);
+  void Delete(std::string key);
 
   void Commit();
 
@@ -42,7 +42,7 @@ class Transaction {
   }
 
   NodeRef insert_recursive(std::deque<NodeRef>& path,
-      std::string elem, const NodeRef& node);
+      std::string key, std::string val, const NodeRef& node);
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodeRef& parent, NodeRef& nn,
@@ -53,7 +53,7 @@ class Transaction {
       ChildA child_a, ChildB child_b, NodeRef& root);
 
   NodeRef delete_recursive(std::deque<NodeRef>& path,
-      std::string elem, const NodeRef& node);
+      std::string key, const NodeRef& node);
 
   void transplant(NodeRef parent, NodeRef removed,
       NodeRef transplanted, NodeRef& root);

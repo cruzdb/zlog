@@ -44,7 +44,8 @@ void Transaction::serialize_node(kvstore_proto::Node *dst,
     NodeRef node, int field_index) const
 {
   dst->set_red(node->red);
-  dst->set_value(node->elem);
+  dst->set_key(node->key);
+  dst->set_val(node->val);
 
   assert(node->field_index == -1);
   node->field_index = field_index;
@@ -55,26 +56,31 @@ void Transaction::serialize_node(kvstore_proto::Node *dst,
 }
 
 NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
-    std::string elem, const NodeRef& node)
+    std::string key, std::string val, const NodeRef& node)
 {
   assert(node != nullptr);
 
   if (node == Node::Nil()) {
-    auto nn = std::make_shared<Node>(elem, true, Node::Nil(), Node::Nil(), rid_);
+    auto nn = std::make_shared<Node>(key, val, true,
+        Node::Nil(), Node::Nil(), rid_);
     path.push_back(nn);
     return nn;
   }
 
-  bool less = elem < node->elem;
-  bool equal = !less && elem == node->elem;
+  bool less = key < node->key;
+  bool equal = !less && key == node->key;
 
+  /*
+   * How should we handle key/value updates? What about when the values are
+   * the same?
+   */
   if (equal)
     return nullptr;
 
   db_->cache_.ResolveNodePtr(node->left);
   db_->cache_.ResolveNodePtr(node->right);
 
-  auto child = insert_recursive(path, elem,
+  auto child = insert_recursive(path, key, val,
       (less ? node->left.ref : node->right.ref));
 
   if (child == nullptr)
@@ -157,19 +163,19 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
 }
 
 NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
-    std::string elem, const NodeRef& node)
+    std::string key, const NodeRef& node)
 {
   assert(node != nullptr);
 
-  std::cerr << "delete_recursive(" << elem << "): " << node << " : " << node->elem << std::endl;
+  std::cerr << "delete_recursive(" << key << "): " << node << " : " << node->key << std::endl;
 
   if (node == Node::Nil()) {
     std::cerr << "delete_recursive: node not found" << std::endl;
     return nullptr;
   }
 
-  bool less = elem < node->elem;
-  bool equal = !less && elem == node->elem;
+  bool less = key < node->key;
+  bool equal = !less && key == node->key;
 
   if (equal) {
     std::cerr << "delete_recursive: found equal" << std::endl;
@@ -185,7 +191,7 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
   db_->cache_.ResolveNodePtr(node->left);
   db_->cache_.ResolveNodePtr(node->right);
 
-  auto child = delete_recursive(path, elem,
+  auto child = delete_recursive(path, key,
       (less ? node->left.ref : node->right.ref));
 
   if (child == nullptr) {
@@ -389,21 +395,32 @@ void Transaction::set_intention_self_csn(NodeRef root, uint64_t pos) {
   set_intention_self_csn_recursive(root->rid, root, pos);
 }
 
-void Transaction::Put(std::string val)
+void Transaction::Put(const std::string& key, const std::string& val)
 {
   /*
    * build copy of path to new node
    */
   std::deque<NodeRef> path;
 
-  std::stringstream ss;
-  ss << "put: " << val;
-  description_.emplace_back(ss.str());
-
   auto base_root = root_ == nullptr ? src_root_ : root_;
-  auto root = insert_recursive(path, val, base_root);
-  if (root == nullptr)
-    return;
+  auto root = insert_recursive(path, key, val, base_root);
+  if (root == nullptr) {
+    /*
+     * this is the update case that is transformed into delete + put. an
+     * optimization would be to 1) use the path constructed here to skip that
+     * step in delete or 2) update the algorithm to handle this case
+     * explicitly.
+     */
+    Delete(key); // first remove the key
+    path.clear(); // new path will be built
+    assert(root_ != nullptr); // delete set the root
+    root = insert_recursive(path, key, val, root_);
+    assert(root != nullptr); // a new root was added
+  }
+
+  std::stringstream ss;
+  ss << "put: " << key;
+  description_.emplace_back(ss.str());
 
   path.push_back(Node::Nil());
   assert(path.size() >= 2);
@@ -429,16 +446,16 @@ void Transaction::Put(std::string val)
   root_ = root;
 }
 
-void Transaction::Delete(std::string val)
+void Transaction::Delete(std::string key)
 {
   std::deque<NodeRef> path;
 
   std::stringstream ss;
-  ss << "del: " << val;
+  ss << "del: " << key;
   description_.emplace_back(ss.str());
 
   auto base_root = root_ == nullptr ? src_root_ : root_;
-  auto root = delete_recursive(path, val, base_root);
+  auto root = delete_recursive(path, key, base_root);
   if (root == nullptr) {
     std::cerr << "delete: not found" << std::endl;
     return;
@@ -448,7 +465,7 @@ void Transaction::Delete(std::string val)
   path.push_back(Node::Nil());
   assert(path.size() >= 2);
 
-  std::cerr << "delete " << val << " path: ";
+  std::cerr << "delete " << key << " path: ";
   db_->print_path(std::cerr, path);
 
   /*
@@ -456,7 +473,7 @@ void Transaction::Delete(std::string val)
    */
   auto removed = path.front();
   assert(removed != nullptr);
-  assert(removed->elem == val);
+  assert(removed->key == key);
 
   std::cerr << "removed " << removed << std::endl;
 
@@ -488,7 +505,8 @@ void Transaction::Delete(std::string val)
     db_->cache_.ResolveNodePtr(removed->right);
     transplanted = removed->right.ref;
     assert(transplanted != nullptr);
-    temp->elem = std::move(removed->elem);
+    temp->key = std::move(removed->key);
+    temp->val = std::move(removed->val);
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
   }

@@ -49,7 +49,7 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
 
   // TODO: replace rid==csn with a lookup table that lets us
   // use random values for more reliable assertions.
-  auto nn = std::make_shared<Node>(n.value(),
+  auto nn = std::make_shared<Node>(n.key(), n.val(),
       n.red(), Node::Nil(), Node::Nil(), pos);
 
   nn->field_index = index;

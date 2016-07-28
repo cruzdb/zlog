@@ -11,9 +11,10 @@ message NodePtr {
 
 message Node {
     required bool red = 1;
-    required string value = 2;
-    required NodePtr left = 3;
-    required NodePtr right = 4;
+    required string key = 2;
+    required string val = 3;
+    required NodePtr left = 4;
+    required NodePtr right = 5;
 }
 
 message Intention {

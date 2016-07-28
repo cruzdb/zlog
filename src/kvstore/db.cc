@@ -42,23 +42,24 @@ DB::DB(std::vector<std::string> log) :
 
 DB::~DB()
 {
+  lock_.lock();
   stop_ = true;
   log_cond_.notify_all();
-  if (log_processor_.joinable())
-    log_processor_.join();
+  lock_.unlock();
+  log_processor_.join();
 }
 
-std::set<std::string> DB::stl_set(Snapshot snapshot) {
-  std::set<std::string> set;
+std::map<std::string, std::string> DB::stl_map(Snapshot snapshot) {
+  std::map<std::string, std::string> map;
   NodeRef node = snapshot.root;
   if (node == Node::Nil())
-    return set;
+    return map;
   std::stack<NodeRef> stack;
   stack.push(node);
   while (!stack.empty()) {
     node = stack.top();
     stack.pop();
-    auto ret = set.emplace(node->elem);
+    auto ret = map.emplace(std::make_pair(node->key, node->val));
     assert(ret.second);
     if (node->right.ref != Node::Nil()) {
       cache_.ResolveNodePtr(node->right);
@@ -69,16 +70,16 @@ std::set<std::string> DB::stl_set(Snapshot snapshot) {
       stack.push(node->left.ref);
     }
   }
-  return set;
+  return map;
 }
 
-std::set<std::string> DB::stl_set() {
-  return stl_set(GetSnapshot());
+std::map<std::string, std::string> DB::stl_map() {
+  return stl_map(GetSnapshot());
 }
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
 {
-  out << "node(" << n.get() << "):" << n->elem << ": ";
+  out << "node(" << n.get() << "):" << n->key << ": ";
   out << (n->red ? "red " : "blk ");
   out << "fi " << n->field_index << " ";
   out << "left=[p" << n->left.csn << ",o" << n->left.offset << ",";
@@ -105,7 +106,7 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p)
 
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Node& n)
 {
-  out << "val " << n.value() << " ";
+  out << "key " << n.key() << " val " << n.val() << " ";
   out << (n.red() ? "red" : "blk") << " ";
   out << "left " << n.left() << " right " << n.right();
   return out;
@@ -148,7 +149,7 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
     return;
 
   out << "\"" << node.get() << "\" ["
-    << "label=" << node->elem << ",style=filled,"
+    << "label=\"" << node->key << "_" << node->val << "\",style=filled,"
     << "fillcolor=" << (node->red ? "red" :
         "black,fontcolor=white")
     << "]" << std::endl;
@@ -230,7 +231,7 @@ void DB::print_node(NodeRef node)
   if (node == Node::Nil())
     std::cout << "nil:" << (node->red ? "r" : "b");
   else
-    std::cout << node->elem << ":" << (node->red ? "r" : "b");
+    std::cout << node->key << ":" << (node->red ? "r" : "b");
 }
 
 void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
@@ -244,7 +245,7 @@ void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
       if (node == Node::Nil())
         out << "nil:" << (node->red ? "r " : "b ");
       else
-        out << node->elem << ":" << (node->red ? "r " : "b ");
+        out << node->key << ":" << (node->red ? "r " : "b ");
     }
     out << "]";
   }
@@ -278,8 +279,8 @@ int DB::_validate_rb_tree(NodeRef root)
   int lh = _validate_rb_tree(ln);
   int rh = _validate_rb_tree(rn);
 
-  if ((ln != Node::Nil() && ln->elem >= root->elem) ||
-      (rn != Node::Nil() && rn->elem <= root->elem))
+  if ((ln != Node::Nil() && ln->key >= root->key) ||
+      (rn != Node::Nil() && rn->key <= root->key))
     return 0;
 
   if (lh != 0 && rh != 0 && lh != rh)

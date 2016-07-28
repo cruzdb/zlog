@@ -16,25 +16,35 @@ int main(int argc, char **argv)
   std::vector<Snapshot> snapshots;
   snapshots.push_back(db.GetSnapshot());
 
-  // how many transactions
-  for (int i = 0; i < 5; i++) {
-    // number of operations in this transaction
-    int num_ops = std::rand() % 5 + 1;
+  int num_txns = 20;
+  while (num_txns--) {
 
+    // number of operations in this transaction
+    int num_ops = std::rand() % 10;
     auto txn = db.BeginTransaction();
-    for (int i = 0; i < num_ops; i++) {
-      int nval = std::rand() % 20;
+    while (num_ops--) {
+
+      // gen key/value pair
+      int nkey = std::rand() % 100;
+      std::string key = tostr(nkey);
+      int nval = std::rand() % 100;
       std::string val = tostr(nval);
-      if ((std::rand() % 100) < 80) {
-        std::cerr << "operation: insert: " << val << std::endl;
-        txn.Put(val);
+
+      // flip coin to insert or remove
+      if ((std::rand() % 100) < 50) {
+        txn.Put(key, val);
       } else {
-        std::cerr << "operation: erase: " << val << std::endl;
-        txn.Delete(val);
+        txn.Delete(key);
       }
     }
     txn.Commit();
-    snapshots.push_back(db.GetSnapshot());
+
+    // this keeps the snapshot if it isn't a duplicate (ie the txn didn't do
+    // anything). this special case isn't bc of the db internals, its because
+    // the graphviz generation isn't very smart.
+    auto snapshot = db.GetSnapshot();
+    if (snapshot.root != snapshots.back().root)
+      snapshots.push_back(snapshot);
   }
 
   db.write_dot_history(std::cout, snapshots);
