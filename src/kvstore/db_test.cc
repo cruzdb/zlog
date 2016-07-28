@@ -47,8 +47,6 @@ int main(int argc, char **argv)
       db_history.push_back(db.GetSnapshot());
     }
 
-    db.validate_rb_tree(true);
-
     assert(truth_history.size() == db_history.size());
 
     for (unsigned i = 0; i < db_history.size(); i++) {

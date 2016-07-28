@@ -19,7 +19,7 @@ DB::DB() :
   stop_ = false;
 
   // todo: enable/disable debug
-  validate_rb_tree();
+  validate_rb_tree(root_);
 
   log_processor_ = std::thread(&DB::process_log_entry, this);
 }
@@ -35,7 +35,7 @@ DB::DB(std::vector<std::string> log) :
   stop_ = false;
 
   // todo: enable/disable debug
-  validate_rb_tree();
+  validate_rb_tree(root_);
 
   log_processor_ = std::thread(&DB::process_log_entry, this);
 }
@@ -252,14 +252,16 @@ void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
   out << std::endl;
 }
 
-bool DB::validate_rb_tree(bool all)
-{
-  return _validate_rb_tree(root_) != 0;
-}
-
-int DB::_validate_rb_tree(NodeRef root)
+/*
+ *
+ */
+int DB::_validate_rb_tree(const NodeRef root)
 {
   assert(root != nullptr);
+
+  assert(root->read_only());
+  if (!root->read_only())
+    return 0;
 
   if (root == Node::Nil())
     return 1;
@@ -290,6 +292,11 @@ int DB::_validate_rb_tree(NodeRef root)
     return root->red() ? lh : lh + 1;
 
   return 0;
+}
+
+void DB::validate_rb_tree(NodeRef root)
+{
+  assert(_validate_rb_tree(root) != 0);
 }
 
 Transaction DB::BeginTransaction()
@@ -334,6 +341,7 @@ void DB::process_log_entry()
     if (i.snapshot() != -1) assert(next > 0);
     if (i.snapshot() == (int64_t)last_pos_) {
       auto root = cache_.CacheIntention(i, next);
+      validate_rb_tree(root);
       root_ = root;
       root_pos_ = next;
 

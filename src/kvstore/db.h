@@ -64,9 +64,9 @@ class DB {
   void _write_dot(std::ostream& out, NodeRef root, uint64_t& nullcount, bool scoped = false);
 
   int _validate_rb_tree(NodeRef root);
+  void validate_rb_tree(NodeRef root);
 
  public:
-  bool validate_rb_tree(bool all = false);
 
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out,
