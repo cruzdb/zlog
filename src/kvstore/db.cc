@@ -294,7 +294,6 @@ void DB::validate_rb_tree(NodeRef root)
 Transaction DB::BeginTransaction()
 {
   std::lock_guard<std::mutex> l(lock_);
-  std::cerr << "begin txn: snapshot " << root_pos_ << std::endl;
   return Transaction(this, root_, root_pos_, root_id_++);
 }
 
@@ -308,9 +307,6 @@ void DB::process_log_entry()
 
     uint64_t tail = log_tail();
     assert(last_pos_ <= tail);
-
-    std::cerr << "process_log_entry: last_pos_ " << last_pos_
-      << " tail " << tail << std::endl;
 
     if (last_pos_ == tail) {
       log_cond_.wait(l);
@@ -341,11 +337,9 @@ void DB::process_log_entry()
       for (int idx = 0; idx < i.description_size(); idx++)
         root_desc_.push_back(i.description(idx));
 
-      std::cerr << "commiting serial txn: pos " << next << std::endl;
       auto res = committed_.emplace(std::make_pair(next, true));
       assert(res.second);
     } else {
-      std::cerr << "aborting non-serial txn: pos " << next << std::endl;
       auto res = committed_.emplace(std::make_pair(next, false));
       assert(res.second);
     }

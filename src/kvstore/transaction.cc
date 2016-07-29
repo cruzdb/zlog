@@ -11,9 +11,6 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     dst->set_self(false);
     dst->set_csn(0);
     dst->set_off(0);
-#if 0
-    std::cerr << " - serialize_node: " << dir << " nil" << std::endl;
-#endif
   } else if (src.ref()->rid() == rid_) {
     dst->set_nil(false);
     dst->set_self(true);
@@ -21,22 +18,12 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     assert(src.ref()->field_index() >= 0);
     dst->set_off(src.ref()->field_index());
     src.set_offset(src.ref()->field_index());
-#if 0
-    std::cerr << " - serialize_node: " << dir << " internal csn " <<
-      dst->csn() << " off " << dst->off()
-      << std::endl;
-#endif
   } else {
     assert(src.ref() != nullptr);
     dst->set_nil(false);
     dst->set_self(false);
     dst->set_csn(src.csn());
     dst->set_off(src.offset());
-#if 0
-    std::cerr << " - serialize_node: " << dir << " external csn " <<
-      dst->csn() << " off " << dst->off()
-      << std::endl;
-#endif
   }
 }
 
@@ -140,9 +127,6 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
   assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
   if (uncle.ref()->red()) {
-#if 0
-    std::cerr << "insert_balance: copy uncle " << uncle.ref << std::endl;
-#endif
     if (uncle.ref()->rid() != rid_)
       uncle.set_ref(Node::Copy(uncle.ref(), rid_));
     parent->set_red(false);
@@ -166,10 +150,7 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
 {
   assert(node != nullptr);
 
-  std::cerr << "delete_recursive(" << key << "): " << node << " : " << node->key() << std::endl;
-
   if (node == Node::Nil()) {
-    std::cerr << "delete_recursive: node not found" << std::endl;
     return nullptr;
   }
 
@@ -177,7 +158,6 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
   bool equal = !less && key == node->key();
 
   if (equal) {
-    std::cerr << "delete_recursive: found equal" << std::endl;
     NodeRef copy;
     if (node->rid() == rid_)
       copy = node;
@@ -191,7 +171,6 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
       (less ? node->left.ref() : node->right.ref()));
 
   if (child == nullptr) {
-    std::cerr << "delete_recursive: child is nullptr" << std::endl;
     return child;
   }
 
@@ -221,13 +200,10 @@ void Transaction::transplant(NodeRef parent, NodeRef removed,
     NodeRef transplanted, NodeRef& root)
 {
   if (parent == Node::Nil()) {
-    std::cerr << "transplat: patch root" << std::endl;
     root = transplanted;
   } else if (parent->left.ref() == removed) {
-    std::cerr << "transplat: patch parent left" << std::endl;
     parent->left.set_ref(transplanted);
   } else {
-    std::cerr << "transplat: patch parent right" << std::endl;
     parent->right.set_ref(transplanted);
   }
 }
@@ -453,16 +429,12 @@ void Transaction::Delete(std::string key)
   auto base_root = root_ == nullptr ? src_root_ : root_;
   auto root = delete_recursive(path, key, base_root);
   if (root == nullptr) {
-    std::cerr << "delete: not found" << std::endl;
     return;
   }
 
   //roots.push_back(node);
   path.push_back(Node::Nil());
   assert(path.size() >= 2);
-
-  std::cerr << "delete " << key << " path: ";
-  db_->print_path(std::cerr, path);
 
   /*
    * remove and balance
@@ -471,26 +443,20 @@ void Transaction::Delete(std::string key)
   assert(removed != nullptr);
   assert(removed->key() == key);
 
-  std::cerr << "removed " << removed << std::endl;
-
   auto transplanted = removed->right.ref();
   assert(transplanted != nullptr);
 
   if (removed->left.ref() == Node::Nil()) {
-    std::cerr << "removed->left.ref() == Node::Nil()" << std::endl;
     path.pop_front();
-    db_->print_path(std::cerr, path);
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
   } else if (removed->right.ref() == Node::Nil()) {
-    std::cerr << "removed->right.ref() == Node::Nil()" << std::endl;
     path.pop_front();
     assert(removed->left.ref() != nullptr);
     transplanted = removed->left.ref();
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
   } else {
-    std::cerr << "removed right/left are not Nil" << std::endl;
     assert(transplanted != nullptr);
     auto temp = removed;
     if (removed->right.ref()->rid() != rid_)
@@ -518,7 +484,6 @@ void Transaction::Commit()
 {
   // nothing to do
   if (root_ == nullptr) {
-    std::cerr << "commit: empty transaction" << std::endl;
     return;
   }
 
@@ -526,11 +491,9 @@ void Transaction::Commit()
   int field_index = 0;
   assert(root_ != nullptr);
   if (root_ == Node::Nil()) {
-    std::cerr << "commit: empty tree" << std::endl;
   } else
     assert(root_->rid() == rid_);
 
-  std::cerr << "commit: processing non-empty transaction" << std::endl;
   serialize_intention(root_, field_index);
   intention_.set_snapshot(snapshot_);
 
