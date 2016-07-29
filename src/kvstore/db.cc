@@ -61,11 +61,11 @@ std::map<std::string, std::string> DB::stl_map(Snapshot snapshot) {
     stack.pop();
     auto ret = map.emplace(std::make_pair(node->key(), node->val()));
     assert(ret.second);
-    if (node->right.ref != Node::Nil()) {
-      stack.push(node->right.ref);
+    if (node->right.ref() != Node::Nil()) {
+      stack.push(node->right.ref());
     }
-    if (node->left.ref != Node::Nil()) {
-      stack.push(node->left.ref);
+    if (node->left.ref() != Node::Nil()) {
+      stack.push(node->left.ref());
     }
   }
   return map;
@@ -80,17 +80,17 @@ std::ostream& operator<<(std::ostream& out, const NodeRef& n)
   out << "node(" << n.get() << "):" << n->key() << ": ";
   out << (n->red() ? "red " : "blk ");
   out << "fi " << n->field_index() << " ";
-  out << "left=[p" << n->left.csn << ",o" << n->left.offset << ",";
-  if (n->left.ref == Node::Nil())
+  out << "left=[p" << n->left.csn() << ",o" << n->left.offset() << ",";
+  if (n->left.ref() == Node::Nil())
     out << "nil";
   else
-    out << n->left.ref.get();
+    out << n->left.ref().get();
   out << "] ";
-  out << "right=[p" << n->right.csn << ",o" << n->right.offset << ",";
-  if (n->right.ref == Node::Nil())
+  out << "right=[p" << n->right.csn() << ",o" << n->right.offset() << ",";
+  if (n->right.ref() == Node::Nil())
     out << "nil";
   else
-    out << n->right.ref.get();
+    out << n->right.ref().get();
   out << "] ";
   return out;
 }
@@ -135,9 +135,9 @@ void DB::write_dot_node(std::ostream& out,
     NodeRef parent, NodePtr& child, const std::string& dir)
 {
   out << "\"" << parent.get() << "\":" << dir << " -> ";
-  out << "\"" << child.ref.get() << "\"";
-  out << " [label=\"" << child.csn << ":"
-    << child.offset << "\"];" << std::endl;
+  out << "\"" << child.ref().get() << "\"";
+  out << " [label=\"" << child.csn() << ":"
+    << child.offset() << "\"];" << std::endl;
 }
 
 void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
@@ -152,20 +152,20 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
         "black,fontcolor=white")
     << "]" << std::endl;
 
-  assert(node->left.ref != nullptr);
-  if (node->left.ref == Node::Nil())
+  assert(node->left.ref() != nullptr);
+  if (node->left.ref() == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
     write_dot_node(out, node, node->left, "sw");
-    write_dot_recursive(out, rid, node->left.ref, nullcount, scoped);
+    write_dot_recursive(out, rid, node->left.ref(), nullcount, scoped);
   }
 
-  assert(node->right.ref != nullptr);
-  if (node->right.ref == Node::Nil())
+  assert(node->right.ref() != nullptr);
+  if (node->right.ref() == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
     write_dot_node(out, node, node->right, "se");
-    write_dot_recursive(out, rid, node->right.ref, nullcount, scoped);
+    write_dot_recursive(out, rid, node->right.ref(), nullcount, scoped);
   }
 }
 
@@ -261,11 +261,11 @@ int DB::_validate_rb_tree(const NodeRef root)
   if (root == Node::Nil())
     return 1;
 
-  assert(root->left.ref);
-  assert(root->right.ref);
+  assert(root->left.ref());
+  assert(root->right.ref());
 
-  NodeRef ln = root->left.ref;
-  NodeRef rn = root->right.ref;
+  NodeRef ln = root->left.ref();
+  NodeRef rn = root->right.ref();
 
   if (root->red() && (ln->red() || rn->red()))
     return 0;

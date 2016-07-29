@@ -3,28 +3,28 @@
 
 void NodeCache::ResolveNodePtr(NodePtr& ptr)
 {
-  if (ptr.ref != nullptr)
+  if (ptr.ref() != nullptr)
     return;
 
-  auto it = nodes_.find(std::make_pair(ptr.csn, ptr.offset));
+  auto it = nodes_.find(std::make_pair(ptr.csn(), ptr.offset()));
   if (it != nodes_.end()) {
-    ptr.ref = it->second;
+    ptr.set_ref(it->second);
     return;
   }
 
   // the cache sits on top of the database log
-  std::string snapshot = db_->log_read(ptr.csn);
+  std::string snapshot = db_->log_read(ptr.csn());
   kvstore_proto::Intention i;
   assert(i.ParseFromString(snapshot));
   assert(i.IsInitialized());
 
-  auto nn = deserialize_node(i, ptr.csn, ptr.offset);
+  auto nn = deserialize_node(i, ptr.csn(), ptr.offset());
 
   assert(nn->read_only());
   nodes_.insert(std::make_pair(
-        std::make_pair(ptr.csn, ptr.offset), nn));
+        std::make_pair(ptr.csn(), ptr.offset()), nn));
 
-  ptr.ref = nn;
+  ptr.set_ref(nn);
 }
 
 NodeRef NodeCache::CacheIntention(const kvstore_proto::Intention& i,
@@ -59,23 +59,23 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
 
   assert(nn->field_index() == index);
   if (!n.left().nil()) {
-    nn->left.ref = nullptr;
-    nn->left.offset = n.left().off();
+    nn->left.set_ref(nullptr);
+    nn->left.set_offset(n.left().off());
     if (n.left().self()) {
-      nn->left.csn = pos;
+      nn->left.set_csn(pos);
     } else {
-      nn->left.csn = n.left().csn();
+      nn->left.set_csn(n.left().csn());
     }
     ResolveNodePtr(nn->left);
   }
 
   if (!n.right().nil()) {
-    nn->right.ref = nullptr;
-    nn->right.offset = n.right().off();
+    nn->right.set_ref(nullptr);
+    nn->right.set_offset(n.right().off());
     if (n.right().self()) {
-      nn->right.csn = pos;
+      nn->right.set_csn(pos);
     } else {
-      nn->right.csn = n.right().csn();
+      nn->right.set_csn(n.right().csn());
     }
     ResolveNodePtr(nn->right);
   }

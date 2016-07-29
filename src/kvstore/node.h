@@ -9,18 +9,80 @@ struct Node;
 using NodeRef = std::shared_ptr<Node>;
 
 /*
- *
+ * The read-only flag is a temporary hack for enforcing read-only property on
+ * the connected Node. What is really needed is a more sophisticated approach
+ * that avoids duplicating the read-only flag as well as what is probably some
+ * call overhead associated with this design. Overall, this isn't pretty but
+ * lets us have confidence in the correctness which is the priority right now.
+ * There is probably a lot of overhead always returning copies of the
+ * shared_ptr NodeRef.
  */
-struct NodePtr {
-  NodeRef ref;
-  int64_t csn;
-  int offset;
+class NodePtr {
+ public:
 
-  NodePtr() : NodePtr(nullptr) {}
+  NodePtr(const NodePtr& other) {
+    ref_ = other.ref_;
+    offset_ = other.offset_;
+    csn_ = other.csn_;
+    read_only_ = true;
+  }
 
-  explicit NodePtr(NodeRef ref) :
-    ref(ref), csn(-1), offset(-1)
+  NodePtr& operator=(const NodePtr& other) {
+    assert(!read_only());
+    ref_ = other.ref_;
+    offset_ = other.offset_;
+    csn_ = other.csn_;
+    return *this;
+  }
+
+  NodePtr(NodePtr&& other) = delete;
+  NodePtr& operator=(NodePtr&& other) & = delete;
+
+  NodePtr(NodeRef ref, bool read_only) :
+    ref_(ref), csn_(-1), offset_(-1), read_only_(read_only)
   {}
+
+  inline bool read_only() const {
+    return read_only_;
+  }
+
+  inline bool set_read_only() {
+    assert(!read_only());
+    read_only_ = true;
+  }
+
+  inline NodeRef ref() const {
+    return ref_;
+  }
+
+  inline void set_ref(NodeRef ref) {
+    assert(!read_only());
+    ref_ = ref;
+  }
+
+  inline int offset() const {
+    return offset_;
+  }
+
+  inline void set_offset(int offset) {
+    assert(!read_only());
+    offset_ = offset;
+  }
+
+  inline int64_t csn() const {
+    return csn_;
+  }
+
+  inline void set_csn(int64_t csn) {
+    assert(!read_only());
+    csn_ = csn;
+  }
+
+ private:
+  NodeRef ref_;
+  int offset_;
+  int64_t csn_;
+  bool read_only_;
 };
 
 /*
@@ -34,8 +96,8 @@ class Node {
   // TODO: allow rid to have negative initialization value
   Node(std::string key, std::string val, bool red, NodeRef lr, NodeRef rr,
       uint64_t rid, int field_index, bool read_only) :
-    key_(key), val_(val), red_(red), left(lr), right(rr), rid_(rid),
-    field_index_(field_index), read_only_(read_only)
+    key_(key), val_(val), red_(red), left(lr, read_only), right(rr, read_only),
+    rid_(rid), field_index_(field_index), read_only_(read_only)
   {}
 
   static NodeRef& Nil() {
@@ -49,13 +111,13 @@ class Node {
       return Nil();
 
     auto node = std::make_shared<Node>(src->key(), src->val(), src->red(),
-        src->left.ref, src->right.ref, rid, -1, false);
+        src->left.ref(), src->right.ref(), rid, -1, false);
 
-    node->left.csn = src->left.csn;
-    node->left.offset = src->left.offset;
+    node->left.set_csn(src->left.csn());
+    node->left.set_offset(src->left.offset());
 
-    node->right.csn = src->right.csn;
-    node->right.offset = src->right.offset;
+    node->right.set_csn(src->right.csn());
+    node->right.set_offset(src->right.offset());
 
     return node;
   }
@@ -66,6 +128,8 @@ class Node {
 
   inline void set_read_only() {
     assert(!read_only());
+    left.set_read_only();
+    right.set_read_only();
     read_only_ = true;
   }
 
@@ -78,7 +142,7 @@ class Node {
     red_ = red;
   }
 
-  inline void swap_color(NodeRef& other) {
+  inline void swap_color(NodeRef other) {
     assert(!read_only());
     assert(!other->read_only());
     std::swap(red_, other->red_);
