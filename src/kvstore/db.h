@@ -15,26 +15,13 @@
 #include "node.h"
 #include "transaction.h"
 #include "node_cache.h"
+#include "snapshot.h"
+#include "iterator.h"
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Node& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
-
-class Snapshot {
- public:
-  Snapshot(const NodeRef root, uint64_t seq, std::vector<std::string> desc) :
-    root(root), seq(seq), desc(desc)
-  {}
-
-  const NodeRef root;
-  const uint64_t seq;
-
-  // TODO: remove in favor of some sort of pointer to this state. for example
-  // let's have a special RootNodeRef that has additional metadata or
-  // something along those lines.
-  const std::vector<std::string> desc;
-};
 
 class DB {
  public:
@@ -51,6 +38,14 @@ class DB {
   Snapshot GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
     return Snapshot(root_, root_pos_, root_desc_);
+  }
+
+  Iterator NewIterator(Snapshot snapshot) {
+    return Iterator(snapshot);
+  }
+
+  Iterator NewIterator() {
+    return NewIterator(GetSnapshot());
   }
 
  private:

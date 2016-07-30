@@ -8,6 +8,7 @@ add_library(libkvstore SHARED
     db.cc
     transaction.cc
     node_cache.cc
+    iterator.cc
 )
 target_link_libraries(libkvstore kvstore_proto)
 
@@ -19,6 +20,9 @@ target_link_libraries(db_test libkvstore)
 
 add_executable(rbt rbt.cc)
 target_link_libraries(rbt libkvstore)
+
+add_executable(iterator_test iterator_test.cc)
+target_link_libraries(iterator_test libkvstore)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     include(CodeCoverage)
