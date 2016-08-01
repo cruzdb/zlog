@@ -48,12 +48,12 @@ class Iterator {
   // REQUIRES: !AtEnd() && !AtStart()
   std::string value() const;
 
+#if 0
   // If an error has occurred, return it.  Else return an ok status.
   // If non-blocking IO is requested and this operation cannot be
   // satisfied without doing some IO, then this returns Status::Incomplete().
-  int status() const;
+  Status status() const;
 
-#if 0
   // Property "rocksdb.iterator.is-key-pinned":
   //   If returning "1", this means that the Slice returned by key() is valid
   //   as long as the iterator is not deleted.
@@ -73,8 +73,9 @@ class Iterator {
   //void operator=(const Iterator&);
 
   std::stack<NodeRef> stack_;
-  NodeRef curr_;
   Snapshot snapshot_;
+  NodeRef first_;
+  NodeRef last_;
 };
 
 #endif

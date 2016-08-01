@@ -1,75 +1,132 @@
 #include "iterator.h"
 
-#include "iterator.h"
-
-Iterator::Iterator(Snapshot snapshot) : curr_(Node::Nil()), snapshot_(snapshot)
+/*
+ * This iterator implementation can likely be made more efficient. The most
+ * annoying part of it is track explicilty the first and last elements in the
+ * tree to handle the iteration next/prev edge cases.
+ */
+Iterator::Iterator(Snapshot snapshot) :
+  snapshot_(snapshot)
 {
+  if (snapshot_.root != Node::Nil()) {
+    // set first
+    NodeRef node = snapshot_.root;
+    while (node->left.ref() != Node::Nil())
+      node = node->left.ref();
+    first_ = node;
+
+    // set last
+    node = snapshot_.root;
+    while (node->right.ref() != Node::Nil())
+      node = node->right.ref();
+    last_ = node;
+  }
 }
 
 bool Iterator::Valid() const
 {
-  return curr_ != Node::Nil();
+  return !stack_.empty();
 }
 
 void Iterator::SeekToFirst()
 {
+  // clear stack
   std::stack<NodeRef> stack;
+  stack_.swap(stack);
+
+  // all the way to the left
   NodeRef node = snapshot_.root;
-  if (node == Node::Nil()) {
-    curr_ = Node::Nil();
-    stack_.swap(stack);
-    return;
-  }
-  stack.push(Node::Nil());
-  while (node->left.ref() != Node::Nil()) {
-    stack.push(node);
+  while (node != Node::Nil()) {
+    stack_.push(node);
     node = node->left.ref();
   }
-  stack_.swap(stack);
-  curr_ = node;
 }
 
 void Iterator::SeekToLast()
 {
+  // clear stack
   std::stack<NodeRef> stack;
+  stack_.swap(stack);
+
+  // all the way to the right
   NodeRef node = snapshot_.root;
-  if (node == Node::Nil()) {
-    curr_ = Node::Nil();
-    return;
-  }
-  stack.push(Node::Nil());
-  while (node->right.ref() != Node::Nil()) {
-    stack.push(node);
+  while (node != Node::Nil()) {
+    stack_.push(node);
     node = node->right.ref();
   }
+}
+
+void Iterator::Seek(const std::string& key)
+{
+  // clear stack
+  std::stack<NodeRef> stack;
   stack_.swap(stack);
-  curr_ = node;
+
+  NodeRef node = snapshot_.root;
+  while (node != Node::Nil()) {
+    stack_.push(node);
+    if (key == node->key())
+      break;
+    else if (key < node->key()) {
+      node = node->left.ref();
+      if (node != Node::Nil() && node->key() < key)
+        break;
+    } else
+      node = node->right.ref();
+  }
+  if (stack_.top()->key() < key) {
+    // not found: clear stack
+    std::stack<NodeRef> stack;
+    stack_.swap(stack);
+  }
 }
 
 void Iterator::Next()
 {
   assert(Valid());
-  NodeRef node = curr_->right.ref();
+  if (stack_.top() == last_) {
+    std::stack<NodeRef> stack;
+    stack_.swap(stack);
+    assert(!Valid());
+    return;
+  }
+  NodeRef node = stack_.top()->right.ref();
   if (node != Node::Nil()) {
-    while (node->left.ref() != Node::Nil()) {
+    while (node != Node::Nil()) {
       stack_.push(node);
       node = node->left.ref();
     }
-  } else {
-    node = stack_.top();
+  } else
     stack_.pop();
+}
+
+void Iterator::Prev()
+{
+  assert(Valid());
+  if (stack_.top() == first_) {
+    std::stack<NodeRef> stack;
+    stack_.swap(stack);
+    assert(!Valid());
+    return;
   }
-  curr_ = node;
+  NodeRef node = stack_.top()->left.ref();
+  if (node != Node::Nil()) {
+    while (node != Node::Nil()) {
+      stack_.push(node);
+      node = node->right.ref();
+    }
+  } else
+    stack_.pop();
 }
 
 std::string Iterator::key() const
 {
   assert(Valid());
-  return curr_->key();
+  return stack_.top()->key();
 }
 
 std::string Iterator::value() const
 {
   assert(Valid());
-  return curr_->val();
+  return stack_.top()->val();
 }

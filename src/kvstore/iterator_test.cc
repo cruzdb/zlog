@@ -13,39 +13,51 @@ int main(int argc, char **argv)
 {
   DB db;
 
-  auto it = db.NewIterator();
-  assert(!it.Valid());
-
-  it.SeekToFirst();
-  assert(!it.Valid());
-
-  it.SeekToLast();
-  assert(!it.Valid());
-
-  std::vector<std::string> strs{"a", "b", "c"};
+  std::vector<std::string> strs{"m", "f", "t"};
   for (auto s : strs) {
     auto txn = db.BeginTransaction();
     txn.Put(s, "");
     txn.Commit();
   }
 
-  auto it2 = db.NewIterator();
-  assert(!it2.Valid());
+  auto it = db.NewIterator();
+  assert(!it.Valid());
 
-#if 0
-  it2.SeekToFirst();
-  while (it2.Valid()) {
-    std::cout << it2.key() << std::endl;
-    it2.Next();
-  }
-#endif
+  // equality
+  it.Seek("m");
+  assert(it.Valid());
+  assert(it.key() == "m");
 
-  // not working....
-  it2.SeekToLast();
-  while (it2.Valid()) {
-    std::cout << it2.key() << std::endl;
-    it2.Next();
-  }
+  it.Seek("f");
+  assert(it.Valid());
+  assert(it.key() == "f");
+
+  it.Seek("t");
+  assert(it.Valid());
+  assert(it.key() == "t");
+
+  // edges
+  it.Seek("a");
+  assert(it.Valid());
+  assert(it.key() == "f");
+
+  it.Seek("h");
+  assert(it.Valid());
+  assert(it.key() == "m");
+
+  it.Seek("j");
+  assert(it.Valid());
+  assert(it.key() == "m");
+
+  it.Seek("o");
+  assert(it.Valid());
+  assert(it.key() == "t");
+
+  it.Seek("v");
+  assert(!it.Valid());
+
+  it.Seek("x");
+  assert(!it.Valid());
 
   return 0;
 }
