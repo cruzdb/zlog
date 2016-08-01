@@ -9,6 +9,27 @@ static inline std::string tostr(int value)
   return ss.str();
 }
 
+static std::map<std::string, std::string> get_map(DB& db,
+    Snapshot snapshot, bool forward)
+{
+  std::map<std::string, std::string> map;
+  auto it = db.NewIterator(snapshot);
+  if (forward) {
+    it.SeekToFirst();
+    while (it.Valid()) {
+      map[it.key()] = it.value();
+      it.Next();
+    }
+  } else {
+    it.SeekToLast();
+    while (it.Valid()) {
+      map[it.key()] = it.value();
+      it.Prev();
+    }
+  }
+  return map;
+}
+
 int main(int argc, char **argv)
 {
   std::srand(0);
@@ -50,26 +71,8 @@ int main(int argc, char **argv)
     assert(truth_history.size() == db_history.size());
 
     for (unsigned i = 0; i < db_history.size(); i++) {
-      assert(truth_history[i] == db.stl_map(db_history[i]));
-    }
-
-    // each of the truths match the tree if we deserialize it
-    for (unsigned i = 0; i < truth_history.size(); i++) {
-      DB db2(db.log());
-      assert(truth_history[i] == db.stl_map(db_history[i]));
-    }
-
-    // and it works in reverse
-    for (int i = truth_history.size() - 1; i >= 0; i--) {
-      DB db2(db.log());
-      assert(truth_history[i] == db.stl_map(db_history[i]));
-    }
-
-    // and some random access
-    for (int x = 0; x < std::min(100, (int)truth_history.size()); x++) {
-      DB db2(db.log());
-      int i = std::rand() % truth_history.size();
-      assert(truth_history[i] == db.stl_map(db_history[i]));
+      assert(truth_history[i] == get_map(db, db_history[i], true));
+      assert(truth_history[i] == get_map(db, db_history[i], false));
     }
   }
 

@@ -9,6 +9,84 @@ static inline std::string tostr(int value)
   return ss.str();
 }
 
+static std::map<std::string, std::string> get_map(DB& db,
+    Snapshot snapshot, bool forward, size_t split)
+{
+  std::map<std::string, std::string> map;
+  auto it = db.NewIterator(snapshot);
+  if (split > 0) {
+    size_t half = split / 2;
+    if (forward) {
+      // skip forward half entries
+      it.SeekToFirst();
+      for (size_t i = 1; i < half; i++) {
+        it.Next();
+      }
+
+      // insert that range moving backward
+      assert(it.Valid());
+      while (it.Valid()) {
+        map[it.key()] = it.value();
+        it.Prev();
+      }
+
+      // skip forward half entries
+      it.SeekToFirst();
+      for (size_t i = 0; i < half; i++) {
+        it.Next();
+      }
+      assert(it.Valid());
+
+      // add the last half
+      while (it.Valid()) {
+        map[it.key()] = it.value();
+        it.Next();
+      }
+    } else {
+      // skip back half entries
+      it.SeekToLast();
+      for (size_t i = 1; i < half; i++) {
+        it.Prev();
+      }
+
+      // insert that range moving forward
+      assert(it.Valid());
+      while (it.Valid()) {
+        map[it.key()] = it.value();
+        it.Next();
+      }
+
+      // skip back half entries
+      it.SeekToLast();
+      for (size_t i = 0; i < half; i++) {
+        it.Prev();
+      }
+      assert(it.Valid());
+
+      // add the frst half
+      while (it.Valid()) {
+        map[it.key()] = it.value();
+        it.Prev();
+      }
+    }
+  } else {
+    if (forward) {
+      it.SeekToFirst();
+      while (it.Valid()) {
+        map[it.key()] = it.value();
+        it.Next();
+      }
+    } else {
+      it.SeekToLast();
+      while (it.Valid()) {
+        map[it.key()] = it.value();
+        it.Prev();
+      }
+    }
+  }
+  return map;
+}
+
 int main(int argc, char **argv)
 {
   std::srand(0);
@@ -23,10 +101,11 @@ int main(int argc, char **argv)
     db_history.push_back(db.GetSnapshot());
 
     // number of transactions in tree
-    int num_txns = std::rand() % 2000;
+    int num_txns = std::rand() % 200;
 
     std::cout << "building tree with " <<
       num_txns << " transactions" << std::endl;
+    std::cout << std::flush;
 
     while (num_txns--) {
 
@@ -64,10 +143,17 @@ int main(int argc, char **argv)
 
     uint64_t count = 0;
     std::cout << "verifying tree...";
+    std::cout << std::flush;
     assert(truth_history.size() == db_history.size());
     for (unsigned i = 0; i < db_history.size(); i++) {
       count += truth_history[i].size();
-      assert(truth_history[i] == db.stl_map(db_history[i]));
+      assert(truth_history[i] == get_map(db, db_history[i], true, 0));
+      assert(truth_history[i] == get_map(db, db_history[i], false, 0));
+      if (truth_history[i].size() > 10) {
+        size_t size = truth_history[i].size();
+        assert(truth_history[i] == get_map(db, db_history[i], true, size));
+        assert(truth_history[i] == get_map(db, db_history[i], false, size));
+      }
     }
     std::cout << " complete! (" << count << ")" << std::endl;
   }

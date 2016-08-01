@@ -49,32 +49,6 @@ DB::~DB()
   log_processor_.join();
 }
 
-std::map<std::string, std::string> DB::stl_map(Snapshot snapshot) {
-  std::map<std::string, std::string> map;
-  NodeRef node = snapshot.root;
-  if (node == Node::Nil())
-    return map;
-  std::stack<NodeRef> stack;
-  stack.push(node);
-  while (!stack.empty()) {
-    node = stack.top();
-    stack.pop();
-    auto ret = map.emplace(std::make_pair(node->key(), node->val()));
-    assert(ret.second);
-    if (node->right.ref() != Node::Nil()) {
-      stack.push(node->right.ref());
-    }
-    if (node->left.ref() != Node::Nil()) {
-      stack.push(node->left.ref());
-    }
-  }
-  return map;
-}
-
-std::map<std::string, std::string> DB::stl_map() {
-  return stl_map(GetSnapshot());
-}
-
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
 {
   out << "node(" << n.get() << "):" << n->key() << ": ";

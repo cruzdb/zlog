@@ -9,17 +9,11 @@ Iterator::Iterator(Snapshot snapshot) :
   snapshot_(snapshot)
 {
   if (snapshot_.root != Node::Nil()) {
-    // set first
     NodeRef node = snapshot_.root;
-    while (node->left.ref() != Node::Nil())
-      node = node->left.ref();
-    first_ = node;
-
-    // set last
-    node = snapshot_.root;
-    while (node->right.ref() != Node::Nil())
+    while (node != Node::Nil()) {
+      last_ = node;
       node = node->right.ref();
-    last_ = node;
+    }
   }
 }
 
@@ -40,6 +34,8 @@ void Iterator::SeekToFirst()
     stack_.push(node);
     node = node->left.ref();
   }
+
+  dir = 1; // forward
 }
 
 void Iterator::SeekToLast()
@@ -54,6 +50,8 @@ void Iterator::SeekToLast()
     stack_.push(node);
     node = node->right.ref();
   }
+
+  dir = 1; // forward
 }
 
 void Iterator::Seek(const std::string& key)
@@ -79,6 +77,8 @@ void Iterator::Seek(const std::string& key)
     std::stack<NodeRef> stack;
     stack_.swap(stack);
   }
+
+  dir = 1; // forward
 }
 
 void Iterator::Next()
@@ -87,36 +87,35 @@ void Iterator::Next()
   if (stack_.top() == last_) {
     std::stack<NodeRef> stack;
     stack_.swap(stack);
-    assert(!Valid());
     return;
   }
+  if (dir == 0) {
+    Seek(key());
+    dir = 1;
+  }
+  assert(Valid());
   NodeRef node = stack_.top()->right.ref();
-  if (node != Node::Nil()) {
-    while (node != Node::Nil()) {
-      stack_.push(node);
-      node = node->left.ref();
-    }
-  } else
-    stack_.pop();
+  stack_.pop();
+  while (node != Node::Nil()) {
+    stack_.push(node);
+    node = node->left.ref();
+  }
 }
 
 void Iterator::Prev()
 {
   assert(Valid());
-  if (stack_.top() == first_) {
-    std::stack<NodeRef> stack;
-    stack_.swap(stack);
-    assert(!Valid());
-    return;
+  if (dir == 1) {
+    Seek(key());
+    dir = 0;
   }
+  assert(Valid());
   NodeRef node = stack_.top()->left.ref();
-  if (node != Node::Nil()) {
-    while (node != Node::Nil()) {
-      stack_.push(node);
-      node = node->right.ref();
-    }
-  } else
-    stack_.pop();
+  stack_.pop();
+  while (node != Node::Nil()) {
+    stack_.push(node);
+    node = node->right.ref();
+  }
 }
 
 std::string Iterator::key() const

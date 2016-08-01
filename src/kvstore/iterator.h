@@ -74,8 +74,8 @@ class Iterator {
 
   std::stack<NodeRef> stack_;
   Snapshot snapshot_;
-  NodeRef first_;
   NodeRef last_;
+  int dir = -1;
 };
 
 #endif

@@ -32,9 +32,6 @@ class DB {
 
   Transaction BeginTransaction();
 
-  std::map<std::string, std::string> stl_map();
-  std::map<std::string, std::string> stl_map(Snapshot snapshot);
-
   Snapshot GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
     return Snapshot(root_, root_pos_, root_desc_);
