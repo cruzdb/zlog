@@ -1,4 +1,5 @@
 add_subdirectory(proto)
+add_subdirectory(kvstore)
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
 
 add_library(zlog_seqr SHARED libseq/libseqr.cc)

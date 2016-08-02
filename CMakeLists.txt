@@ -23,4 +23,10 @@ find_package(libcls_zlog_client REQUIRED)
 include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    include(CodeCoverage)
+    SET(CMAKE_CXX_FLAGS "-g -O0 -fprofile-arcs -ftest-coverage")
+    SET(CMAKE_C_FLAGS "-g -O0 -fprofile-arcs -ftest-coverage")
+endif()
+
 add_subdirectory(src)
