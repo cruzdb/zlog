@@ -504,7 +504,11 @@ void Transaction::Commit()
   std::string blob;
   assert(intention_.IsInitialized());
   assert(intention_.SerializeToString(&blob));
-  size_t pos = db_->log_append(blob);
+
+  size_t pos;
+  int ret = db_->be_->Append(blob, &pos);
+  assert(ret == 0);
+  db_->log_cond_.notify_all();
 
   // update the in-memory intention ptrs
   set_intention_self_csn(root_, pos);

@@ -3,36 +3,43 @@
 #include "transaction.h"
 
 DB::DB() :
-  cache_(this)
+  be_(NULL), cache_(this)
 {
-  root_ = Node::Nil();
-  root_pos_ = 0;
-
-  std::string blob;
-  kvstore_proto::Intention intention;
-  intention.set_snapshot(-1);
-  assert(intention.IsInitialized());
-  assert(intention.SerializeToString(&blob));
-  log_append(blob);
-
-  last_pos_ = 0;
-  stop_ = false;
-
-  // todo: enable/disable debug
-  validate_rb_tree(root_);
-
-  log_processor_ = std::thread(&DB::process_log_entry, this);
 }
 
-DB::DB(std::vector<std::string> log) :
-  cache_(this)
+int DB::Open(Backend *be, bool create_if_empty)
 {
+  be_ = be;
+
   root_ = Node::Nil();
   root_pos_ = 0;
 
-  log_ = log;
   last_pos_ = 0;
   stop_ = false;
+
+  uint64_t tail;
+  int ret = be_->Tail(&tail);
+  assert(ret == 0);
+
+  // empty log
+  if (tail == 0) {
+    if (!create_if_empty)
+      return -EINVAL;
+
+    std::string blob;
+    kvstore_proto::Intention intention;
+    intention.set_snapshot(-1);
+    assert(intention.IsInitialized());
+    assert(intention.SerializeToString(&blob));
+
+    ret = be_->Append(blob, &tail);
+    assert(ret == 0);
+    assert(tail == 0);
+
+    ret = be_->Tail(&tail);
+    assert(ret == 0);
+    assert(tail == 1);
+  }
 
   // todo: enable/disable debug
   validate_rb_tree(root_);
@@ -279,20 +286,25 @@ void DB::process_log_entry()
     if (stop_)
       return;
 
-    uint64_t tail = log_tail();
-    assert(last_pos_ <= tail);
+    uint64_t tail;
+    int ret = be_->Tail(&tail);
+    assert(ret == 0);
 
-    if (last_pos_ == tail) {
+    assert(last_pos_ < tail);
+
+    if ((last_pos_ + 1) == tail) {
       log_cond_.wait(l);
       continue; // try again
     }
 
     // process log in strict serial order
     uint64_t next = last_pos_ + 1;
-    assert(next <= tail);
+    assert(next < tail);
 
     // read and deserialize intention from log
-    std::string i_snapshot = log_read(next);
+    std::string i_snapshot;
+    ret = be_->Read(&i_snapshot, next);
+    assert(ret == 0);
 
     kvstore_proto::Intention i;
     assert(i.ParseFromString(i_snapshot));
@@ -336,25 +348,4 @@ bool DB::CommitResult(uint64_t pos)
     }
     result_cv_.wait(l);
   }
-}
-
-size_t DB::log_append(std::string blob)
-{
-  std::lock_guard<std::mutex> l(lock_);
-  log_.push_back(blob);
-  log_cond_.notify_all();
-  return log_.size() - 1;
-}
-
-size_t DB::log_tail() {
-  return log_.size() - 1;
-}
-
-std::vector<std::string> DB::log() {
-  return log_;
-}
-
-std::string DB::log_read(ssize_t pos)
-{
-  return log_.at(pos);
 }

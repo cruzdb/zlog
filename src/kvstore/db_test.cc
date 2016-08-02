@@ -43,7 +43,10 @@ int main(int argc, char **argv)
     truth_history.push_back(truth);
 
     // initially empty ptree
+    VectorBackend be;
     DB db;
+    int ret = db.Open(&be, true);
+    assert(ret == 0);
 
     std::vector<Snapshot> db_history;
     db_history.push_back(db.GetSnapshot());

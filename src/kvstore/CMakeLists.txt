@@ -10,10 +10,10 @@ add_library(libkvstore SHARED
     node_cache.cc
     iterator.cc
 )
-target_link_libraries(libkvstore kvstore_proto)
+target_link_libraries(libkvstore libzlog kvstore_proto)
 
 add_executable(thrash thrash.cc)
-target_link_libraries(thrash libkvstore)
+target_link_libraries(thrash libzlog zlog_seqr libkvstore)
 
 add_executable(db_test db_test.cc)
 target_link_libraries(db_test libkvstore)

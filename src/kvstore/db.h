@@ -17,6 +17,7 @@
 #include "node_cache.h"
 #include "snapshot.h"
 #include "iterator.h"
+#include "backend.h"
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
@@ -26,9 +27,9 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 class DB {
  public:
   DB();
-  DB(std::vector<std::string> log);
-
   ~DB();
+
+  int Open(Backend *be, bool create_if_empty);
 
   Transaction BeginTransaction();
 
@@ -47,6 +48,7 @@ class DB {
 
  private:
   friend class Transaction;
+  friend class NodeCache;
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
@@ -63,11 +65,6 @@ class DB {
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out,
       std::vector<Snapshot>& snapshots);
-
-  size_t log_append(std::string blob);
-  size_t log_tail();
-  std::vector<std::string> log();
-  std::string log_read(ssize_t pos);
 
   bool CommitResult(uint64_t pos);
 
@@ -86,9 +83,8 @@ class DB {
 
   std::mutex lock_;
 
-  // fake/simulated log
-  std::vector<std::string> log_;
   std::condition_variable log_cond_;
+  Backend *be_;
 
   NodeCache cache_;
 

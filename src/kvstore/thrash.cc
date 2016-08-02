@@ -139,7 +139,38 @@ int main(int argc, char **argv)
     std::map<std::string, std::string> truth;
     truth_history.push_back(truth);
 
+#if 0
+    VectorBackend be;
     DB db;
+    int ret = db.Open(&be, true);
+    assert(ret == 0);
+#else
+    zlog::SeqrClient client("localhost", "5678");
+    client.Connect();
+
+    librados::Rados rados;
+    rados.init(NULL);
+    rados.conf_read_file(NULL);
+    rados.connect();
+
+    librados::IoCtx ioctx;
+    rados.ioctx_create("rbd", ioctx);
+
+    std::stringstream ss;
+    ss << "log." << time(NULL) << "." << std::rand();
+    std::cout << "log name: " << ss.str() << std::endl;
+
+    zlog::Log *log;
+    int ret = zlog::Log::Create(ioctx, ss.str(), &client, &log);
+    assert(ret == 0);
+
+    ZLogBackend be(log);
+
+    DB db;
+    ret = db.Open(&be, true);
+    assert(ret == 0);
+#endif
+
     std::vector<Snapshot> db_history;
     db_history.push_back(db.GetSnapshot());
 
