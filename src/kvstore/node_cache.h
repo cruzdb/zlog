@@ -4,7 +4,7 @@
 #include <mutex>
 #include <utility>
 #include "node.h"
-#include "kvstore.pb.h"
+#include "kvstore/kvstore.pb.h"
 
 class DB;
 

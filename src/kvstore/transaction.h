@@ -2,7 +2,7 @@
 #define ZLOG_KVSTORE_TRANSACTION_H
 #include <deque>
 #include "node.h"
-#include "kvstore.pb.h"
+#include "kvstore/kvstore.pb.h"
 
 class DB;
 

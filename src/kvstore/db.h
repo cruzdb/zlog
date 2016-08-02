@@ -11,7 +11,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include "kvstore.pb.h"
+#include "kvstore/kvstore.pb.h"
 #include "node.h"
 #include "transaction.h"
 #include "node_cache.h"
