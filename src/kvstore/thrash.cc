@@ -109,6 +109,25 @@ static void test_seek(const std::map<std::string, std::string>& truth,
       assert(it2->first == it.key());
     }
   }
+
+  int nkey = std::rand() % (MAX_KEY + 100); // 0-max+100
+  std::string key = tostr(nkey);
+
+  auto it = db.NewIterator(snapshot);
+  it.Seek(key);
+
+  auto it2 = truth.lower_bound(key);
+  if (it2 == truth.end()) {
+    assert(!it.Valid());
+    return;
+  }
+
+  while (it.Valid()) {
+    assert(it.key() == it2->first);
+    it.Next();
+    it2++;
+  }
+  assert(it2 == truth.end());
 }
 
 int main(int argc, char **argv)
