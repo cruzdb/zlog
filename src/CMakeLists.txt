@@ -1,6 +1,6 @@
 add_subdirectory(proto)
-add_subdirectory(kvstore)
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
+add_subdirectory(kvstore)
 
 add_library(zlog_seqr SHARED libseq/libseqr.cc)
 target_link_libraries(zlog_seqr zlog_proto)
@@ -25,6 +25,7 @@ target_link_libraries(libzlog
     zlog_proto
     ${LIBRADOS_LIBRARIES}
     ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
+    ${Boost_SYSTEM_LIBRARY}
 )
 
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")

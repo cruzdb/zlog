@@ -11,7 +11,10 @@ static inline std::string tostr(int value)
 
 int main(int argc, char **argv)
 {
+  VectorBackend be;
   DB db;
+  int ret = db.Open(&be, true);
+  assert(ret == 0);
 
   std::vector<Snapshot> snapshots;
   snapshots.push_back(db.GetSnapshot());
