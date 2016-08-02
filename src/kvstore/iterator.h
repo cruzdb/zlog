@@ -72,12 +72,17 @@ class Iterator {
   //Iterator(const Iterator&);
   //void operator=(const Iterator&);
 
+  enum Direction {
+    Forward,
+    Reverse
+  };
+
   void SeekForward(const std::string& target);
   void SeekPrevious(const std::string& target);
 
   std::stack<NodeRef> stack_; // curr or unvisited parents
   Snapshot snapshot_;
-  int dir = -1;
+  Direction dir;
 };
 
 #endif

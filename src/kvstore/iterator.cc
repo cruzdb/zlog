@@ -23,7 +23,7 @@ void Iterator::SeekToFirst()
     node = node->left.ref();
   }
 
-  dir = 1; // forward
+  dir = Forward;
 }
 
 void Iterator::SeekToLast()
@@ -39,7 +39,7 @@ void Iterator::SeekToLast()
     node = node->right.ref();
   }
 
-  dir = 0; // backward
+  dir = Reverse;
 }
 
 void Iterator::Seek(const std::string& key)
@@ -54,24 +54,15 @@ void Iterator::Seek(const std::string& key)
       stack_.push(node);
       break;
     } else if (key < node->key()) {
-      NodeRef parent = node;
+      stack_.push(node);
       node = node->left.ref();
-      if (node != Node::Nil() && node->key() < key) {
-        stack_.push(parent);
-        break;
-      }
-      stack_.push(parent);
     } else
       node = node->right.ref();
   }
 
-  if (!stack_.empty() && stack_.top()->key() < key) {
-    // not found: clear stack
-    std::stack<NodeRef> stack;
-    stack_.swap(stack);
-  }
+  assert(stack_.empty() || stack_.top()->key() >= key);
 
-  dir = 1; // forward
+  dir = Forward;
 }
 
 void Iterator::SeekForward(const std::string& key)
@@ -94,7 +85,7 @@ void Iterator::SeekForward(const std::string& key)
 
   assert(stack_.empty() || stack_.top()->key() == key);
 
-  dir = 1; // forward
+  dir = Forward;
 }
 
 void Iterator::SeekPrevious(const std::string& key)
@@ -118,15 +109,15 @@ void Iterator::SeekPrevious(const std::string& key)
 
   assert(stack_.empty() || stack_.top()->key() == key);
 
-  dir = 0; // backward
+  dir = Reverse;
 }
 
 void Iterator::Next()
 {
   assert(Valid());
-  if (dir == 0) {
+  if (dir == Reverse) {
     SeekForward(key());
-    dir = 1;
+    assert(dir == Forward);
   }
   assert(Valid());
   NodeRef node = stack_.top()->right.ref();
@@ -140,9 +131,9 @@ void Iterator::Next()
 void Iterator::Prev()
 {
   assert(Valid());
-  if (dir == 1) {
+  if (dir == Forward) {
     SeekPrevious(key());
-    dir = 0;
+    assert(dir == Reverse);
   }
   assert(Valid());
   NodeRef node = stack_.top()->left.ref();

@@ -2,6 +2,8 @@
 #include <sstream>
 #include <iomanip>
 
+#define MAX_KEY 1000
+
 static inline std::string tostr(int value)
 {
   std::stringstream ss;
@@ -87,6 +89,28 @@ static std::map<std::string, std::string> get_map(DB& db,
   return map;
 }
 
+static void test_seek(const std::map<std::string, std::string>& truth,
+    DB& db, Snapshot snapshot)
+{
+  assert(truth == get_map(db, snapshot, true, 0));
+
+  for (int i = 0; i < 1000; i++) {
+    int nkey = std::rand() % (MAX_KEY + 200); // 0-max+200
+    std::string key = tostr(nkey);
+
+    auto it = db.NewIterator(snapshot);
+    it.Seek(key);
+
+    auto it2 = truth.lower_bound(key);
+    if (it2 == truth.end())
+      assert(!it.Valid());
+    else {
+      assert(it.Valid());
+      assert(it2->first == it.key());
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   std::srand(0);
@@ -101,7 +125,7 @@ int main(int argc, char **argv)
     db_history.push_back(db.GetSnapshot());
 
     // number of transactions in tree
-    int num_txns = std::rand() % 200;
+    int num_txns = std::rand() % 1000;
 
     std::cout << "building tree with " <<
       num_txns << " transactions" << std::endl;
@@ -117,7 +141,7 @@ int main(int argc, char **argv)
         // flip coin to insert or remove
         if ((std::rand() % 100) < 75) {
           // gen key/value pair to insert/update
-          int nkey = std::rand() % 1000;
+          int nkey = (std::rand() % MAX_KEY) + 100; // so there is 0-100 unused
           std::string key = tostr(nkey);
           int nval = std::rand() % 1000;
           std::string val = tostr(nval);
@@ -154,6 +178,7 @@ int main(int argc, char **argv)
         assert(truth_history[i] == get_map(db, db_history[i], true, size));
         assert(truth_history[i] == get_map(db, db_history[i], false, size));
       }
+      test_seek(truth_history[i], db, db_history[i]);
     }
     std::cout << " complete! (" << count << ")" << std::endl;
   }
