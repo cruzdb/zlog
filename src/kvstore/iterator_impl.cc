@@ -1,23 +1,23 @@
-#include "iterator.h"
+#include "iterator_impl.h"
 
-Iterator::Iterator(Snapshot snapshot) :
+IteratorImpl::IteratorImpl(Snapshot *snapshot) :
   snapshot_(snapshot)
 {
 }
 
-bool Iterator::Valid() const
+bool IteratorImpl::Valid() const
 {
   return !stack_.empty();
 }
 
-void Iterator::SeekToFirst()
+void IteratorImpl::SeekToFirst()
 {
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
   // all the way to the left
-  NodeRef node = snapshot_.root;
+  NodeRef node = snapshot_->root;
   while (node != Node::Nil()) {
     stack_.push(node);
     node = node->left.ref();
@@ -26,14 +26,14 @@ void Iterator::SeekToFirst()
   dir = Forward;
 }
 
-void Iterator::SeekToLast()
+void IteratorImpl::SeekToLast()
 {
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
   // all the way to the right
-  NodeRef node = snapshot_.root;
+  NodeRef node = snapshot_->root;
   while (node != Node::Nil()) {
     stack_.push(node);
     node = node->right.ref();
@@ -42,13 +42,13 @@ void Iterator::SeekToLast()
   dir = Reverse;
 }
 
-void Iterator::Seek(const std::string& key)
+void IteratorImpl::Seek(const std::string& key)
 {
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_.root;
+  NodeRef node = snapshot_->root;
   while (node != Node::Nil()) {
     if (key == node->key()) {
       stack_.push(node);
@@ -65,13 +65,13 @@ void Iterator::Seek(const std::string& key)
   dir = Forward;
 }
 
-void Iterator::SeekForward(const std::string& key)
+void IteratorImpl::SeekForward(const std::string& key)
 {
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_.root;
+  NodeRef node = snapshot_->root;
   while (node != Node::Nil()) {
     if (key == node->key()) {
       stack_.push(node);
@@ -88,13 +88,13 @@ void Iterator::SeekForward(const std::string& key)
   dir = Forward;
 }
 
-void Iterator::SeekPrevious(const std::string& key)
+void IteratorImpl::SeekPrevious(const std::string& key)
 {
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_.root;
+  NodeRef node = snapshot_->root;
   while (node != Node::Nil()) {
     if (key == node->key()) {
       stack_.push(node);
@@ -112,7 +112,7 @@ void Iterator::SeekPrevious(const std::string& key)
   dir = Reverse;
 }
 
-void Iterator::Next()
+void IteratorImpl::Next()
 {
   assert(Valid());
   if (dir == Reverse) {
@@ -128,7 +128,7 @@ void Iterator::Next()
   }
 }
 
-void Iterator::Prev()
+void IteratorImpl::Prev()
 {
   assert(Valid());
   if (dir == Forward) {
@@ -144,13 +144,13 @@ void Iterator::Prev()
   }
 }
 
-std::string Iterator::key() const
+std::string IteratorImpl::key() const
 {
   assert(Valid());
   return stack_.top()->key();
 }
 
-std::string Iterator::value() const
+std::string IteratorImpl::value() const
 {
   assert(Valid());
   return stack_.top()->val();

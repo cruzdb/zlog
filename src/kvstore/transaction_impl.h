@@ -3,16 +3,17 @@
 #include <deque>
 #include "node.h"
 #include "kvstore/kvstore.pb.h"
+#include "zlog/transaction.h"
 
-class DB;
+class DBImpl;
 
 /*
  * would be nice to have some mechanism here for really enforcing the idea
  * that this transaction is isolated.
  */
-class Transaction {
+class TransactionImpl : public Transaction {
  public:
-  Transaction(DB *db, NodeRef root, uint64_t snapshot, uint64_t rid) :
+  TransactionImpl(DBImpl *db, NodeRef root, uint64_t snapshot, uint64_t rid) :
     db_(db), src_root_(root), snapshot_(snapshot), rid_(rid), root_(nullptr)
   {}
 
@@ -22,7 +23,7 @@ class Transaction {
   void Commit();
 
  private:
-  DB *db_;
+  DBImpl *db_;
   // root that transaction started with
   const NodeRef src_root_;
   const uint64_t snapshot_;

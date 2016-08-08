@@ -1,6 +1,7 @@
-#include "db.h"
 #include <sstream>
 #include <iomanip>
+#include "zlog/db.h"
+#include "backend.h"
 
 static inline std::string tostr(int value)
 {
@@ -9,22 +10,22 @@ static inline std::string tostr(int value)
   return ss.str();
 }
 
-static std::map<std::string, std::string> get_map(DB& db,
-    Snapshot snapshot, bool forward)
+static std::map<std::string, std::string> get_map(DB *db,
+    Snapshot *snapshot, bool forward)
 {
   std::map<std::string, std::string> map;
-  auto it = db.NewIterator(snapshot);
+  auto it = db->NewIterator(snapshot);
   if (forward) {
-    it.SeekToFirst();
-    while (it.Valid()) {
-      map[it.key()] = it.value();
-      it.Next();
+    it->SeekToFirst();
+    while (it->Valid()) {
+      map[it->key()] = it->value();
+      it->Next();
     }
   } else {
-    it.SeekToLast();
-    while (it.Valid()) {
-      map[it.key()] = it.value();
-      it.Prev();
+    it->SeekToLast();
+    while (it->Valid()) {
+      map[it->key()] = it->value();
+      it->Prev();
     }
   }
   return map;
@@ -44,12 +45,12 @@ int main(int argc, char **argv)
 
     // initially empty ptree
     VectorBackend be;
-    DB db;
-    int ret = db.Open(&be, true);
+    DB *db;
+    int ret = DB::Open(&be, true, &db);
     assert(ret == 0);
 
-    std::vector<Snapshot> db_history;
-    db_history.push_back(db.GetSnapshot());
+    std::vector<Snapshot*> db_history;
+    db_history.push_back(db->GetSnapshot());
 
     for (int i = 0; i < 300; i++) {
 
@@ -64,11 +65,11 @@ int main(int argc, char **argv)
       truth_history.push_back(truth);
 
       // update tree and save snapshot
-      auto txn = db.BeginTransaction();
-      txn.Put(key, val);
-      txn.Commit();
+      auto txn = db->BeginTransaction();
+      txn->Put(key, val);
+      txn->Commit();
 
-      db_history.push_back(db.GetSnapshot());
+      db_history.push_back(db->GetSnapshot());
     }
 
     assert(truth_history.size() == db_history.size());

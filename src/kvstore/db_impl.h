@@ -13,41 +13,36 @@
 #include <vector>
 #include "kvstore/kvstore.pb.h"
 #include "node.h"
-#include "transaction.h"
+#include "transaction_impl.h"
 #include "node_cache.h"
 #include "snapshot.h"
-#include "iterator.h"
+#include "iterator_impl.h"
 #include "backend.h"
+#include "zlog/db.h"
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Node& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
-class DB {
+class DBImpl : public DB {
  public:
-  DB();
-  ~DB();
+  explicit DBImpl(Backend *be);
+  ~DBImpl();
 
-  int Open(Backend *be, bool create_if_empty);
+  Transaction *BeginTransaction();
 
-  Transaction BeginTransaction();
-
-  Snapshot GetSnapshot() {
+  Snapshot *GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
-    return Snapshot(root_, root_pos_, root_desc_);
+    return new Snapshot(root_, root_pos_, root_desc_);
   }
 
-  Iterator NewIterator(Snapshot snapshot) {
-    return Iterator(snapshot);
-  }
-
-  Iterator NewIterator() {
-    return NewIterator(GetSnapshot());
+  Iterator *NewIterator(Snapshot *snapshot) {
+    return new IteratorImpl(snapshot);
   }
 
  private:
-  friend class Transaction;
+  friend class TransactionImpl;
   friend class NodeCache;
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
@@ -64,7 +59,7 @@ class DB {
 
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out,
-      std::vector<Snapshot>& snapshots);
+      std::vector<Snapshot*>& snapshots);
 
   bool CommitResult(uint64_t pos);
 

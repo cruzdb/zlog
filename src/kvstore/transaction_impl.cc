@@ -1,9 +1,8 @@
-#include "transaction.h"
 #include <deque>
 #include <sstream>
-#include "db.h"
+#include "db_impl.h"
 
-void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
+void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     NodePtr& src, const std::string& dir) const
 {
   if (src.ref() == Node::Nil()) {
@@ -27,7 +26,7 @@ void Transaction::serialize_node_ptr(kvstore_proto::NodePtr *dst,
   }
 }
 
-void Transaction::serialize_node(kvstore_proto::Node *dst,
+void TransactionImpl::serialize_node(kvstore_proto::Node *dst,
     NodeRef node, int field_index) const
 {
   dst->set_red(node->red());
@@ -45,7 +44,7 @@ void Transaction::serialize_node(kvstore_proto::Node *dst,
   serialize_node_ptr(dst->mutable_right(), node->right, "right");
 }
 
-NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
+NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
     std::string key, std::string val, const NodeRef& node)
 {
   assert(node != nullptr);
@@ -95,7 +94,7 @@ NodeRef Transaction::insert_recursive(std::deque<NodeRef>& path,
 }
 
 template<typename ChildA, typename ChildB >
-NodeRef Transaction::rotate(NodeRef parent,
+NodeRef TransactionImpl::rotate(NodeRef parent,
     NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root)
 {
   // copy over ref and csn/off because we might be moving a pointer that
@@ -120,7 +119,7 @@ NodeRef Transaction::rotate(NodeRef parent,
 }
 
 template<typename ChildA, typename ChildB>
-void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
+void TransactionImpl::insert_balance(NodeRef& parent, NodeRef& nn,
     std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
     NodeRef& root)
 {
@@ -145,7 +144,7 @@ void Transaction::insert_balance(NodeRef& parent, NodeRef& nn,
   }
 }
 
-NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
+NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
     std::string key, const NodeRef& node)
 {
   assert(node != nullptr);
@@ -196,7 +195,7 @@ NodeRef Transaction::delete_recursive(std::deque<NodeRef>& path,
   return copy;
 }
 
-void Transaction::transplant(NodeRef parent, NodeRef removed,
+void TransactionImpl::transplant(NodeRef parent, NodeRef removed,
     NodeRef transplanted, NodeRef& root)
 {
   if (parent == Node::Nil()) {
@@ -208,7 +207,7 @@ void Transaction::transplant(NodeRef parent, NodeRef removed,
   }
 }
 
-NodeRef Transaction::build_min_path(NodeRef node, std::deque<NodeRef>& path)
+NodeRef TransactionImpl::build_min_path(NodeRef node, std::deque<NodeRef>& path)
 {
   assert(node != nullptr);
   assert(node->left.ref() != nullptr);
@@ -224,7 +223,7 @@ NodeRef Transaction::build_min_path(NodeRef node, std::deque<NodeRef>& path)
 }
 
 template<typename ChildA, typename ChildB>
-void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
+void TransactionImpl::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
     std::deque<NodeRef>& path, ChildA child_a, ChildB child_b, NodeRef& root)
 {
   NodeRef brother = child_b(parent).ref();
@@ -290,7 +289,7 @@ void Transaction::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
   }
 }
 
-void Transaction::balance_delete(NodeRef extra_black,
+void TransactionImpl::balance_delete(NodeRef extra_black,
     std::deque<NodeRef>& path, NodeRef& root)
 {
   auto parent = pop_front(path);
@@ -329,7 +328,7 @@ void Transaction::balance_delete(NodeRef extra_black,
     new_node->set_red(false);
 }
 
-void Transaction::serialize_intention(NodeRef node, int& field_index)
+void TransactionImpl::serialize_intention(NodeRef node, int& field_index)
 {
   assert(node != nullptr);
 
@@ -345,7 +344,7 @@ void Transaction::serialize_intention(NodeRef node, int& field_index)
   field_index++;
 }
 
-void Transaction::set_intention_self_csn_recursive(uint64_t rid,
+void TransactionImpl::set_intention_self_csn_recursive(uint64_t rid,
     NodeRef node, uint64_t pos) {
 
   if (node == Node::Nil() || node->rid() != rid)
@@ -363,11 +362,11 @@ void Transaction::set_intention_self_csn_recursive(uint64_t rid,
   set_intention_self_csn_recursive(rid, node->left.ref(), pos);
 }
 
-void Transaction::set_intention_self_csn(NodeRef root, uint64_t pos) {
+void TransactionImpl::set_intention_self_csn(NodeRef root, uint64_t pos) {
   set_intention_self_csn_recursive(root->rid(), root, pos);
 }
 
-void Transaction::Put(const std::string& key, const std::string& val)
+void TransactionImpl::Put(const std::string& key, const std::string& val)
 {
   /*
    * build copy of path to new node
@@ -418,7 +417,7 @@ void Transaction::Put(const std::string& key, const std::string& val)
   root_ = root;
 }
 
-void Transaction::Delete(std::string key)
+void TransactionImpl::Delete(std::string key)
 {
   std::deque<NodeRef> path;
 
@@ -480,7 +479,7 @@ void Transaction::Delete(std::string key)
   root_ = root;
 }
 
-void Transaction::Commit()
+void TransactionImpl::Commit()
 {
   // nothing to do
   if (root_ == nullptr) {
