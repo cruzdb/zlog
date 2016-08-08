@@ -4,10 +4,11 @@
 #include <stack>
 #include "node.h"
 #include "snapshot.h"
+#include "zlog/iterator.h"
 
-class Iterator {
+class IteratorImpl : public Iterator {
  public:
-  Iterator(Snapshot snapshot);
+  IteratorImpl(Snapshot *snapshot);
 
   // An iterator is either positioned at a key/value pair, or
   // not valid.  This method returns true iff the iterator is valid.
@@ -81,7 +82,7 @@ class Iterator {
   void SeekPrevious(const std::string& target);
 
   std::stack<NodeRef> stack_; // curr or unvisited parents
-  Snapshot snapshot_;
+  Snapshot *snapshot_;
   Direction dir;
 };
 

@@ -5,10 +5,10 @@ target_link_libraries(kvstore_proto
 )
 
 add_library(libkvstore SHARED
-    db.cc
-    transaction.cc
+    db_impl.cc
+    transaction_impl.cc
     node_cache.cc
-    iterator.cc
+    iterator_impl.cc
 )
 target_link_libraries(libkvstore libzlog kvstore_proto)
 

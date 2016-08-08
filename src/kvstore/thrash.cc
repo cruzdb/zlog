@@ -1,6 +1,8 @@
-#include "db.h"
 #include <sstream>
 #include <iomanip>
+#include <map>
+#include "zlog/db.h"
+#include "backend.h"
 
 #define MAX_KEY 1000
 
@@ -11,78 +13,78 @@ static inline std::string tostr(int value)
   return ss.str();
 }
 
-static std::map<std::string, std::string> get_map(DB& db,
-    Snapshot snapshot, bool forward, size_t split)
+static std::map<std::string, std::string> get_map(DB *db,
+    Snapshot *snapshot, bool forward, size_t split)
 {
   std::map<std::string, std::string> map;
-  auto it = db.NewIterator(snapshot);
+  auto it = db->NewIterator(snapshot);
   if (split > 0) {
     size_t half = split / 2;
     if (forward) {
       // skip forward half entries
-      it.SeekToFirst();
+      it->SeekToFirst();
       for (size_t i = 1; i < half; i++) {
-        it.Next();
+        it->Next();
       }
 
       // insert that range moving backward
-      assert(it.Valid());
-      while (it.Valid()) {
-        map[it.key()] = it.value();
-        it.Prev();
+      assert(it->Valid());
+      while (it->Valid()) {
+        map[it->key()] = it->value();
+        it->Prev();
       }
 
       // skip forward half entries
-      it.SeekToFirst();
+      it->SeekToFirst();
       for (size_t i = 0; i < half; i++) {
-        it.Next();
+        it->Next();
       }
-      assert(it.Valid());
+      assert(it->Valid());
 
       // add the last half
-      while (it.Valid()) {
-        map[it.key()] = it.value();
-        it.Next();
+      while (it->Valid()) {
+        map[it->key()] = it->value();
+        it->Next();
       }
     } else {
       // skip back half entries
-      it.SeekToLast();
+      it->SeekToLast();
       for (size_t i = 1; i < half; i++) {
-        it.Prev();
+        it->Prev();
       }
 
       // insert that range moving forward
-      assert(it.Valid());
-      while (it.Valid()) {
-        map[it.key()] = it.value();
-        it.Next();
+      assert(it->Valid());
+      while (it->Valid()) {
+        map[it->key()] = it->value();
+        it->Next();
       }
 
       // skip back half entries
-      it.SeekToLast();
+      it->SeekToLast();
       for (size_t i = 0; i < half; i++) {
-        it.Prev();
+        it->Prev();
       }
-      assert(it.Valid());
+      assert(it->Valid());
 
       // add the frst half
-      while (it.Valid()) {
-        map[it.key()] = it.value();
-        it.Prev();
+      while (it->Valid()) {
+        map[it->key()] = it->value();
+        it->Prev();
       }
     }
   } else {
     if (forward) {
-      it.SeekToFirst();
-      while (it.Valid()) {
-        map[it.key()] = it.value();
-        it.Next();
+      it->SeekToFirst();
+      while (it->Valid()) {
+        map[it->key()] = it->value();
+        it->Next();
       }
     } else {
-      it.SeekToLast();
-      while (it.Valid()) {
-        map[it.key()] = it.value();
-        it.Prev();
+      it->SeekToLast();
+      while (it->Valid()) {
+        map[it->key()] = it->value();
+        it->Prev();
       }
     }
   }
@@ -90,7 +92,7 @@ static std::map<std::string, std::string> get_map(DB& db,
 }
 
 static void test_seek(const std::map<std::string, std::string>& truth,
-    DB& db, Snapshot snapshot)
+    DB *db, Snapshot *snapshot)
 {
   assert(truth == get_map(db, snapshot, true, 0));
 
@@ -98,33 +100,33 @@ static void test_seek(const std::map<std::string, std::string>& truth,
     int nkey = std::rand() % (MAX_KEY + 200); // 0-max+200
     std::string key = tostr(nkey);
 
-    auto it = db.NewIterator(snapshot);
-    it.Seek(key);
+    auto it = db->NewIterator(snapshot);
+    it->Seek(key);
 
     auto it2 = truth.lower_bound(key);
     if (it2 == truth.end())
-      assert(!it.Valid());
+      assert(!it->Valid());
     else {
-      assert(it.Valid());
-      assert(it2->first == it.key());
+      assert(it->Valid());
+      assert(it2->first == it->key());
     }
   }
 
   int nkey = std::rand() % (MAX_KEY + 100); // 0-max+100
   std::string key = tostr(nkey);
 
-  auto it = db.NewIterator(snapshot);
-  it.Seek(key);
+  auto it = db->NewIterator(snapshot);
+  it->Seek(key);
 
   auto it2 = truth.lower_bound(key);
   if (it2 == truth.end()) {
-    assert(!it.Valid());
+    assert(!it->Valid());
     return;
   }
 
-  while (it.Valid()) {
-    assert(it.key() == it2->first);
-    it.Next();
+  while (it->Valid()) {
+    assert(it->key() == it2->first);
+    it->Next();
     it2++;
   }
   assert(it2 == truth.end());
@@ -139,10 +141,10 @@ int main(int argc, char **argv)
     std::map<std::string, std::string> truth;
     truth_history.push_back(truth);
 
-#if 0
+#if 1
     VectorBackend be;
-    DB db;
-    int ret = db.Open(&be, true);
+    DB *db;
+    int ret = DB::Open(&be, true, &db);
     assert(ret == 0);
 #else
     zlog::SeqrClient client("localhost", "5678");
@@ -166,13 +168,13 @@ int main(int argc, char **argv)
 
     ZLogBackend be(log);
 
-    DB db;
+    DBImpl db;
     ret = db.Open(&be, true);
     assert(ret == 0);
 #endif
 
-    std::vector<Snapshot> db_history;
-    db_history.push_back(db.GetSnapshot());
+    std::vector<Snapshot*> db_history;
+    db_history.push_back(db->GetSnapshot());
 
     // number of transactions in tree
     int num_txns = std::rand() % 1000;
@@ -186,7 +188,7 @@ int main(int argc, char **argv)
       // number of operations in this transaction
       int num_ops = std::rand() % 10;
 
-      auto txn = db.BeginTransaction();
+      auto txn = db->BeginTransaction();
       while (num_ops--) {
         // flip coin to insert or remove
         if ((std::rand() % 100) < 75) {
@@ -196,7 +198,7 @@ int main(int argc, char **argv)
           int nval = std::rand() % 1000;
           std::string val = tostr(nval);
           truth[key] = val;
-          txn.Put(key, val);
+          txn->Put(key, val);
         } else {
           // remove things that are actually in tree
           if (truth.empty())
@@ -206,13 +208,13 @@ int main(int argc, char **argv)
           assert(it != truth.end());
           std::string key = it->first;
           truth.erase(it);
-          txn.Delete(key);
+          txn->Delete(key);
         }
       }
-      txn.Commit();
+      txn->Commit();
 
       truth_history.push_back(truth);
-      db_history.push_back(db.GetSnapshot());
+      db_history.push_back(db->GetSnapshot());
     }
 
     uint64_t count = 0;

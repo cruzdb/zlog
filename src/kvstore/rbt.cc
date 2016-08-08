@@ -1,6 +1,7 @@
-#include "db.h"
 #include <sstream>
 #include <iomanip>
+#include "zlog/db.h"
+#include "backend.h"
 
 static inline std::string tostr(int value)
 {
@@ -12,19 +13,19 @@ static inline std::string tostr(int value)
 int main(int argc, char **argv)
 {
   VectorBackend be;
-  DB db;
-  int ret = db.Open(&be, true);
+  DB *db;
+  int ret = DB::Open(&be, true, &db);
   assert(ret == 0);
 
-  std::vector<Snapshot> snapshots;
-  snapshots.push_back(db.GetSnapshot());
+  std::vector<Snapshot*> snapshots;
+  snapshots.push_back(db->GetSnapshot());
 
   int num_txns = 20;
   while (num_txns--) {
 
     // number of operations in this transaction
     int num_ops = std::rand() % 10;
-    auto txn = db.BeginTransaction();
+    auto txn = db->BeginTransaction();
     while (num_ops--) {
 
       // gen key/value pair
@@ -35,22 +36,24 @@ int main(int argc, char **argv)
 
       // flip coin to insert or remove
       if ((std::rand() % 100) < 50) {
-        txn.Put(key, val);
+        txn->Put(key, val);
       } else {
-        txn.Delete(key);
+        txn->Delete(key);
       }
     }
-    txn.Commit();
+    txn->Commit();
 
     // this keeps the snapshot if it isn't a duplicate (ie the txn didn't do
     // anything). this special case isn't bc of the db internals, its because
     // the graphviz generation isn't very smart.
-    auto snapshot = db.GetSnapshot();
+    auto snapshot = db->GetSnapshot();
+#ifdef FIXME
     if (snapshot.root != snapshots.back().root)
+#endif
       snapshots.push_back(snapshot);
   }
 
-  db.write_dot_history(std::cout, snapshots);
+  db->write_dot_history(std::cout, snapshots);
 
   return 0;
 }

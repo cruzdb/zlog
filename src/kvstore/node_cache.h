@@ -6,11 +6,11 @@
 #include "node.h"
 #include "kvstore/kvstore.pb.h"
 
-class DB;
+class DBImpl;
 
 class NodeCache {
  public:
-  explicit NodeCache(DB *db) :
+  explicit NodeCache(DBImpl *db) :
     db_(db)
   {}
 
@@ -18,7 +18,7 @@ class NodeCache {
       uint64_t pos);
 
  private:
-  DB *db_;
+  DBImpl *db_;
   std::mutex lock_;
   std::map<std::pair<uint64_t, int>, NodeRef> nodes_;
 

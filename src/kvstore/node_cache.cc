@@ -1,5 +1,5 @@
 #include "node_cache.h"
-#include "db.h"
+#include "db_impl.h"
 
 void NodeCache::ResolveNodePtr(NodePtr& ptr)
 {

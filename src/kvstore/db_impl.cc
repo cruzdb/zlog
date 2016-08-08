@@ -1,24 +1,25 @@
-#include "db.h"
+#include "db_impl.h"
 #include <sstream>
-#include "transaction.h"
 
-DB::DB() :
-  be_(NULL), cache_(this)
+DBImpl::DBImpl(Backend *be) :
+  be_(be), cache_(this)
 {
-}
-
-int DB::Open(Backend *be, bool create_if_empty)
-{
-  be_ = be;
-
   root_ = Node::Nil();
   root_pos_ = 0;
 
   last_pos_ = 0;
   stop_ = false;
 
+  // todo: enable/disable debug
+  validate_rb_tree(root_);
+
+  log_processor_ = std::thread(&DBImpl::process_log_entry, this);
+}
+
+int DB::Open(Backend *be, bool create_if_empty, DB **db)
+{
   uint64_t tail;
-  int ret = be_->Tail(&tail);
+  int ret = be->Tail(&tail);
   assert(ret == 0);
 
   // empty log
@@ -32,22 +33,26 @@ int DB::Open(Backend *be, bool create_if_empty)
     assert(intention.IsInitialized());
     assert(intention.SerializeToString(&blob));
 
-    ret = be_->Append(blob, &tail);
+    ret = be->Append(blob, &tail);
     assert(ret == 0);
     assert(tail == 0);
 
-    ret = be_->Tail(&tail);
+    ret = be->Tail(&tail);
     assert(ret == 0);
     assert(tail == 1);
   }
 
-  // todo: enable/disable debug
-  validate_rb_tree(root_);
+  DBImpl *impl = new DBImpl(be);
+  *db = impl;
 
-  log_processor_ = std::thread(&DB::process_log_entry, this);
+  return 0;
 }
 
 DB::~DB()
+{
+}
+
+DBImpl::~DBImpl()
 {
   lock_.lock();
   stop_ = true;
@@ -100,9 +105,9 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i)
   return out;
 }
 
-uint64_t DB::root_id_ = 928734;
+uint64_t DBImpl::root_id_ = 928734;
 
-void DB::write_dot_null(std::ostream& out,
+void DBImpl::write_dot_null(std::ostream& out,
     NodeRef node, uint64_t& nullcount)
 {
   nullcount++;
@@ -112,7 +117,7 @@ void DB::write_dot_null(std::ostream& out,
     << nullcount << " [label=\"nil\"];" << std::endl;
 }
 
-void DB::write_dot_node(std::ostream& out,
+void DBImpl::write_dot_node(std::ostream& out,
     NodeRef parent, NodePtr& child, const std::string& dir)
 {
   out << "\"" << parent.get() << "\":" << dir << " -> ";
@@ -121,7 +126,7 @@ void DB::write_dot_node(std::ostream& out,
     << child.offset() << "\"];" << std::endl;
 }
 
-void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
+void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
     NodeRef node, uint64_t& nullcount, bool scoped)
 {
   if (scoped && node->rid() != rid)
@@ -150,7 +155,7 @@ void DB::write_dot_recursive(std::ostream& out, uint64_t rid,
   }
 }
 
-void DB::_write_dot(std::ostream& out, NodeRef root,
+void DBImpl::_write_dot(std::ostream& out, NodeRef root,
     uint64_t& nullcount, bool scoped)
 {
   assert(root != nullptr);
@@ -158,7 +163,7 @@ void DB::_write_dot(std::ostream& out, NodeRef root,
       root, nullcount, scoped);
 }
 
-void DB::write_dot(std::ostream& out, bool scoped)
+void DBImpl::write_dot(std::ostream& out, bool scoped)
 {
   auto root = root_;
   uint64_t nullcount = 0;
@@ -167,28 +172,30 @@ void DB::write_dot(std::ostream& out, bool scoped)
   out << "}" << std::endl;
 }
 
-void DB::write_dot_history(std::ostream& out,
-    std::vector<Snapshot>& snapshots)
+void DBImpl::write_dot_history(std::ostream& out,
+    std::vector<Snapshot*>& snapshots)
 {
   uint64_t trees = 0;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
   std::string prev_root = "";
+
   for (auto it = snapshots.cbegin(); it != snapshots.end(); it++) {
 
     // build sub-graph label
     std::stringstream label;
-    label << "label = \"root: " << it->seq;
-    for (const auto& s : it->desc)
+    label << "label = \"root: " << (*it)->seq;
+    for (const auto& s : (*it)->desc)
       label << "\n" << s;
     label << "\"";
 
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    if (it->root == Node::Nil()) {
+    if ((*it)->root == Node::Nil()) {
       out << "null" << ++nullcount << " [label=nil];" << std::endl;
     } else {
-      _write_dot(out, it->root, nullcount, true);
+      _write_dot(out, (*it)->root, nullcount, true);
     }
+
 #if 0
     if (prev_root != "")
       out << "\"" << prev_root << "\" -> \"" << it->root.get() << "\" [style=invis];" << std::endl;
@@ -202,7 +209,7 @@ void DB::write_dot_history(std::ostream& out,
   out << "}" << std::endl;
 }
 
-void DB::print_node(NodeRef node)
+void DBImpl::print_node(NodeRef node)
 {
   if (node == Node::Nil())
     std::cout << "nil:" << (node->red() ? "r" : "b");
@@ -210,7 +217,7 @@ void DB::print_node(NodeRef node)
     std::cout << node->key() << ":" << (node->red() ? "r" : "b");
 }
 
-void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
+void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
 {
   out << "path: ";
   if (path.empty()) {
@@ -231,7 +238,7 @@ void DB::print_path(std::ostream& out, std::deque<NodeRef>& path)
 /*
  *
  */
-int DB::_validate_rb_tree(const NodeRef root)
+int DBImpl::_validate_rb_tree(const NodeRef root)
 {
   assert(root != nullptr);
 
@@ -267,18 +274,18 @@ int DB::_validate_rb_tree(const NodeRef root)
   return 0;
 }
 
-void DB::validate_rb_tree(NodeRef root)
+void DBImpl::validate_rb_tree(NodeRef root)
 {
   assert(_validate_rb_tree(root) != 0);
 }
 
-Transaction DB::BeginTransaction()
+Transaction *DBImpl::BeginTransaction()
 {
   std::lock_guard<std::mutex> l(lock_);
-  return Transaction(this, root_, root_pos_, root_id_++);
+  return new TransactionImpl(this, root_, root_pos_, root_id_++);
 }
 
-void DB::process_log_entry()
+void DBImpl::process_log_entry()
 {
   for (;;) {
     std::unique_lock<std::mutex> l(lock_);
@@ -336,7 +343,7 @@ void DB::process_log_entry()
   }
 }
 
-bool DB::CommitResult(uint64_t pos)
+bool DBImpl::CommitResult(uint64_t pos)
 {
   for (;;) {
     std::unique_lock<std::mutex> l(lock_);
