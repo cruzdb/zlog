@@ -13,6 +13,10 @@ More information:
 
 This project uses Semantic Versioning (http://semver.org/).
 
+## Getting Involved
+
+We welcome and encourage people to learn and contribute to the zlog project. If you are looking for ways to get started, we use the [help-wanted](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) label to tag issues that we think are good candidates for new contributors.
+
 ## Language Bindings
 
 The base zlog project provides C, C++, and Java bindings.
