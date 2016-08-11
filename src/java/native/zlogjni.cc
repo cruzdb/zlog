@@ -4,6 +4,7 @@
 
 #include "com_cruzdb_Log.h"
 #include "portal.h"
+#include "zlog/ceph_backend.h"
 
 void Java_com_cruzdb_Log_disposeInternal(
     JNIEnv *env, jobject jobj, jlong jhandle)
@@ -61,8 +62,11 @@ void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
     goto out_noexcept;
   }
 
+  // FIXME: this is a memory leak!
+  CephBackend *be = new CephBackend(&log->ioctx);
+
   log_name = env->GetStringUTFChars(jlog_name, 0);
-  ret = zlog::Log::OpenOrCreate(log->ioctx, log_name, log->seqr_client, &log->log);
+  ret = zlog::Log::OpenOrCreate(be, log_name, log->seqr_client, &log->log);
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)
     goto out;
