@@ -104,6 +104,20 @@ target_link_libraries(zlog-bench-ng
 
 ####
 
+add_executable(zlog-bench
+    bench/bench.cc
+)
+
+target_link_libraries(zlog-bench
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    atomic
+)
+
+####
+
 add_executable(stream-stress
     stream-stress.cc
 )
