@@ -218,8 +218,7 @@ TEST(LibZlog, Append) {
 
   for (int i = 0; i < 100; i++) {
     uint64_t pos;
-    ceph::bufferlist bl;
-    ret = log->Append(bl, &pos);
+    ret = log->Append(Slice(), &pos);
     ASSERT_EQ(ret, 0);
 
     ASSERT_EQ(pos, tail);
@@ -235,8 +234,7 @@ TEST(LibZlog, Append) {
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
 
-  ceph::bufferlist bl;
-  ret = log->Append(bl, &pos2);
+  ret = log->Append(Slice(), &pos2);
   ASSERT_EQ(ret, 0);
   ASSERT_GT(pos2, pos);
 
@@ -688,8 +686,7 @@ TEST(LibZlog, Fill) {
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ceph::bufferlist bl;
-  ret = log->Append(bl, &pos);
+  ret = log->Append(Slice(), &pos);
   ASSERT_EQ(ret, 0);
 
   ret = log->Fill(pos);
@@ -740,16 +737,16 @@ TEST(LibZlog, Read) {
   ret = log->Read(232, bl);
   ASSERT_EQ(ret, -EFAULT);
 
+  const char *input = "asdfasdfasdf";
   uint64_t pos;
-  bl.append("asdfasdfasdf");
-  ret = log->Append(bl, &pos);
+  ret = log->Append(Slice(input), &pos);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl2;
   ret = log->Read(pos, bl2);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_TRUE(bl == bl2);
+  ASSERT_TRUE(Slice(input) == Slice(bl2.c_str(), bl2.length()));
 
   // trim a written position
   ret = log->Trim(pos);
@@ -795,8 +792,7 @@ TEST(LibZlog, Trim) {
 
   // can trim written spot
   uint64_t pos;
-  ceph::bufferlist bl;
-  ret = log->Append(bl, &pos);
+  ret = log->Append(Slice(), &pos);
   ASSERT_EQ(ret, 0);
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);

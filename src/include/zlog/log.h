@@ -3,6 +3,7 @@
 #include <rados/librados.hpp>
 #include "libseq/libseqr.h"
 #include "zlog/stream.h"
+#include "zlog/slice.h"
 
 namespace zlog {
 
@@ -21,7 +22,7 @@ class Log {
   /*
    * Synchronous API
    */
-  virtual int Append(ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
+  virtual int Append(const Slice& data, uint64_t *pposition = NULL) = 0;
   virtual int Read(uint64_t position, ceph::bufferlist& bl) = 0;
   virtual int Fill(uint64_t position) = 0;
   virtual int CheckTail(uint64_t *pposition) = 0;

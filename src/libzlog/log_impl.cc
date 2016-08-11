@@ -598,7 +598,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
  * we pause for a second. other options include waiting to observe an _actual_
  * change to a new projection. that is probably better...
  */
-int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
+int LogImpl::Append(const Slice& data, uint64_t *pposition)
 {
   for (;;) {
     uint64_t position;
@@ -610,8 +610,10 @@ int LogImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
+    ceph::bufferlist data_bl;
+    data_bl.append(data.data(), data.size());
     librados::ObjectWriteOperation op;
-    backend->write(op, epoch, position, data);
+    backend->write(op, epoch, position, data_bl);
 
     ret = ioctx_->operate(oid, &op);
     if (ret < 0 && ret != -EFBIG) {
@@ -902,9 +904,7 @@ extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
     uint64_t *pposition)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  ceph::bufferlist bl;
-  bl.append((char*)data, len);
-  return ctx->log->Append(bl, pposition);
+  return ctx->log->Append(Slice((char*)data, len), pposition);
 }
 
 extern "C" int zlog_multiappend(zlog_log_t log, const void *data,

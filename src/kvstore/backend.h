@@ -16,9 +16,7 @@ class ZLogBackend : public Backend {
   {}
 
   virtual int Append(const std::string& data, uint64_t *pos) {
-    ceph::bufferlist bl;
-    bl.append(data.c_str(), data.size());
-    return log_->Append(bl, pos);
+    return log_->Append(Slice(data), pos);
   }
 
   virtual int Tail(uint64_t *pos) {

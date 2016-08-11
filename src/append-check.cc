@@ -119,11 +119,8 @@ int main(int argc, char **argv)
     char bytes[sizeof(value)];
     memcpy(bytes, &value, sizeof(value));
 
-    ceph::bufferlist bl;
-    bl.append(bytes, sizeof(bytes));
-
     uint64_t pos;
-    int ret = log->Append(bl, &pos);
+    int ret = log->Append(Slice(bytes, sizeof(bytes)), &pos);
     assert(ret == 0);
 
     std::cout << "Append: " << pos << std::endl;

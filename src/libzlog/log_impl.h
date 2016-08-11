@@ -43,7 +43,7 @@ class LogImpl : public Log {
   /*
    * Append data to the log and return its position.
    */
-  int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
+  int Append(const Slice& data, uint64_t *pposition = NULL);
 
   int OpenStream(uint64_t stream_id, zlog::Stream **streamptr);
 

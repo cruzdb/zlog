@@ -24,9 +24,7 @@ void client_thread(zlog::LogImpl *log, bool check_tail)
     if (check_tail) {
       ret = log->CheckTail(&pos, true);
     } else {
-      ceph::bufferlist bl;
-      bl.append(buf);
-      ret = log->Append(bl, &pos);
+      ret = log->Append(Slice(buf, sizeof(buf)), &pos);
     }
     assert(ret == 0);
   }

@@ -413,8 +413,7 @@ int main(int argc, char **argv)
   // this is just a little hack that forces the epoch to be refreshed in the
   // log instance. otherwise when we blast out a bunch of async requests they
   // all end up having old epochs.
-  ceph::bufferlist bl;
-  log->Append(bl);
+  log->Append(Slice());
 
   /*
    * For read mode we look up the current tail and then issue random reads
@@ -501,10 +500,8 @@ int main(int argc, char **argv)
           iobuf[i] = (char)rand();
         }
         uint64_t pos = 0;
-        ceph::bufferlist bl;
-        bl.append(iobuf, iosize);
         start_ns = getns();
-        int ret = log->Append(bl, &pos);
+        int ret = log->Append(Slice(iobuf, iosize), &pos);
         latency_ns = getns() - start_ns;
         assert(ret == 0);
         assert(pos > 0);

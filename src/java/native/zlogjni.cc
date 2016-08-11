@@ -83,13 +83,11 @@ jlong Java_com_cruzdb_Log_append(JNIEnv *env, jobject jlog,
   auto log = reinterpret_cast<LogWrapper*>(jlog_handle);
 
   jbyte *data = env->GetByteArrayElements(jdata, 0);
-  ceph::bufferlist bl;
-  bl.append((char*)data, jdata_len);
-  env->ReleaseByteArrayElements(jdata, data, JNI_ABORT);
 
   uint64_t position;
-  int ret = log->log->Append(bl, &position);
+  int ret = log->log->Append(Slice((char*)data, jdata_len), &position);
   ZlogExceptionJni::ThrowNew(env, ret);
+  env->ReleaseByteArrayElements(jdata, data, JNI_ABORT);
 
   return position;
 }

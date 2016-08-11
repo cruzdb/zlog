@@ -6,11 +6,7 @@ using namespace skytype;
 
 int SkyObject::update_helper(const void *data, size_t size)
 {
-  ceph::bufferptr bp((char*)data, size);
-  ceph::bufferlist bl;
-  bl.push_back(bp);
-
-  int ret = log_->Append(bl);
+  int ret = log_->Append(Slice((char*)data, size));
   if (ret)
     return ret;
 
