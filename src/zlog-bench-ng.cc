@@ -22,7 +22,7 @@ namespace po = boost::program_options;
 struct AioState {
   zlog::LogImpl *log;
   ceph::bufferlist append_bl;
-  ceph::bufferlist read_bl;
+  std::string read_str;
   zlog::AioCompletion *c;
   librados::AioCompletion *rc; // used by append workload
   uint64_t position;
@@ -177,7 +177,7 @@ static void handle_read_cb(AioState *s)
     std::cout << op_rv << " " << s->position << std::endl;
   }
   assert(s->c->ReturnValue() == 0);
-  assert(s->read_bl.length() > 0);
+  assert(s->read_str.size() > 0);
 
   delete s->c;
   s->c = NULL;
@@ -525,7 +525,7 @@ int main(int argc, char **argv)
           state->c = zlog::Log::aio_create_completion(std::bind(handle_read_cb, state));
           assert(state->c);
           state->submitted = std::chrono::steady_clock::now();
-          ret = log->AioRead(state->position, state->c, &state->read_bl);
+          ret = log->AioRead(state->position, state->c, &state->read_str);
           assert(ret == 0);
         } else if (append) {
           // this is a simulation where we grab a sequence number and do an

@@ -62,7 +62,7 @@ class AioCompletionImpl {
    * pbl:
    *  - where to put result
    */
-  ceph::bufferlist *pbl;
+  std::string *datap;
 
   AioCompletionImpl() :
     ref(1), complete(false), released(false), retval(0)
@@ -131,8 +131,8 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
     /*
      * Read was successful. We're done.
      */
-    if (impl->pbl && impl->bl.length() > 0) {
-      *impl->pbl = impl->bl;
+    if (impl->datap && impl->bl.length() > 0) {
+      impl->datap->assign(impl->bl.c_str(), impl->bl.length());
     }
     ret = 0;
     finish = true;
@@ -401,14 +401,14 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 }
 
 int LogImpl::AioRead(uint64_t position, AioCompletion *c,
-    ceph::bufferlist *pbl)
+    std::string *datap)
 {
   AioCompletionImplWrapper *wrapper =
     reinterpret_cast<AioCompletionImplWrapper*>(c);
   AioCompletionImpl *impl = wrapper->impl_;
 
   impl->log = this;
-  impl->pbl = pbl;
+  impl->datap = datap;
   impl->position = position;
   impl->ioctx = ioctx_;
   impl->type = ZLOG_AIO_READ;

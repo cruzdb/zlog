@@ -63,7 +63,7 @@ class LogImpl : public Log {
    * Read data asynchronously from the log.
    */
   int AioRead(uint64_t position, zlog::AioCompletion *c,
-      ceph::bufferlist *bpl);
+      std::string *datap);
 
   /*
    * Mark a position as unused.
