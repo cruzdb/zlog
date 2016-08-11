@@ -48,14 +48,14 @@ sleep 1
 ps aux | grep zlog
 
 # now with automake
-cd ../..
-rm -rf build
-autoreconf -ivf
-./configure
-make
-
-cd src
-export CEPH_CONF=/tmp/ceph/ceph.conf
-./zlog-seqr --streams --port 5678 --daemon
-./zlog-test
-make test-java
+#cd ../..
+#rm -rf build
+#autoreconf -ivf
+#./configure
+#make
+#
+#cd src
+#export CEPH_CONF=/tmp/ceph/ceph.conf
+#./zlog-seqr --streams --port 5678 --daemon
+#./zlog-test
+#make test-java
