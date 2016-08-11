@@ -21,11 +21,11 @@ int SkyObject::query_helper()
     return ret;
 
   while (position_ <= tail) {
-    ceph::bufferlist bl;
-    ret = log_->Read(position_, bl);
+    std::string entry;
+    ret = log_->Read(position_, &entry);
     switch (ret) {
       case 0:
-        apply(bl.c_str());
+        apply(entry.data());
         break;
       case -ENODEV:
         ret = log_->Fill(position_);

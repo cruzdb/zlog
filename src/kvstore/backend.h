@@ -24,12 +24,9 @@ class ZLogBackend : public Backend {
   }
 
   virtual int Read(std::string *data, uint64_t pos) {
-    ceph::bufferlist bl;
-    int ret = log_->Read(pos, bl);
+    int ret = log_->Read(pos, data);
     if (ret)
       return ret;
-    std::string out(bl.c_str(), bl.length());
-    *data = out;
     return 0;
   }
 

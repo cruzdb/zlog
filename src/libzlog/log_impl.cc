@@ -746,7 +746,7 @@ int LogImpl::Trim(uint64_t position)
   }
 }
 
-int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
+int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
 {
   for (;;) {
     librados::ObjectReadOperation op;
@@ -755,15 +755,17 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
     std::string oid;
     mapper_.FindObject(position, &oid, NULL);
 
+    ceph::bufferlist bl;
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;
     }
 
-    if (ret == Backend::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK) {
+      data->assign(bl.c_str(), bl.length());
       return 0;
-    else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN)
+    } else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN)
       return -ENODEV;
     else if (ret == Backend::CLS_ZLOG_INVALIDATED)
       return -EFAULT;
@@ -780,7 +782,7 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl)
   assert(0);
 }
 
-int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
+int LogImpl::Read(uint64_t position, std::string *data)
 {
   for (;;) {
     uint64_t epoch;
@@ -790,15 +792,17 @@ int LogImpl::Read(uint64_t position, ceph::bufferlist& bl)
     librados::ObjectReadOperation op;
     backend->read(op, epoch, position);
 
+    ceph::bufferlist bl;
     int ret = ioctx_->operate(oid, &op, &bl);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;
     }
 
-    if (ret == Backend::CLS_ZLOG_OK)
+    if (ret == Backend::CLS_ZLOG_OK) {
+      data->assign(bl.c_str(), bl.length());
       return 0;
-    else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN)
+    } else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN)
       return -ENODEV;
     else if (ret == Backend::CLS_ZLOG_INVALIDATED)
       return -EFAULT;
@@ -924,16 +928,13 @@ extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
     size_t len)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  ceph::bufferlist bl;
-  ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
-  bl.push_back(bp);
-  int ret = ctx->log->Read(position, bl);
+  std::string entry;
+  int ret = ctx->log->Read(position, &entry);
   if (ret >= 0) {
-    if (bl.length() > len)
+    if (entry.size() > len)
       return -ERANGE;
-    if (bl.c_str() != data)
-      bl.copy(0, bl.length(), (char*)data);
-    ret = bl.length();
+    memcpy(data, entry.data(), entry.size());
+    ret = entry.size();
   }
   return ret;
 }

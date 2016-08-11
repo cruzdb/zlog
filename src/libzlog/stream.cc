@@ -88,19 +88,19 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
   assert(0);
 }
 
-int LogImpl::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+int LogImpl::StreamHeader(const std::string& entry, std::set<uint64_t>& stream_ids,
     size_t *header_size)
 {
-  if (bl.length() <= sizeof(uint32_t))
+  if (entry.size() <= sizeof(uint32_t))
     return -EINVAL;
 
-  const char *data = bl.c_str();
+  const char *data = entry.data();
 
   uint32_t hdr_len = ntohl(*((uint32_t*)data));
   if (hdr_len > 512) // TODO something reasonable...?
     return -EINVAL;
 
-  if ((sizeof(uint32_t) + hdr_len) > bl.length())
+  if ((sizeof(uint32_t) + hdr_len) > entry.size())
     return -EINVAL;
 
   zlog_proto::EntryHeader hdr;
@@ -126,24 +126,24 @@ int LogImpl::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
 
 int LogImpl::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
 {
-  ceph::bufferlist bl;
-  int ret = Read(position, bl);
+  std::string entry;
+  int ret = Read(position, &entry);
   if (ret)
     return ret;
 
-  ret = StreamHeader(bl, stream_ids);
+  ret = StreamHeader(entry, stream_ids);
 
   return ret;
 }
 
 int LogImpl::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
 {
-  ceph::bufferlist bl;
-  int ret = Read(epoch, position, bl);
+  std::string entry;
+  int ret = Read(epoch, position, &entry);
   if (ret)
     return ret;
 
-  ret = StreamHeader(bl, stream_ids);
+  ret = StreamHeader(entry, stream_ids);
 
   return ret;
 }
@@ -189,22 +189,22 @@ int StreamImpl::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
 
   uint64_t pos = *curpos;
 
-  ceph::bufferlist bl_out;
-  int ret = log->Read(pos, bl_out);
+  std::string entry;
+  int ret = log->Read(pos, &entry);
   if (ret)
     return ret;
 
   size_t header_size;
   std::set<uint64_t> stream_ids;
-  ret = log->StreamHeader(bl_out, stream_ids, &header_size);
+  ret = log->StreamHeader(entry, stream_ids, &header_size);
   if (ret)
     return -EIO;
 
   assert(stream_ids.find(stream_id) != stream_ids.end());
 
   // FIXME: how to create this view more efficiently?
-  const char *data = bl_out.c_str();
-  bl.append(data + header_size, bl_out.length() - header_size);
+  const char *data = entry.data();
+  bl.append(data + header_size, entry.size() - header_size);
 
   if (pposition)
     *pposition = pos;

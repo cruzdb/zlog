@@ -489,12 +489,12 @@ int main(int argc, char **argv)
       uint64_t start_ns, latency_ns;
       if (read_mode) {
         uint64_t pos = dis(gen);
-        ceph::bufferlist bl;
+        std::string entry;
         start_ns = getns();
-        int ret = log->Read(pos, bl);
+        int ret = log->Read(pos, &entry);
         latency_ns = getns() - start_ns;
         assert(ret == 0);
-        assert(bl.length() > 0);
+        assert(entry.size() > 0);
       } else {
         for (unsigned i = 0; i < iosize; i++) {
           iobuf[i] = (char)rand();

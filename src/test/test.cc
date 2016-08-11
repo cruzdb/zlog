@@ -718,23 +718,23 @@ TEST(LibZlog, Read) {
   int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  ceph::bufferlist bl;
-  ret = log->Read(0, bl);
+  std::string entry;
+  ret = log->Read(0, &entry);
   ASSERT_EQ(ret, -ENODEV);
 
   ret = log->Fill(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(0, bl);
+  ret = log->Read(0, &entry);
   ASSERT_EQ(ret, -EFAULT);
 
-  ret = log->Read(232, bl);
+  ret = log->Read(232, &entry);
   ASSERT_EQ(ret, -ENODEV);
 
   ret = log->Fill(232);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(232, bl);
+  ret = log->Read(232, &entry);
   ASSERT_EQ(ret, -EFAULT);
 
   const char *input = "asdfasdfasdf";
@@ -742,23 +742,22 @@ TEST(LibZlog, Read) {
   ret = log->Append(Slice(input), &pos);
   ASSERT_EQ(ret, 0);
 
-  ceph::bufferlist bl2;
-  ret = log->Read(pos, bl2);
+  ret = log->Read(pos, &entry);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_TRUE(Slice(input) == Slice(bl2.c_str(), bl2.length()));
+  ASSERT_TRUE(Slice(input) == Slice(entry));
 
   // trim a written position
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
-  ret = log->Read(pos, bl);
+  ret = log->Read(pos, &entry);
   ASSERT_EQ(ret, -EFAULT);
 
   // same for unwritten position
   pos = 456;
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
-  ret = log->Read(pos, bl);
+  ret = log->Read(pos, &entry);
   ASSERT_EQ(ret, -EFAULT);
 
   delete log;

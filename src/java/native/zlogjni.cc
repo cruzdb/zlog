@@ -98,9 +98,9 @@ jbyteArray Java_com_cruzdb_Log_read(JNIEnv *env, jobject jlog,
   auto log = reinterpret_cast<LogWrapper*>(jlog_handle);
 
   uint64_t position = jpos;
-  ceph::bufferlist bl;
+  std::string entry;
 
-  int ret = log->log->Read(position, bl);
+  int ret = log->log->Read(position, &entry);
   if (ret) {
     if (ret == -ENODEV)
       NotWrittenExceptionJni::ThrowNew(env, ret);
@@ -111,9 +111,9 @@ jbyteArray Java_com_cruzdb_Log_read(JNIEnv *env, jobject jlog,
     return nullptr;
   }
 
-  jbyteArray result = env->NewByteArray(static_cast<jsize>(bl.length()));
-  env->SetByteArrayRegion(result, 0, static_cast<jsize>(bl.length()),
-      reinterpret_cast<const jbyte*>(bl.c_str()));
+  jbyteArray result = env->NewByteArray(static_cast<jsize>(entry.size()));
+  env->SetByteArrayRegion(result, 0, static_cast<jsize>(entry.size()),
+      reinterpret_cast<const jbyte*>(entry.data()));
   return result;
 }
 

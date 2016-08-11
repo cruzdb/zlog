@@ -23,7 +23,7 @@ class Log {
    * Synchronous API
    */
   virtual int Append(const Slice& data, uint64_t *pposition = NULL) = 0;
-  virtual int Read(uint64_t position, ceph::bufferlist& bl) = 0;
+  virtual int Read(uint64_t position, std::string *data) = 0;
   virtual int Fill(uint64_t position) = 0;
   virtual int CheckTail(uint64_t *pposition) = 0;
   virtual int Trim(uint64_t position) = 0;

@@ -56,11 +56,11 @@ static void check_appends(std::string pool, std::string server,
     int value = it->second;
     lock.unlock();
 
-    ceph::bufferlist bl;
-    int ret = log->Read(pos, bl);
+    std::string entry;
+    int ret = log->Read(pos, &entry);
     assert(ret == 0);
 
-    assert(memcmp(bl.c_str(), (char*)&value, sizeof(value)) == 0);
+    assert(memcmp(entry.data(), (char*)&value, sizeof(value)) == 0);
 
     if (++count % 1000 == 0)
       std::cout << "Check pos " << pos << std::endl;

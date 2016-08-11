@@ -73,7 +73,7 @@ class LogImpl : public Log {
   /*
    *
    */
-  int Read(uint64_t position, ceph::bufferlist& bl);
+  int Read(uint64_t position, std::string *data);
 
   /*
    *
@@ -98,9 +98,9 @@ class LogImpl : public Log {
 
   int RefreshProjection();
 
-  int Read(uint64_t epoch, uint64_t position, ceph::bufferlist& bl);
+  int Read(uint64_t epoch, uint64_t position, std::string *data);
 
-  int StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+  int StreamHeader(const std::string& data, std::set<uint64_t>& stream_ids,
       size_t *header_size = NULL);
 
   /*
