@@ -57,22 +57,9 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
 
   librados::IoCtx *ioctx = (librados::IoCtx*)backend->ioctx;
 
-  /*
-   * Create the log metadata/head object and create the first projection. The
-   * initial projection number is epoch = 0. Note that we don't initially seal
-   * the objects that the log will be striped across. The semantics of
-   * cls_zlog are such that unitialized objects behave exactly as if they had
-   * been sealed with epoch = -1.
-   *
-   * The projection will be initialized for this log object during
-   * RefreshProjection in the same way that it is done during Open().
-   */
-  librados::ObjectWriteOperation op;
-  op.create(true); // exclusive create
-  TmpBackend::set_projection(op, 0, bl);
-
+  // create the log metadata/head object
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = ioctx->operate(metalog_oid, &op);
+  int ret = backend->CreateHeadObject(metalog_oid, bl);
   if (ret) {
     std::cerr << "Failed to create log " << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
