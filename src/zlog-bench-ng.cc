@@ -558,7 +558,7 @@ int main(int argc, char **argv)
           }
           state->append_bl.append(iobuf, iosize);
           state->submitted = std::chrono::steady_clock::now();
-          ret = log->AioAppend(state->c, state->append_bl, &state->position);
+          ret = log->AioAppend(state->c, Slice(state->append_bl.c_str(), state->append_bl.length()), &state->position);
           assert(ret == 0);
         }
 

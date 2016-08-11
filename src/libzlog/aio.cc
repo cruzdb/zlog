@@ -349,7 +349,7 @@ zlog::AioCompletion *Log::aio_create_completion()
  * The retry for AioAppend is coordinated through the aio_safe_cb callback
  * which will dispatch a new rados operation.
  */
-int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
+int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
     uint64_t *pposition)
 {
   // initial position guess
@@ -362,8 +362,11 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
     reinterpret_cast<AioCompletionImplWrapper*>(c);
   AioCompletionImpl *impl = wrapper->impl_;
 
+  ceph::bufferlist data_bl;
+  data_bl.append(data.data(), data.size());
+
   impl->log = this;
-  impl->bl = data;
+  impl->bl = data_bl;
   impl->position = position;
   impl->pposition = pposition;
   impl->ioctx = ioctx_;
@@ -384,7 +387,7 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   assert(impl->c);
 
   librados::ObjectWriteOperation op;
-  backend->write(op, epoch, position, data);
+  backend->write(op, epoch, position, data_bl);
 
   ret = ioctx_->aio_operate(oid, impl->c, &op);
   /*

@@ -31,7 +31,7 @@ class Log {
   /*
    * Asynchronous API
    */
-  virtual int AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
+  virtual int AioAppend(AioCompletion *c, const Slice& data, uint64_t *pposition = NULL) = 0;
   virtual int AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl) = 0;
 
   static AioCompletion *aio_create_completion();

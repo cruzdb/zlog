@@ -56,7 +56,7 @@ class LogImpl : public Log {
   /*
    * Append data asynchronously to the log and return its position.
    */
-  int AioAppend(zlog::AioCompletion *c, ceph::bufferlist& data,
+  int AioAppend(zlog::AioCompletion *c, const Slice& data,
       uint64_t *pposition = NULL);
 
   /*
