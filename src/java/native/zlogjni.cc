@@ -21,6 +21,8 @@ void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
   const char *log_name;
   const char *pool;
   LogWrapper *log = new LogWrapper;
+  // FIXME: this is a memory leak!
+  CephBackend *be;
 
   /*
    * Connect to RADOS
@@ -63,7 +65,7 @@ void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
   }
 
   // FIXME: this is a memory leak!
-  CephBackend *be = new CephBackend(&log->ioctx);
+  be = new CephBackend(&log->ioctx);
 
   log_name = env->GetStringUTFChars(jlog_name, 0);
   ret = zlog::Log::OpenOrCreate(be, log_name, log->seqr_client, &log->log);
