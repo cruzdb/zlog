@@ -919,9 +919,7 @@ extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
   if (stream_ids_len == 0)
     return -EINVAL;
   std::set<uint64_t> ids(stream_ids, stream_ids + stream_ids_len);
-  ceph::bufferlist bl;
-  bl.append((char*)data, data_len);
-  return ctx->log->MultiAppend(bl, ids, pposition);
+  return ctx->log->MultiAppend(Slice((char*)data, data_len), ids, pposition);
 }
 
 extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,

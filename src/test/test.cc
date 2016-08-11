@@ -257,12 +257,10 @@ TEST(LibZlogStream, MultiAppend) {
   int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
-  ceph::bufferlist bl;
-
   {
     // empty set of streams
     std::set<uint64_t> stream_ids;
-    ret = log->MultiAppend(bl, stream_ids, NULL);
+    ret = log->MultiAppend(Slice(), stream_ids, NULL);
     ASSERT_EQ(ret, -EINVAL);
   }
 
@@ -284,7 +282,7 @@ TEST(LibZlogStream, MultiAppend) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    ret = log->MultiAppend(bl, stream_ids, &pos);
+    ret = log->MultiAppend(Slice(), stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     stream_ids_list.push_back(stream_ids);
@@ -361,18 +359,18 @@ TEST(LibZlogStream, Append) {
 
   // nothing in stream
   uint64_t pos = 99;
-  ceph::bufferlist bl;
-  ret = stream->ReadNext(bl, &pos);
+  std::string entry;
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
   // add something to stream
   uint64_t pos2;
-  ret = stream->Append(bl, &pos2);
+  ret = stream->Append(Slice(entry), &pos2);
   ASSERT_EQ(ret, 0);
 
   // still don't see it...
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -381,7 +379,7 @@ TEST(LibZlogStream, Append) {
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
 
@@ -412,8 +410,8 @@ TEST(LibZlogStream, ReadNext) {
 
   // empty
   uint64_t pos = 99;
-  ceph::bufferlist bl;
-  ret = stream->ReadNext(bl, &pos);
+  std::string entry;
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -421,7 +419,7 @@ TEST(LibZlogStream, ReadNext) {
   ASSERT_EQ(ret, 0);
 
   // still empty
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -429,46 +427,41 @@ TEST(LibZlogStream, ReadNext) {
 
   // append something to the stream
   uint64_t pos2;
-  bl.clear();
-  bl.append(data, sizeof(data));
-  ret = stream->Append(bl, &pos2);
+  ret = stream->Append(Slice(data, sizeof(data)), &pos2);
   ASSERT_EQ(ret, 0);
 
   ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
-  ceph::bufferlist bl_out;
-  ret = stream->ReadNext(bl_out, &pos);
+  std::string entry2;
+  ret = stream->ReadNext(&entry2, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(bl == bl_out);
+  ASSERT_TRUE(Slice(data, sizeof(data)) == entry2);
 
   // we just read it, so it should be empty stream again
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
   char data2[234];
 
   // again
-  bl.clear();
-  bl.append(data2, sizeof(data2));
-  ret = stream->Append(bl, &pos2);
+  ret = stream->Append(Slice(data2, sizeof(data2)), &pos2);
   ASSERT_EQ(ret, 0);
 
   ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
-  bl_out.clear();
-  ret = stream->ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(bl == bl_out);
+  ASSERT_TRUE(entry == Slice(data2, sizeof(data2)));
 
   // we just read it, so it should be empty stream again
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
@@ -499,8 +492,8 @@ TEST(LibZlogStream, Reset) {
 
   // empty
   uint64_t pos = 99;
-  ceph::bufferlist bl;
-  ret = stream->ReadNext(bl, &pos);
+  std::string entry;
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -508,7 +501,7 @@ TEST(LibZlogStream, Reset) {
   ASSERT_EQ(ret, 0);
 
   // still empty
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, 99);
 
@@ -516,23 +509,20 @@ TEST(LibZlogStream, Reset) {
   char data[1234];
 
   uint64_t pos2;
-  bl.clear();
-  bl.append(data, sizeof(data));
-  ret = stream->Append(bl, &pos2);
+  ret = stream->Append(Slice(data, sizeof(data)), &pos2);
   ASSERT_EQ(ret, 0);
 
   ret = stream->Sync();
   ASSERT_EQ(ret, 0);
 
   // we should see it now..
-  ceph::bufferlist bl_out;
-  ret = stream->ReadNext(bl_out, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(bl == bl_out);
+  ASSERT_TRUE(Slice(entry) == Slice(data, sizeof(data)));
 
   // we just read it, so it should be empty stream again
-  ret = stream->ReadNext(bl, &pos);
+  ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
   ASSERT_EQ(pos, pos2);
 
@@ -541,11 +531,11 @@ TEST(LibZlogStream, Reset) {
   ASSERT_EQ(ret, 0);
 
   // we see the same thing again
-  bl_out.clear();
-  ret = stream->ReadNext(bl_out, &pos);
+  std::string entry2;
+  ret = stream->ReadNext(&entry2, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(bl == bl_out);
+  ASSERT_TRUE(entry == entry2);
 
   delete stream;
 
@@ -598,8 +588,7 @@ TEST(LibZlogStream, Sync) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    ceph::bufferlist bl;
-    ret = log->MultiAppend(bl, stream_ids, &pos);
+    ret = log->MultiAppend(Slice(), stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();
@@ -635,8 +624,7 @@ TEST(LibZlogStream, Sync) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    ceph::bufferlist bl;
-    ret = log->MultiAppend(bl, stream_ids, &pos);
+    ret = log->MultiAppend(Slice(), stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();

@@ -50,7 +50,7 @@ class LogImpl : public Log {
   /*
    * Append data to multiple streams and return its position.
    */
-  int MultiAppend(ceph::bufferlist& data,
+  int MultiAppend(const Slice& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
 
   /*

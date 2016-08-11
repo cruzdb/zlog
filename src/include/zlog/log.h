@@ -42,7 +42,7 @@ class Log {
    * Stream API
    */
   virtual int OpenStream(uint64_t stream_id, Stream **streamptr) = 0;
-  virtual int MultiAppend(ceph::bufferlist& data,
+  virtual int MultiAppend(const Slice& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) = 0;
   virtual int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) = 0;
 

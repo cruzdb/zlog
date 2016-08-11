@@ -11,7 +11,7 @@ namespace zlog {
 
 Stream::~Stream() {}
 
-int LogImpl::MultiAppend(ceph::bufferlist& data,
+int LogImpl::MultiAppend(const Slice& data,
     const std::set<uint64_t>& stream_ids, uint64_t *pposition)
 {
   for (;;) {
@@ -46,7 +46,7 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
 
     ceph::bufferlist bl;
     pack_msg_hdr<zlog_proto::EntryHeader>(bl, hdr);
-    bl.append(data.c_str(), data.length());
+    bl.append(data.data(), data.size());
 
     uint64_t epoch;
     std::string oid;
@@ -157,8 +157,8 @@ class StreamImpl : public zlog::Stream {
   std::set<uint64_t>::const_iterator prevpos;
   std::set<uint64_t>::const_iterator curpos;
 
-  int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
-  int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL);
+  int Append(const Slice& data, uint64_t *pposition = NULL);
+  int ReadNext(std::string *data, uint64_t *pposition = NULL);
   int Reset();
   int Sync();
   uint64_t Id() const;
@@ -173,14 +173,14 @@ std::vector<uint64_t> StreamImpl::History() const
   return ret;
 }
 
-int StreamImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
+int StreamImpl::Append(const Slice& data, uint64_t *pposition)
 {
   std::set<uint64_t> stream_ids;
   stream_ids.insert(stream_id);
   return log->MultiAppend(data, stream_ids, pposition);
 }
 
-int StreamImpl::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
+int StreamImpl::ReadNext(std::string *data, uint64_t *pposition)
 {
   if (curpos == pos.cend())
     return -EBADF;
@@ -202,9 +202,7 @@ int StreamImpl::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
 
   assert(stream_ids.find(stream_id) != stream_ids.end());
 
-  // FIXME: how to create this view more efficiently?
-  const char *data = entry.data();
-  bl.append(data + header_size, entry.size() - header_size);
+  data->assign(entry.data() + header_size, entry.size() - header_size);
 
   if (pposition)
     *pposition = pos;
@@ -398,9 +396,7 @@ extern "C" int zlog_stream_append(zlog_stream_t stream, const void *data,
     size_t len, uint64_t *pposition)
 {
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  ceph::bufferlist bl;
-  bl.append((char*)data, len);
-  return ctx->stream->Append(bl, pposition);
+  return ctx->stream->Append(Slice((char*)data, len), pposition);
 }
 
 extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
@@ -408,24 +404,14 @@ extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
 {
   zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
 
-  ceph::bufferlist bl;
-  // FIXME: below the buffer is added to avoid double copies. However, in
-  // ReadNext we have to create a view of the data read to remove the header.
-  // It isn't clear how to do that without the copies. As a fix for now we
-  // just force the case where the bufferlist has to be resized.
-#if 0
-  ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
-  bl.push_back(bp);
-#endif
-
-  int ret = ctx->stream->ReadNext(bl, pposition);
+  std::string entry;
+  int ret = ctx->stream->ReadNext(&entry, pposition);
 
   if (ret >= 0) {
-    if (bl.length() > len)
+    if (entry.size() > len)
       return -ERANGE;
-    if (bl.c_str() != data)
-      bl.copy(0, bl.length(), (char*)data);
-    ret = bl.length();
+    memcpy(data, entry.data(), entry.size());
+    ret = entry.size();
   }
 
   return ret;

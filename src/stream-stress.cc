@@ -56,8 +56,7 @@ int main(int argc, char **argv)
   const unsigned print_freq = 100;
   for (unsigned count = 1; 1; count++) {
     for (unsigned i = 0; i < 10; i++) {
-      ceph::bufferlist bl;
-      ret = stream[i]->Append(bl);
+      ret = stream[i]->Append(Slice());
       assert(ret == 0);
 
       if (count % print_freq == 0) {
