@@ -2,6 +2,7 @@
 #include <boost/program_options.hpp>
 #include <rados/librados.hpp>
 #include "libzlog/log_impl.h"
+#include "include/zlog/ceph_backend.h"
 
 namespace po = boost::program_options;
 
@@ -42,8 +43,10 @@ int main(int argc, char **argv)
   //client = new zlog::SeqrClient(server.c_str(), port.c_str());
   //client->Connect();
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *baselog;
-  ret = zlog::Log::Open(ioctx, log_name, client, &baselog);
+  ret = zlog::Log::Open(be, log_name, client, &baselog);
   assert(ret == 0);
   zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 

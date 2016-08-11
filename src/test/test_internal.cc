@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include "include/zlog/log.h"
 #include "libzlog/log_impl.h"
+#include "include/zlog/ceph_backend.h"
 
 /*
  * Helper function from ceph/src/test/librados/test.cc
@@ -120,8 +121,10 @@ TEST(LibZlogInternal, CheckTailBatch) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *blog;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &blog);
+  int ret = zlog::Log::Create(be, "mylog", &client, &blog);
   ASSERT_EQ(ret, 0);
   zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(blog);
 
@@ -169,8 +172,10 @@ TEST(LibZlogInternal, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *blog;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &blog);
+  int ret = zlog::Log::Create(be, "mylog", &client, &blog);
   ASSERT_EQ(ret, 0);
   zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(blog);
 

@@ -124,13 +124,13 @@ class LogImpl : public Log {
   std::string metalog_oid_;
   SeqrClient *seqr;
 
-  Backend *backend;
+  TmpBackend *backend;
   int backend_ver;
 
   void set_backend_v2() {
     assert(backend);
     delete backend;
-    backend = Backend::CreateV2();
+    backend = TmpBackend::CreateV2();
     backend_ver = 2;
   }
 
@@ -143,6 +143,7 @@ class LogImpl : public Log {
 
 struct zlog_log_ctx {
   librados::IoCtx ioctx;
+  Backend *be;
   zlog::SeqrClient *seqr;
   zlog::Log *log;
 };

@@ -1,9 +1,9 @@
 #ifndef LIBZLOG_ZLOG_HPP
 #define LIBZLOG_ZLOG_HPP
-#include <rados/librados.hpp>
 #include "libseq/libseqr.h"
 #include "zlog/stream.h"
 #include "zlog/slice.h"
+#include "zlog/backend.h"
 
 namespace zlog {
 
@@ -52,21 +52,21 @@ class Log {
 
   virtual int StripeWidth() = 0;
 
-  static int CreateWithStripeWidth(librados::IoCtx& ioctx, const std::string& name,
+  static int CreateWithStripeWidth(Backend *backend, const std::string& name,
       SeqrClient *seqr, int stripe_width, Log **logptr);
 
-  static int Create(librados::IoCtx& ioctx, const std::string& name,
+  static int Create(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr);
 
-  static int Open(librados::IoCtx& ioctx, const std::string& name,
+  static int Open(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr);
 
-  static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
+  static int OpenOrCreate(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr) {
-    int ret = Open(ioctx, name, seqr, logptr);
+    int ret = Open(backend, name, seqr, logptr);
     if (ret != -ENOENT)
       return ret;
-    return Create(ioctx, name, seqr, logptr);
+    return Create(backend, name, seqr, logptr);
   }
 
  private:

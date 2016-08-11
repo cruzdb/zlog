@@ -61,13 +61,13 @@ int LogImpl::MultiAppend(const Slice& data,
       return ret;
     }
 
-    if (ret == Backend::CLS_ZLOG_OK) {
+    if (ret == TmpBackend::CLS_ZLOG_OK) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -83,7 +83,7 @@ int LogImpl::MultiAppend(const Slice& data,
       continue;
     }
 
-    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
+    assert(ret == TmpBackend::CLS_ZLOG_READ_ONLY);
   }
   assert(0);
 }

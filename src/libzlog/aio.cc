@@ -127,7 +127,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
 
   assert(impl->type == ZLOG_AIO_READ);
 
-  if (ret == Backend::CLS_ZLOG_OK) {
+  if (ret == TmpBackend::CLS_ZLOG_OK) {
     /*
      * Read was successful. We're done.
      */
@@ -136,7 +136,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
     }
     ret = 0;
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+  } else if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
     /*
      * We'll need to try again with a new epoch.
      */
@@ -148,10 +148,10 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
      * Encountered a RADOS error.
      */
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN) {
+  } else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN) {
     ret = -ENODEV;
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_INVALIDATED) {
+  } else if (ret == TmpBackend::CLS_ZLOG_INVALIDATED) {
     ret = -EFAULT;
     finish = true;
   } else {
@@ -213,7 +213,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
 
   assert(impl->type == ZLOG_AIO_APPEND);
 
-  if (ret == Backend::CLS_ZLOG_OK) {
+  if (ret == TmpBackend::CLS_ZLOG_OK) {
     /*
      * Append was successful. We're done.
      */
@@ -222,7 +222,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
     }
     ret = 0;
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+  } else if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
     /*
      * We'll need to try again with a new epoch.
      */
@@ -241,7 +241,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
      */
     finish = true;
   } else {
-    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
+    assert(ret == TmpBackend::CLS_ZLOG_READ_ONLY);
   }
 
   /*

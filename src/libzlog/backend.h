@@ -5,7 +5,7 @@
 
 namespace zlog {
 
-class Backend {
+class TmpBackend {
  public:
 
   // these must be synchronized with cls_zlog_client.h
@@ -48,8 +48,8 @@ class Backend {
   static void get_projection(librados::ObjectReadOperation& op,
       int *pret, uint64_t epoch, ceph::bufferlist *out);
 
-  static Backend *CreateV1();
-  static Backend *CreateV2();
+  static TmpBackend *CreateV1();
+  static TmpBackend *CreateV2();
 };
 
 }

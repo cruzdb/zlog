@@ -27,7 +27,7 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
 class DBImpl : public DB {
  public:
-  explicit DBImpl(Backend *be);
+  explicit DBImpl(Tmp2Backend *be);
   ~DBImpl();
 
   Transaction *BeginTransaction();
@@ -79,7 +79,7 @@ class DBImpl : public DB {
   std::mutex lock_;
 
   std::condition_variable log_cond_;
-  Backend *be_;
+  Tmp2Backend *be_;
 
   NodeCache cache_;
 

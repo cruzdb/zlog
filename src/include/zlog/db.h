@@ -4,7 +4,7 @@
 #include "zlog/transaction.h"
 #include "zlog/iterator.h"
 
-class Backend;
+class Tmp2Backend;
 class Snapshot;
 
 class DB {
@@ -18,7 +18,7 @@ class DB {
   /*
    *
    */
-  static int Open(Backend *be, bool create_if_empty, DB **db);
+  static int Open(Tmp2Backend *be, bool create_if_empty, DB **db);
 
   /*
    *

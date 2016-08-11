@@ -11,6 +11,7 @@
 #include <rados/librados.hpp>
 #include "proto/zlog.pb.h"
 #include "libzlog/log_impl.h"
+#include "include/zlog/ceph_backend.h"
 
 namespace po = boost::program_options;
 
@@ -288,8 +289,10 @@ class LogManager {
       return ret;
     }
 
+    CephBackend *be = new CephBackend(&ioctx);
+
     zlog::Log *baselog;
-    ret = zlog::Log::Open(ioctx, name, NULL, &baselog);
+    ret = zlog::Log::Open(be, name, NULL, &baselog);
     if (ret) {
       std::cerr << "failed to open log " << name << std::endl;
       return ret;

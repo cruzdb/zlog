@@ -1,6 +1,7 @@
 #include <iostream>
 #include <rados/librados.hpp>
 #include "include/zlog/log.h"
+#include "include/zlog/ceph_backend.h"
 
 static void print_history(zlog::Stream *stream, int len = 10)
 {
@@ -38,8 +39,10 @@ int main(int argc, char **argv)
   client = new zlog::SeqrClient("localhost", "5678");
   client->Connect();
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  ret = zlog::Log::OpenOrCreate(ioctx, "log2", client, &log);
+  ret = zlog::Log::OpenOrCreate(be, "log2", client, &log);
   assert(ret == 0);
 
   std::vector<zlog::Stream*> stream(10);

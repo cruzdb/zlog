@@ -13,6 +13,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <rados/librados.hpp>
 #include "libzlog/log_impl.h"
+#include "include/zlog/ceph_backend.h"
 
 namespace po = boost::program_options;
 
@@ -199,7 +200,8 @@ class FakeSeqrClient : public zlog::SeqrClient {
 
   void Init(librados::IoCtx& ioctx) {
     zlog::Log *baselog;
-    int ret = zlog::LogImpl::Open(ioctx, name_, NULL, &baselog);
+    CephBackend *be = new CephBackend(&ioctx);
+    int ret = zlog::LogImpl::Open(be, name_, NULL, &baselog);
     assert(ret == 0);
     zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
@@ -401,7 +403,8 @@ int main(int argc, char **argv)
     client = new FakeSeqrClient(logname);
   }
   zlog::Log *baselog;
-  ret = zlog::LogImpl::OpenOrCreate(ioctx, logname, client, &baselog);
+  CephBackend *be = new CephBackend(&ioctx);
+  ret = zlog::LogImpl::OpenOrCreate(be, logname, client, &baselog);
   assert(ret == 0);
   zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 

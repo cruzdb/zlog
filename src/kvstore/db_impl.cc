@@ -1,7 +1,7 @@
 #include "db_impl.h"
 #include <sstream>
 
-DBImpl::DBImpl(Backend *be) :
+DBImpl::DBImpl(Tmp2Backend *be) :
   be_(be), cache_(this)
 {
   root_ = Node::Nil();
@@ -16,7 +16,7 @@ DBImpl::DBImpl(Backend *be) :
   log_processor_ = std::thread(&DBImpl::process_log_entry, this);
 }
 
-int DB::Open(Backend *be, bool create_if_empty, DB **db)
+int DB::Open(Tmp2Backend *be, bool create_if_empty, DB **db)
 {
   uint64_t tail;
   int ret = be->Tail(&tail);

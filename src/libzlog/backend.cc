@@ -5,7 +5,7 @@
 
 using namespace zlog;
 
-class BackendV1 : public Backend {
+class BackendV1 : public TmpBackend {
  public:
   void seal(librados::ObjectWriteOperation& op, uint64_t epoch) {
     cls_zlog_seal(op, epoch);
@@ -37,7 +37,7 @@ class BackendV1 : public Backend {
   }
 };
 
-class BackendV2 : public Backend {
+class BackendV2 : public TmpBackend {
  public:
   void seal(librados::ObjectWriteOperation& op, uint64_t epoch) {
     cls_zlog_seal_v2(op, epoch);
@@ -69,30 +69,30 @@ class BackendV2 : public Backend {
   }
 };
 
-void Backend::set_projection(librados::ObjectWriteOperation& op,
+void TmpBackend::set_projection(librados::ObjectWriteOperation& op,
     uint64_t epoch, ceph::bufferlist& data)
 {
   cls_zlog_set_projection(op, epoch, data);
 }
 
-void Backend::get_latest_projection(librados::ObjectReadOperation& op,
+void TmpBackend::get_latest_projection(librados::ObjectReadOperation& op,
     int *pret, uint64_t *pepoch, ceph::bufferlist *out)
 {
   cls_zlog_get_latest_projection(op, pret, pepoch, out);
 }
 
-void Backend::get_projection(librados::ObjectReadOperation& op,
+void TmpBackend::get_projection(librados::ObjectReadOperation& op,
       int *pret, uint64_t epoch, ceph::bufferlist *out)
 {
   cls_zlog_get_projection(op, pret, epoch, out);
 }
 
-Backend *Backend::CreateV1()
+TmpBackend *TmpBackend::CreateV1()
 {
   return new BackendV1();
 }
 
-Backend *Backend::CreateV2()
+TmpBackend *TmpBackend::CreateV2()
 {
   return new BackendV2();
 }

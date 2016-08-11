@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include "include/zlog/log.h"
 #include "include/zlog/capi.h"
+#include "include/zlog/ceph_backend.h"
 
 /*
  * Helper function from ceph/src/test/librados/test.cc
@@ -118,19 +119,21 @@ TEST(LibZlog, Create) {
 
   zlog::Log *log = NULL;
 
-  int ret = zlog::Log::Create(ioctx, "", NULL, &log);
+  CephBackend *be = new CephBackend(&ioctx);
+
+  int ret = zlog::Log::Create(be, "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
   // TODO: creating a log with NULL seqclient should be an error
-  ret = zlog::Log::Create(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Create(be, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
   delete log;
   log = NULL;
 
-  ret = zlog::Log::Create(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Create(be, "mylog", NULL, &log);
   ASSERT_EQ(ret, -EEXIST);
   ASSERT_EQ(log, nullptr);
 
@@ -146,22 +149,24 @@ TEST(LibZlog, Open) {
 
   zlog::Log *log = NULL;
 
-  int ret = zlog::Log::Open(ioctx, "", NULL, &log);
+  CephBackend *be = new CephBackend(&ioctx);
+
+  int ret = zlog::Log::Open(be, "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
-  ret = zlog::Log::Open(ioctx, "dne", NULL, &log);
+  ret = zlog::Log::Open(be, "dne", NULL, &log);
   ASSERT_EQ(ret, -ENOENT);
   ASSERT_EQ(log, nullptr);
 
-  ret = zlog::Log::Create(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Create(be, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
   delete log;
   log = NULL;
 
-  ret = zlog::Log::Open(ioctx, "mylog", NULL, &log);
+  ret = zlog::Log::Open(be, "mylog", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
@@ -180,8 +185,10 @@ TEST(LibZlog, CheckTail) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -208,8 +215,10 @@ TEST(LibZlog, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
@@ -253,8 +262,10 @@ TEST(LibZlogStream, MultiAppend) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   {
@@ -314,8 +325,10 @@ TEST(LibZlogStream, StreamId) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream0;
@@ -349,8 +362,10 @@ TEST(LibZlogStream, Append) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream;
@@ -400,8 +415,10 @@ TEST(LibZlogStream, ReadNext) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream;
@@ -482,8 +499,10 @@ TEST(LibZlogStream, Reset) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream;
@@ -554,8 +573,10 @@ TEST(LibZlogStream, Sync) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)
@@ -660,8 +681,10 @@ TEST(LibZlog, Fill) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   ret = log->Fill(0);
@@ -702,8 +725,10 @@ TEST(LibZlog, Read) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   std::string entry;
@@ -763,8 +788,10 @@ TEST(LibZlog, Trim) {
   zlog::SeqrClient client("localhost", "5678");
   ASSERT_NO_THROW(client.Connect());
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  int ret = zlog::Log::Create(ioctx, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", &client, &log);
   ASSERT_EQ(ret, 0);
 
   // can trim empty spot
