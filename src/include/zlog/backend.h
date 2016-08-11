@@ -14,6 +14,24 @@ class Backend {
    */
   virtual int Write(const std::string& oid, const Slice& data,
       uint64_t epoch, uint64_t position) = 0;
+
+  /*
+   *
+   */
+  virtual int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data) = 0;
+
+  /*
+   *
+   */
+  virtual int Trim(const std::string& oid, uint64_t epoch,
+      uint64_t position) = 0;
+
+  /*
+   *
+   */
+  virtual int Fill(const std::string& oid, uint64_t epoch,
+      uint64_t position) = 0;
 };
 
 #endif

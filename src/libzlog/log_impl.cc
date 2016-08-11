@@ -681,10 +681,7 @@ int LogImpl::Fill(uint64_t position)
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    librados::ObjectWriteOperation op;
-    backend->fill(op, epoch, position);
-
-    int ret = ioctx_->operate(oid, &op);
+    int ret = new_backend->Fill(oid, epoch, position);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
       return ret;
@@ -712,10 +709,7 @@ int LogImpl::Trim(uint64_t position)
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    librados::ObjectWriteOperation op;
-    backend->trim(op, epoch, position);
-
-    int ret = ioctx_->operate(oid, &op);
+    int ret = new_backend->Trim(oid, epoch, position);
     if (ret < 0) {
       std::cerr << "trim: failed ret " << ret << std::endl;
       return ret;
@@ -738,23 +732,18 @@ int LogImpl::Trim(uint64_t position)
 int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
 {
   for (;;) {
-    librados::ObjectReadOperation op;
-    backend->read(op, epoch, position);
-
     std::string oid;
     mapper_.FindObject(position, &oid, NULL);
 
-    ceph::bufferlist bl;
-    int ret = ioctx_->operate(oid, &op, &bl);
+    int ret = new_backend->Read(oid, epoch, position, data);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK) {
-      data->assign(bl.c_str(), bl.length());
+    if (ret == TmpBackend::CLS_ZLOG_OK)
       return 0;
-    } else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN)
+    else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN)
       return -ENODEV;
     else if (ret == TmpBackend::CLS_ZLOG_INVALIDATED)
       return -EFAULT;
@@ -778,20 +767,15 @@ int LogImpl::Read(uint64_t position, std::string *data)
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    librados::ObjectReadOperation op;
-    backend->read(op, epoch, position);
-
-    ceph::bufferlist bl;
-    int ret = ioctx_->operate(oid, &op, &bl);
+    int ret = new_backend->Read(oid, epoch, position, data);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK) {
-      data->assign(bl.c_str(), bl.length());
+    if (ret == TmpBackend::CLS_ZLOG_OK)
       return 0;
-    } else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN)
+    else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN)
       return -ENODEV;
     else if (ret == TmpBackend::CLS_ZLOG_INVALIDATED)
       return -EFAULT;

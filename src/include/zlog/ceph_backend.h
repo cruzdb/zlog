@@ -3,6 +3,7 @@
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "zlog/backend.h"
+#include "libzlog/backend.h"
 
 // v1
 class CephBackend : public Backend {
@@ -38,6 +39,49 @@ class CephBackend : public Backend {
     data_bl.append(data.data(), data.size());
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_write(op, epoch, position, data_bl);
+
+    // run operation
+    return ioctx_->operate(oid, &op);
+  }
+
+  virtual int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data) {
+    // prepare operation
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_read(op, epoch, position);
+
+    // run operation
+    ceph::bufferlist bl;
+    int ret = ioctx_->operate(oid, &op, &bl);
+
+    if (ret == zlog::TmpBackend::CLS_ZLOG_OK) {
+      data->assign(bl.c_str(), bl.length());
+    }
+
+    return ret;
+  }
+
+  /*
+   *
+   */
+  virtual int Trim(const std::string& oid, uint64_t epoch,
+      uint64_t position) {
+    // prepare operation
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_trim(op, epoch, position);
+
+    // run operation
+    return ioctx_->operate(oid, &op);
+  }
+
+  /*
+   *
+   */
+  virtual int Fill(const std::string& oid, uint64_t epoch,
+      uint64_t position) {
+    // prepare operation
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_fill(op, epoch, position);
 
     // run operation
     return ioctx_->operate(oid, &op);
