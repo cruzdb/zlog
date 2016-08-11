@@ -8,6 +8,12 @@ class Backend {
   void *ioctx;
 
   virtual int CreateHeadObject(const std::string& oid, ceph::bufferlist& bl) = 0;
+
+  /*
+   *
+   */
+  virtual int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) = 0;
 };
 
 #endif

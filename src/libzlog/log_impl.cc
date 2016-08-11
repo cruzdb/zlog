@@ -68,6 +68,7 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
 
   LogImpl *impl = new LogImpl;
 
+  impl->new_backend = backend;
   impl->ioctx_ = ioctx;
   impl->pool_ = ioctx->get_pool_name();
   impl->name_ = name;
@@ -603,12 +604,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    ceph::bufferlist data_bl;
-    data_bl.append(data.data(), data.size());
-    librados::ObjectWriteOperation op;
-    backend->write(op, epoch, position, data_bl);
-
-    ret = ioctx_->operate(oid, &op);
+    ret = new_backend->Write(oid, data, epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;

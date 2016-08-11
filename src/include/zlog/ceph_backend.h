@@ -4,6 +4,7 @@
 #include <rados/cls_zlog_client.h>
 #include "zlog/backend.h"
 
+// v1
 class CephBackend : public Backend {
  public:
   explicit CephBackend(librados::IoCtx *ioctx) :
@@ -25,6 +26,18 @@ class CephBackend : public Backend {
     librados::ObjectWriteOperation op;
     op.create(true); // exclusive create
     zlog::cls_zlog_set_projection(op, 0, bl);
+
+    // run operation
+    return ioctx_->operate(oid, &op);
+  }
+
+  virtual int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) {
+    // prepare operation
+    ceph::bufferlist data_bl;
+    data_bl.append(data.data(), data.size());
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_write(op, epoch, position, data_bl);
 
     // run operation
     return ioctx_->operate(oid, &op);

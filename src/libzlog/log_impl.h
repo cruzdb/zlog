@@ -7,6 +7,7 @@
 #include "libseq/libseqr.h"
 #include "log_mapper.h"
 #include "backend.h"
+#include "include/zlog/backend.h"
 
 namespace zlog {
 
@@ -123,6 +124,8 @@ class LogImpl : public Log {
   std::string name_;
   std::string metalog_oid_;
   SeqrClient *seqr;
+
+  Backend *new_backend;
 
   TmpBackend *backend;
   int backend_ver;
