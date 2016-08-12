@@ -1,11 +1,8 @@
 #include "log_impl.h"
 
 #include <iostream>
-#include <rados/librados.hpp>
 
 #include "proto/zlog.pb.h"
-#include "proto/protobuf_bufferlist_adapter.h"
-#include "include/zlog/capi.h"
 
 namespace zlog {
 
@@ -44,15 +41,23 @@ int LogImpl::MultiAppend(const Slice& data,
       index++;
     }
 
-    ceph::bufferlist bl;
-    pack_msg_hdr<zlog_proto::EntryHeader>(bl, hdr);
-    bl.append(data.data(), data.size());
+    std::string out_data;
+    {
+      assert(hdr.IsInitialized());
+      uint32_t buf_size = hdr.ByteSize();
+      char buf[buf_size];
+      assert(hdr.SerializeToArray(buf, buf_size));
+      uint32_t be_buf_size = htonl(buf_size);
+      out_data.append((char*)&be_buf_size, sizeof(be_buf_size));
+      out_data.append(buf, sizeof(buf));
+      out_data.append(data.data(), data.size());
+    }
 
     uint64_t epoch;
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    ret = new_backend->Write(oid, Slice(bl.c_str(), bl.length()), epoch, position);
+    ret = new_backend->Write(oid, Slice(out_data), epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
@@ -71,6 +76,7 @@ int LogImpl::MultiAppend(const Slice& data,
       continue;
     }
 
+#ifdef BACKEND_SUPPORT_DISALBED
     if (ret == -EFBIG) {
       assert(backend_ver == 2);
       CreateNewStripe(epoch);
@@ -79,6 +85,7 @@ int LogImpl::MultiAppend(const Slice& data,
         return ret;
       continue;
     }
+#endif
 
     assert(ret == Backend::ZLOG_READ_ONLY);
   }
@@ -368,101 +375,6 @@ int LogImpl::OpenStream(uint64_t stream_id, Stream **streamptr)
   *streamptr = impl;
 
   return 0;
-}
-
-extern "C" int zlog_stream_open(zlog_log_t log, uint64_t stream_id,
-    zlog_stream_t *pstream)
-{
-  zlog_log_ctx *log_ctx = (zlog_log_ctx*)log;
-
-  zlog_stream_ctx *stream_ctx = new zlog_stream_ctx;
-  stream_ctx->log_ctx = log_ctx;
-
-  int ret = log_ctx->log->OpenStream(stream_id, &stream_ctx->stream);
-  if (ret) {
-    delete stream_ctx;
-    return ret;
-  }
-
-  *pstream = stream_ctx;
-
-  return 0;
-}
-
-extern "C" int zlog_stream_append(zlog_stream_t stream, const void *data,
-    size_t len, uint64_t *pposition)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Append(Slice((char*)data, len), pposition);
-}
-
-extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
-    size_t len, uint64_t *pposition)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-
-  std::string entry;
-  int ret = ctx->stream->ReadNext(&entry, pposition);
-
-  if (ret >= 0) {
-    if (entry.size() > len)
-      return -ERANGE;
-    memcpy(data, entry.data(), entry.size());
-    ret = entry.size();
-  }
-
-  return ret;
-}
-
-extern "C" int zlog_stream_reset(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Reset();
-}
-
-extern "C" int zlog_stream_sync(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Sync();
-}
-
-extern "C" uint64_t zlog_stream_id(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Id();
-}
-
-extern "C" size_t zlog_stream_history(zlog_stream_t stream, uint64_t *pos, size_t len)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-
-  std::vector<uint64_t> history = ctx->stream->History();
-  size_t size = history.size();
-  if (pos && size <= len)
-    std::copy(history.begin(), history.end(), pos);
-
-  return size;
-}
-
-extern "C" int zlog_stream_membership(zlog_log_t log,
-    uint64_t *stream_ids, size_t len, uint64_t position)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-
-  std::set<uint64_t> ids;
-  int ret = ctx->log->StreamMembership(ids, position);
-  if (ret)
-    return ret;
-
-  size_t size = ids.size();
-  if (size <= len) {
-    std::vector<uint64_t> tmp;
-    for (auto it = ids.begin(); it != ids.end(); it++)
-      tmp.push_back(*it);
-    std::copy(tmp.begin(), tmp.end(), stream_ids);
-  }
-
-  return size;
 }
 
 }

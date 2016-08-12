@@ -2,18 +2,19 @@
 #define LIBZLOG_INTERNAL_HPP
 #include <condition_variable>
 #include <mutex>
-#include <rados/librados.h>
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
 #include "log_mapper.h"
-#include "backend.h"
 #include "include/zlog/backend.h"
 
 namespace zlog {
 
 class LogImpl : public Log {
  public:
+  LogImpl() {}
+#if BACKEND_SUPPORT_DISABLED
   LogImpl() : backend(NULL), backend_ver(2), new_stripe_pending_(false) {}
+#endif
 
   /*
    * Create cut.
@@ -126,6 +127,7 @@ class LogImpl : public Log {
 
   Backend *new_backend;
 
+#if BACKEND_SUPPORT_DISABLE
   TmpBackend *backend;
   int backend_ver;
 
@@ -136,25 +138,14 @@ class LogImpl : public Log {
     backend_ver = 2;
   }
 
+  bool new_stripe_pending_;
+#endif
+
   LogMapper mapper_;
 
-  bool new_stripe_pending_;
   std::condition_variable new_stripe_cond_;
   std::mutex lock_;
 };
-
-struct zlog_log_ctx {
-  librados::IoCtx ioctx;
-  Backend *be;
-  zlog::SeqrClient *seqr;
-  zlog::Log *log;
-};
-
-struct zlog_stream_ctx {
-  zlog::Stream *stream;
-  zlog_log_ctx *log_ctx;
-};
-
 
 }
 

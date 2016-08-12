@@ -5,16 +5,23 @@ add_subdirectory(kvstore)
 add_library(zlog_seqr SHARED libseq/libseqr.cc)
 target_link_libraries(zlog_seqr zlog_proto)
 
-####
+################################################################################
+################################################################################
+################################################################################
 
-add_library(libzlog SHARED
-    libzlog/log_impl.cc
-    libzlog/stream.cc
-    libzlog/aio.cc
-    libzlog/stripe_history.cc
-    libzlog/log_mapper.cc
-    libzlog/backend.cc
-)
+set(libzlog_sources
+  libzlog/log_impl.cc
+  libzlog/stream.cc
+  libzlog/stripe_history.cc
+  libzlog/log_mapper.cc)
+
+# some stuff hasn't been converted to use generic backend
+if(BUILD_CEPH_BACKEND)
+  list(APPEND libzlog_sources libzlog/aio.cc)
+  list(APPEND libzlog_sources libzlog/capi.cc)
+endif(BUILD_CEPH_BACKEND)
+
+add_library(libzlog SHARED ${libzlog_sources})
 
 target_include_directories(libzlog
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
@@ -30,107 +37,6 @@ target_link_libraries(libzlog
 
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
-####
-
-add_library(zstate SHARED
-    zstate/skytype.cc
-)
-
-target_link_libraries(zstate
-    libzlog
-)
-
-####
-
-add_executable(zlog-seqr
-    seqr-server.cc
-)
-
-target_link_libraries(zlog-seqr
-    libzlog
-    zlog_proto
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-####
-
-add_executable(append-check append-check.cc)
-target_link_libraries(append-check
-    libzlog
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-####
-
-add_executable(zlogtool zlog-tool.cc)
-set_target_properties(zlogtool PROPERTIES OUTPUT_NAME "zlog")
-target_link_libraries(zlogtool
-    libzlog
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-####
-
-add_executable(zlog-seqr-bench
-    zlog-seqr-bench.cc
-)
-
-target_link_libraries(zlog-seqr-bench
-    libzlog
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-####
-
-add_executable(zlog-bench-ng
-    zlog-bench-ng.cc
-)
-
-target_link_libraries(zlog-bench-ng
-    libzlog
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-    atomic
-)
-
-####
-
-add_executable(zlog-bench
-    bench/bench.cc
-)
-
-target_link_libraries(zlog-bench
-    libzlog
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-    atomic
-)
-
-####
-
-add_executable(stream-stress
-    stream-stress.cc
-)
-
-target_link_libraries(stream-stress
-    libzlog
-    zlog_seqr
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-####
-
 add_library(gtest
     gtest/src/gtest-all.cc
     gtest/src/gtest_main.cc
@@ -141,7 +47,65 @@ target_include_directories(gtest
     PRIVATE gtest
 )
 
-####
+################################################################################
+################################################################################
+################################################################################
+
+if(BUILD_CEPH_BACKEND)
+
+add_library(zstate SHARED zstate/skytype.cc)
+target_link_libraries(zstate libzlog)
+
+add_executable(zlog-seqr seqr-server.cc)
+target_link_libraries(zlog-seqr
+    libzlog
+    zlog_proto
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+add_executable(append-check append-check.cc)
+target_link_libraries(append-check
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+add_executable(stream-stress stream-stress.cc)
+target_link_libraries(stream-stress
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+add_executable(zlog-seqr-bench zlog-seqr-bench.cc)
+target_link_libraries(zlog-seqr-bench
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+add_executable(zlog-bench bench/bench.cc)
+target_link_libraries(zlog-bench
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    atomic
+)
+
+add_executable(zlog-bench-ng zlog-bench-ng.cc)
+target_link_libraries(zlog-bench-ng
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    atomic
+)
 
 add_executable(zlog-test
     test/test.cc
@@ -155,12 +119,16 @@ target_link_libraries(zlog-test
     ${Boost_SYSTEM_LIBRARY}
 )
 
-####
-
-add_executable(zstate-test
-    test/zstate_test.cc
+add_executable(zlogtool zlog-tool.cc)
+set_target_properties(zlogtool PROPERTIES OUTPUT_NAME "zlog")
+target_link_libraries(zlogtool
+    libzlog
+    zlog_seqr
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
 )
 
+add_executable(zstate-test test/zstate_test.cc)
 target_link_libraries(zstate-test
     libzlog
     gtest
@@ -168,3 +136,5 @@ target_link_libraries(zstate-test
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
 )
+
+endif(BUILD_CEPH_BACKEND)

@@ -8,16 +8,11 @@
 #include <string>
 #include <vector>
 
-#include <rados/librados.hpp>
-
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
-#include "include/zlog/capi.h"
 #include "include/zlog/backend.h"
-#include "include/zlog/ceph_backend.h"
 
 #include "stripe_history.h"
-#include "backend.h"
 
 /*
  * We can use Ceph API to query and make some intelligent decisiosn about what
@@ -71,12 +66,6 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   impl->seqr = seqr;
   impl->mapper_.SetName(name);
 
-  // default backend. this can be changed using LogImpl::set_backend_vN
-  // interface immediately after this call and before any log I/O occurs. It
-  // is up to the client to make sure that the correct version is used and
-  // that no version mixing occurs.
-  impl->backend = TmpBackend::CreateV1();
-
   ret = impl->RefreshProjection();
   if (ret) {
     delete impl;
@@ -122,12 +111,6 @@ int Log::Open(Backend *backend, const std::string& name,
   impl->seqr = seqr;
   impl->mapper_.SetName(name);
 
-  // default backend. this can be changed using LogImpl::set_backend_vN
-  // interface immediately after this call and before any log I/O occurs. It
-  // is up to the client to make sure that the correct version is used and
-  // that no version mixing occurs.
-  impl->backend = TmpBackend::CreateV1();
-
   ret = impl->RefreshProjection();
   if (ret) {
     delete impl;
@@ -162,6 +145,7 @@ class new_stripe_notifier {
   bool *pred_;
 };
 
+#ifdef BACKEND_SUPPORT_DISABLED
 /*
  * Create a new stripe empty stripe.
  *
@@ -271,6 +255,7 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
 
   return 0;
 }
+#endif
 
 int LogImpl::SetStripeWidth(int width)
 {
@@ -566,6 +551,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       continue;
     }
 
+#ifdef BACKEND_SUPPORT_DISABLED
     /*
      * When an object becomes too large we seal the entire stripe and create a
      * new stripe of empty objects. First we refresh the projection and try
@@ -580,6 +566,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
         return ret;
       continue;
     }
+#endif
 
     assert(ret == Backend::ZLOG_READ_ONLY);
   }
@@ -729,143 +716,6 @@ int LogImpl::Read(uint64_t position, std::string *data)
     }
   }
   assert(0);
-}
-
-extern "C" int zlog_destroy(zlog_log_t log)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  delete ctx->log;
-  delete ctx->seqr;
-  delete ctx->be;
-  delete ctx;
-  return 0;
-}
-
-extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port,
-    zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
-  ctx->be = new CephBackend(&ctx->ioctx);
-
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
-  int ret = zlog::Log::Open(ctx->be, name,
-      ctx->seqr, &ctx->log);
-  if (ret) {
-    delete ctx->be;
-    delete ctx->seqr;
-    delete ctx;
-    return ret;
-  }
-
-  *log = ctx;
-
-  return 0;
-}
-
-extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
-  ctx->be = new CephBackend(&ctx->ioctx);
-
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
-  int ret = zlog::Log::Create(ctx->be, name,
-      ctx->seqr, &ctx->log);
-  if (ret) {
-    delete ctx->be;
-    delete ctx->seqr;
-    delete ctx;
-    return ret;
-  }
-
-  *log = ctx;
-
-  return 0;
-}
-
-extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
-  ctx->be = new CephBackend(&ctx->ioctx);
-
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
-  int ret = zlog::Log::OpenOrCreate(ctx->be, name,
-      ctx->seqr, &ctx->log);
-  if (ret) {
-    delete ctx->be;
-    delete ctx->seqr;
-    delete ctx;
-    return ret;
-  }
-
-  *log = ctx;
-
-  return 0;
-}
-
-extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->CheckTail(pposition);
-}
-
-extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
-    uint64_t *pposition)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->Append(Slice((char*)data, len), pposition);
-}
-
-extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
-    size_t data_len, const uint64_t *stream_ids, size_t stream_ids_len,
-    uint64_t *pposition)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  if (stream_ids_len == 0)
-    return -EINVAL;
-  std::set<uint64_t> ids(stream_ids, stream_ids + stream_ids_len);
-  return ctx->log->MultiAppend(Slice((char*)data, data_len), ids, pposition);
-}
-
-extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
-    size_t len)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  std::string entry;
-  int ret = ctx->log->Read(position, &entry);
-  if (ret >= 0) {
-    if (entry.size() > len)
-      return -ERANGE;
-    memcpy(data, entry.data(), entry.size());
-    ret = entry.size();
-  }
-  return ret;
-}
-
-extern "C" int zlog_fill(zlog_log_t log, uint64_t position)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->Fill(position);
-}
-
-extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->Trim(position);
 }
 
 }

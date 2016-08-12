@@ -2,8 +2,8 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <rados/cls_zlog_client.h>
 #include <rados/librados.hpp>
-#include "backend.h"
 
 namespace zlog {
 
@@ -173,7 +173,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
 
     // build and submit new op
     librados::ObjectReadOperation op;
-    impl->log->backend->read(op, epoch, impl->position);
+    zlog::cls_zlog_read(op, epoch, impl->position);
     ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
     if (ret)
       finish = true;
@@ -229,12 +229,14 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
+#if BACKEND_SUPPORT_DISABLE
   } else if (ret == -EFBIG) {
     assert(impl->log->backend_ver == 2);
     impl->log->CreateNewStripe(impl->epoch);
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
+#endif
   } else if (ret < 0) {
     /*
      * Encountered a RADOS error.
@@ -272,7 +274,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
 
       // build and submit new op
       librados::ObjectWriteOperation op;
-      impl->log->backend->write(op, epoch, impl->position, impl->bl);
+      zlog::cls_zlog_write(op, epoch, impl->position, impl->bl);
       ret = impl->ioctx->aio_operate(oid, impl->c, &op);
       if (ret)
         finish = true;
@@ -387,7 +389,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   assert(impl->c);
 
   librados::ObjectWriteOperation op;
-  backend->write(op, epoch, position, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, data_bl);
 
   ret = impl->ioctx->aio_operate(oid, impl->c, &op);
   /*
@@ -423,7 +425,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   mapper_.FindObject(position, &oid, &epoch);
 
   librados::ObjectReadOperation op;
-  backend->read(op, epoch, position);
+  zlog::cls_zlog_read(op, epoch, position);
 
   int ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
   /*

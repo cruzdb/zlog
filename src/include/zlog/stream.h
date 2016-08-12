@@ -1,7 +1,6 @@
 #ifndef ZLOG_INCLUDE_ZLOG_STREAM_H_
 #define ZLOG_INCLUDE_ZLOG_STREAM_H_
 #include <vector>
-#include <rados/librados.hpp>
 #include "zlog/slice.h"
 
 namespace zlog {
