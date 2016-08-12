@@ -1,6 +1,7 @@
 #ifndef ZLOG_INCLUDE_ZLOG_BACKEND_H
 #define ZLOG_INCLUDE_ZLOG_BACKEND_H
 #include <rados/librados.hpp>
+#include "proto/zlog.pb.h"
 
 class Backend {
  public:
@@ -17,19 +18,23 @@ class Backend {
   explicit Backend(void *ioctx) : ioctx(ioctx) {}
   void *ioctx;
 
-  virtual int CreateHeadObject(const std::string& oid, ceph::bufferlist& bl) = 0;
+  /*
+   *
+   */
+  virtual int CreateHeadObject(const std::string& oid,
+      const zlog_proto::MetaLog& data) = 0;
 
   /*
    *
    */
   virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const Slice& data) = 0;
+      const zlog_proto::MetaLog& data) = 0;
 
   /*
    *
    */
   virtual int LatestProjection(const std::string& oid,
-      uint64_t *epoch, std::string *data) = 0;
+      uint64_t *epoch, zlog_proto::MetaLog& data) = 0;
 
   /*
    *

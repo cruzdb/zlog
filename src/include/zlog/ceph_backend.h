@@ -4,6 +4,7 @@
 #include <rados/cls_zlog_client.h>
 #include "zlog/backend.h"
 #include <iostream>
+#include "proto/protobuf_bufferlist_adapter.h"
 
 // v1
 class CephBackend : public Backend {
@@ -22,7 +23,12 @@ class CephBackend : public Backend {
    * The projection will be initialized for this log object during
    * RefreshProjection in the same way that it is done during Open().
    */
-  virtual int CreateHeadObject(const std::string& oid, ceph::bufferlist& bl) {
+  virtual int CreateHeadObject(const std::string& oid,
+      const zlog_proto::MetaLog& data) {
+    // prepare blob
+    ceph::bufferlist bl;
+    pack_msg<zlog_proto::MetaLog>(bl, data);
+
     // prepare operation
     librados::ObjectWriteOperation op;
     op.create(true); // exclusive create
@@ -34,10 +40,12 @@ class CephBackend : public Backend {
   }
 
   virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const Slice& data) {
-    // prepare operation
+      const zlog_proto::MetaLog& data) {
+    // prepare blob
     ceph::bufferlist bl;
-    bl.append(data.data(), data.size());
+    pack_msg<zlog_proto::MetaLog>(bl, data);
+
+    // prepare operation
     librados::ObjectWriteOperation op;
     zlog::cls_zlog_set_projection(op, epoch, bl);
 
@@ -50,7 +58,7 @@ class CephBackend : public Backend {
    *
    */
   virtual int LatestProjection(const std::string& oid,
-      uint64_t *epoch, std::string *data) {
+      uint64_t *epoch, zlog_proto::MetaLog& config) {
     // prepare operation
     int rv;
     ceph::bufferlist bl;
@@ -70,7 +78,10 @@ class CephBackend : public Backend {
     }
 
     // copy out data
-    data->assign(bl.c_str(), bl.length());
+    if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
+      std::cerr << "failed to parse configuration" << std::endl;
+      return -EIO;
+    }
 
     return zlog_rv(0);
   }

@@ -11,7 +11,6 @@
 #include <rados/librados.hpp>
 
 #include "proto/zlog.pb.h"
-#include "proto/protobuf_bufferlist_adapter.h"
 #include "include/zlog/log.h"
 #include "include/zlog/capi.h"
 #include "include/zlog/backend.h"
@@ -53,13 +52,13 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   // Setup the first projection
   StripeHistory hist;
   hist.AddStripe(0, 0, stripe_size);
-  ceph::bufferlist bl = hist.Serialize();
+  const auto hist_data = hist.Serialize();
 
   librados::IoCtx *ioctx = (librados::IoCtx*)backend->ioctx;
 
   // create the log metadata/head object
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = backend->CreateHeadObject(metalog_oid, bl);
+  int ret = backend->CreateHeadObject(metalog_oid, hist_data);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "Failed to create log " << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
@@ -223,8 +222,8 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
    * propose the next projection/epoch.
    */
   uint64_t epoch;
-  std::string data;
-  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+  zlog_proto::MetaLog config;
+  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to get projection ret " << ret << std::endl;
     return ret;
@@ -243,10 +242,8 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
 
   //std::cout << "creating new stripe!" << std::endl;
 
-  ceph::bufferlist in_bl;
-  in_bl.append(data.data(), data.size());
   StripeHistory hist;
-  ret = hist.Deserialize(in_bl);
+  ret = hist.Deserialize(config);
   if (ret)
     return ret;
   assert(!hist.Empty());
@@ -268,13 +265,12 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
    */
   uint64_t next_epoch = epoch + 1;
   hist.CloneLatestStripe(max_position, next_epoch);
-  ceph::bufferlist out_bl = hist.Serialize();
+  const auto hist_data = hist.Serialize();
 
   /*
    * Propose the updated projection for the next epoch.
    */
-  ret = new_backend->SetProjection(metalog_oid_, next_epoch,
-      Slice(out_bl.c_str(), out_bl.length()));
+  ret = new_backend->SetProjection(metalog_oid_, next_epoch, hist_data);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to set new epoch " << next_epoch
       << " ret " << ret << std::endl;
@@ -291,17 +287,15 @@ int LogImpl::SetStripeWidth(int width)
    * propose the next projection/epoch.
    */
   uint64_t epoch;
-  std::string data;
-  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+  zlog_proto::MetaLog config;
+  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to get projection ret " << ret << std::endl;
     return ret;
   }
 
-  ceph::bufferlist in_bl;
-  in_bl.append(data.data(), data.size());
   StripeHistory hist;
-  ret = hist.Deserialize(in_bl);
+  ret = hist.Deserialize(config);
   if (ret)
     return ret;
   assert(!hist.Empty());
@@ -318,13 +312,12 @@ int LogImpl::SetStripeWidth(int width)
 
   uint64_t next_epoch = epoch + 1;
   hist.AddStripe(max_position, next_epoch, width);
-  ceph::bufferlist out_bl = hist.Serialize();
+  const auto hist_data = hist.Serialize();
 
   /*
    * Propose the updated projection for the next epoch.
    */
-  ret = new_backend->SetProjection(metalog_oid_, next_epoch,
-      Slice(out_bl.c_str(), out_bl.length()));
+  ret = new_backend->SetProjection(metalog_oid_, next_epoch, hist_data);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to set new epoch " << next_epoch
       << " ret " << ret << std::endl;
@@ -341,18 +334,15 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    * projection.
    */
   uint64_t epoch;
-  std::string data;
-  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+  zlog_proto::MetaLog config;
+  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to get projection ret " << ret << std::endl;
     return ret;
   }
 
-  ceph::bufferlist bl;
-  bl.append(data.data(), data.size());
-
   StripeHistory hist;
-  ret = hist.Deserialize(bl);
+  ret = hist.Deserialize(config);
   if (ret)
     return ret;
   assert(!hist.Empty());
@@ -371,8 +361,7 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    * Propose the next epoch / projection.
    */
   uint64_t next_epoch = epoch + 1;
-  ret = new_backend->SetProjection(metalog_oid_, next_epoch,
-      Slice(bl.c_str(), bl.length()));
+  ret = new_backend->SetProjection(metalog_oid_, next_epoch, config);
   if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to set new epoch " << next_epoch
       << " ret " << ret << std::endl;
@@ -436,19 +425,16 @@ int LogImpl::RefreshProjection()
 {
   for (;;) {
     uint64_t epoch;
-    std::string data;
-    int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+    zlog_proto::MetaLog config;
+    int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
     if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to get projection ret " << ret << std::endl;
       sleep(1);
       continue;
     }
 
-    ceph::bufferlist bl;
-    bl.append(data.data(), data.size());
-
     StripeHistory hist;
-    ret = hist.Deserialize(bl);
+    ret = hist.Deserialize(config);
     if (ret) {
       std::cerr << "RefreshProjection: failed to decode..." << std::endl << std::flush;
       return ret;

@@ -12,7 +12,7 @@
  * Pack a protobuf message into a bufferlist.
  */
 template<typename T>
-void pack_msg(ceph::bufferlist& bl, T& m) {
+void pack_msg(ceph::bufferlist& bl, const T& m) {
   assert(m.IsInitialized());
   char buf[m.ByteSize()];
   assert(m.SerializeToArray(buf, sizeof(buf)));

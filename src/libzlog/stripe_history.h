@@ -1,7 +1,7 @@
 #ifndef ZLOG_STRIPE_HISTORY_H_
 #define ZLOG_STRIPE_HISTORY_H_
 #include <map>
-#include <rados/librados.hpp>
+#include "proto/zlog.pb.h"
 
 class StripeHistory {
  public:
@@ -18,8 +18,8 @@ class StripeHistory {
 
   bool Empty() const;
 
-  ceph::bufferlist Serialize() const;
-  int Deserialize(ceph::bufferlist& bl);
+  zlog_proto::MetaLog Serialize() const;
+  int Deserialize(const zlog_proto::MetaLog& data);
 
  private:
   std::map<uint64_t, Stripe> history_;
