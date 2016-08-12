@@ -54,8 +54,6 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   hist.AddStripe(0, 0, stripe_size);
   const auto hist_data = hist.Serialize();
 
-  librados::IoCtx *ioctx = (librados::IoCtx*)backend->ioctx;
-
   // create the log metadata/head object
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
   int ret = backend->CreateHeadObject(metalog_oid, hist_data);
@@ -68,8 +66,6 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   LogImpl *impl = new LogImpl;
 
   impl->new_backend = backend;
-  impl->ioctx_ = ioctx;
-  impl->pool_ = ioctx->get_pool_name();
   impl->name_ = name;
   impl->metalog_oid_ = metalog_oid;
   impl->seqr = seqr;
@@ -106,14 +102,12 @@ int Log::Open(Backend *backend, const std::string& name,
     return -EINVAL;
   }
 
-  librados::IoCtx *ioctx = (librados::IoCtx*)backend->ioctx;
-
   /*
    * Check that the log metadata/head object exists. The projection and other
    * state is read during RefreshProjection.
    */
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = ioctx->stat(metalog_oid, NULL, NULL);
+  int ret = backend->Exists(metalog_oid);
   if (ret) {
     std::cerr << "Failed to open log meta object " << metalog_oid << " ret " <<
       ret << std::endl;
@@ -123,8 +117,6 @@ int Log::Open(Backend *backend, const std::string& name,
   LogImpl *impl = new LogImpl;
 
   impl->new_backend = backend;
-  impl->ioctx_ = ioctx;
-  impl->pool_ = ioctx->get_pool_name();
   impl->name_ = name;
   impl->metalog_oid_ = metalog_oid;
   impl->seqr = seqr;
@@ -452,7 +444,8 @@ int LogImpl::RefreshProjection()
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(mapper_.Epoch(), pool_, name_, pposition, increment);
+    int ret = seqr->CheckTail(mapper_.Epoch(), new_backend->pool(),
+        name_, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
@@ -481,7 +474,8 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 
   for (;;) {
     std::vector<uint64_t> result;
-    int ret = seqr->CheckTail(mapper_.Epoch(), pool_, name_, result, count);
+    int ret = seqr->CheckTail(mapper_.Epoch(), new_backend->pool(),
+        name_, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
@@ -505,8 +499,8 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(mapper_.Epoch(), pool_, name_, stream_ids,
-        stream_backpointers, pposition, increment);
+    int ret = seqr->CheckTail(mapper_.Epoch(), new_backend->pool(),
+        name_, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);

@@ -19,6 +19,18 @@ class Backend {
   void *ioctx;
 
   /*
+   * TODO: this is used to provide the rados pool name when composing requests
+   * to the sequencer. this rados specific, and needs to be factored out
+   * somehow.
+   */
+  virtual std::string pool() = 0;
+
+  /*
+   *
+   */
+  virtual int Exists(const std::string& oid) = 0;
+
+  /*
    *
    */
   virtual int CreateHeadObject(const std::string& oid,

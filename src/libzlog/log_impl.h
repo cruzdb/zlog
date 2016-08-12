@@ -119,8 +119,7 @@ class LogImpl : public Log {
 
   int StripeWidth();
 
-  librados::IoCtx *ioctx_;
-  std::string pool_;
+  std::string pool2_;
   std::string name_;
   std::string metalog_oid_;
   SeqrClient *seqr;

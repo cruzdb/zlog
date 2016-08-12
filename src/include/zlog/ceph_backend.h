@@ -11,7 +11,18 @@ class CephBackend : public Backend {
  public:
   explicit CephBackend(librados::IoCtx *ioctx) :
     Backend(ioctx), ioctx_(ioctx)
-  {}
+  {
+    pool_ = ioctx_->get_pool_name();
+  }
+
+  virtual std::string pool() {
+    return pool_;
+  }
+
+  virtual int Exists(const std::string& oid) {
+    int ret = ioctx_->stat(oid, NULL, NULL);
+    return zlog_rv(ret);
+  }
 
   /*
    * Create the log metadata/head object and create the first projection. The
@@ -209,6 +220,7 @@ class CephBackend : public Backend {
   }
 
   librados::IoCtx *ioctx_;
+  std::string pool_;
 };
 
 #endif

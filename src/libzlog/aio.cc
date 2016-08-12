@@ -369,7 +369,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->bl = data_bl;
   impl->position = position;
   impl->pposition = pposition;
-  impl->ioctx = ioctx_;
+  impl->ioctx = (librados::IoCtx*)new_backend->ioctx;
   impl->type = ZLOG_AIO_APPEND;
 
   uint64_t epoch;
@@ -389,7 +389,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   librados::ObjectWriteOperation op;
   backend->write(op, epoch, position, data_bl);
 
-  ret = ioctx_->aio_operate(oid, impl->c, &op);
+  ret = impl->ioctx->aio_operate(oid, impl->c, &op);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
    * need to make sure that references to impl and the rados completion are
@@ -410,7 +410,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   impl->log = this;
   impl->datap = datap;
   impl->position = position;
-  impl->ioctx = ioctx_;
+  impl->ioctx = (librados::IoCtx*)new_backend->ioctx;
   impl->type = ZLOG_AIO_READ;
 
   impl->get(); // rados aio now has a reference
@@ -425,7 +425,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   librados::ObjectReadOperation op;
   backend->read(op, epoch, position);
 
-  int ret = ioctx_->aio_operate(oid, impl->c, &op, &impl->bl);
+  int ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
    * need to make sure that references to impl and the rados completion are
