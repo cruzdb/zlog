@@ -10,22 +10,11 @@ class TmpBackend {
 
   // object class interface
 
-  virtual void seal(librados::ObjectWriteOperation& op, uint64_t epoch) = 0;
-
-  virtual void fill(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position) = 0;
-
   virtual void write(librados::ObjectWriteOperation& op, uint64_t epoch,
       uint64_t position, ceph::bufferlist& data) = 0;
 
   virtual void read(librados::ObjectReadOperation& op, uint64_t epoch,
       uint64_t position) = 0;
-
-  virtual void trim(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position) = 0;
-
-  virtual void max_position(librados::ObjectReadOperation& op, uint64_t epoch,
-      uint64_t *pposition, int *pret) = 0;
 
   // projection management
 

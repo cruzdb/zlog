@@ -62,6 +62,34 @@ class CephBackend : public Backend {
     return zlog_rv(0);
   }
 
+  virtual int Seal(const std::string& oid, uint64_t epoch) {
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_seal(op, epoch);
+    int ret = ioctx_->operate(oid, &op);
+    return zlog_rv(ret);
+  }
+
+  virtual int MaxPos(const std::string& oid, uint64_t epoch,
+      uint64_t *pos) {
+    // prepare operation
+    int rv;
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_max_position(op, epoch, pos, &rv);
+
+    // run operation
+    ceph::bufferlist unused;
+    int ret = ioctx_->operate(oid, &op, &unused);
+    if (ret || rv) {
+      std::cerr << "MaxPos ret " << ret << " rv " << rv << std::endl;
+      if (ret)
+        return zlog_rv(ret);
+      if (rv)
+        return zlog_rv(rv);
+    }
+
+    return zlog_rv(0);
+  }
+
   /*
    *
    */

@@ -395,9 +395,7 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
    * Seal each object
    */
   for (const auto& oid : objects) {
-    librados::ObjectWriteOperation seal_op;
-    backend->seal(seal_op, epoch);
-    int ret = ioctx_->operate(oid, &seal_op);
+    int ret = new_backend->Seal(oid, epoch);
     if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to seal object" << std::endl;
       return ret;
@@ -411,28 +409,15 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
   bool first = true;
   for (const auto& oid : objects) {
     /*
-     * Prepare max_position operation
-     */
-    int op_ret;
-    uint64_t this_pos;
-    librados::ObjectReadOperation op;
-    backend->max_position(op, epoch, &this_pos, &op_ret);
-
-    /*
      * The max_position function should only be called on objects that have
      * been sealed, thus here we return from any error includes -ENOENT. The
      * epoch tag must also match the sealed epoch in the object otherwise
      * we'll receive -EINVAL.
      */
-    ceph::bufferlist unused;
-    int ret = ioctx_->operate(oid, &op, &unused);
+    uint64_t this_pos;
+    int ret = new_backend->MaxPos(oid, epoch, &this_pos);
     if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to find max pos ret " << ret << std::endl;
-      return ret;
-    }
-
-    if (op_ret != Backend::ZLOG_OK) {
-      std::cerr << "failed to find max pos op_ret " << ret << std::endl;
       return ret;
     }
 
@@ -627,13 +612,10 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
 int LogImpl::Fill(uint64_t epoch, uint64_t position)
 {
   for (;;) {
-    librados::ObjectWriteOperation op;
-    backend->fill(op, epoch, position);
-
     std::string oid;
     mapper_.FindObject(position, &oid, NULL);
 
-    int ret = ioctx_->operate(oid, &op);
+    int ret = new_backend->Fill(oid, epoch, position);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
       return ret;

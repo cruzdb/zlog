@@ -7,15 +7,6 @@ using namespace zlog;
 
 class BackendV1 : public TmpBackend {
  public:
-  void seal(librados::ObjectWriteOperation& op, uint64_t epoch) {
-    cls_zlog_seal(op, epoch);
-  }
-
-  void fill(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position) {
-    cls_zlog_fill(op, epoch, position);
-  }
-
   void write(librados::ObjectWriteOperation& op, uint64_t epoch,
       uint64_t position, ceph::bufferlist& data) {
     cls_zlog_write(op, epoch, position, data);
@@ -25,29 +16,10 @@ class BackendV1 : public TmpBackend {
       uint64_t position) {
     cls_zlog_read(op, epoch, position);
   }
-
-  void trim(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position) {
-    cls_zlog_trim(op, epoch, position);
-  }
-
-  void max_position(librados::ObjectReadOperation& op, uint64_t epoch,
-      uint64_t *pposition, int *pret) {
-    cls_zlog_max_position(op, epoch, pposition, pret);
-  }
 };
 
 class BackendV2 : public TmpBackend {
  public:
-  void seal(librados::ObjectWriteOperation& op, uint64_t epoch) {
-    cls_zlog_seal_v2(op, epoch);
-  }
-
-  void fill(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position) {
-    cls_zlog_fill_v2(op, epoch, position);
-  }
-
   void write(librados::ObjectWriteOperation& op, uint64_t epoch,
       uint64_t position, ceph::bufferlist& data) {
     cls_zlog_write_v2(op, epoch, position, data);
@@ -56,16 +28,6 @@ class BackendV2 : public TmpBackend {
   void read(librados::ObjectReadOperation& op, uint64_t epoch,
       uint64_t position) {
     cls_zlog_read_v2(op, epoch, position);
-  }
-
-  void trim(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position) {
-    cls_zlog_trim_v2(op, epoch, position);
-  }
-
-  void max_position(librados::ObjectReadOperation& op, uint64_t epoch,
-      uint64_t *pposition, int *pret) {
-    cls_zlog_max_position_v2(op, epoch, pposition, pret);
   }
 };
 

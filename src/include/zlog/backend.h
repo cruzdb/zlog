@@ -28,6 +28,17 @@ class Backend {
   /*
    *
    */
+  virtual int Seal(const std::string& oid, uint64_t epoch) = 0;
+
+  /*
+   *
+   */
+  virtual int MaxPos(const std::string& oid, uint64_t epoch,
+      uint64_t *pos) = 0;
+
+  /*
+   *
+   */
   virtual int Write(const std::string& oid, const Slice& data,
       uint64_t epoch, uint64_t position) = 0;
 
