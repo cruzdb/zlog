@@ -8,16 +8,6 @@ namespace zlog {
 class TmpBackend {
  public:
 
-  // these must be synchronized with cls_zlog_client.h
-  enum {
-    CLS_ZLOG_OK            = 0x00,
-    CLS_ZLOG_STALE_EPOCH   = 0x01,
-    CLS_ZLOG_READ_ONLY     = 0x02,
-    CLS_ZLOG_NOT_WRITTEN   = 0x03,
-    CLS_ZLOG_INVALIDATED   = 0x04,
-    CLS_ZLOG_INVALID_EPOCH = 0x05,
-  };
-
   // object class interface
 
   virtual void seal(librados::ObjectWriteOperation& op, uint64_t epoch) = 0;

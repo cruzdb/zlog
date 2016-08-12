@@ -52,22 +52,19 @@ int LogImpl::MultiAppend(const Slice& data,
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    librados::ObjectWriteOperation op;
-    backend->write(op, epoch, position, bl);
-
-    ret = ioctx_->operate(oid, &op);
+    ret = new_backend->Write(oid, Slice(bl.c_str(), bl.length()), epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK) {
+    if (ret == Backend::ZLOG_OK) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -83,7 +80,7 @@ int LogImpl::MultiAppend(const Slice& data,
       continue;
     }
 
-    assert(ret == TmpBackend::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::ZLOG_READ_ONLY);
   }
   assert(0);
 }

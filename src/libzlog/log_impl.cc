@@ -60,7 +60,7 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   // create the log metadata/head object
   std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
   int ret = backend->CreateHeadObject(metalog_oid, bl);
-  if (ret) {
+  if (ret != Backend::ZLOG_OK) {
     std::cerr << "Failed to create log " << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
     return ret;
@@ -417,7 +417,7 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
     librados::ObjectWriteOperation seal_op;
     backend->seal(seal_op, epoch);
     int ret = ioctx_->operate(oid, &seal_op);
-    if (ret != TmpBackend::CLS_ZLOG_OK) {
+    if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to seal object" << std::endl;
       return ret;
     }
@@ -445,12 +445,12 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
      */
     ceph::bufferlist unused;
     int ret = ioctx_->operate(oid, &op, &unused);
-    if (ret != TmpBackend::CLS_ZLOG_OK) {
+    if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to find max pos ret " << ret << std::endl;
       return ret;
     }
 
-    if (op_ret != TmpBackend::CLS_ZLOG_OK) {
+    if (op_ret != Backend::ZLOG_OK) {
       std::cerr << "failed to find max pos op_ret " << ret << std::endl;
       return ret;
     }
@@ -610,13 +610,13 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK) {
+    if (ret == Backend::ZLOG_OK) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::ZLOG_STALE_EPOCH) {
       sleep(1); // avoid spinning in this loop
       ret = RefreshProjection();
       if (ret)
@@ -639,7 +639,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       continue;
     }
 
-    assert(ret == TmpBackend::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::ZLOG_READ_ONLY);
   }
   assert(0);
 }
@@ -659,17 +659,17 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK)
+    if (ret == Backend::ZLOG_OK)
       return 0;
 
-    if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
       continue;
     }
 
-    assert(ret == TmpBackend::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::ZLOG_READ_ONLY);
     return -EROFS;
   }
 }
@@ -687,17 +687,17 @@ int LogImpl::Fill(uint64_t position)
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK)
+    if (ret == Backend::ZLOG_OK)
       return 0;
 
-    if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
       continue;
     }
 
-    assert(ret == TmpBackend::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::ZLOG_READ_ONLY);
     return -EROFS;
   }
 }
@@ -715,10 +715,10 @@ int LogImpl::Trim(uint64_t position)
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK)
+    if (ret == Backend::ZLOG_OK)
       return 0;
 
-    if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -741,13 +741,13 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK)
+    if (ret == Backend::ZLOG_OK)
       return 0;
-    else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN)
+    else if (ret == Backend::ZLOG_NOT_WRITTEN)
       return -ENODEV;
-    else if (ret == TmpBackend::CLS_ZLOG_INVALIDATED)
+    else if (ret == Backend::ZLOG_INVALIDATED)
       return -EFAULT;
-    else if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    else if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
@@ -773,13 +773,13 @@ int LogImpl::Read(uint64_t position, std::string *data)
       return ret;
     }
 
-    if (ret == TmpBackend::CLS_ZLOG_OK)
+    if (ret == Backend::ZLOG_OK)
       return 0;
-    else if (ret == TmpBackend::CLS_ZLOG_NOT_WRITTEN)
+    else if (ret == Backend::ZLOG_NOT_WRITTEN)
       return -ENODEV;
-    else if (ret == TmpBackend::CLS_ZLOG_INVALIDATED)
+    else if (ret == Backend::ZLOG_INVALIDATED)
       return -EFAULT;
-    else if (ret == TmpBackend::CLS_ZLOG_STALE_EPOCH) {
+    else if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;

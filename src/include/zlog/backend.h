@@ -4,6 +4,16 @@
 
 class Backend {
  public:
+  enum {
+    //ZLOG_OK = 9823098,
+    ZLOG_OK = 0,
+    ZLOG_STALE_EPOCH,
+    ZLOG_READ_ONLY,
+    ZLOG_NOT_WRITTEN,
+    ZLOG_INVALIDATED,
+    ZLOG_INVALID_EPOCH,
+  };
+
   explicit Backend(void *ioctx) : ioctx(ioctx) {}
   void *ioctx;
 
