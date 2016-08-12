@@ -3,6 +3,7 @@
 #include <rados/librados.hpp>
 #include <rados/cls_zlog_client.h>
 #include "zlog/backend.h"
+#include <iostream>
 
 // v1
 class CephBackend : public Backend {
@@ -21,7 +22,7 @@ class CephBackend : public Backend {
    * The projection will be initialized for this log object during
    * RefreshProjection in the same way that it is done during Open().
    */
-  int CreateHeadObject(const std::string& oid, ceph::bufferlist& bl) {
+  virtual int CreateHeadObject(const std::string& oid, ceph::bufferlist& bl) {
     // prepare operation
     librados::ObjectWriteOperation op;
     op.create(true); // exclusive create
@@ -29,9 +30,41 @@ class CephBackend : public Backend {
 
     // run operation
     int ret = ioctx_->operate(oid, &op);
-    return rv(ret);
+    return zlog_rv(ret);
   }
 
+  /*
+   *
+   */
+  virtual int LatestProjection(const std::string& oid,
+      uint64_t *epoch, std::string *data) {
+    // prepare operation
+    int rv;
+    ceph::bufferlist bl;
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_get_latest_projection(op, &rv, epoch, &bl);
+
+    // run operation
+    ceph::bufferlist unused;
+    int ret = ioctx_->operate(oid, &op, &unused);
+    if (ret || rv) {
+      std::cerr << "LatestProjection: rv " << rv
+        << " ret " << ret << std::endl;
+      if (ret)
+        return zlog_rv(ret);
+      if (rv)
+        return zlog_rv(rv);
+    }
+
+    // copy out data
+    data->assign(bl.c_str(), bl.length());
+
+    return zlog_rv(0);
+  }
+
+  /*
+   *
+   */
   virtual int Write(const std::string& oid, const Slice& data,
       uint64_t epoch, uint64_t position) {
     // prepare operation
@@ -42,9 +75,12 @@ class CephBackend : public Backend {
 
     // run operation
     int ret = ioctx_->operate(oid, &op);
-    return rv(ret);
+    return zlog_rv(ret);
   }
 
+  /*
+   *
+   */
   virtual int Read(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data) {
     // prepare operation
@@ -59,7 +95,7 @@ class CephBackend : public Backend {
     if (ret == zlog::CLS_ZLOG_OK)
       data->assign(bl.c_str(), bl.length());
 
-    return rv(ret);
+    return zlog_rv(ret);
   }
 
   /*
@@ -73,7 +109,7 @@ class CephBackend : public Backend {
 
     // run operation
     int ret = ioctx_->operate(oid, &op);
-    return rv(ret);
+    return zlog_rv(ret);
   }
 
   /*
@@ -87,11 +123,11 @@ class CephBackend : public Backend {
 
     // run operation
     int ret = ioctx_->operate(oid, &op);
-    return rv(ret);
+    return zlog_rv(ret);
   }
 
  private:
-  static inline int rv(int ret) {
+  static inline int zlog_rv(int ret) {
     if (ret < 0)
       return ret;
 

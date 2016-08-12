@@ -1,4 +1,5 @@
 #include <sstream>
+#include <iostream>
 #include <iomanip>
 #include <map>
 #include "zlog/db.h"

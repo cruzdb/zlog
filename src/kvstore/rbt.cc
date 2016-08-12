@@ -1,5 +1,6 @@
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 #include "zlog/db.h"
 #include "backend.h"
 

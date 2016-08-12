@@ -123,6 +123,7 @@ int Log::Open(Backend *backend, const std::string& name,
 
   LogImpl *impl = new LogImpl;
 
+  impl->new_backend = backend;
   impl->ioctx_ = ioctx;
   impl->pool_ = ioctx->get_pool_name();
   impl->name_ = name;
@@ -221,21 +222,12 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
    * Get the current projection. We'll add the new striping width when we
    * propose the next projection/epoch.
    */
-  int rv;
   uint64_t epoch;
-  ceph::bufferlist in_bl;
-  librados::ObjectReadOperation get_op;
-  TmpBackend::get_latest_projection(get_op, &rv, &epoch, &in_bl);
-
-  ceph::bufferlist unused;
-  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
-  if (ret || rv) {
-    std::cerr << "failed to get projection ret " << ret
-      << " rv " << rv << std::endl;
-    if (ret)
-      return ret;
-    if (rv)
-      return rv;
+  std::string data;
+  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+  if (ret != Backend::ZLOG_OK) {
+    std::cerr << "failed to get projection ret " << ret << std::endl;
+    return ret;
   }
 
   /*
@@ -251,6 +243,8 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
 
   //std::cout << "creating new stripe!" << std::endl;
 
+  ceph::bufferlist in_bl;
+  in_bl.append(data.data(), data.size());
   StripeHistory hist;
   ret = hist.Deserialize(in_bl);
   if (ret)
@@ -297,23 +291,16 @@ int LogImpl::SetStripeWidth(int width)
    * Get the current projection. We'll add the new striping width when we
    * propose the next projection/epoch.
    */
-  int rv;
   uint64_t epoch;
-  ceph::bufferlist in_bl;
-  librados::ObjectReadOperation get_op;
-  TmpBackend::get_latest_projection(get_op, &rv, &epoch, &in_bl);
-
-  ceph::bufferlist unused;
-  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
-  if (ret || rv) {
-    std::cerr << "failed to get projection ret " << ret
-      << " rv " << rv << std::endl;
-    if (ret)
-      return ret;
-    if (rv)
-      return rv;
+  std::string data;
+  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+  if (ret != Backend::ZLOG_OK) {
+    std::cerr << "failed to get projection ret " << ret << std::endl;
+    return ret;
   }
 
+  ceph::bufferlist in_bl;
+  in_bl.append(data.data(), data.size());
   StripeHistory hist;
   ret = hist.Deserialize(in_bl);
   if (ret)
@@ -355,22 +342,16 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    * Get the current projection. We'll make a copy of this as the next
    * projection.
    */
-  int rv;
   uint64_t epoch;
-  ceph::bufferlist bl;
-  librados::ObjectReadOperation get_op;
-  TmpBackend::get_latest_projection(get_op, &rv, &epoch, &bl);
-
-  ceph::bufferlist unused;
-  int ret = ioctx_->operate(metalog_oid_, &get_op, &unused);
-  if (ret || rv) {
-    std::cerr << "failed to get projection ret " << ret
-      << " rv " << rv << std::endl;
-    if (ret)
-      return ret;
-    if (rv)
-      return rv;
+  std::string data;
+  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+  if (ret != Backend::ZLOG_OK) {
+    std::cerr << "failed to get projection ret " << ret << std::endl;
+    return ret;
   }
+
+  ceph::bufferlist bl;
+  bl.append(data.data(), data.size());
 
   StripeHistory hist;
   ret = hist.Deserialize(bl);
@@ -472,25 +453,24 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
 int LogImpl::RefreshProjection()
 {
   for (;;) {
-    int rv;
     uint64_t epoch;
-    ceph::bufferlist bl;
-    librados::ObjectReadOperation op;
-    TmpBackend::get_latest_projection(op, &rv, &epoch, &bl);
-
-    ceph::bufferlist unused;
-    int ret = ioctx_->operate(metalog_oid_, &op, &unused);
-    if (ret || rv) {
-      std::cerr << "failed to get projection ret "
-        << ret << " rv " << rv << std::endl;
+    std::string data;
+    int ret = new_backend->LatestProjection(metalog_oid_, &epoch, &data);
+    if (ret != Backend::ZLOG_OK) {
+      std::cerr << "failed to get projection ret " << ret << std::endl;
       sleep(1);
       continue;
     }
 
+    ceph::bufferlist bl;
+    bl.append(data.data(), data.size());
+
     StripeHistory hist;
     ret = hist.Deserialize(bl);
-    if (ret)
+    if (ret) {
+      std::cerr << "RefreshProjection: failed to decode..." << std::endl << std::flush;
       return ret;
+    }
     assert(!hist.Empty());
 
     mapper_.SetHistory(hist, epoch);

@@ -22,6 +22,12 @@ class Backend {
   /*
    *
    */
+  virtual int LatestProjection(const std::string& oid,
+      uint64_t *epoch, std::string *data) = 0;
+
+  /*
+   *
+   */
   virtual int Write(const std::string& oid, const Slice& data,
       uint64_t epoch, uint64_t position) = 0;
 
