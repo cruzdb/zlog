@@ -273,10 +273,9 @@ int LogImpl::CreateNewStripe(uint64_t last_epoch)
   /*
    * Propose the updated projection for the next epoch.
    */
-  librados::ObjectWriteOperation set_op;
-  TmpBackend::set_projection(set_op, next_epoch, out_bl);
-  ret = ioctx_->operate(metalog_oid_, &set_op);
-  if (ret) {
+  ret = new_backend->SetProjection(metalog_oid_, next_epoch,
+      Slice(out_bl.c_str(), out_bl.length()));
+  if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to set new epoch " << next_epoch
       << " ret " << ret << std::endl;
     return ret;
@@ -324,10 +323,9 @@ int LogImpl::SetStripeWidth(int width)
   /*
    * Propose the updated projection for the next epoch.
    */
-  librados::ObjectWriteOperation set_op;
-  TmpBackend::set_projection(set_op, next_epoch, out_bl);
-  ret = ioctx_->operate(metalog_oid_, &set_op);
-  if (ret) {
+  ret = new_backend->SetProjection(metalog_oid_, next_epoch,
+      Slice(out_bl.c_str(), out_bl.length()));
+  if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to set new epoch " << next_epoch
       << " ret " << ret << std::endl;
     return ret;
@@ -373,10 +371,9 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
    * Propose the next epoch / projection.
    */
   uint64_t next_epoch = epoch + 1;
-  librados::ObjectWriteOperation set_op;
-  TmpBackend::set_projection(set_op, next_epoch, bl);
-  ret = ioctx_->operate(metalog_oid_, &set_op);
-  if (ret) {
+  ret = new_backend->SetProjection(metalog_oid_, next_epoch,
+      Slice(bl.c_str(), bl.length()));
+  if (ret != Backend::ZLOG_OK) {
     std::cerr << "failed to set new epoch " << next_epoch
       << " ret " << ret << std::endl;
     return ret;

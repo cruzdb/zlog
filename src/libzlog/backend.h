@@ -18,12 +18,6 @@ class TmpBackend {
 
   // projection management
 
-  static void set_projection(librados::ObjectWriteOperation& op,
-      uint64_t epoch, ceph::bufferlist& data);
-
-  static void get_latest_projection(librados::ObjectReadOperation& op,
-      int *pret, uint64_t *pepoch, ceph::bufferlist *out);
-
   static void get_projection(librados::ObjectReadOperation& op,
       int *pret, uint64_t epoch, ceph::bufferlist *out);
 

@@ -33,6 +33,19 @@ class CephBackend : public Backend {
     return zlog_rv(ret);
   }
 
+  virtual int SetProjection(const std::string& oid, uint64_t epoch,
+      const Slice& data) {
+    // prepare operation
+    ceph::bufferlist bl;
+    bl.append(data.data(), data.size());
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_set_projection(op, epoch, bl);
+
+    // run operation
+    int ret = ioctx_->operate(oid, &op);
+    return zlog_rv(ret);
+  }
+
   /*
    *
    */

@@ -31,18 +31,6 @@ class BackendV2 : public TmpBackend {
   }
 };
 
-void TmpBackend::set_projection(librados::ObjectWriteOperation& op,
-    uint64_t epoch, ceph::bufferlist& data)
-{
-  cls_zlog_set_projection(op, epoch, data);
-}
-
-void TmpBackend::get_latest_projection(librados::ObjectReadOperation& op,
-    int *pret, uint64_t *pepoch, ceph::bufferlist *out)
-{
-  cls_zlog_get_latest_projection(op, pret, pepoch, out);
-}
-
 void TmpBackend::get_projection(librados::ObjectReadOperation& op,
       int *pret, uint64_t epoch, ceph::bufferlist *out)
 {
