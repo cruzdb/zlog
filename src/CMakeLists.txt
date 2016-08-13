@@ -47,6 +47,18 @@ target_include_directories(gtest
     PRIVATE gtest
 )
 
+add_executable(zlog-test-ceph test/test_ceph.cc)
+
+#test/test_internal.cc
+
+target_link_libraries(zlog-test-ceph
+    libzlog
+    gtest
+    zlog_seqr
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+
 ################################################################################
 ################################################################################
 ################################################################################
@@ -105,18 +117,6 @@ target_link_libraries(zlog-bench-ng
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     atomic
-)
-
-add_executable(zlog-test
-    test/test.cc
-    test/test_internal.cc
-)
-
-target_link_libraries(zlog-test
-    libzlog
-    gtest
-    zlog_seqr
-    ${Boost_SYSTEM_LIBRARY}
 )
 
 add_executable(zlogtool zlog-tool.cc)

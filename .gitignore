@@ -30,7 +30,7 @@ src/zlog-seqr
 *.pb.cc
 *.pb.h
 
-src/zlog-test
+src/zlog-test-ceph
 src/zstate-test
 src/stream-stress
 src/append-check
