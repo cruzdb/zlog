@@ -47,18 +47,6 @@ target_include_directories(gtest
     PRIVATE gtest
 )
 
-add_executable(zlog-test-ceph test/test_ceph.cc)
-
-#test/test_internal.cc
-
-target_link_libraries(zlog-test-ceph
-    libzlog
-    gtest
-    zlog_seqr
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-
 ################################################################################
 ################################################################################
 ################################################################################
@@ -67,6 +55,15 @@ if(BUILD_CEPH_BACKEND)
 
 add_library(zstate SHARED zstate/skytype.cc)
 target_link_libraries(zstate libzlog)
+
+add_executable(zlog-test-ceph test/test_ceph.cc)
+#test/test_internal.cc
+target_link_libraries(zlog-test-ceph
+    libzlog
+    gtest
+    zlog_seqr
+    ${Boost_SYSTEM_LIBRARY}
+)
 
 add_executable(zlog-seqr seqr-server.cc)
 target_link_libraries(zlog-seqr

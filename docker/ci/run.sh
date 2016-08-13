@@ -33,7 +33,7 @@ git status
 
 mkdir build
 cd build
-cmake ..
+cmake -DWITH_CEPH_BACKEND=1 ..
 make
 
 # run seqr and tests

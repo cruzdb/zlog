@@ -42,3 +42,5 @@ CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
 *.so
+
+build
