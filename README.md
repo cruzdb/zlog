@@ -10,6 +10,7 @@ More information:
 
 * System Design: http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html
 * Asynchronous API Design: http://noahdesu.github.io/2015/09/04/zlog-async-api.html
+* Key-Value Store: http://noahdesu.github.io/2016/08/02/zlog-kvstore-intro.html
 
 This project uses Semantic Versioning (http://semver.org/).
 
