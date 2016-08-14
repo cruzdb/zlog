@@ -17,6 +17,8 @@ This project uses Semantic Versioning (http://semver.org/).
 
 We welcome and encourage people to learn and contribute to the zlog project. If you are looking for ways to get started, we use the [E-easy](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy) and [E-intermediate](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate) labels to tag issues that are good candidates for new contributors.
 
+* [Mailing list](https://groups.google.com/forum/#!forum/cruzdb)
+
 ## Language Bindings
 
 The base zlog project provides C, C++, and Java bindings.
