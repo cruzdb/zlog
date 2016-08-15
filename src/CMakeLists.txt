@@ -47,6 +47,15 @@ target_include_directories(gtest
     PRIVATE gtest
 )
 
+add_executable(zlog-test-ram test/test_ram.cc)
+#test/test_internal.cc
+target_link_libraries(zlog-test-ram
+    libzlog
+    gtest
+    zlog_seqr
+    ${Boost_SYSTEM_LIBRARY}
+)
+
 ################################################################################
 ################################################################################
 ################################################################################
