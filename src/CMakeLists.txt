@@ -1,41 +1,14 @@
 add_subdirectory(proto)
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
-add_subdirectory(kvstore)
 
 add_library(zlog_seqr SHARED libseq/libseqr.cc)
 target_link_libraries(zlog_seqr zlog_proto)
 
+add_subdirectory(libzlog)
+add_subdirectory(kvstore)
 ################################################################################
 ################################################################################
 ################################################################################
-
-set(libzlog_sources
-  libzlog/log_impl.cc
-  libzlog/stream.cc
-  libzlog/stripe_history.cc
-  libzlog/log_mapper.cc)
-
-# some stuff hasn't been converted to use generic backend
-if(BUILD_CEPH_BACKEND)
-  list(APPEND libzlog_sources libzlog/aio.cc)
-  #list(APPEND libzlog_sources libzlog/capi.cc)
-endif(BUILD_CEPH_BACKEND)
-
-add_library(libzlog SHARED ${libzlog_sources})
-
-target_include_directories(libzlog
-    PUBLIC ${LIBRADOS_INCLUDE_DIRS}
-    PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
-)
-
-target_link_libraries(libzlog
-    zlog_proto
-    ${LIBRADOS_LIBRARIES}
-    ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
 add_library(gtest
     gtest/src/gtest-all.cc
@@ -62,15 +35,8 @@ target_link_libraries(zlog-test-ram
 
 if(BUILD_CEPH_BACKEND)
 
-add_library(zlog_backend_ceph SHARED libzlog/backend/ceph.cc)
-target_link_libraries(zlog_backend_ceph ${LIBRADOS_LIBRARIES})
-target_include_directories(zlog_backend_ceph
-    PUBLIC ${LIBRADOS_INCLUDE_DIRS}
-    PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
-)
-
 add_library(zstate SHARED zstate/skytype.cc)
-target_link_libraries(zstate libzlog)
+target_link_libraries(zstate libzlog zlog_backend_ceph)
 
 add_executable(zlog-test-ceph test/test_ceph.cc)
 #test/test_internal.cc

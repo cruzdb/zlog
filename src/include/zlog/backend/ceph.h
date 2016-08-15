@@ -185,7 +185,18 @@ class CephBackend : public Backend {
     return zlog_rv(ret);
   }
 
+  virtual int AioAppend(const std::string& oid, uint64_t epoch,
+      uint64_t position, const Slice& data, void *arg,
+      std::function<void(void*, int)> callback);
+
+  virtual int AioRead(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data, void *arg,
+      std::function<void(void*, int)> callback);
+
  private:
+  static void aio_safe_cb_append(librados::completion_t cb, void *arg);
+  static void aio_safe_cb_read(librados::completion_t cb, void *arg);
+
   static inline int zlog_rv(int ret) {
     if (ret < 0)
       return ret;

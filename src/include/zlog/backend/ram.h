@@ -266,6 +266,20 @@ class RAMBackend : public Backend {
     }
   }
 
+  virtual int AioAppend(const std::string& oid, uint64_t epoch,
+      uint64_t position, const Slice& data, void *arg,
+      std::function<void(void*, int)> callback)
+  {
+    assert(0);
+  }
+
+  virtual int AioRead(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data, void *arg,
+      std::function<void(void*, int)> callback)
+  {
+    assert(0);
+  }
+
  private:
   struct log_entry {
     bool trimmed;

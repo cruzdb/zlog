@@ -82,6 +82,20 @@ class Backend {
    */
   virtual int Fill(const std::string& oid, uint64_t epoch,
       uint64_t position) = 0;
+
+  /*
+   *
+   */
+  virtual int AioAppend(const std::string& oid, uint64_t epoch,
+      uint64_t position, const Slice& data, void *arg,
+      std::function<void(void*, int)> callback) = 0;
+
+  /*
+   *
+   */
+  virtual int AioRead(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data, void *arg,
+      std::function<void(void*, int)> callback) = 0;
 };
 
 #endif

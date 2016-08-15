@@ -2,7 +2,7 @@
 #include <deque>
 #include <map>
 #include "include/zlog/log.h"
-#include "include/zlog/ram_backend.h"
+#include "include/zlog/backend/ram.h"
 
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
