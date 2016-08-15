@@ -8,7 +8,7 @@
 #include <rados/librados.hpp>
 #include <gtest/gtest.h>
 #include "zstate/objects/register.h"
-#include "include/zlog/ceph_backend.h"
+#include "include/zlog/backend/ceph.h"
 
 static std::string randstr(void)
 {

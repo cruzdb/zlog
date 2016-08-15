@@ -9,11 +9,7 @@
 // v1
 class CephBackend : public Backend {
  public:
-  explicit CephBackend(librados::IoCtx *ioctx) :
-    Backend(ioctx), ioctx_(ioctx)
-  {
-    pool_ = ioctx_->get_pool_name();
-  }
+  explicit CephBackend(librados::IoCtx *ioctx);
 
   virtual std::string pool() {
     return pool_;

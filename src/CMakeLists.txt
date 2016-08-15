@@ -18,7 +18,7 @@ set(libzlog_sources
 # some stuff hasn't been converted to use generic backend
 if(BUILD_CEPH_BACKEND)
   list(APPEND libzlog_sources libzlog/aio.cc)
-  list(APPEND libzlog_sources libzlog/capi.cc)
+  #list(APPEND libzlog_sources libzlog/capi.cc)
 endif(BUILD_CEPH_BACKEND)
 
 add_library(libzlog SHARED ${libzlog_sources})
@@ -62,6 +62,13 @@ target_link_libraries(zlog-test-ram
 
 if(BUILD_CEPH_BACKEND)
 
+add_library(zlog_backend_ceph SHARED libzlog/backend/ceph.cc)
+target_link_libraries(zlog_backend_ceph ${LIBRADOS_LIBRARIES})
+target_include_directories(zlog_backend_ceph
+    PUBLIC ${LIBRADOS_INCLUDE_DIRS}
+    PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
+)
+
 add_library(zstate SHARED zstate/skytype.cc)
 target_link_libraries(zstate libzlog)
 
@@ -71,6 +78,7 @@ target_link_libraries(zlog-test-ceph
     libzlog
     gtest
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
 )
 
@@ -79,6 +87,7 @@ target_link_libraries(zlog-seqr
     libzlog
     zlog_proto
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
@@ -87,6 +96,7 @@ add_executable(append-check append-check.cc)
 target_link_libraries(append-check
     libzlog
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
@@ -95,6 +105,7 @@ add_executable(stream-stress stream-stress.cc)
 target_link_libraries(stream-stress
     libzlog
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
@@ -103,6 +114,7 @@ add_executable(zlog-seqr-bench zlog-seqr-bench.cc)
 target_link_libraries(zlog-seqr-bench
     libzlog
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
@@ -111,6 +123,7 @@ add_executable(zlog-bench bench/bench.cc)
 target_link_libraries(zlog-bench
     libzlog
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     atomic
@@ -120,6 +133,7 @@ add_executable(zlog-bench-ng zlog-bench-ng.cc)
 target_link_libraries(zlog-bench-ng
     libzlog
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     atomic
@@ -130,6 +144,7 @@ set_target_properties(zlogtool PROPERTIES OUTPUT_NAME "zlog")
 target_link_libraries(zlogtool
     libzlog
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
@@ -140,6 +155,7 @@ target_link_libraries(zstate-test
     gtest
     zstate
     zlog_seqr
+    zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
 )
 

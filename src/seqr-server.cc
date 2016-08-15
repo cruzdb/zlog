@@ -11,7 +11,7 @@
 #include <rados/librados.hpp>
 #include "proto/zlog.pb.h"
 #include "libzlog/log_impl.h"
-#include "include/zlog/ceph_backend.h"
+#include "include/zlog/backend/ceph.h"
 
 namespace po = boost::program_options;
 

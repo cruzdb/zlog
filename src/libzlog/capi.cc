@@ -1,7 +1,6 @@
 #include <rados/librados.hpp>
 #include <rados/librados.h>
-#include "include/zlog/backend.h"
-#include "include/zlog/ceph_backend.h"
+#include "include/zlog/backend/ceph.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/slice.h"
 #include "include/zlog/stream.h"

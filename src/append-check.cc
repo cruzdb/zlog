@@ -6,7 +6,7 @@
 #include <boost/program_options.hpp>
 #include <rados/librados.hpp>
 #include "include/zlog/log.h"
-#include "include/zlog/ceph_backend.h"
+#include "include/zlog/backend/ceph.h"
 
 namespace po = boost::program_options;
 

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <rados/librados.hpp>
 #include "include/zlog/log.h"
-#include "include/zlog/ceph_backend.h"
+#include "include/zlog/backend/ceph.h"
 
 static void print_history(zlog::Stream *stream, int len = 10)
 {
