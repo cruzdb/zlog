@@ -116,14 +116,18 @@ class LibZlog : public ::testing::Test {
     ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
     ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
     be = new CephBackend(&ioctx);
+    client = new zlog::SeqrClient("localhost", "5678");
+    ASSERT_NO_THROW(client->Connect());
   }
 
   void TearDown() {
     delete be;
+    delete client;
     ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
   }
 
   Backend  *be;
+  zlog::SeqrClient *client;
 
 
  private:

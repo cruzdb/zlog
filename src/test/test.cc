@@ -50,11 +50,9 @@ TEST_F(LibZlog, Open) {
 }
 
 TEST_F(LibZlog, CheckTail) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
 
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -70,11 +68,8 @@ TEST_F(LibZlog, CheckTail) {
 }
 
 TEST_F(LibZlog, Append) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
@@ -107,11 +102,8 @@ TEST_F(LibZlog, Append) {
 }
 
 TEST_F(LibZlog, Fill) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   ret = log->Fill(0);
@@ -141,11 +133,8 @@ TEST_F(LibZlog, Fill) {
 }
 
 TEST_F(LibZlog, Read) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   std::string entry;
@@ -194,11 +183,8 @@ TEST_F(LibZlog, Read) {
 }
 
 TEST_F(LibZlog, Trim) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   // can trim empty spot
@@ -228,11 +214,8 @@ TEST_F(LibZlog, Trim) {
 }
 
 TEST_F(LibZlogStream, MultiAppend) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   {
@@ -281,11 +264,8 @@ TEST_F(LibZlogStream, MultiAppend) {
 }
 
 TEST_F(LibZlogStream, StreamId) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream0;
@@ -308,11 +288,8 @@ TEST_F(LibZlogStream, StreamId) {
 }
 
 TEST_F(LibZlogStream, Append) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream;
@@ -351,11 +328,8 @@ TEST_F(LibZlogStream, Append) {
 }
 
 TEST_F(LibZlogStream, ReadNext) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream;
@@ -425,11 +399,8 @@ TEST_F(LibZlogStream, ReadNext) {
 }
 
 TEST_F(LibZlogStream, Reset) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   zlog::Stream *stream;
@@ -489,11 +460,8 @@ TEST_F(LibZlogStream, Reset) {
 }
 
 TEST_F(LibZlogStream, Sync) {
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  int ret = zlog::Log::Create(be, "mylog", &client, &log);
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
   ASSERT_EQ(ret, 0);
 
   // initialize some streams (note stream id = position)

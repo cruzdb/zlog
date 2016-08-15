@@ -284,7 +284,7 @@ class RAMBackend : public Backend {
       std::unordered_map<std::string, object>::iterator& it) {
     if (it == db_.end())
       return 0;
-    if (epoch <= it->second.epoch)
+    if (it->second.sealed && epoch <= it->second.epoch)
       return Backend::ZLOG_STALE_EPOCH;
     return 0;
   }
