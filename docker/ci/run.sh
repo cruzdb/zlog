@@ -40,7 +40,9 @@ make
 cd src
 export CEPH_CONF=/tmp/ceph/ceph.conf
 ./zlog-seqr --streams --port 5678 --daemon
-./zlog-test-ceph
+./test/zlog-test-ceph
+./test/zlog-test-ram
+./test/db_test
 
 skill zlog-seqr
 skill -9 zlog-seqr
