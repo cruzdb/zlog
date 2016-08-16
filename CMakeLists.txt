@@ -27,10 +27,10 @@ include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 # check for ceph backend dependencies
-option(WITH_CEPH_BACKEND "Ceph Backend is here")
+option(WITH_CEPH_BACKEND "Ceph Backend is here" ON)
 if(WITH_CEPH_BACKEND)
-    find_package(librados REQUIRED)
-    find_package(libcls_zlog_client REQUIRED)
+    find_package(librados)
+    find_package(libcls_zlog_client)
     if(${LIBRADOS_FOUND})
         if(${LIBCLS_ZLOG_CLIENT_FOUND})
             set(BUILD_CEPH_BACKEND ${LIBRADOS_FOUND})
