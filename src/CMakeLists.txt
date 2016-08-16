@@ -6,6 +6,8 @@ target_link_libraries(zlog_seqr zlog_proto)
 
 add_subdirectory(libzlog)
 add_subdirectory(kvstore)
+add_subdirectory(test)
+
 ################################################################################
 ################################################################################
 ################################################################################
@@ -20,25 +22,6 @@ target_include_directories(gtest
     PRIVATE gtest
 )
 
-add_executable(db_test2 test/db_test.cc)
-target_link_libraries(db_test2 libzlog zlog_seqr gtest libkvstore)
-if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    setup_target_for_coverage(dbtest2-cov db_test2 coverage)
-endif()
-
-add_executable(zlog-test-ram test/test_ram.cc)
-#test/test_internal.cc
-target_link_libraries(zlog-test-ram
-    libzlog
-    gtest
-    zlog_seqr
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    setup_target_for_coverage(zlog-test-ram-cov zlog-test-ram coverage)
-endif()
-
 ################################################################################
 ################################################################################
 ################################################################################
@@ -47,16 +30,6 @@ if(BUILD_CEPH_BACKEND)
 
 add_library(zstate SHARED zstate/skytype.cc)
 target_link_libraries(zstate libzlog zlog_backend_ceph)
-
-add_executable(zlog-test-ceph test/test_ceph.cc)
-#test/test_internal.cc
-target_link_libraries(zlog-test-ceph
-    libzlog
-    gtest
-    zlog_seqr
-    zlog_backend_ceph
-    ${Boost_SYSTEM_LIBRARY}
-)
 
 add_executable(zlog-seqr seqr-server.cc)
 target_link_libraries(zlog-seqr
@@ -122,16 +95,6 @@ target_link_libraries(zlogtool
     zlog_seqr
     zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-add_executable(zstate-test test/zstate_test.cc)
-target_link_libraries(zstate-test
-    libzlog
-    gtest
-    zstate
-    zlog_seqr
-    zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
 )
 
