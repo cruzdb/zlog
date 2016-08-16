@@ -1,7 +1,7 @@
 #include <sstream>
 #include <iomanip>
 #include "zlog/db.h"
-#include "backend.h"
+#include "zlog/backend/ram.h"
 
 static inline std::string tostr(int value)
 {
@@ -44,9 +44,14 @@ int main(int argc, char **argv)
     truth_history.push_back(truth);
 
     // initially empty ptree
-    VectorBackend be;
+    zlog::Log *log;
+    auto be = new RAMBackend();
+    auto client = new FakeSeqrClient();
+    int ret = zlog::Log::Create(be, "log", client, &log);
+    assert(ret == 0);
+
     DB *db;
-    int ret = DB::Open(&be, true, &db);
+    ret = DB::Open(log, true, &db);
     assert(ret == 0);
 
     std::vector<Snapshot*> db_history;
@@ -78,6 +83,11 @@ int main(int argc, char **argv)
       assert(truth_history[i] == get_map(db, db_history[i], true));
       assert(truth_history[i] == get_map(db, db_history[i], false));
     }
+
+    delete log;
+    delete db;
+    delete be;
+    delete client;
   }
 
   return 0;

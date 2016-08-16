@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <map>
 #include "zlog/db.h"
-#include "backend.h"
+#include "zlog/backend/ram.h"
 
 #define MAX_KEY 1000
 
@@ -143,9 +143,14 @@ int main(int argc, char **argv)
     truth_history.push_back(truth);
 
 #if 1
-    VectorBackend be;
+    zlog::Log *log;
+    auto be = new RAMBackend();
+    auto client = new FakeSeqrClient();
+    int ret = zlog::Log::Create(be, "log", client, &log);
+    assert(ret == 0);
+
     DB *db;
-    int ret = DB::Open(&be, true, &db);
+    ret = DB::Open(log, true, &db);
     assert(ret == 0);
 #else
     zlog::SeqrClient client("localhost", "5678");

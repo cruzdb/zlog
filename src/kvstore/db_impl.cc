@@ -1,8 +1,8 @@
 #include "db_impl.h"
 #include <sstream>
 
-DBImpl::DBImpl(Tmp2Backend *be) :
-  be_(be), cache_(this)
+DBImpl::DBImpl(zlog::Log *log) :
+  log_(log), cache_(this)
 {
   root_ = Node::Nil();
   root_pos_ = 0;
@@ -16,10 +16,10 @@ DBImpl::DBImpl(Tmp2Backend *be) :
   log_processor_ = std::thread(&DBImpl::process_log_entry, this);
 }
 
-int DB::Open(Tmp2Backend *be, bool create_if_empty, DB **db)
+int DB::Open(zlog::Log *log, bool create_if_empty, DB **db)
 {
   uint64_t tail;
-  int ret = be->Tail(&tail);
+  int ret = log->CheckTail(&tail);
   assert(ret == 0);
 
   // empty log
@@ -33,16 +33,16 @@ int DB::Open(Tmp2Backend *be, bool create_if_empty, DB **db)
     assert(intention.IsInitialized());
     assert(intention.SerializeToString(&blob));
 
-    ret = be->Append(blob, &tail);
+    ret = log->Append(blob, &tail);
     assert(ret == 0);
     assert(tail == 0);
 
-    ret = be->Tail(&tail);
+    ret = log->CheckTail(&tail);
     assert(ret == 0);
     assert(tail == 1);
   }
 
-  DBImpl *impl = new DBImpl(be);
+  DBImpl *impl = new DBImpl(log);
   *db = impl;
 
   return 0;
@@ -294,7 +294,7 @@ void DBImpl::process_log_entry()
       return;
 
     uint64_t tail;
-    int ret = be_->Tail(&tail);
+    int ret = log_->CheckTail(&tail);
     assert(ret == 0);
 
     assert(last_pos_ < tail);
@@ -310,7 +310,7 @@ void DBImpl::process_log_entry()
 
     // read and deserialize intention from log
     std::string i_snapshot;
-    ret = be_->Read(&i_snapshot, next);
+    ret = log_->Read(next, &i_snapshot);
     assert(ret == 0);
 
     kvstore_proto::Intention i;

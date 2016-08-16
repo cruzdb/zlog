@@ -13,16 +13,16 @@ add_library(libkvstore SHARED
 target_link_libraries(libkvstore libzlog kvstore_proto)
 
 add_executable(thrash thrash.cc)
-target_link_libraries(thrash libzlog zlog_seqr libkvstore)
+target_link_libraries(thrash libzlog zlog_seqr libkvstore zlog_seqr)
 
 add_executable(db_test db_test.cc)
-target_link_libraries(db_test libkvstore)
+target_link_libraries(db_test libkvstore zlog_seqr)
 
 add_executable(rbt rbt.cc)
-target_link_libraries(rbt libkvstore)
+target_link_libraries(rbt libkvstore zlog_seqr)
 
 add_executable(iterator_test iterator_test.cc)
-target_link_libraries(iterator_test libkvstore)
+target_link_libraries(iterator_test libkvstore zlog_seqr)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     include(CodeCoverage)
