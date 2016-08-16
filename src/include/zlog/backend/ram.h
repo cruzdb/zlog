@@ -8,13 +8,11 @@
 
 class RAMBackend : public Backend {
  public:
-  RAMBackend() : Backend(NULL) {
+  RAMBackend() {
     std::srand(time(NULL));
     std::stringstream ss;
     ss << "fakepool." << std::rand();
     pool_ = ss.str();
-
-    pool_ = "rbd";
   }
 
   virtual std::string pool() {
