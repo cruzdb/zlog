@@ -1,5 +1,5 @@
 add_executable(db_test db_test.cc)
-target_link_libraries(db_test libzlog zlog_seqr gtest libkvstore)
+target_link_libraries(db_test libzlog zlog_seqr gtest_main libkvstore)
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     setup_target_for_coverage(dbtest2-cov db_test coverage)
 endif()
@@ -8,7 +8,7 @@ endif()
 add_executable(zlog-test-ram test_ram.cc)
 #test/test_internal.cc
 target_link_libraries(zlog-test-ram
-    libzlog gtest zlog_seqr ${Boost_SYSTEM_LIBRARY}
+    libzlog gtest_main zlog_seqr ${Boost_SYSTEM_LIBRARY}
 )
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     setup_target_for_coverage(zlog-test-ram-cov zlog-test-ram coverage)
@@ -20,7 +20,7 @@ add_executable(zlog-test-ceph test_ceph.cc)
 #test/test_internal.cc
 target_link_libraries(zlog-test-ceph
     libzlog
-    gtest
+    gtest_main
     zlog_seqr
     zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
@@ -29,7 +29,7 @@ target_link_libraries(zlog-test-ceph
 add_executable(zstate-test zstate_test.cc)
 target_link_libraries(zstate-test
     libzlog
-    gtest
+    gtest_main
     zstate
     zlog_seqr
     zlog_backend_ceph

@@ -6,21 +6,9 @@ target_link_libraries(zlog_seqr zlog_proto)
 
 add_subdirectory(libzlog)
 add_subdirectory(kvstore)
+
+add_subdirectory(googletest/googlemock)
 add_subdirectory(test)
-
-################################################################################
-################################################################################
-################################################################################
-
-add_library(gtest
-    gtest/src/gtest-all.cc
-    gtest/src/gtest_main.cc
-)
-
-target_include_directories(gtest
-    PUBLIC gtest/include
-    PRIVATE gtest
-)
 
 ################################################################################
 ################################################################################
