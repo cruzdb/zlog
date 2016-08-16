@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <numeric>
 #include <rados/librados.hpp>
 #include <rados/librados.h>
 #include <deque>

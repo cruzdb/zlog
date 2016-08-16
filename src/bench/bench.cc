@@ -1,4 +1,5 @@
 #include <atomic>
+#include <random>
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
