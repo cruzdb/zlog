@@ -20,6 +20,12 @@ target_include_directories(gtest
     PRIVATE gtest
 )
 
+add_executable(db_test2 test/db_test.cc)
+target_link_libraries(db_test2 libzlog zlog_seqr gtest libkvstore)
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    setup_target_for_coverage(dbtest2-cov db_test2 coverage)
+endif()
+
 add_executable(zlog-test-ram test/test_ram.cc)
 #test/test_internal.cc
 target_link_libraries(zlog-test-ram
