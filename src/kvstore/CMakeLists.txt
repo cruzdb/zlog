@@ -3,6 +3,9 @@ add_library(kvstore_proto SHARED ${PROTO_SRCS} ${PROTO_HDRS})
 target_link_libraries(kvstore_proto
     ${PROTOBUF_LIBRARIES}
 )
+target_include_directories(kvstore_proto
+    PUBLIC ${PROTOBUF_INCLUDE_DIR}
+)
 
 add_library(libkvstore SHARED
     db_impl.cc
