@@ -20,6 +20,7 @@ class AioCompletionImpl {
   std::mutex lock;
   int ref;
   bool complete;
+  bool callback_complete;
   bool released;
 
   /*
@@ -63,12 +64,12 @@ class AioCompletionImpl {
   std::string *datap;
 
   AioCompletionImpl() :
-    ref(1), complete(false), released(false), retval(0)
+    ref(1), complete(false), callback_complete(false), released(false), retval(0)
   {}
 
   void WaitForComplete() {
     std::unique_lock<std::mutex> l(lock);
-    cond.wait(l, [&]{ return complete; });
+    cond.wait(l, [&]{ return complete && callback_complete; });
   }
 
   int ReturnValue() {
@@ -100,6 +101,7 @@ class AioCompletionImpl {
   void SetCallback(std::function<void()> callback) {
     std::lock_guard<std::mutex> l(lock);
     has_callback = true;
+    callback_complete = false;
     this->callback = callback;
   }
 
@@ -175,6 +177,7 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
     impl->lock.unlock();
     if (impl->has_callback)
       impl->callback();
+    impl->callback_complete = true;
     impl->cond.notify_all();
     impl->lock.lock();
     impl->put_unlock();
@@ -271,6 +274,7 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
     impl->lock.unlock();
     if (impl->has_callback)
       impl->callback();
+    impl->callback_complete = true;
     impl->cond.notify_all();
     impl->lock.lock();
     impl->put_unlock();
@@ -319,6 +323,7 @@ zlog::AioCompletion *Log::aio_create_completion(
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->has_callback = true;
+  impl->callback_complete = false;
   impl->callback = callback;
   return new AioCompletionImplWrapper(impl);
 }
@@ -327,6 +332,7 @@ zlog::AioCompletion *Log::aio_create_completion()
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->has_callback = false;
+  impl->callback_complete = true;
   return new AioCompletionImplWrapper(impl);
 }
 
