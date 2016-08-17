@@ -3,3 +3,6 @@ add_library(zlog_proto SHARED ${PROTO_SRCS} ${PROTO_HDRS})
 target_link_libraries(zlog_proto
     ${PROTOBUF_LIBRARIES}
 )
+target_include_directories(zlog_proto
+    PUBLIC ${PROTOBUF_INCLUDE_DIR}
+)

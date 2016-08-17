@@ -504,8 +504,8 @@ void TransactionImpl::Commit()
   assert(intention_.IsInitialized());
   assert(intention_.SerializeToString(&blob));
 
-  size_t pos;
-  int ret = db_->be_->Append(blob, &pos);
+  uint64_t pos;
+  int ret = db_->log_->Append(blob, &pos);
   assert(ret == 0);
   db_->log_cond_.notify_all();
 

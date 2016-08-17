@@ -2,8 +2,7 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <rados/librados.hpp>
-#include "backend.h"
+#include "zlog/backend.h"
 
 namespace zlog {
 
@@ -21,14 +20,14 @@ class AioCompletionImpl {
   std::mutex lock;
   int ref;
   bool complete;
+  bool callback_complete;
   bool released;
 
   /*
    * base log and rados completion
    */
   LogImpl *log;
-  librados::IoCtx *ioctx;
-  librados::AioCompletion *c;
+  Backend *backend;
 
   /*
    * Common
@@ -44,7 +43,7 @@ class AioCompletionImpl {
   bool has_callback;
   std::function<void()> callback;
   uint64_t position;
-  ceph::bufferlist bl;
+  std::string data;
   AioType type;
 
   /*
@@ -62,15 +61,15 @@ class AioCompletionImpl {
    * pbl:
    *  - where to put result
    */
-  ceph::bufferlist *pbl;
+  std::string *datap;
 
   AioCompletionImpl() :
-    ref(1), complete(false), released(false), retval(0)
+    ref(1), complete(false), callback_complete(false), released(false), retval(0)
   {}
 
   void WaitForComplete() {
     std::unique_lock<std::mutex> l(lock);
-    cond.wait(l, [&]{ return complete; });
+    cond.wait(l, [&]{ return complete && callback_complete; });
   }
 
   int ReturnValue() {
@@ -102,41 +101,36 @@ class AioCompletionImpl {
   void SetCallback(std::function<void()> callback) {
     std::lock_guard<std::mutex> l(lock);
     has_callback = true;
+    callback_complete = false;
     this->callback = callback;
   }
 
-  static void aio_safe_cb_read(librados::completion_t cb, void *arg);
-  static void aio_safe_cb_append(librados::completion_t cb, void *arg);
+  static void aio_safe_cb_read(void *arg, int ret);
+  static void aio_safe_cb_append(void *arg, int ret);
 };
 
 /*
  *
  */
-void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
+void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
-  librados::AioCompletion *rc = impl->c;
   bool finish = false;
 
   impl->lock.lock();
 
-  int ret = rc->get_return_value();
-
-  // done with the rados completion
-  rc->release();
-
   assert(impl->type == ZLOG_AIO_READ);
 
-  if (ret == Backend::CLS_ZLOG_OK) {
+  if (ret == Backend::ZLOG_OK) {
     /*
      * Read was successful. We're done.
      */
-    if (impl->pbl && impl->bl.length() > 0) {
-      *impl->pbl = impl->bl;
+    if (impl->datap && !impl->data.empty()) {
+      impl->datap->swap(impl->data);
     }
     ret = 0;
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+  } else if (ret == Backend::ZLOG_STALE_EPOCH) {
     /*
      * We'll need to try again with a new epoch.
      */
@@ -148,10 +142,10 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
      * Encountered a RADOS error.
      */
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_NOT_WRITTEN) {
+  } else if (ret == Backend::ZLOG_NOT_WRITTEN) {
     ret = -ENODEV;
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_INVALIDATED) {
+  } else if (ret == Backend::ZLOG_INVALIDATED) {
     ret = -EFAULT;
     finish = true;
   } else {
@@ -163,18 +157,15 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
    * stale epoch that we refresh, or if the position was marked read-only.
    */
   if (!finish) {
-    impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb_read);
-    assert(impl->c);
-    // don't need impl->get(): reuse reference
-
     uint64_t epoch;
     std::string oid;
     impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
 
-    // build and submit new op
-    librados::ObjectReadOperation op;
-    impl->log->backend->read(op, epoch, impl->position);
-    ret = impl->ioctx->aio_operate(oid, impl->c, &op, &impl->bl);
+    // don't need impl->get(): reuse reference
+
+    // submit new aio op
+    ret = impl->backend->AioRead(oid, epoch, impl->position, &impl->data,
+        impl, AioCompletionImpl::aio_safe_cb_read);
     if (ret)
       finish = true;
   }
@@ -186,6 +177,7 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
     impl->lock.unlock();
     if (impl->has_callback)
       impl->callback();
+    impl->callback_complete = true;
     impl->cond.notify_all();
     impl->lock.lock();
     impl->put_unlock();
@@ -198,22 +190,16 @@ void AioCompletionImpl::aio_safe_cb_read(librados::completion_t cb, void *arg)
 /*
  *
  */
-void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
+void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
-  librados::AioCompletion *rc = impl->c;
   bool finish = false;
 
   impl->lock.lock();
 
-  int ret = rc->get_return_value();
-
-  // done with the rados completion
-  rc->release();
-
   assert(impl->type == ZLOG_AIO_APPEND);
 
-  if (ret == Backend::CLS_ZLOG_OK) {
+  if (ret == Backend::ZLOG_OK) {
     /*
      * Append was successful. We're done.
      */
@@ -222,26 +208,28 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
     }
     ret = 0;
     finish = true;
-  } else if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+  } else if (ret == Backend::ZLOG_STALE_EPOCH) {
     /*
      * We'll need to try again with a new epoch.
      */
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
+#if BACKEND_SUPPORT_DISABLE
   } else if (ret == -EFBIG) {
     assert(impl->log->backend_ver == 2);
     impl->log->CreateNewStripe(impl->epoch);
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
+#endif
   } else if (ret < 0) {
     /*
      * Encountered a RADOS error.
      */
     finish = true;
   } else {
-    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::ZLOG_READ_ONLY);
   }
 
   /*
@@ -266,14 +254,14 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
       // refresh
       impl->epoch = epoch;
 
-      impl->c = librados::Rados::aio_create_completion(impl, NULL, aio_safe_cb_append);
-      assert(impl->c);
       // don't need impl->get(): reuse reference
 
-      // build and submit new op
-      librados::ObjectWriteOperation op;
-      impl->log->backend->write(op, epoch, impl->position, impl->bl);
-      ret = impl->ioctx->aio_operate(oid, impl->c, &op);
+      // submit new aio op
+      // TODO: can we avoid all the data copying between impl->data and the
+      // backend? the backend may even make another copy...
+      ret = impl->backend->AioAppend(oid, epoch, impl->position,
+          Slice(impl->data.data(), impl->data.size()),
+          impl, AioCompletionImpl::aio_safe_cb_append);
       if (ret)
         finish = true;
     }
@@ -286,6 +274,7 @@ void AioCompletionImpl::aio_safe_cb_append(librados::completion_t cb, void *arg)
     impl->lock.unlock();
     if (impl->has_callback)
       impl->callback();
+    impl->callback_complete = true;
     impl->cond.notify_all();
     impl->lock.lock();
     impl->put_unlock();
@@ -334,6 +323,7 @@ zlog::AioCompletion *Log::aio_create_completion(
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->has_callback = true;
+  impl->callback_complete = false;
   impl->callback = callback;
   return new AioCompletionImplWrapper(impl);
 }
@@ -342,6 +332,7 @@ zlog::AioCompletion *Log::aio_create_completion()
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
   impl->has_callback = false;
+  impl->callback_complete = true;
   return new AioCompletionImplWrapper(impl);
 }
 
@@ -349,7 +340,7 @@ zlog::AioCompletion *Log::aio_create_completion()
  * The retry for AioAppend is coordinated through the aio_safe_cb callback
  * which will dispatch a new rados operation.
  */
-int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
+int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
     uint64_t *pposition)
 {
   // initial position guess
@@ -363,10 +354,10 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   AioCompletionImpl *impl = wrapper->impl_;
 
   impl->log = this;
-  impl->bl = data;
+  impl->data.assign(data.data(), data.size());
   impl->position = position;
   impl->pposition = pposition;
-  impl->ioctx = ioctx_;
+  impl->backend = new_backend;
   impl->type = ZLOG_AIO_APPEND;
 
   uint64_t epoch;
@@ -378,15 +369,10 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
   // threads or contexts try to do the same thing).
   impl->epoch = epoch;
 
-  impl->get(); // rados aio now has a reference
-  impl->c = librados::Rados::aio_create_completion(impl, NULL,
-      AioCompletionImpl::aio_safe_cb_append);
-  assert(impl->c);
+  impl->get(); // backend now has a reference
 
-  librados::ObjectWriteOperation op;
-  backend->write(op, epoch, position, data);
-
-  ret = ioctx_->aio_operate(oid, impl->c, &op);
+  ret = new_backend->AioAppend(oid, epoch, position, data,
+      impl, AioCompletionImpl::aio_safe_cb_append);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
    * need to make sure that references to impl and the rados completion are
@@ -398,37 +384,32 @@ int LogImpl::AioAppend(AioCompletion *c, ceph::bufferlist& data,
 }
 
 int LogImpl::AioRead(uint64_t position, AioCompletion *c,
-    ceph::bufferlist *pbl)
+    std::string *datap)
 {
   AioCompletionImplWrapper *wrapper =
     reinterpret_cast<AioCompletionImplWrapper*>(c);
   AioCompletionImpl *impl = wrapper->impl_;
 
   impl->log = this;
-  impl->pbl = pbl;
+  impl->datap = datap;
   impl->position = position;
-  impl->ioctx = ioctx_;
+  impl->backend = new_backend;
   impl->type = ZLOG_AIO_READ;
 
-  impl->get(); // rados aio now has a reference
-  impl->c = librados::Rados::aio_create_completion(impl, NULL,
-      AioCompletionImpl::aio_safe_cb_read);
-  assert(impl->c);
+  impl->get(); // backend now has a reference
 
   uint64_t epoch;
   std::string oid;
   mapper_.FindObject(position, &oid, &epoch);
 
-  librados::ObjectReadOperation op;
-  backend->read(op, epoch, position);
-
-  int ret = ioctx_->aio_operate(oid, impl->c, &op, &impl->bl);
+  int ret = new_backend->AioRead(oid, epoch, position, &impl->data,
+      impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
    * need to make sure that references to impl and the rados completion are
    * cleaned up correctly.
    */
-  assert(ret == 0);
+  assert(ret == Backend::ZLOG_OK);
 
   return ret;
 }

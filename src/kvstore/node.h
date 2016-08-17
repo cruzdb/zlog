@@ -46,7 +46,7 @@ class NodePtr {
     return read_only_;
   }
 
-  inline bool set_read_only() {
+  inline void set_read_only() {
     assert(!read_only());
     read_only_ = true;
   }

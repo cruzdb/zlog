@@ -6,6 +6,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <rados/librados.hpp>
 #include "libzlog/log_impl.h"
+#include "include/zlog/backend/ceph.h"
 
 namespace po = boost::program_options;
 
@@ -24,9 +25,7 @@ void client_thread(zlog::LogImpl *log, bool check_tail)
     if (check_tail) {
       ret = log->CheckTail(&pos, true);
     } else {
-      ceph::bufferlist bl;
-      bl.append(buf);
-      ret = log->Append(bl, &pos);
+      ret = log->Append(Slice(buf, sizeof(buf)), &pos);
     }
     assert(ret == 0);
   }
@@ -83,7 +82,8 @@ int main(int argc, char **argv)
     zlog::SeqrClient *client = new zlog::SeqrClient(server.c_str(), port.c_str());
     client->Connect();
     zlog::Log *baselog;
-    ret = zlog::LogImpl::OpenOrCreate(ioctx, logname.str(), client, &baselog);
+    CephBackend *be = new CephBackend(&ioctx);
+    ret = zlog::LogImpl::OpenOrCreate(be, logname.str(), client, &baselog);
     zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
     assert(ret == 0);
     std::thread t(client_thread, log, check_tail);

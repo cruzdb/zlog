@@ -1,7 +1,8 @@
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 #include "zlog/db.h"
-#include "backend.h"
+#include "zlog/backend/ram.h"
 
 static inline std::string tostr(int value)
 {
@@ -12,9 +13,14 @@ static inline std::string tostr(int value)
 
 int main(int argc, char **argv)
 {
-  VectorBackend be;
+  zlog::Log *log;
+  auto be = new RAMBackend();
+  auto client = new FakeSeqrClient();
+  int ret = zlog::Log::Create(be, "log", client, &log);
+  assert(ret == 0);
+
   DB *db;
-  int ret = DB::Open(&be, true, &db);
+  ret = DB::Open(log, true, &db);
   assert(ret == 0);
 
   std::vector<Snapshot*> snapshots;

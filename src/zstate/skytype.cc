@@ -6,11 +6,7 @@ using namespace skytype;
 
 int SkyObject::update_helper(const void *data, size_t size)
 {
-  ceph::bufferptr bp((char*)data, size);
-  ceph::bufferlist bl;
-  bl.push_back(bp);
-
-  int ret = log_->Append(bl);
+  int ret = log_->Append(Slice((char*)data, size));
   if (ret)
     return ret;
 
@@ -25,11 +21,11 @@ int SkyObject::query_helper()
     return ret;
 
   while (position_ <= tail) {
-    ceph::bufferlist bl;
-    ret = log_->Read(position_, bl);
+    std::string entry;
+    ret = log_->Read(position_, &entry);
     switch (ret) {
       case 0:
-        apply(bl.c_str());
+        apply(entry.data());
         break;
       case -ENODEV:
         ret = log_->Fill(position_);

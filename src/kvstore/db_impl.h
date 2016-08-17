@@ -17,8 +17,8 @@
 #include "node_cache.h"
 #include "snapshot.h"
 #include "iterator_impl.h"
-#include "backend.h"
 #include "zlog/db.h"
+#include "zlog/log.h"
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n);
 std::ostream& operator<<(std::ostream& out, const kvstore_proto::NodePtr& p);
@@ -27,7 +27,7 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i);
 
 class DBImpl : public DB {
  public:
-  explicit DBImpl(Backend *be);
+  explicit DBImpl(zlog::Log *log);
   ~DBImpl();
 
   Transaction *BeginTransaction();
@@ -79,7 +79,7 @@ class DBImpl : public DB {
   std::mutex lock_;
 
   std::condition_variable log_cond_;
-  Backend *be_;
+  zlog::Log *log_;
 
   NodeCache cache_;
 

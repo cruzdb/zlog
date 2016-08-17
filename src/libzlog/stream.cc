@@ -1,17 +1,14 @@
 #include "log_impl.h"
 
 #include <iostream>
-#include <rados/librados.hpp>
 
 #include "proto/zlog.pb.h"
-#include "proto/protobuf_bufferlist_adapter.h"
-#include "include/zlog/capi.h"
 
 namespace zlog {
 
 Stream::~Stream() {}
 
-int LogImpl::MultiAppend(ceph::bufferlist& data,
+int LogImpl::MultiAppend(const Slice& data,
     const std::set<uint64_t>& stream_ids, uint64_t *pposition)
 {
   for (;;) {
@@ -44,36 +41,42 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
       index++;
     }
 
-    ceph::bufferlist bl;
-    pack_msg_hdr<zlog_proto::EntryHeader>(bl, hdr);
-    bl.append(data.c_str(), data.length());
+    std::string out_data;
+    {
+      assert(hdr.IsInitialized());
+      uint32_t buf_size = hdr.ByteSize();
+      char buf[buf_size];
+      assert(hdr.SerializeToArray(buf, buf_size));
+      uint32_t be_buf_size = htonl(buf_size);
+      out_data.append((char*)&be_buf_size, sizeof(be_buf_size));
+      out_data.append(buf, sizeof(buf));
+      out_data.append(data.data(), data.size());
+    }
 
     uint64_t epoch;
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    librados::ObjectWriteOperation op;
-    backend->write(op, epoch, position, bl);
-
-    ret = ioctx_->operate(oid, &op);
+    ret = new_backend->Write(oid, Slice(out_data), epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
     }
 
-    if (ret == Backend::CLS_ZLOG_OK) {
+    if (ret == Backend::ZLOG_OK) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == Backend::CLS_ZLOG_STALE_EPOCH) {
+    if (ret == Backend::ZLOG_STALE_EPOCH) {
       ret = RefreshProjection();
       if (ret)
         return ret;
       continue;
     }
 
+#ifdef BACKEND_SUPPORT_DISALBED
     if (ret == -EFBIG) {
       assert(backend_ver == 2);
       CreateNewStripe(epoch);
@@ -82,25 +85,26 @@ int LogImpl::MultiAppend(ceph::bufferlist& data,
         return ret;
       continue;
     }
+#endif
 
-    assert(ret == Backend::CLS_ZLOG_READ_ONLY);
+    assert(ret == Backend::ZLOG_READ_ONLY);
   }
   assert(0);
 }
 
-int LogImpl::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
+int LogImpl::StreamHeader(const std::string& entry, std::set<uint64_t>& stream_ids,
     size_t *header_size)
 {
-  if (bl.length() <= sizeof(uint32_t))
+  if (entry.size() <= sizeof(uint32_t))
     return -EINVAL;
 
-  const char *data = bl.c_str();
+  const char *data = entry.data();
 
   uint32_t hdr_len = ntohl(*((uint32_t*)data));
   if (hdr_len > 512) // TODO something reasonable...?
     return -EINVAL;
 
-  if ((sizeof(uint32_t) + hdr_len) > bl.length())
+  if ((sizeof(uint32_t) + hdr_len) > entry.size())
     return -EINVAL;
 
   zlog_proto::EntryHeader hdr;
@@ -126,24 +130,24 @@ int LogImpl::StreamHeader(ceph::bufferlist& bl, std::set<uint64_t>& stream_ids,
 
 int LogImpl::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
 {
-  ceph::bufferlist bl;
-  int ret = Read(position, bl);
+  std::string entry;
+  int ret = Read(position, &entry);
   if (ret)
     return ret;
 
-  ret = StreamHeader(bl, stream_ids);
+  ret = StreamHeader(entry, stream_ids);
 
   return ret;
 }
 
 int LogImpl::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
 {
-  ceph::bufferlist bl;
-  int ret = Read(epoch, position, bl);
+  std::string entry;
+  int ret = Read(epoch, position, &entry);
   if (ret)
     return ret;
 
-  ret = StreamHeader(bl, stream_ids);
+  ret = StreamHeader(entry, stream_ids);
 
   return ret;
 }
@@ -157,8 +161,8 @@ class StreamImpl : public zlog::Stream {
   std::set<uint64_t>::const_iterator prevpos;
   std::set<uint64_t>::const_iterator curpos;
 
-  int Append(ceph::bufferlist& data, uint64_t *pposition = NULL);
-  int ReadNext(ceph::bufferlist& bl, uint64_t *pposition = NULL);
+  int Append(const Slice& data, uint64_t *pposition = NULL);
+  int ReadNext(std::string *data, uint64_t *pposition = NULL);
   int Reset();
   int Sync();
   uint64_t Id() const;
@@ -173,14 +177,14 @@ std::vector<uint64_t> StreamImpl::History() const
   return ret;
 }
 
-int StreamImpl::Append(ceph::bufferlist& data, uint64_t *pposition)
+int StreamImpl::Append(const Slice& data, uint64_t *pposition)
 {
   std::set<uint64_t> stream_ids;
   stream_ids.insert(stream_id);
   return log->MultiAppend(data, stream_ids, pposition);
 }
 
-int StreamImpl::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
+int StreamImpl::ReadNext(std::string *data, uint64_t *pposition)
 {
   if (curpos == pos.cend())
     return -EBADF;
@@ -189,22 +193,20 @@ int StreamImpl::ReadNext(ceph::bufferlist& bl, uint64_t *pposition)
 
   uint64_t pos = *curpos;
 
-  ceph::bufferlist bl_out;
-  int ret = log->Read(pos, bl_out);
+  std::string entry;
+  int ret = log->Read(pos, &entry);
   if (ret)
     return ret;
 
   size_t header_size;
   std::set<uint64_t> stream_ids;
-  ret = log->StreamHeader(bl_out, stream_ids, &header_size);
+  ret = log->StreamHeader(entry, stream_ids, &header_size);
   if (ret)
     return -EIO;
 
   assert(stream_ids.find(stream_id) != stream_ids.end());
 
-  // FIXME: how to create this view more efficiently?
-  const char *data = bl_out.c_str();
-  bl.append(data + header_size, bl_out.length() - header_size);
+  data->assign(entry.data() + header_size, entry.size() - header_size);
 
   if (pposition)
     *pposition = pos;
@@ -373,113 +375,6 @@ int LogImpl::OpenStream(uint64_t stream_id, Stream **streamptr)
   *streamptr = impl;
 
   return 0;
-}
-
-extern "C" int zlog_stream_open(zlog_log_t log, uint64_t stream_id,
-    zlog_stream_t *pstream)
-{
-  zlog_log_ctx *log_ctx = (zlog_log_ctx*)log;
-
-  zlog_stream_ctx *stream_ctx = new zlog_stream_ctx;
-  stream_ctx->log_ctx = log_ctx;
-
-  int ret = log_ctx->log->OpenStream(stream_id, &stream_ctx->stream);
-  if (ret) {
-    delete stream_ctx;
-    return ret;
-  }
-
-  *pstream = stream_ctx;
-
-  return 0;
-}
-
-extern "C" int zlog_stream_append(zlog_stream_t stream, const void *data,
-    size_t len, uint64_t *pposition)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  ceph::bufferlist bl;
-  bl.append((char*)data, len);
-  return ctx->stream->Append(bl, pposition);
-}
-
-extern "C" int zlog_stream_readnext(zlog_stream_t stream, void *data,
-    size_t len, uint64_t *pposition)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-
-  ceph::bufferlist bl;
-  // FIXME: below the buffer is added to avoid double copies. However, in
-  // ReadNext we have to create a view of the data read to remove the header.
-  // It isn't clear how to do that without the copies. As a fix for now we
-  // just force the case where the bufferlist has to be resized.
-#if 0
-  ceph::bufferptr bp = ceph::buffer::create_static(len, (char*)data);
-  bl.push_back(bp);
-#endif
-
-  int ret = ctx->stream->ReadNext(bl, pposition);
-
-  if (ret >= 0) {
-    if (bl.length() > len)
-      return -ERANGE;
-    if (bl.c_str() != data)
-      bl.copy(0, bl.length(), (char*)data);
-    ret = bl.length();
-  }
-
-  return ret;
-}
-
-extern "C" int zlog_stream_reset(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Reset();
-}
-
-extern "C" int zlog_stream_sync(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Sync();
-}
-
-extern "C" uint64_t zlog_stream_id(zlog_stream_t stream)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-  return ctx->stream->Id();
-}
-
-extern "C" size_t zlog_stream_history(zlog_stream_t stream, uint64_t *pos, size_t len)
-{
-  zlog_stream_ctx *ctx = (zlog_stream_ctx*)stream;
-
-  std::vector<uint64_t> history = ctx->stream->History();
-  size_t size = history.size();
-  if (pos && size <= len)
-    std::copy(history.begin(), history.end(), pos);
-
-  return size;
-}
-
-extern "C" int zlog_stream_membership(zlog_log_t log,
-    uint64_t *stream_ids, size_t len, uint64_t position)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-
-  std::set<uint64_t> ids;
-  int ret = ctx->log->StreamMembership(ids, position);
-  if (ret)
-    return ret;
-
-  size_t size = ids.size();
-  if (size <= len) {
-    std::vector<uint64_t> tmp;
-    for (auto it = ids.begin(); it != ids.end(); it++)
-      tmp.push_back(*it);
-    std::copy(tmp.begin(), tmp.end(), stream_ids);
-  }
-
-  return size;
 }
 
 }

@@ -8,6 +8,7 @@
 #include <rados/librados.hpp>
 #include <gtest/gtest.h>
 #include "zstate/objects/register.h"
+#include "include/zlog/backend/ceph.h"
 
 static std::string randstr(void)
 {
@@ -33,7 +34,8 @@ static void make_context(librados::Rados& rados, librados::IoCtx& ioctx)
 static void get_log(librados::IoCtx& ioctx, zlog::Log **log, std::string name,
     zlog::SeqrClient *client)
 {
-  int ret = zlog::Log::OpenOrCreate(ioctx, name, client, log);
+  CephBackend *be = new CephBackend(&ioctx);
+  int ret = zlog::Log::OpenOrCreate(be, name, client, log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(*log, nullptr);
 }

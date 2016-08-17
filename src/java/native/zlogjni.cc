@@ -4,6 +4,7 @@
 
 #include "com_cruzdb_Log.h"
 #include "portal.h"
+#include "zlog/ceph_backend.h"
 
 void Java_com_cruzdb_Log_disposeInternal(
     JNIEnv *env, jobject jobj, jlong jhandle)
@@ -20,6 +21,8 @@ void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
   const char *log_name;
   const char *pool;
   LogWrapper *log = new LogWrapper;
+  // FIXME: this is a memory leak!
+  CephBackend *be;
 
   /*
    * Connect to RADOS
@@ -61,8 +64,11 @@ void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
     goto out_noexcept;
   }
 
+  // FIXME: this is a memory leak!
+  be = new CephBackend(&log->ioctx);
+
   log_name = env->GetStringUTFChars(jlog_name, 0);
-  ret = zlog::Log::OpenOrCreate(log->ioctx, log_name, log->seqr_client, &log->log);
+  ret = zlog::Log::OpenOrCreate(be, log_name, log->seqr_client, &log->log);
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)
     goto out;
@@ -83,13 +89,11 @@ jlong Java_com_cruzdb_Log_append(JNIEnv *env, jobject jlog,
   auto log = reinterpret_cast<LogWrapper*>(jlog_handle);
 
   jbyte *data = env->GetByteArrayElements(jdata, 0);
-  ceph::bufferlist bl;
-  bl.append((char*)data, jdata_len);
-  env->ReleaseByteArrayElements(jdata, data, JNI_ABORT);
 
   uint64_t position;
-  int ret = log->log->Append(bl, &position);
+  int ret = log->log->Append(Slice((char*)data, jdata_len), &position);
   ZlogExceptionJni::ThrowNew(env, ret);
+  env->ReleaseByteArrayElements(jdata, data, JNI_ABORT);
 
   return position;
 }
@@ -100,9 +104,9 @@ jbyteArray Java_com_cruzdb_Log_read(JNIEnv *env, jobject jlog,
   auto log = reinterpret_cast<LogWrapper*>(jlog_handle);
 
   uint64_t position = jpos;
-  ceph::bufferlist bl;
+  std::string entry;
 
-  int ret = log->log->Read(position, bl);
+  int ret = log->log->Read(position, &entry);
   if (ret) {
     if (ret == -ENODEV)
       NotWrittenExceptionJni::ThrowNew(env, ret);
@@ -113,9 +117,9 @@ jbyteArray Java_com_cruzdb_Log_read(JNIEnv *env, jobject jlog,
     return nullptr;
   }
 
-  jbyteArray result = env->NewByteArray(static_cast<jsize>(bl.length()));
-  env->SetByteArrayRegion(result, 0, static_cast<jsize>(bl.length()),
-      reinterpret_cast<const jbyte*>(bl.c_str()));
+  jbyteArray result = env->NewByteArray(static_cast<jsize>(entry.size()));
+  env->SetByteArrayRegion(result, 0, static_cast<jsize>(entry.size()),
+      reinterpret_cast<const jbyte*>(entry.data()));
   return result;
 }
 

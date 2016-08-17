@@ -6,6 +6,7 @@
 #include <boost/program_options.hpp>
 #include <rados/librados.hpp>
 #include "include/zlog/log.h"
+#include "include/zlog/backend/ceph.h"
 
 namespace po = boost::program_options;
 
@@ -38,8 +39,10 @@ static void check_appends(std::string pool, std::string server,
   client = new zlog::SeqrClient(server.c_str(), port.c_str());
   client->Connect();
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  ret = zlog::Log::OpenOrCreate(ioctx, log_name, client, &log);
+  ret = zlog::Log::OpenOrCreate(be, log_name, client, &log);
   assert(ret == 0);
 
   int count = 0;
@@ -56,11 +59,11 @@ static void check_appends(std::string pool, std::string server,
     int value = it->second;
     lock.unlock();
 
-    ceph::bufferlist bl;
-    int ret = log->Read(pos, bl);
+    std::string entry;
+    int ret = log->Read(pos, &entry);
     assert(ret == 0);
 
-    assert(memcmp(bl.c_str(), (char*)&value, sizeof(value)) == 0);
+    assert(memcmp(entry.data(), (char*)&value, sizeof(value)) == 0);
 
     if (++count % 1000 == 0)
       std::cout << "Check pos " << pos << std::endl;
@@ -108,8 +111,10 @@ int main(int argc, char **argv)
   client = new zlog::SeqrClient(server.c_str(), port.c_str());
   client->Connect();
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   zlog::Log *log;
-  ret = zlog::Log::OpenOrCreate(ioctx, log_name, client, &log);
+  ret = zlog::Log::OpenOrCreate(be, log_name, client, &log);
   assert(ret == 0);
 
   std::thread check_thread(check_appends, pool, server, port, log_name);
@@ -119,11 +124,8 @@ int main(int argc, char **argv)
     char bytes[sizeof(value)];
     memcpy(bytes, &value, sizeof(value));
 
-    ceph::bufferlist bl;
-    bl.append(bytes, sizeof(bytes));
-
     uint64_t pos;
-    int ret = log->Append(bl, &pos);
+    int ret = log->Append(Slice(bytes, sizeof(bytes)), &pos);
     assert(ret == 0);
 
     std::cout << "Append: " << pos << std::endl;

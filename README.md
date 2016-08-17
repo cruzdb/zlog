@@ -1,6 +1,6 @@
 # Zlog - a distributed shared log for ceph
 
-[![Build Status](https://travis-ci.org/noahdesu/zlog.svg?branch=master)](https://travis-ci.org/noahdesu/zlog)
+[![Build Status](https://travis-ci.org/noahdesu/zlog.svg?branch=master)](https://travis-ci.org/noahdesu/zlog) [![Coverity Scan Build Status](https://scan.coverity.com/projects/9894/badge.svg)](https://scan.coverity.com/projects/noahdesu-zlog)
 
 Zlog is a strongly consistent shared log designed to run on top of Ceph.
 Specifically, it is an implementation of the CORFU protocol adapted for RADOS,

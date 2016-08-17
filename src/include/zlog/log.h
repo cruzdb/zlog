@@ -1,8 +1,9 @@
 #ifndef LIBZLOG_ZLOG_HPP
 #define LIBZLOG_ZLOG_HPP
-#include <rados/librados.hpp>
 #include "libseq/libseqr.h"
 #include "zlog/stream.h"
+#include "zlog/slice.h"
+#include "zlog/backend.h"
 
 namespace zlog {
 
@@ -21,8 +22,8 @@ class Log {
   /*
    * Synchronous API
    */
-  virtual int Append(ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
-  virtual int Read(uint64_t position, ceph::bufferlist& bl) = 0;
+  virtual int Append(const Slice& data, uint64_t *pposition = NULL) = 0;
+  virtual int Read(uint64_t position, std::string *data) = 0;
   virtual int Fill(uint64_t position) = 0;
   virtual int CheckTail(uint64_t *pposition) = 0;
   virtual int Trim(uint64_t position) = 0;
@@ -30,8 +31,8 @@ class Log {
   /*
    * Asynchronous API
    */
-  virtual int AioAppend(AioCompletion *c, ceph::bufferlist& data, uint64_t *pposition = NULL) = 0;
-  virtual int AioRead(uint64_t position, AioCompletion *c, ceph::bufferlist *bpl) = 0;
+  virtual int AioAppend(AioCompletion *c, const Slice& data, uint64_t *pposition = NULL) = 0;
+  virtual int AioRead(uint64_t position, AioCompletion *c, std::string *datap) = 0;
 
   static AioCompletion *aio_create_completion();
   static AioCompletion *aio_create_completion(
@@ -41,7 +42,7 @@ class Log {
    * Stream API
    */
   virtual int OpenStream(uint64_t stream_id, Stream **streamptr) = 0;
-  virtual int MultiAppend(ceph::bufferlist& data,
+  virtual int MultiAppend(const Slice& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) = 0;
   virtual int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) = 0;
 
@@ -51,21 +52,21 @@ class Log {
 
   virtual int StripeWidth() = 0;
 
-  static int CreateWithStripeWidth(librados::IoCtx& ioctx, const std::string& name,
+  static int CreateWithStripeWidth(Backend *backend, const std::string& name,
       SeqrClient *seqr, int stripe_width, Log **logptr);
 
-  static int Create(librados::IoCtx& ioctx, const std::string& name,
+  static int Create(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr);
 
-  static int Open(librados::IoCtx& ioctx, const std::string& name,
+  static int Open(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr);
 
-  static int OpenOrCreate(librados::IoCtx& ioctx, const std::string& name,
+  static int OpenOrCreate(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr) {
-    int ret = Open(ioctx, name, seqr, logptr);
+    int ret = Open(backend, name, seqr, logptr);
     if (ret != -ENOENT)
       return ret;
-    return Create(ioctx, name, seqr, logptr);
+    return Create(backend, name, seqr, logptr);
   }
 
  private:

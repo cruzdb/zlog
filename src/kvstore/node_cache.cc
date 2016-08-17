@@ -14,7 +14,7 @@ void NodeCache::ResolveNodePtr(NodePtr& ptr)
 
   // the cache sits on top of the database log
   std::string snapshot;
-  int ret = db_->be_->Read(&snapshot, ptr.csn());
+  int ret = db_->log_->Read(ptr.csn(), &snapshot);
   assert(ret == 0);
 
   kvstore_proto::Intention i;

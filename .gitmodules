@@ -1,0 +1,5 @@
+[submodule "googletest"]
+	path = src/googletest
+	url = git://github.com/cruzdb/googletest
+	branch = cruzdb
+    ignore = dirty

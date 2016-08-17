@@ -1,8 +1,7 @@
 #include "stripe_history.h"
 #include "proto/zlog.pb.h"
-#include "proto/protobuf_bufferlist_adapter.h"
 
-ceph::bufferlist StripeHistory::Serialize() const
+zlog_proto::MetaLog StripeHistory::Serialize() const
 {
   zlog_proto::MetaLog config;
 
@@ -17,20 +16,11 @@ ceph::bufferlist StripeHistory::Serialize() const
     entry->set_width(s.width);
   }
 
-  ceph::bufferlist bl;
-  pack_msg<zlog_proto::MetaLog>(bl, config);
-
-  return bl;
+  return config;
 }
 
-int StripeHistory::Deserialize(ceph::bufferlist& bl)
+int StripeHistory::Deserialize(const zlog_proto::MetaLog& config)
 {
-  zlog_proto::MetaLog config;
-  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
-    std::cerr << "failed to parse configuration" << std::endl;
-    return -EIO;
-  }
-
   for (unsigned i = 0; i < config.stripe_history_size(); i++) {
     const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
     uint64_t position = e.pos();

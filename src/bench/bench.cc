@@ -1,4 +1,5 @@
 #include <atomic>
+#include <random>
 #include <cassert>
 #include <condition_variable>
 #include <cstdint>
@@ -16,6 +17,7 @@
 #include <time.h>
 #include <rados/librados.hpp>
 #include "../libzlog/log_impl.h"
+#include "include/zlog/backend/ceph.h"
 
 namespace po = boost::program_options;
 
@@ -98,12 +100,10 @@ static void append_workload_func(zlog::Log *log, const int qdepth, int entry_siz
       assert(io->c);
 
       // fill with random data
-      ceph::bufferlist bl;
       size_t buf_offset = rand_dist(generator);
-      bl.append(rand_buf_raw + buf_offset, entry_size);
 
       // queue aio append operation
-      int ret = log->AioAppend(io->c, bl);
+      int ret = log->AioAppend(io->c, Slice(rand_buf_raw + buf_offset, entry_size));
       assert(ret == 0);
 
       outstanding_ios++;
@@ -142,12 +142,10 @@ static void append_workload_sync_func(zlog::Log *log, int entry_size)
 
   for (;;) {
     // fill with random data
-    ceph::bufferlist bl;
     size_t buf_offset = rand_dist(generator);
-    bl.append(rand_buf_raw + buf_offset, entry_size);
 
     uint64_t pos;
-    int ret = log->Append(bl, &pos);
+    int ret = log->Append(Slice(rand_buf_raw + buf_offset, entry_size), &pos);
     assert(ret == 0);
 
     ios_completed++;
@@ -338,15 +336,17 @@ int main(int argc, char **argv)
   zlog::SeqrClient client(server.c_str(), port.c_str());
   client.Connect();
 
+  CephBackend *be = new CephBackend(&ioctx);
+
   // open log
   zlog::Log *log;
   if (stripe_width == -1) {
     // default stripe width
-    ret = zlog::Log::OpenOrCreate(ioctx, logname, &client, &log);
+    ret = zlog::Log::OpenOrCreate(be, logname, &client, &log);
   } else {
-    ret = zlog::Log::Open(ioctx, logname, &client, &log);
+    ret = zlog::Log::Open(be, logname, &client, &log);
     if (ret == -ENOENT)
-      ret = zlog::Log::CreateWithStripeWidth(ioctx, logname, &client, stripe_width, &log);
+      ret = zlog::Log::CreateWithStripeWidth(be, logname, &client, stripe_width, &log);
     if (ret == 0)
       assert(log->StripeWidth() == stripe_width);
   }
@@ -365,7 +365,11 @@ int main(int argc, char **argv)
       // this is the default case
       break;
     case 2:
+#ifdef BACKEND_SUPPORT_DISABLED
+      std::cerr << "backend support disabled temporarily" << std::endl << std::flush;
+      assert(0);
       log_impl->set_backend_v2();
+#endif
       break;
     default:
       assert(0);
@@ -376,8 +380,7 @@ int main(int argc, char **argv)
   // when we send out of a bunch of async requests they don't all initially
   // fail due to an old epoch. TODO: this should probably be handled when we
   // open the log?? TODO: try without this...
-  ceph::bufferlist bl;
-  log->Append(bl);
+  log->Append(Slice());
 
   signal(SIGINT, sigint_handler);
 
