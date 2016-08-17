@@ -4,6 +4,74 @@
  * executable. It would be nice avoid this using some gtest advanced features!
  */
 
+struct AioContext {
+  zlog::AioCompletion *c;
+  uint64_t position;
+  int retval;
+  std::string in_data;
+  std::string out_data;
+};
+
+static void handle_aio_cb(AioContext *ctx)
+{
+  ctx->retval = ctx->c->ReturnValue();
+}
+
+static void handle_aio_cb_read(AioContext *ctx)
+{
+  ctx->retval = ctx->c->ReturnValue();
+}
+
+TEST_F(LibZlog, Aio) {
+  zlog::Log *log;
+  int ret = zlog::Log::Create(be, "mylog", client, &log);
+  ASSERT_EQ(ret, 0);
+
+  // issue some appends
+  std::vector<AioContext*> aios;
+  for (int i = 0; i < 50; i++) {
+    AioContext *ctx = new AioContext;
+    ctx->position = (uint64_t)-1;
+    ctx->retval = -1;
+    std::stringstream ss;
+    ss << "data." << i;
+    ctx->in_data = ss.str();
+    ASSERT_NE(ctx->in_data, ctx->out_data);
+    ctx->c = zlog::Log::aio_create_completion(
+        std::bind(handle_aio_cb, ctx));
+    int ret = log->AioAppend(ctx->c, Slice(ss.str()), &ctx->position);
+    ASSERT_EQ(ret, 0);
+    aios.push_back(ctx);
+  }
+
+  // wait for them to complete
+  for (auto ctx : aios) {
+    ctx->c->WaitForComplete();
+    ASSERT_GE(ctx->position, 0);
+    ASSERT_EQ(ctx->retval, 0);
+    delete ctx->c;
+    ctx->c = NULL;
+  }
+
+  // re-read and verify
+  for (auto ctx : aios) {
+    ctx->c = zlog::Log::aio_create_completion(
+        std::bind(handle_aio_cb_read, ctx));
+    int ret = log->AioRead(ctx->position, ctx->c, &ctx->out_data);
+    ASSERT_EQ(ret, 0);
+  }
+
+  // wait for them to complete
+  for (auto ctx : aios) {
+    ctx->c->WaitForComplete();
+    ASSERT_GE(ctx->position, 0);
+    ASSERT_EQ(ctx->retval, 0);
+    ASSERT_EQ(ctx->in_data, ctx->out_data);
+    delete ctx->c;
+    delete ctx;
+  }
+}
+
 TEST_F(LibZlog, Create) {
   zlog::Log *log = NULL;
 

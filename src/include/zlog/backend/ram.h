@@ -270,14 +270,78 @@ class RAMBackend : public Backend {
       uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback)
   {
-    assert(0);
+    std::lock_guard<std::mutex> l(lock_);
+
+    auto it = db_.find(oid);
+
+    // check epoch
+    int ret = CheckEpoch(epoch, it);
+    if (ret) {
+      callback(arg, ret);
+      return ZLOG_OK;
+    }
+
+    // object reference
+    object *obj;
+    if (it == db_.end())
+      obj = &db_[oid];
+    else
+      obj = &it->second;
+
+    // check entry
+    auto entry_it = obj->entries.find(position);
+    if (entry_it == obj->entries.end()) {
+      log_entry e;
+      e.trimmed = false;
+      e.invalidated = false;
+      e.data.assign(data.data(), data.size());
+      obj->entries[position] = e;
+      callback(arg, Backend::ZLOG_OK);
+      return ZLOG_OK;
+    }
+
+    callback(arg, Backend::ZLOG_READ_ONLY);
+    return ZLOG_OK;
   }
 
   virtual int AioRead(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data, void *arg,
       std::function<void(void*, int)> callback)
   {
-    assert(0);
+    std::lock_guard<std::mutex> l(lock_);
+
+    auto it = db_.find(oid);
+
+    // check epoch
+    int ret = CheckEpoch(epoch, it);
+    if (ret) {
+      callback(arg, ret);
+      return ZLOG_OK;
+    }
+
+    // object reference
+    object *obj;
+    if (it == db_.end())
+      obj = &db_[oid];
+    else
+      obj = &it->second;
+
+    // check entry
+    auto entry_it = obj->entries.find(position);
+    if (entry_it == obj->entries.end()) {
+      callback(arg, Backend::ZLOG_NOT_WRITTEN);
+      return ZLOG_OK;
+    }
+
+    if (entry_it->second.trimmed || entry_it->second.invalidated) {
+      callback(arg, Backend::ZLOG_INVALIDATED);
+      return ZLOG_OK;
+    }
+
+    *data = entry_it->second.data;
+
+    callback(arg, ZLOG_OK);
+    return Backend::ZLOG_OK;
   }
 
  private:
