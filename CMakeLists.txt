@@ -20,13 +20,13 @@ else()
 endif()
 
 find_package(Boost COMPONENTS system program_options REQUIRED)
-
 find_package(Protobuf REQUIRED)
 
-include_directories(${CMAKE_BINARY_DIR}/src)
-include_directories(${CMAKE_SOURCE_DIR}/src)
-
-# check for ceph backend dependencies
+# check for ceph backend dependencies. the way this is setup is that unless
+# the ceph backend is disabled, it will be built if the dependencies are
+# found. TODO: it would be nice to distinguish between default-ON and user
+# requested ON so that we can abort/fail if the dependencies are not found
+# and the user explicitly requested the ceph backend.
 option(WITH_CEPH_BACKEND "Ceph Backend is here" ON)
 if(WITH_CEPH_BACKEND)
     find_package(librados)

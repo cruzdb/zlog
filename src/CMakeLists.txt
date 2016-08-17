@@ -1,15 +1,11 @@
+include_directories(${CMAKE_BINARY_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/src/include)
+
 add_subdirectory(proto)
-include_directories(${PROJECT_SOURCE_DIR}/src/include)
-
-add_library(zlog_seqr SHARED libseq/libseqr.cc)
-target_link_libraries(zlog_seqr
-    zlog_proto
-    ${Boost_SYSTEM_LIBRARY}
-)
-
+add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(kvstore)
-
 add_subdirectory(googletest/googlemock)
 add_subdirectory(test)
 

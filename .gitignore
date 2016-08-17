@@ -30,9 +30,10 @@ src/zlog-seqr
 *.pb.cc
 *.pb.h
 
-src/zlog-test-ceph
-src/zlog-test-ram
-src/zstate-test
+src/test/zlog-test-ceph
+src/test/zlog-test-ram
+src/test/zstate-test
+src/test/db_test
 src/stream-stress
 src/append-check
 src/zlog
@@ -45,3 +46,4 @@ cmake_install.cmake
 *.so
 
 build
+*.dylib
