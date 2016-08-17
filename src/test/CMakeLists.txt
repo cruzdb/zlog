@@ -1,7 +1,7 @@
-add_executable(db_test db_test.cc)
-target_link_libraries(db_test libzlog zlog_seqr gtest_main libkvstore)
+add_executable(db-test db_test.cc)
+target_link_libraries(db-test libzlog zlog_seqr gtest_main libkvstore)
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    setup_target_for_coverage(dbtest2-cov db_test coverage)
+    setup_target_for_coverage(db-test-cov db-test coverage)
 endif()
 
 
