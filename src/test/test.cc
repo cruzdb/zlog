@@ -4,20 +4,21 @@
  * executable. It would be nice avoid this using some gtest advanced features!
  */
 
-struct AioContext {
+struct aio_state {
   zlog::AioCompletion *c;
   uint64_t position;
   int retval;
+
   std::string in_data;
   std::string out_data;
 };
 
-static void handle_aio_cb(AioContext *ctx)
+static void handle_aio_cb(aio_state *ctx)
 {
   ctx->retval = ctx->c->ReturnValue();
 }
 
-static void handle_aio_cb_read(AioContext *ctx)
+static void handle_aio_cb_read(aio_state *ctx)
 {
   ctx->retval = ctx->c->ReturnValue();
 }
@@ -28,9 +29,9 @@ TEST_F(LibZlog, Aio) {
   ASSERT_EQ(ret, 0);
 
   // issue some appends
-  std::vector<AioContext*> aios;
-  for (int i = 0; i < 50; i++) {
-    AioContext *ctx = new AioContext;
+  std::vector<aio_state*> aios;
+  for (int i = 0; i < 1; i++) {
+    auto ctx = new aio_state;
     ctx->position = (uint64_t)-1;
     ctx->retval = -1;
     std::stringstream ss;
@@ -39,7 +40,7 @@ TEST_F(LibZlog, Aio) {
     ASSERT_NE(ctx->in_data, ctx->out_data);
     ctx->c = zlog::Log::aio_create_completion(
         std::bind(handle_aio_cb, ctx));
-    int ret = log->AioAppend(ctx->c, Slice(ss.str()), &ctx->position);
+    int ret = log->AioAppend(ctx->c, Slice(ctx->in_data), &ctx->position);
     ASSERT_EQ(ret, 0);
     aios.push_back(ctx);
   }
