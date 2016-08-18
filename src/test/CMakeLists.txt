@@ -26,6 +26,10 @@ target_link_libraries(zlog-test-ceph
     ${Boost_SYSTEM_LIBRARY}
 )
 
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    setup_target_for_coverage(zlog-test-ceph-cov zlog-test-ceph coverage)
+endif()
+
 add_executable(zstate-test zstate_test.cc)
 target_link_libraries(zstate-test
     libzlog
