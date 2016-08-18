@@ -140,7 +140,7 @@ FUNCTION(SETUP_TARGET_FOR_COVERAGE _targetname _testrunner _outputname)
 	ADD_CUSTOM_TARGET(${_targetname}
 
 		# Cleanup lcov
-		${LCOV_PATH} --directory . --zerocounters
+        #${LCOV_PATH} --directory . --zerocounters
 
 		# Run tests
 		COMMAND ${test_command} ${ARGV3}
