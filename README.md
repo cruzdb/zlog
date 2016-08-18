@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/noahdesu/zlog.svg?branch=master)](https://travis-ci.org/noahdesu/zlog)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/9894/badge.svg)](https://scan.coverity.com/projects/noahdesu-zlog)
-[![Coverage Status](https://coveralls.io/repos/github/noahdesu/zlog/badge.svg?branch=master)](https://coveralls.io/github/noahdesu/zlog?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/noahdesu/zlog/badge.svg)](https://coveralls.io/github/noahdesu/zlog)
 
 Zlog is a strongly consistent shared log designed to run on top of Ceph.
 Specifically, it is an implementation of the CORFU protocol adapted for RADOS,
