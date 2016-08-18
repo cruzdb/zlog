@@ -3,6 +3,7 @@
 #include <set>
 #include <vector>
 #include <mutex>
+#include <atomic>
 #include <boost/asio.hpp>
 
 namespace zlog {
