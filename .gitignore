@@ -33,7 +33,7 @@ src/zlog-seqr
 src/test/zlog-test-ceph
 src/test/zlog-test-ram
 src/test/zstate-test
-src/test/db_test
+src/test/db-test
 src/stream-stress
 src/append-check
 src/zlog
@@ -47,3 +47,4 @@ cmake_install.cmake
 
 build
 *.dylib
+coverage

@@ -7,9 +7,15 @@ dist: trusty
 services:   
   - docker
 
+matrix:
+  include:
+    - os: linux
+      env: COVERAGE=1
+    - os: linux
+      env: COVERAGE=0
+
 before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y libprotobuf-dev protobuf-compiler libboost-all-dev
+  - sudo pip install cpp-coveralls
 
 env:
   global:
@@ -18,6 +24,12 @@ env:
    - secure: "EhSojL5dZ7LY9S59Iixzw8KUtMqVdE8dZTZqZ0gnA1VfG4XcQr8u8Vi9jJzGaGxcXIL10p3nE4whrmhlEhUpxKkrcOgKo9vKmn9xByUHd0CBhBudZAdlQsq4DMEp20qAwg+5iuCUHS6cn3UjduQqdo9YMhfqFuRiH+U3oZxS0W4="
 
 addons:
+  apt:
+    packages:
+    - lcov
+    - libboost-all-dev
+    - libprotobuf-dev
+    - protobuf-compiler
   coverity_scan:
     project:
       name: "noahdesu/zlog"
@@ -27,4 +39,5 @@ addons:
     build_command:   "make"
     branch_pattern: coverity_scan
 
-script: if [ "${COVERITY_SCAN_BRANCH}" != 1 ]; then docker run -v $TRAVIS_BUILD_DIR:/src/zlog zlog/ci ; fi
+script: ci/script.sh
+after_success: ci/after_success.sh
