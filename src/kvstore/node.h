@@ -5,7 +5,7 @@
 #include <string>
 #include <iostream>
 
-struct Node;
+class Node;
 using NodeRef = std::shared_ptr<Node>;
 
 /*
