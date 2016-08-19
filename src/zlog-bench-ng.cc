@@ -113,7 +113,6 @@ static void verify_append_cb(AioState *s)
 static void handle_append_cb(AioState *s)
 {
   auto completed = std::chrono::steady_clock::now();
-  zlog::LogImpl *log = s->log;
 
   ios_completed++;
   ios_completed_total++;
@@ -129,6 +128,7 @@ static void handle_append_cb(AioState *s)
   latency_us += diff_us.count();
 
 #ifdef VERIFY_IOS
+  zlog::LogImpl *log = s->log;
   if (s->append_bl.length() > 0)
     assert(!(s->append_bl == s->read_bl));
   s->c = zlog::Log::aio_create_completion(std::bind(verify_append_cb, s));
@@ -387,7 +387,7 @@ int main(int argc, char **argv)
   std::vector<std::string> append_oids;
   if (append) {
       assert(width > 0);
-      for (size_t i = 0; i < width; i++) {
+      for (int i = 0; i < width; i++) {
           std::stringstream oid;
           oid << logname << "." << i;
           append_oids.push_back(oid.str());
@@ -499,7 +499,7 @@ int main(int argc, char **argv)
         assert(ret == 0);
         assert(entry.size() > 0);
       } else {
-        for (unsigned i = 0; i < iosize; i++) {
+        for (unsigned i = 0; i < (unsigned)iosize; i++) {
           iobuf[i] = (char)rand();
         }
         uint64_t pos = 0;
@@ -520,7 +520,7 @@ int main(int argc, char **argv)
     size_t append_oid_cnt = append_oids.size();
     size_t append_count = 0; // used to stripe ios in append mode
     for (;;) {
-      while (outstanding_ios < qdepth) {
+      while (outstanding_ios < (unsigned)qdepth) {
         AioState *state = new AioState;
         state->log = log;
         if (read_mode) {
@@ -541,7 +541,7 @@ int main(int argc, char **argv)
           //
           state->rc = librados::Rados::aio_create_completion(state, NULL, handle_bulk_append_cb);
           assert(state->rc);
-          for (unsigned i = 0; i < iosize; i++) {
+          for (unsigned i = 0; i < (unsigned)iosize; i++) {
             iobuf[i] = (char)rand();
           }
           state->append_bl.append(iobuf, iosize);
@@ -556,7 +556,7 @@ int main(int argc, char **argv)
         } else {
           state->c = zlog::Log::aio_create_completion(std::bind(handle_append_cb, state));
           assert(state->c);
-          for (unsigned i = 0; i < iosize; i++) {
+          for (unsigned i = 0; i < (unsigned)iosize; i++) {
             iobuf[i] = (char)rand();
           }
           state->append_bl.append(iobuf, iosize);
@@ -567,7 +567,7 @@ int main(int argc, char **argv)
 
         outstanding_ios++;
       }
-      io_cond.wait(lock, [&]{ return outstanding_ios < qdepth; });
+      io_cond.wait(lock, [&]{ return outstanding_ios < (unsigned)qdepth; });
 
       if (stop)
         break;

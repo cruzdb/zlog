@@ -7,19 +7,23 @@ set(libzlog_sources
   log_mapper.cc
   aio.cc)
 
+if(BUILD_CEPH_BACKEND)
+  list(APPEND libzlog_sources capi.cc)
+endif(BUILD_CEPH_BACKEND)
+
 add_library(libzlog SHARED ${libzlog_sources})
 
-#if(BUILD_CEPH_BACKEND)
-#  list(APPEND libzlog_sources libzlog/capi.cc)
-#  target_include_directories(libzlog
-#      PUBLIC ${LIBRADOS_INCLUDE_DIRS}
-#      PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
-#   )
-#   target_link_libraries(libzlog
-#      ${LIBRADOS_LIBRARIES}
-#      ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
-#   )
-#endif(BUILD_CEPH_BACKEND)
+if(BUILD_CEPH_BACKEND)
+  target_include_directories(libzlog
+      PUBLIC ${LIBRADOS_INCLUDE_DIRS}
+      PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
+   )
+   target_link_libraries(libzlog
+      zlog_backend_ceph
+      ${LIBRADOS_LIBRARIES}
+      ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
+   )
+endif(BUILD_CEPH_BACKEND)
 
 target_link_libraries(libzlog
     zlog_proto

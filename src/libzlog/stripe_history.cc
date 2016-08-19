@@ -21,7 +21,7 @@ zlog_proto::MetaLog StripeHistory::Serialize() const
 
 int StripeHistory::Deserialize(const zlog_proto::MetaLog& config)
 {
-  for (unsigned i = 0; i < config.stripe_history_size(); i++) {
+  for (unsigned i = 0; i < (unsigned)config.stripe_history_size(); i++) {
     const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
     uint64_t position = e.pos();
     assert(history_.find(position) == history_.end());

@@ -20,7 +20,7 @@ class SeqrClient {
     }
   }
 
-  ~SeqrClient() {
+  virtual ~SeqrClient() {
     for (channel *chan : channels_)
       delete chan;
   }

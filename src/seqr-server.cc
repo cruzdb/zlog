@@ -417,7 +417,7 @@ class LogManager {
 
       uint64_t end_ns;
       uint64_t end_seq;
-      int num_logs;
+      uint64_t num_logs;
 
       // ending state of all the current sequences
       {

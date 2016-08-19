@@ -15,6 +15,8 @@ class Backend {
     ZLOG_INVALID_EPOCH,
   };
 
+  virtual ~Backend() {}
+
   /*
    * TODO: this is used to provide the rados pool name when composing requests
    * to the sequencer. this rados specific, and needs to be factored out
