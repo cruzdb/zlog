@@ -24,6 +24,8 @@
 
 namespace zlog {
 
+Log::~Log() {}
+
 std::string LogImpl::metalog_oid_from_name(const std::string& name)
 {
   std::stringstream ss;

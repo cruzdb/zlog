@@ -18,6 +18,7 @@ class AioCompletion {
 class Log {
  public:
   Log() {}
+  virtual ~Log();
 
   /*
    * Synchronous API
