@@ -2,14 +2,13 @@
 
 set -e
 
+#
+# Build and cache the ZLog plugin for Ceph? If the cache is empty we'll build
+# the plugin inside a docker container and move the plugin into the cache.
+#
 if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
-  #
-  # Build and cache the ZLog plugin for Ceph?
-  #
   if [ ! -f "$HOME/zlog_ceph_deps/cls_zlog_client.h" ]; then
-    #
-    # The plugin is built in a docker image
-    #
+
 cat <<EOF | docker build -t zlog_deps -
 FROM ubuntu:trusty
 
@@ -24,6 +23,7 @@ RUN cd /src/ceph/ceph && ./autogen.sh && \
     ./configure --prefix=/usr && \
     cd src && make libcls_zlog.la libcls_zlog_client.la
 EOF
+
     # copy artificats back into host
     mkdir -p $HOME/zlog_ceph_deps
     docker run -v $HOME/zlog_ceph_deps/:/deps -it zlog_deps \
@@ -45,16 +45,16 @@ EOF
   CEPH_CONF=/tmp/osd/ceph.conf ceph status
 fi
 
-mkdir build
-pushd build
-
 if [ "${RUN_COVERAGE}" == 1 ]; then
-  cmake -DCMAKE_BUILD_TYPE=Coverage ..
+  cmake -DCMAKE_BUILD_TYPE=Coverage .
 else
+  mkdir build
+  pushd build
   cmake -DCMAKE_BUILD_TYPE=Debug ..
 fi
 
 make -j2
+
 ./src/test/zlog-test-ram
 ./src/test/db-test
 
@@ -71,6 +71,6 @@ if [ "${RUN_COVERAGE}" == 1 ]; then
   if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
     CEPH_CONF=/tmp/osd/ceph.conf make zlog-test-ceph-cov
   fi
+else
+  popd
 fi
-
-popd
