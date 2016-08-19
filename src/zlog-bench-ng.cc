@@ -113,7 +113,6 @@ static void verify_append_cb(AioState *s)
 static void handle_append_cb(AioState *s)
 {
   auto completed = std::chrono::steady_clock::now();
-  zlog::LogImpl *log = s->log;
 
   ios_completed++;
   ios_completed_total++;
@@ -129,6 +128,7 @@ static void handle_append_cb(AioState *s)
   latency_us += diff_us.count();
 
 #ifdef VERIFY_IOS
+  zlog::LogImpl *log = s->log;
   if (s->append_bl.length() > 0)
     assert(!(s->append_bl == s->read_bl));
   s->c = zlog::Log::aio_create_completion(std::bind(verify_append_cb, s));
