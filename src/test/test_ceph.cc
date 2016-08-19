@@ -142,10 +142,6 @@ class LibZlogStream : public LibZlog {};
 // common tests
 #include "test.cc"
 
-// FIXME. either solve the backend problem for the c bindings, or create a
-// separate library for the c bindings.
-#if 0
-
 // below are tests that are so far not ported to generic backend
 //
 class LibZlogC : public ::testing::Test {
@@ -361,7 +357,7 @@ TEST_F(LibZlogC, Read) {
   char data2[4096];
   memset(data2, 0, sizeof(data2));
   ret = zlog_read(log, pos, data2, sizeof(data2));
-  ASSERT_EQ(ret, sizeof(data2));
+  ASSERT_EQ((unsigned)ret, sizeof(data2));
 
   ASSERT_TRUE(strcmp(data2, s) == 0);
 
@@ -459,7 +455,7 @@ TEST_F(LibZlogCStream, ReadNext) {
   uint64_t pos = 99;
   ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   ret = zlog_stream_sync(stream);
   ASSERT_EQ(ret, 0);
@@ -467,7 +463,7 @@ TEST_F(LibZlogCStream, ReadNext) {
   // still empty
   ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   char data2[1234];
 
@@ -481,7 +477,7 @@ TEST_F(LibZlogCStream, ReadNext) {
 
   // we should see it now..
   ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
-  ASSERT_EQ(ret, sizeof(data2));
+  ASSERT_EQ((unsigned)ret, sizeof(data2));
   ASSERT_EQ(pos, pos2);
   //ASSERT_EQ(bl, bl_out);
 
@@ -503,7 +499,7 @@ TEST_F(LibZlogCStream, ReadNext) {
 
   // we should see it now..
   ret = zlog_stream_readnext(stream, data4, sizeof(data4), &pos);
-  ASSERT_EQ(ret, sizeof(data3));
+  ASSERT_EQ((unsigned)ret, sizeof(data3));
   ASSERT_EQ(pos, pos2);
   //ASSERT_EQ(bl, bl_out);
 
@@ -532,7 +528,7 @@ TEST_F(LibZlogCStream, Reset) {
   ceph::bufferlist bl;
   ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   ret = zlog_stream_reset(stream);
   ASSERT_EQ(ret, 0);
@@ -540,7 +536,7 @@ TEST_F(LibZlogCStream, Reset) {
   // still empty
   ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   // append something to the stream
   char data2[1234];
@@ -556,7 +552,7 @@ TEST_F(LibZlogCStream, Reset) {
 
   // we should see it now..
   ret = zlog_stream_readnext(stream, data3, sizeof(data3), &pos);
-  ASSERT_EQ(ret, sizeof(data2));
+  ASSERT_EQ((unsigned)ret, sizeof(data2));
   ASSERT_EQ(pos, pos2);
   //ASSERT_EQ(bl, bl_out); FIXME
 
@@ -571,7 +567,7 @@ TEST_F(LibZlogCStream, Reset) {
 
   // we see the same thing again
   ret = zlog_stream_readnext(stream, data3, sizeof(data3), &pos);
-  ASSERT_EQ(ret, sizeof(data2));
+  ASSERT_EQ((unsigned)ret, sizeof(data2));
   ASSERT_EQ(pos, pos2);
   //ASSERT_EQ(bl, bl_out);
 
@@ -592,7 +588,7 @@ TEST_F(LibZlogCStream, Sync) {
   }
 
   // an empty stream sync is OK
-  ASSERT_EQ(zlog_stream_history(streams[4], NULL, 0), 0);
+  ASSERT_EQ(zlog_stream_history(streams[4], NULL, 0), (unsigned)0);
   ret = zlog_stream_sync(streams[4]);
   ASSERT_EQ(ret, 0);
 
@@ -609,7 +605,7 @@ TEST_F(LibZlogCStream, Sync) {
     std::random_shuffle(indicies.begin(), indicies.end());
 
     std::set<uint64_t> stream_ids;
-    int count = rand() % 9 + 1;
+    unsigned count = rand() % 9 + 1;
     for (unsigned j = 0; j < count; j++)
       stream_ids.insert(indicies[j]);
 
@@ -638,7 +634,7 @@ TEST_F(LibZlogCStream, Sync) {
     size_t history_size = zlog_stream_history(streams[i], NULL, 0);
     std::vector<uint64_t> h(history_size);
     ret = zlog_stream_history(streams[i], &h[0], history_size);
-    ASSERT_EQ(ret, history_size);
+    ASSERT_EQ((unsigned)ret, history_size);
     ASSERT_EQ(stream_history[i], h);
   }
 
@@ -654,7 +650,7 @@ TEST_F(LibZlogCStream, Sync) {
     std::random_shuffle(indicies.begin(), indicies.end());
 
     std::set<uint64_t> stream_ids;
-    int count = rand() % 9 + 1;
+    unsigned count = rand() % 9 + 1;
     for (unsigned j = 0; j < count; j++)
       stream_ids.insert(indicies[j]);
 
@@ -681,7 +677,7 @@ TEST_F(LibZlogCStream, Sync) {
     size_t history_size = zlog_stream_history(streams[i], NULL, 0);
     std::vector<uint64_t> h(history_size);
     ret = zlog_stream_history(streams[i], &h[0], history_size);
-    ASSERT_EQ(ret, history_size);
+    ASSERT_EQ((unsigned)ret, history_size);
     ASSERT_EQ(stream_history[i], h);
   }
 
@@ -698,13 +694,13 @@ TEST_F(LibZlogCStream, StreamId) {
   ret = zlog_stream_open(log, 0, &stream0);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(zlog_stream_id(stream0), 0);
+  ASSERT_EQ(zlog_stream_id(stream0), (unsigned)0);
 
   zlog_stream_t stream33;
   ret = zlog_stream_open(log, 33, &stream33);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(zlog_stream_id(stream33), 33);
+  ASSERT_EQ(zlog_stream_id(stream33), (unsigned)33);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
@@ -723,7 +719,7 @@ TEST_F(LibZlogCStream, Append) {
   uint64_t pos = 99;
   ret = zlog_stream_readnext(stream, NULL, 0, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   // add something to stream
   char data[5];
@@ -734,7 +730,7 @@ TEST_F(LibZlogCStream, Append) {
   // still don't see it...
   ret = zlog_stream_readnext(stream, NULL, 0, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   // update view
   ret = zlog_stream_sync(stream);
@@ -742,11 +738,9 @@ TEST_F(LibZlogCStream, Append) {
 
   // we should see it now..
   ret = zlog_stream_readnext(stream, data, sizeof(data), &pos);
-  ASSERT_EQ(ret, sizeof(data));
+  ASSERT_EQ((unsigned)ret, sizeof(data));
   ASSERT_EQ(pos, pos2);
 
   ret = zlog_destroy(log);
   ASSERT_EQ(ret, 0);
 }
-
-#endif

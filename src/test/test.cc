@@ -48,7 +48,7 @@ TEST_F(LibZlog, Aio) {
   // wait for them to complete
   for (auto ctx : aios) {
     ctx->c->WaitForComplete();
-    ASSERT_GE(ctx->position, 0);
+    ASSERT_GE(ctx->position, (uint64_t)0);
     ASSERT_EQ(ctx->retval, 0);
     delete ctx->c;
     ctx->c = NULL;
@@ -65,7 +65,7 @@ TEST_F(LibZlog, Aio) {
   // wait for them to complete
   for (auto ctx : aios) {
     ctx->c->WaitForComplete();
-    ASSERT_GE(ctx->position, 0);
+    ASSERT_GE(ctx->position, (uint64_t)0);
     ASSERT_EQ(ctx->retval, 0);
     ASSERT_EQ(ctx->in_data, ctx->out_data);
     delete ctx->c;
@@ -341,7 +341,7 @@ TEST_F(LibZlogStream, StreamId) {
   ret = log->OpenStream(0, &stream0);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(stream0->Id(), 0);
+  ASSERT_EQ(stream0->Id(), (uint64_t)0);
 
   delete stream0;
 
@@ -349,7 +349,7 @@ TEST_F(LibZlogStream, StreamId) {
   ret = log->OpenStream(33, &stream33);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(stream33->Id(), 33);
+  ASSERT_EQ(stream33->Id(), (uint64_t)33);
 
   delete stream33;
 
@@ -370,7 +370,7 @@ TEST_F(LibZlogStream, Append) {
   std::string entry;
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   // add something to stream
   uint64_t pos2;
@@ -380,7 +380,7 @@ TEST_F(LibZlogStream, Append) {
   // still don't see it...
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   // update view
   ret = stream->Sync();
@@ -410,7 +410,7 @@ TEST_F(LibZlogStream, ReadNext) {
   std::string entry;
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   ret = stream->Sync();
   ASSERT_EQ(ret, 0);
@@ -418,7 +418,7 @@ TEST_F(LibZlogStream, ReadNext) {
   // still empty
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   char data[1234];
 
@@ -481,7 +481,7 @@ TEST_F(LibZlogStream, Reset) {
   std::string entry;
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   ret = stream->Reset();
   ASSERT_EQ(ret, 0);
@@ -489,7 +489,7 @@ TEST_F(LibZlogStream, Reset) {
   // still empty
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, -EBADF);
-  ASSERT_EQ(pos, 99);
+  ASSERT_EQ(pos, (uint64_t)99);
 
   // append something to the stream
   char data[1234];
@@ -558,7 +558,7 @@ TEST_F(LibZlogStream, Sync) {
     std::random_shuffle(indicies.begin(), indicies.end());
 
     std::set<uint64_t> stream_ids;
-    int count = rand() % 9 + 1;
+    unsigned count = rand() % 9 + 1;
     for (unsigned j = 0; j < count; j++)
       stream_ids.insert(indicies[j]);
 
@@ -594,7 +594,7 @@ TEST_F(LibZlogStream, Sync) {
     std::random_shuffle(indicies.begin(), indicies.end());
 
     std::set<uint64_t> stream_ids;
-    int count = rand() % 9 + 1;
+    unsigned count = rand() % 9 + 1;
     for (unsigned j = 0; j < count; j++)
       stream_ids.insert(indicies[j]);
 
