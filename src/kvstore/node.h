@@ -96,8 +96,8 @@ class Node {
   // TODO: allow rid to have negative initialization value
   Node(std::string key, std::string val, bool red, NodeRef lr, NodeRef rr,
       uint64_t rid, int field_index, bool read_only) :
-    key_(key), val_(val), red_(red), left(lr, read_only), right(rr, read_only),
-    rid_(rid), field_index_(field_index), read_only_(read_only)
+    left(lr, read_only), right(rr, read_only), key_(key), val_(val),
+    red_(red), rid_(rid), field_index_(field_index), read_only_(read_only)
   {}
 
   static NodeRef& Nil() {
