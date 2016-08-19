@@ -80,8 +80,8 @@ class NodePtr {
 
  private:
   NodeRef ref_;
-  int offset_;
   int64_t csn_;
+  int offset_;
   bool read_only_;
 };
 
