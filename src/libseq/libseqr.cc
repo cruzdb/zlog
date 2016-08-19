@@ -185,11 +185,11 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
     return -ERANGE;
   else {
     assert(reply.status() == zlog_proto::MSeqReply::OK);
-    assert(reply.stream_backpointers_size() == stream_ids.size());
+    assert((unsigned)reply.stream_backpointers_size() == stream_ids.size());
     assert(reply.position_size() == 1);
 
     std::map<uint64_t, std::vector<uint64_t>> result;
-    for (size_t index = 0; index < reply.stream_backpointers_size(); index++) {
+    for (size_t index = 0; index < (unsigned)reply.stream_backpointers_size(); index++) {
       const zlog_proto::StreamBackPointer ptrs = reply.stream_backpointers(index);
       assert(stream_ids.find(ptrs.id()) != stream_ids.end());
       std::vector<uint64_t> backpointers(ptrs.backpointer().begin(),
