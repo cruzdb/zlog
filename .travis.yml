@@ -35,20 +35,28 @@ env:
    #   via the "travis encrypt" command using the project repo's public key
    - secure: "EhSojL5dZ7LY9S59Iixzw8KUtMqVdE8dZTZqZ0gnA1VfG4XcQr8u8Vi9jJzGaGxcXIL10p3nE4whrmhlEhUpxKkrcOgKo9vKmn9xByUHd0CBhBudZAdlQsq4DMEp20qAwg+5iuCUHS6cn3UjduQqdo9YMhfqFuRiH+U3oZxS0W4="
 
-os:
-  - linux
-  - osx
-
-compiler:
-  - gcc
-  - clang
-
 matrix:
   include:
     - os: linux
       compiler: gcc
+    - os: linux
+      compiler: clang
+    - os: osx
+      compiler: gcc
+    - os: osx
+      compiler: clang
+    - os: linux
+      compiler: gcc
       env: RUN_COVERAGE=1
 
-before_install: ci/before_install.sh
-script: ci/script.sh
-after_success: ci/after_success.sh
+before_install:
+  - test $TRAVIS_BRANCH != coverity_scan -o ${TRAVIS_JOB_NUMBER##*.} = 1 || exit 0
+  - ci/before_install.sh
+
+script:
+  - test $TRAVIS_BRANCH != coverity_scan || exit 0
+  - ci/script.sh
+
+after_success:
+  - test $TRAVIS_BRANCH != coverity_scan || exit 0
+  - ci/after_success.sh
