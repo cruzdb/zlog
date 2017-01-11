@@ -6,3 +6,4 @@ target_link_libraries(zlog_proto
 target_include_directories(zlog_proto
     PUBLIC ${PROTOBUF_INCLUDE_DIR}
 )
+install(TARGETS zlog_proto DESTINATION lib)

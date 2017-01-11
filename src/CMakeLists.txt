@@ -6,6 +6,7 @@ add_subdirectory(proto)
 add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(kvstore)
+add_subdirectory(include)
 add_subdirectory(googletest/googlemock)
 add_subdirectory(test)
 
