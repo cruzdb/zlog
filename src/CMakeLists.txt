@@ -28,6 +28,7 @@ target_link_libraries(zlog-seqr
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
+install(TARGETS zlog-seqr DESTINATION bin)
 
 add_executable(append-check append-check.cc)
 target_link_libraries(append-check

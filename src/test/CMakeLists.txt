@@ -25,6 +25,7 @@ target_link_libraries(zlog-test-ceph
     zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
 )
+install(TARGETS zlog-test-ceph DESTINATION bin)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     setup_target_for_coverage(zlog-test-ceph-cov zlog-test-ceph coverage)
