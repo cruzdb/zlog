@@ -56,6 +56,7 @@ target_link_libraries(zlog-seqr-bench
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
+install(TARGETS zlog-seqr-bench DESTINATION bin)
 
 add_executable(zlog-bench bench/bench.cc)
 target_link_libraries(zlog-bench
@@ -66,6 +67,7 @@ target_link_libraries(zlog-bench
     ${Boost_SYSTEM_LIBRARY}
     atomic
 )
+install(TARGETS zlog-bench DESTINATION bin)
 
 add_executable(zlog-bench-ng zlog-bench-ng.cc)
 target_link_libraries(zlog-bench-ng
@@ -76,6 +78,7 @@ target_link_libraries(zlog-bench-ng
     ${Boost_SYSTEM_LIBRARY}
     atomic
 )
+install(TARGETS zlog-bench-ng DESTINATION bin)
 
 add_executable(zlogtool zlog-tool.cc)
 set_target_properties(zlogtool PROPERTIES OUTPUT_NAME "zlog")
