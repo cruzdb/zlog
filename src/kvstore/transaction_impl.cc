@@ -516,3 +516,21 @@ void TransactionImpl::Commit()
   bool committed = db_->CommitResult(pos);
   assert(committed);
 }
+
+int TransactionImpl::Get(const std::string& key, std::string* val)
+{
+  NodeRef getter = src_root_;
+  // Keep looking until we're Nil (We've reached the end)
+  while (getter != Node::Nil())
+  {
+    if (getter->key() == key)
+    {
+      *val = getter->val();
+      return EXIT_SUCCESS;
+    }
+    // Next to look up if not yet found
+    getter = key < getter->key() ? getter->left.ref() : getter->right.ref();
+  }
+
+  return -ENOENT;
+}

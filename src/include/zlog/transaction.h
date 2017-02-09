@@ -6,6 +6,7 @@ class Transaction {
   virtual void Put(const std::string& key, const std::string& val) = 0;
   virtual void Delete(std::string key) = 0;
   virtual void Commit() = 0;
+  virtual int Get(const std::string& key, std::string* val) = 0;
 };
 
 #endif
