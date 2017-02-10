@@ -4,7 +4,7 @@
 
 #include "com_cruzdb_Log.h"
 #include "portal.h"
-#include "zlog/ceph_backend.h"
+#include "zlog/backend/ceph.h"
 
 void Java_com_cruzdb_Log_disposeInternal(
     JNIEnv *env, jobject jobj, jlong jhandle)

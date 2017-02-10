@@ -10,6 +10,7 @@ BuildRequires:	gcc-c++
 BuildRequires:	boost-devel
 BuildRequires:	protobuf-devel
 BuildRequires:	protobuf-compiler
+BuildRequires:	java-devel
 
 %description
 distributed shared log

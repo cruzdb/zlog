@@ -1,2 +1,1 @@
-include
-target
+native/com_cruzdb_*.h
