@@ -48,3 +48,5 @@ cmake_install.cmake
 build
 *.dylib
 coverage
+
+build-doc
