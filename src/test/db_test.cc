@@ -287,7 +287,7 @@ TEST(DB, Get) {
 
   // empty key
   ret = txn->Get("", &val);
-  ASSERT_EQ(ret, EXIT_SUCCESS);
+  ASSERT_EQ(ret, 0);
   ASSERT_EQ(val, "Empty key");
 
   // c does not exist
@@ -296,11 +296,13 @@ TEST(DB, Get) {
 
   // a exists
   ret = txn->Get("a", &val);
-  ASSERT_EQ(ret, EXIT_SUCCESS);
+  ASSERT_EQ(ret, 0);
   ASSERT_EQ(val, "a");
 
   // b exists
   ret = txn->Get("b", &val);
-  ASSERT_EQ(ret, EXIT_SUCCESS);
+  ASSERT_EQ(ret, 0);
   ASSERT_EQ(val, "b");
+
+  txn->Commit();
 }

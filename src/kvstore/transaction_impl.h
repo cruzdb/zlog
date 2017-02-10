@@ -22,7 +22,7 @@ class TransactionImpl : public Transaction {
 
   void Commit();
 
-  int Get(const std::string& key, std::string* val);
+  int Get(const std::string& key, std::string *val);
 
  private:
   DBImpl *db_;

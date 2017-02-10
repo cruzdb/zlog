@@ -526,7 +526,7 @@ int TransactionImpl::Get(const std::string& key, std::string* val)
     if (getter->key() == key)
     {
       *val = getter->val();
-      return EXIT_SUCCESS;
+      return 0;
     }
     // Next to look up if not yet found
     getter = key < getter->key() ? getter->left.ref() : getter->right.ref();
