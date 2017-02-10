@@ -263,3 +263,46 @@ TEST(DB, Iterator) {
   it->Seek("x");
   ASSERT_TRUE(!it->Valid());
 }
+
+TEST(DB, Get) {
+  zlog::Log *log;
+  auto be = new RAMBackend();
+  auto client = new FakeSeqrClient();
+  int ret = zlog::Log::Create(be, "log", client, &log);
+  ASSERT_EQ(ret, 0);
+
+  DB *db;
+  ret = DB::Open(log, true, &db);
+  ASSERT_EQ(ret, 0);
+
+  std::vector<std::string> strs{"a", "b", ""};
+  for (auto s : strs) {
+    auto txn = db->BeginTransaction();
+    txn->Put(s, s.empty() ? "Empty key" : s);
+    txn->Commit();
+  }
+
+  auto txn = db->BeginTransaction();
+  std::string val;
+
+  // empty key
+  ret = txn->Get("", &val);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(val, "Empty key");
+
+  // c does not exist
+  ret = txn->Get("c", &val);
+  ASSERT_EQ(ret, -ENOENT);
+
+  // a exists
+  ret = txn->Get("a", &val);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(val, "a");
+
+  // b exists
+  ret = txn->Get("b", &val);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(val, "b");
+
+  txn->Commit();
+}
