@@ -11,6 +11,7 @@ BuildRequires:	boost-devel
 BuildRequires:	protobuf-devel
 BuildRequires:	protobuf-compiler
 BuildRequires:	java-devel
+BuildRequires:	lcov
 
 %description
 distributed shared log

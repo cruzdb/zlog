@@ -6,4 +6,5 @@ Build-Depends: cmake,
   protobuf-compiler,
   libboost-dev,
   libboost-system-dev,
-  libboost-program-options-dev
+  libboost-program-options-dev,
+  lcov
