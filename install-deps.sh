@@ -13,6 +13,27 @@ fi
 
 source /etc/os-release
 case $ID in
+  debian|ubuntu)
+    echo "Using apt-get to install dependencies"
+    $SUDO apt-get install -y lsb-release devscripts equivs
+    $SUDO apt-get install -y dpkg-dev gcc
+    if ! test -r debian/control ; then
+      echo debian/control is not a readable file
+      exit 1
+    fi
+    touch $DIR/status
+
+    backports=""
+    control="debian/control"
+
+    # make a metapackage that expresses the build dependencies,
+    # install it, rm the .deb; then uninstall the package as its
+    # work is done
+    $SUDO env DEBIAN_FRONTEND=noninteractive mk-build-deps --install --remove --tool="apt-get -y --no-install-recommends $backports" $control || exit 1
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get -y remove cruzdb-build-deps
+    if [ -n "$backports" ] ; then rm $control; fi
+    ;;
+
   fedora)
 
     yumdnf="yum"

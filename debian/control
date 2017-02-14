@@ -1,0 +1,9 @@
+Source: cruzdb
+Section: admin
+Priority: optional
+Build-Depends: cmake,
+  libprotobuf-dev,
+  protobuf-compiler,
+  libboost-dev,
+  libboost-system-dev,
+  libboost-program-options-dev
