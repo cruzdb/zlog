@@ -9,11 +9,11 @@ if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
 fi
 
 if [ "${RUN_COVERAGE}" == 1 ]; then
-  cmake -DCMAKE_BUILD_TYPE=Coverage .
+  cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Coverage .
 else
   mkdir build
   pushd build
-  cmake -DCMAKE_BUILD_TYPE=Debug ..
+  cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug ..
 fi
 
 make -j2
