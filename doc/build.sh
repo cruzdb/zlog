@@ -27,19 +27,19 @@ elif command -v yum > /dev/null; then
     echo "yum install -y $missing"
     exit 1
   fi
-else
-  for command in virtualenv; do
-    command -v "$command" > /dev/null;
-    ret_code=$?
-    if [ $ret_code -ne 0 ]; then
-      missing="${missing:+$missing }$command"
-    fi
-  done
-  if [ -n "$missing" ]; then
-    echo "$0: missing required command, please install them:" 1>&2
-    echo "$missing"
-    exit 1
+fi
+
+for command in virtualenv; do
+  command -v "$command" > /dev/null;
+  ret_code=$?
+  if [ $ret_code -ne 0 ]; then
+    missing="${missing:+$missing }$command"
   fi
+done
+if [ -n "$missing" ]; then
+  echo "$0: missing required command, please install them:" 1>&2
+  echo "$missing"
+  exit 1
 fi
 
 set -e
