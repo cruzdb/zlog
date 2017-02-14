@@ -2,6 +2,14 @@
 
 set -e
 
+# solution adapted from:
+#  http://stackoverflow.com/questions/33196136/travis-ci-update-cmake-using-the-packages-cache
+if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
+  CMAKE_URL="https://cmake.org/files/v3.6/cmake-3.6.3-Linux-x86_64.tar.gz"
+  wget --quiet -O - ${CMAKE_URL} | sudo tar --strip-components=1 -xz -C /usr
+fi
+# osx has up-to-date cmake
+
 if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
   curl https://download.ceph.com/keys/release.asc | sudo apt-key add -
   sudo apt-add-repository 'deb https://download.ceph.com/debian-jewel/ trusty main'
