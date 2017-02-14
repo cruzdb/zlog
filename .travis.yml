@@ -15,6 +15,7 @@ addons:
     - libboost-system-dev
     - libboost-program-options-dev
     - libboost-thread-dev
+    - default-jdk
   coverity_scan:
     project:
       name: "noahdesu/zlog"
