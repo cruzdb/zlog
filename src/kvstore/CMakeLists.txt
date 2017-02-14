@@ -6,6 +6,7 @@ target_link_libraries(kvstore_proto
 target_include_directories(kvstore_proto
     PUBLIC ${PROTOBUF_INCLUDE_DIR}
 )
+install(TARGETS kvstore_proto DESTINATION lib)
 
 add_library(libkvstore SHARED
     db_impl.cc
@@ -14,6 +15,7 @@ add_library(libkvstore SHARED
     iterator_impl.cc
 )
 target_link_libraries(libkvstore libzlog kvstore_proto)
+install(TARGETS libkvstore LIBRARY DESTINATION lib)
 
 add_executable(thrash thrash.cc)
 target_link_libraries(thrash libzlog zlog_seqr libkvstore zlog_seqr)
