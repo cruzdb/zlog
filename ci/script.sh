@@ -17,19 +17,20 @@ else
 fi
 
 make -j2
+sudo make install
 
-./src/test/zlog-test-ram
-./src/test/db-test
+zlog-test-ram
+zlog-db-test
 
 # on linux we assume a ceph instance is running and execute any tests that
 # depend on the ceph backend being available.
 if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
-  CEPH_CONF=/tmp/osd/ceph.conf ./src/zlog-seqr --streams --port 5678 --daemon
-  CEPH_CONF=/tmp/osd/ceph.conf ./src/test/zlog-test-ceph
+  CEPH_CONF=/tmp/osd/ceph.conf zlog-seqr --streams --port 5678 --daemon
+  CEPH_CONF=/tmp/osd/ceph.conf zlog-test-ceph
 fi
 
 if [ "${RUN_COVERAGE}" == 1 ]; then
-  make db-test-cov
+  make zlog-db-test-cov
   make zlog-test-ram-cov
   if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
     CEPH_CONF=/tmp/osd/ceph.conf make zlog-test-ceph-cov

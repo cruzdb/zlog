@@ -1,9 +1,9 @@
-add_executable(db-test db_test.cc)
-target_link_libraries(db-test libzlog zlog_seqr gtest_main libkvstore)
+add_executable(zlog-db-test db_test.cc)
+target_link_libraries(zlog-db-test libzlog zlog_seqr gtest_main libkvstore)
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    setup_target_for_coverage(db-test-cov db-test coverage)
+    setup_target_for_coverage(zlog-db-test-cov zlog-db-test coverage)
 endif()
-
+install(TARGETS zlog-db-test DESTINATION bin)
 
 add_executable(zlog-test-ram test_ram.cc)
 #test/test_internal.cc
@@ -13,6 +13,7 @@ target_link_libraries(zlog-test-ram
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     setup_target_for_coverage(zlog-test-ram-cov zlog-test-ram coverage)
 endif()
+install(TARGETS zlog-test-ram DESTINATION bin)
 
 if(BUILD_CEPH_BACKEND)
 
