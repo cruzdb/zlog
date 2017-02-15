@@ -2,6 +2,9 @@
 
 set -e
 
+echo "os type $OSTYPE"
+./install-deps.sh
+
 # solution adapted from:
 #  http://stackoverflow.com/questions/33196136/travis-ci-update-cmake-using-the-packages-cache
 if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
