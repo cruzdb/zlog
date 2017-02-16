@@ -6,7 +6,7 @@ cd ..
 TOPDIR=`pwd`
 
 if command -v dpkg > /dev/null; then
-  for package in python-dev python-pip python-virtualenv; do
+  for package in python-virtualenv; do
     if [ "$(dpkg --status -- $package 2>&1 | sed -n 's/^Status: //p')" != "install ok installed" ]; then
         missing="${missing:+$missing }$package"
     fi
@@ -17,7 +17,7 @@ if command -v dpkg > /dev/null; then
     exit 1
   fi
 elif command -v yum > /dev/null; then
-  for package in python-devel python-pip python2-virtualenv; do
+  for package in python2-virtualenv; do
     if ! rpm -q $package >/dev/null ; then
       missing="${missing:+$missing }$package"
     fi
