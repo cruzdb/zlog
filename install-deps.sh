@@ -32,6 +32,9 @@ case $ID in
     $SUDO env DEBIAN_FRONTEND=noninteractive mk-build-deps --install --remove --tool="apt-get -y --no-install-recommends $backports" $control || exit 1
     $SUDO env DEBIAN_FRONTEND=noninteractive apt-get -y remove cruzdb-build-deps
     if [ -n "$backports" ] ; then rm $control; fi
+
+    # for doc/build.sh
+    $SUDO apt-get install -y python-virtualenv
     ;;
 
   fedora)
@@ -61,6 +64,9 @@ case $ID in
     cp zlog.spec $DIR/zlog.spec
     $SUDO $builddepcmd $DIR/zlog.spec 2>&1 | tee $DIR/yum-builddep.out
     ! grep -q -i error: $DIR/yum-builddep.out || exit 1
+
+    # for doc/build.sh
+    $SUDO $yumdnf install -y python2-virtualenv
     ;;
 
   *)
