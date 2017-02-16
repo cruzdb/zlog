@@ -9,12 +9,6 @@ addons:
   apt:
     packages:
     - uuid-runtime
-    - lcov
-    - protobuf-compiler
-    - libprotobuf-dev
-    - libboost-system-dev
-    - libboost-program-options-dev
-    - libboost-thread-dev
   coverity_scan:
     project:
       name: "noahdesu/zlog"

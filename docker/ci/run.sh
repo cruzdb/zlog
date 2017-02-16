@@ -42,7 +42,7 @@ export CEPH_CONF=/tmp/ceph/ceph.conf
 ./zlog-seqr --streams --port 5678 --daemon
 ./test/zlog-test-ceph
 ./test/zlog-test-ram
-./test/db-test
+./test/zlog-db-test
 
 skill zlog-seqr
 skill -9 zlog-seqr

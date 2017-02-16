@@ -4,6 +4,10 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
 project(zlog)
 
+if(APPLE)
+  cmake_policy(SET CMP0042 NEW)
+endif()
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     include(CodeCoverage)
     SET(CMAKE_CXX_FLAGS "-g -O0 -fprofile-arcs -ftest-coverage")
