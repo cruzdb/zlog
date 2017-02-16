@@ -2,6 +2,8 @@
 
 set -e
 
+./doc/build.sh
+
 # start ceph
 if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
   ci/micro-osd.sh /tmp/osd
