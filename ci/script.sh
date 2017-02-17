@@ -15,7 +15,11 @@ if [ "${RUN_COVERAGE}" == 1 ]; then
 else
   mkdir build
   pushd build
-  cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug ..
+  if [ "${TRAVIS_OS_NAME}" == "osx" ]; then
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Debug ..
+  else
+    cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug ..
+  fi
 fi
 
 make -j2
