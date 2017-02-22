@@ -1,6 +1,6 @@
 if(BUILD_CEPH_BACKEND)
 
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS zlog.proto)
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ceph.proto)
 add_library(zlog_ceph_proto SHARED ${PROTO_SRCS} ${PROTO_HDRS})
 target_link_libraries(zlog_ceph_proto
     ${PROTOBUF_LIBRARIES}

@@ -1,11 +1,7 @@
 #ifndef CLS_ZLOG_CLIENT_H
 #define CLS_ZLOG_CLIENT_H
 
-#ifdef __CEPH__
-# include "include/rados/librados.hpp"
-#else
-# include <rados/librados.hpp>
-#endif
+#include <rados/librados.hpp>
 
 namespace zlog {
 
