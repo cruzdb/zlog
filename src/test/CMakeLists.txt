@@ -41,4 +41,12 @@ target_link_libraries(zstate-test
     zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
 )
+
+add_executable(ceph_test_cls_zlog
+    test_cls_zlog.cc
+    test_cls_zlog_v2.cc)
+target_link_libraries(ceph_test_cls_zlog
+    cls_zlog_client
+    gtest_main)
+
 endif(BUILD_CEPH_BACKEND)
