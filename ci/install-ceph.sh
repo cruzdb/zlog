@@ -3,6 +3,10 @@
 set -e
 set -x
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  exit 0
+fi
+
 if test $(id -u) != 0 ; then
   SUDO=sudo
 fi
