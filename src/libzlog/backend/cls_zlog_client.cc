@@ -10,15 +10,19 @@ void encode(ceph::buffer::list& bl, google::protobuf::Message& msg) {
   bl.append(buf, sizeof(buf));
 }
 
-void decode(ceph::buffer::list& bl, google::protobuf::Message* msg) {
+bool decode(ceph::bufferlist& bl, google::protobuf::Message* msg) {
+  if (bl.length() == 0) {
+    return false;
+  }
   if (!msg->ParseFromString(bl.to_str())) {
     std::cerr << "decode: unable to decode message" << std::endl;
-    throw std::runtime_error("decode: unable to decode message");
+    return false;
   }
   if (!msg->IsInitialized()) {
     std::cerr << "decode: message is uninitialized" << std::endl;
-    throw std::runtime_error("decode: message is uninitialized");
+    return false;
   }
+  return true;
 }
 
 namespace zlog {
@@ -85,11 +89,10 @@ class ClsZlogMaxPositionReply : public librados::ObjectOperationCompletion {
 
   void handle_completion(int ret, ceph::bufferlist& outbl) {
     if (ret == CLS_ZLOG_OK) {
-      try {
-        zlog_ceph_proto::MaxPositionRet reply;
-        decode(outbl, &reply);
+      zlog_ceph_proto::MaxPositionRet reply;
+      if (decode(outbl, &reply)) {
         *pposition_ = reply.pos();
-      } catch (ceph::buffer::error& err) {
+      } else {
         ret = -EIO;
       }
     }
@@ -195,12 +198,11 @@ class GetProjectionReply : public librados::ObjectOperationCompletion {
   void handle_completion(int ret, ceph::bufferlist& outbl) {
     if (ret == 0) {
       zlog_ceph_proto::GetProjectionRet reply;
-      try {
-        decode(outbl, &reply);
+      if (decode(outbl, &reply)) {
         if (pepoch_)
           *pepoch_ = reply.epoch();
         out_->append(reply.out());
-      } catch (ceph::buffer::error& err) {
+      } else {
         ret = -EIO;
       }
     }
