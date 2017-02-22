@@ -4,7 +4,6 @@
 #include <jni.h>
 #include <cassert>
 #include <rados/librados.hpp>
-#include <rados/cls_zlog_client.h>
 #include "zlog/log.h"
 #include "zlog/backend.h"
 #include "zlog/backend/ceph.h"

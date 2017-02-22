@@ -1,7 +1,6 @@
 #ifndef ZLOG_INCLUDE_ZLOG_CEPH_BACKEND_H
 #define ZLOG_INCLUDE_ZLOG_CEPH_BACKEND_H
 #include <rados/librados.hpp>
-#include <rados/cls_zlog_client.h>
 #include "zlog/backend.h"
 #include <iostream>
 #include "proto/protobuf_bufferlist_adapter.h"
