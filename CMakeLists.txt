@@ -29,20 +29,26 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall")
 find_package(Boost COMPONENTS system program_options REQUIRED)
 find_package(Protobuf REQUIRED)
 
-# check for ceph backend dependencies. the way this is setup is that unless
-# the ceph backend is disabled, it will be built if the dependencies are
-# found. TODO: it would be nice to distinguish between default-ON and user
-# requested ON so that we can abort/fail if the dependencies are not found
-# and the user explicitly requested the ceph backend.
-option(WITH_CEPH_BACKEND "Ceph Backend is here" ON)
-if(WITH_CEPH_BACKEND)
-    find_package(librados)
-    find_package(libcls_zlog_client)
-    if(${LIBRADOS_FOUND})
-        if(${LIBCLS_ZLOG_CLIENT_FOUND})
-            set(BUILD_CEPH_BACKEND ${LIBRADOS_FOUND})
-        endif(${LIBCLS_ZLOG_CLIENT_FOUND})
-    endif(${LIBRADOS_FOUND})
-endif(WITH_CEPH_BACKEND)
+find_package(librados)
+option(WITH_CEPH "Build Ceph backend" OFF)
+if(${LIBRADOS_FOUND})
+  message(STATUS "Building Ceph backend ${LIBRADOS_LIBRARIES}")
+  set(TMP_BUILD_CEPH_BACKEND TRUE)
+elseif(WITH_CEPH)
+  message(FATAL_ERROR "Cannot find librados")
+endif()
+
+find_package(libcls_zlog_client)
+if(TMP_BUILD_CEPH_BACKEND AND ${LIBCLS_ZLOG_CLIENT_FOUND})
+  set(BUILD_CEPH_BACKEND ${LIBRADOS_FOUND})
+endif()
+
+SET(CMAKE_SKIP_BUILD_RPATH FALSE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+IF("${isSystemDir}" STREQUAL "-1")
+  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+ENDIF("${isSystemDir}" STREQUAL "-1")
 
 add_subdirectory(src)
