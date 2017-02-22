@@ -2,7 +2,6 @@
 
 set -e
 
-echo "os type $OSTYPE"
 ./install-deps.sh
 
 # solution adapted from:
@@ -19,10 +18,6 @@ if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
   sudo apt-get update -qq
   sudo apt-get install -y ceph librados-dev
   sudo pip install cpp-coveralls
-
-elif [ "${TRAVIS_OS_NAME}" == "osx" ]; then
-  brew update
-  brew install boost protobuf cmake || true
 fi
 
 #

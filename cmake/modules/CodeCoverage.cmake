@@ -77,14 +77,13 @@ IF(NOT GCOV_PATH)
 	MESSAGE(FATAL_ERROR "gcov not found! Aborting...")
 ENDIF() # NOT GCOV_PATH
 
-IF(NOT CMAKE_COMPILER_IS_GNUCXX)
-	# Clang version 3.0.0 and greater now supports gcov as well.
-	MESSAGE(WARNING "Compiler is not GNU gcc! Clang Version 3.0.0 and greater supports gcov as well, but older versions don't.")
-
-	IF(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-		MESSAGE(FATAL_ERROR "Compiler is not GNU gcc! Aborting...")
+IF("${CMAKE_CXX_COMPILER_ID}" MATCHES "(Apple)?[Cc]lang")
+	IF("${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS 3)
+		MESSAGE(FATAL_ERROR "Clang version must be 3.0.0 or greater! Aborting...")
 	ENDIF()
-ENDIF() # NOT CMAKE_COMPILER_IS_GNUCXX
+ELSEIF(NOT CMAKE_COMPILER_IS_GNUCXX)
+	MESSAGE(FATAL_ERROR "Compiler is not GNU gcc! Aborting...")
+ENDIF() # CHECK VALID COMPILER
 
 SET(CMAKE_CXX_FLAGS_COVERAGE
     "-g -O0 --coverage -fprofile-arcs -ftest-coverage"
@@ -133,14 +132,14 @@ FUNCTION(SETUP_TARGET_FOR_COVERAGE _targetname _testrunner _outputname)
 
 	SET(coverage_info "${CMAKE_BINARY_DIR}/${_outputname}.info")
 	SET(coverage_cleaned "${coverage_info}.cleaned")
-  
+
 	SEPARATE_ARGUMENTS(test_command UNIX_COMMAND "${_testrunner}")
 
 	# Setup target
 	ADD_CUSTOM_TARGET(${_targetname}
 
 		# Cleanup lcov
-        #${LCOV_PATH} --directory . --zerocounters
+		${LCOV_PATH} --directory . --zerocounters
 
 		# Run tests
 		COMMAND ${test_command} ${ARGV3}

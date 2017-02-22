@@ -4,9 +4,13 @@
 
 set -e
 
-DIR=/tmp/install-deps.$$
-trap "rm -fr $DIR" EXIT
-mkdir -p $DIR
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  brew install boost protobuf cmake || true
+  exit 0
+fi
+
+ZLOG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 if test $(id -u) != 0 ; then
   SUDO=sudo
 fi
@@ -14,38 +18,34 @@ fi
 source /etc/os-release
 case $ID in
   debian|ubuntu)
-    echo "Using apt-get to install dependencies"
-    $SUDO apt-get install -y lsb-release devscripts equivs
-    $SUDO apt-get install -y dpkg-dev gcc
-    if ! test -r debian/control ; then
-      echo debian/control is not a readable file
-      exit 1
-    fi
-    touch $DIR/status
+    $SUDO apt-get update
 
-    backports=""
-    control="debian/control"
+    $SUDO env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -y devscripts equivs
 
-    # make a metapackage that expresses the build dependencies,
-    # install it, rm the .deb; then uninstall the package as its
-    # work is done
-    $SUDO env DEBIAN_FRONTEND=noninteractive mk-build-deps --install --remove --tool="apt-get -y --no-install-recommends $backports" $control || exit 1
-    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get -y remove cruzdb-build-deps
-    if [ -n "$backports" ] ; then rm $control; fi
+    $SUDO env DEBIAN_FRONTEND=noninteractive \
+      mk-build-deps --install --remove \
+      --tool="apt-get -y --no-install-recommends" \
+      ${ZLOG_DIR}/debian/control || exit 1
+    $SUDO env DEBIAN_FRONTEND=noninteractive \
+      apt-get -y remove cruzdb-build-deps
 
     # for doc/build.sh
-    $SUDO apt-get install -y python-virtualenv
+    $SUDO env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -y python-virtualenv
     ;;
 
-  fedora)
+  centos|fedora)
+    BUILD_DIR=$(mktemp -d)
+    trap "rm -fr $BUILD_DIR" EXIT
 
     yumdnf="yum"
     builddepcmd="yum-builddep -y"
-    if test "$(echo "$VERSION_ID >= 22" | bc)" -ne 0; then
+    if command -v dnf > /dev/null; then
       yumdnf="dnf"
+      $SUDO dnf install -y 'dnf-command(builddep)'
       builddepcmd="dnf -y builddep --allowerasing"
     fi
-    echo "Using $yumdnf to install dependencies"
 
     $SUDO $yumdnf install -y redhat-lsb-core
     case $(lsb_release -si) in
@@ -54,19 +54,26 @@ case $ID in
           $SUDO $yumdnf install -y yum-utils
         fi
         ;;
+      CentOS)
+        $SUDO yum install -y yum-utils
+        MAJOR_VERSION=$(lsb_release -rs | cut -f1 -d.)
+        $SUDO yum-config-manager --add-repo https://dl.fedoraproject.org/pub/epel/$MAJOR_VERSION/x86_64/
+        $SUDO yum install --nogpgcheck -y epel-release
+        $SUDO rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-$MAJOR_VERSION
+        $SUDO rm -f /etc/yum.repos.d/dl.fedoraproject.org*
+        ;;
       *)
         echo "unknown release"
         exit 1
         ;;
     esac
 
-    #sed -e 's/@//g' < ceph.spec.in > $DIR/ceph.spec
-    cp zlog.spec $DIR/zlog.spec
-    $SUDO $builddepcmd $DIR/zlog.spec 2>&1 | tee $DIR/yum-builddep.out
-    ! grep -q -i error: $DIR/yum-builddep.out || exit 1
+    cp ${ZLOG_DIR}/zlog.spec ${BUILD_DIR}/zlog.spec
+    $SUDO $builddepcmd ${BUILD_DIR}/zlog.spec 2>&1 | tee ${BUILD_DIR}/yum-builddep.out
+    ! grep -q -i error: ${BUILD_DIR}/yum-builddep.out || exit 1
 
     # for doc/build.sh
-    $SUDO $yumdnf install -y python2-virtualenv
+    $SUDO $yumdnf install -y python-virtualenv
     ;;
 
   *)

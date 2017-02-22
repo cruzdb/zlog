@@ -1,33 +1,11 @@
 #!/bin/bash
 # adapted from https://github.com/ceph/ceph/blob/master/admin/build-doc
 
-cd "$(dirname "$0")"
-cd ..
-TOPDIR=`pwd`
+set -e
 
-if command -v dpkg > /dev/null; then
-  for package in python-virtualenv; do
-    if [ "$(dpkg --status -- $package 2>&1 | sed -n 's/^Status: //p')" != "install ok installed" ]; then
-        missing="${missing:+$missing }$package"
-    fi
-  done
-  if [ -n "$missing" ]; then
-    echo "$0: missing required packages, please install them:" 1>&2
-    echo "sudo apt-get install -o APT::Install-Recommends=true $missing" 1>&2
-    exit 1
-  fi
-elif command -v yum > /dev/null; then
-  for package in python2-virtualenv; do
-    if ! rpm -q $package >/dev/null ; then
-      missing="${missing:+$missing }$package"
-    fi
-  done
-  if [ -n "$missing" ]; then
-    echo "$0: missing required packages, please install them:" 1>&2
-    echo "yum install -y $missing"
-    exit 1
-  fi
-fi
+THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ZLOG_DIR=${THIS_DIR}/../
+OUTPUT_DIR=${1:-"${ZLOG_DIR}/build-doc"}
 
 for command in virtualenv; do
   command -v "$command" > /dev/null;
@@ -42,18 +20,15 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 
-set -e
-
-mkdir build-doc || true
-cd build-doc
-
-[ -z "$vdir" ] && vdir="$TOPDIR/build-doc/virtualenv"
-if [ ! -e $vdir ]; then
-    virtualenv --system-site-packages $vdir
+mkdir -p ${OUTPUT_DIR}
+if [ ! -e ${OUTPUT_DIR}/virtualenv ]; then
+  virtualenv --no-site-packages ${OUTPUT_DIR}/virtualenv
+  ${OUTPUT_DIR}/virtualenv/bin/pip install -U pip
 fi
-$vdir/bin/pip install --quiet -r $TOPDIR/doc/requirements.txt
 
-mkdir -p $TOPDIR/build-doc/output/html
+${OUTPUT_DIR}/virtualenv/bin/pip install --quiet \
+  -r ${ZLOG_DIR}/doc/requirements.txt
 
-$vdir/bin/sphinx-build -a -n -b dirhtml -d doctrees \
-  $TOPDIR/doc $TOPDIR/build-doc/output/html
+mkdir -p ${OUTPUT_DIR}/output/html
+${OUTPUT_DIR}/virtualenv/bin/sphinx-build -W -a -n -b dirhtml \
+  -d ${OUTPUT_DIR}/doctrees ${ZLOG_DIR}/doc ${OUTPUT_DIR}/output/html

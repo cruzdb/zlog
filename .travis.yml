@@ -6,9 +6,6 @@ services:
   - docker
 
 addons:
-  apt:
-    packages:
-    - uuid-runtime
   coverity_scan:
     project:
       name: "noahdesu/zlog"
@@ -18,39 +15,47 @@ addons:
     build_command:   "make"
     branch_pattern: coverity_scan
 
-cache:
-  ccache: true
-  directories:
-    - $HOME/zlog_ceph_deps
-
 env:
   global:
-   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
-   #   via the "travis encrypt" command using the project repo's public key
+   # COVERITY_SCAN_TOKEN
    - secure: "EhSojL5dZ7LY9S59Iixzw8KUtMqVdE8dZTZqZ0gnA1VfG4XcQr8u8Vi9jJzGaGxcXIL10p3nE4whrmhlEhUpxKkrcOgKo9vKmn9xByUHd0CBhBudZAdlQsq4DMEp20qAwg+5iuCUHS6cn3UjduQqdo9YMhfqFuRiH+U3oZxS0W4="
 
+# the first 
 matrix:
   include:
     - os: linux
       compiler: gcc
     - os: linux
-      compiler: clang
-    - os: osx
-      compiler: gcc
-    - os: osx
-      compiler: clang
+      env: DOCKER_IMAGE=centos:7
     - os: linux
-      compiler: gcc
-      env: RUN_COVERAGE=1
+      env: DOCKER_IMAGE=fedora:25
+    - os: linux
+      env: DOCKER_IMAGE=fedora:24
+    - os: linux
+      env: DOCKER_IMAGE=fedora:23
+    - os: linux
+      env: DOCKER_IMAGE=debian:jessie
+    - os: linux
+      env: DOCKER_IMAGE=ubuntu:trusty
+    - os: linux
+      env: DOCKER_IMAGE=ubuntu:xenial
+    - os: linux
+      env: DOCKER_IMAGE=ubuntu:yakkety
+    - os: linux
+      env: DOCKER_IMAGE=ubuntu:zesty
+    - os: linux
+      env: DOCKER_IMAGE=ubuntu:xenial RUN_COVERAGE=1
+    - os: osx
 
+# the coverity build runs in the standard travis environment (job config #1
+# from the build matrix) and needs to have the proper dependencies installed.
+# all other job configurations only run ci/script.sh below which will handle
+# dependency installation.
 before_install:
-  - test $TRAVIS_BRANCH != coverity_scan -o ${TRAVIS_JOB_NUMBER##*.} = 1 || exit 0
-  - ci/before_install.sh
+  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh; fi
+  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} != 1 ]; then exit 0; fi
 
+# build and testing is skipped for coverity builds
 script:
   - test $TRAVIS_BRANCH != coverity_scan || exit 0
   - ci/script.sh
-
-after_success:
-  - test $TRAVIS_BRANCH != coverity_scan || exit 0
-  - ci/after_success.sh
