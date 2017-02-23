@@ -38,6 +38,7 @@ zlog-db-test
 # ceph backend tests
 if [ ! -z ${CEPH_CONF+x} ]; then
   zlog-seqr --port 5678 --streams --daemon
+  zlog-test-cls-zlog
   zlog-test-ceph
 fi
 
