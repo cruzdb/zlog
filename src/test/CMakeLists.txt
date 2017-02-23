@@ -47,6 +47,7 @@ add_executable(ceph_test_cls_zlog
     test_cls_zlog_v2.cc)
 target_link_libraries(ceph_test_cls_zlog
     cls_zlog_client
+    ${LIBRADOS_LIBRARIES}
     gtest_main)
 
 endif(BUILD_CEPH_BACKEND)
