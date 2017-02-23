@@ -29,6 +29,7 @@ if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
   docker build -t micro-osd .
   docker run --rm -d --net=host --volumes-from built-ceph-plugin \
     -v /tmp/micro-osd:/micro-osd micro-osd
+  sleep 10 # wait for osd to be up
   popd
 fi
 fi

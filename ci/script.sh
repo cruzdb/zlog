@@ -16,7 +16,8 @@ if [ ! -z ${DOCKER_IMAGE+x} ]; then
   if [ "${RUN_COVERAGE}" == 1 ]; then
     ci_env=`bash <(curl -s https://codecov.io/env)`
   fi
-  docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog -w="/zlog" \
+  docker run --net=host --rm -v ${TRAVIS_BUILD_DIR}:/zlog -w="/zlog" \
+    -v /tmp/micro-osd/:/tmp/micro-osd \
     $ci_env -e RUN_COVERAGE=${RUN_COVERAGE} \
     ${DOCKER_IMAGE} /bin/bash -c "./install-deps.sh && ./ci/install-ceph.sh && CEPH_CONF=${CEPH_CONF} EXTRA_CMAKE_ARGS=${EXTRA_CMAKE_ARGS} ./ci/run.sh"
 else
