@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <iostream>
 #include "cls_zlog_client.h"
-#include "ceph.pb.h"
+#include "libzlog/backend/ceph.pb.h"
 
 void encode(ceph::buffer::list& bl, google::protobuf::Message& msg) {
   assert(msg.IsInitialized());
