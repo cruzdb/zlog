@@ -8,6 +8,7 @@ target_link_libraries(zlog_ceph_proto
 target_include_directories(zlog_ceph_proto
     PUBLIC ${PROTOBUF_INCLUDE_DIR}
 )
+install(TARGETS zlog_ceph_proto DESTINATION lib)
 
 add_library(cls_zlog_client SHARED cls_zlog_client.cc)
 target_link_libraries(cls_zlog_client
@@ -16,6 +17,7 @@ target_link_libraries(cls_zlog_client
 target_include_directories(cls_zlog_client
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
+install(TARGETS cls_zlog_client DESTINATION lib)
 
 add_library(zlog_backend_ceph SHARED ceph.cc)
 target_link_libraries(zlog_backend_ceph
