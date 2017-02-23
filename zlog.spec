@@ -12,6 +12,7 @@ BuildRequires:	protobuf-devel
 BuildRequires:	protobuf-compiler
 BuildRequires:	java-devel
 BuildRequires:	lcov
+BuildRequires:  libatomic
 
 %description
 distributed shared log
