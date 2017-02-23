@@ -7,4 +7,5 @@ Build-Depends: cmake,
   libboost-dev,
   libboost-system-dev,
   libboost-program-options-dev,
-  lcov
+  lcov,
+  default-jdk
