@@ -16,12 +16,11 @@ add_library(libzlog SHARED ${libzlog_sources})
 if(BUILD_CEPH_BACKEND)
   target_include_directories(libzlog
       PUBLIC ${LIBRADOS_INCLUDE_DIRS}
-      PUBLIC ${LIBCLS_ZLOG_CLIENT_INCLUDE_DIRS}
    )
    target_link_libraries(libzlog
       zlog_backend_ceph
       ${LIBRADOS_LIBRARIES}
-      ${LIBCLS_ZLOG_CLIENT_LIBRARIES}
+      ${Boost_SYSTEM_LIBRARY}
    )
 endif(BUILD_CEPH_BACKEND)
 
