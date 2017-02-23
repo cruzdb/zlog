@@ -27,9 +27,19 @@ set(java_classes
   com.cruzdb.NotWrittenException
   com.cruzdb.ZObject)
 
-create_javah(TARGET jni_headers
-  CLASSES ${java_classes}
-  CLASSPATH zlog_jar
-  OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/native)
+get_property(zlog_jar_path TARGET zlog_jar PROPERTY JAR_FILE)
+set(java_h native/com_cruzdb_Log.h)
+add_custom_command(
+  OUTPUT ${java_h}
+  COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path} -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_h} com.cruzdb.Log)
+add_custom_target(
+  jni_headers
+  DEPENDS ${java_h})
+add_dependencies(jni_headers zlog_jar)
+
+#create_javah(TARGET jni_headers
+#  CLASSES ${java_classes}
+#  CLASSPATH zlog_jar
+#  OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/native)
 
 endif(BUILD_CEPH_BACKEND)
