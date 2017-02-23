@@ -18,8 +18,10 @@ if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
 
   # start micro-osd with plugin
   pushd ${ZLOG_DIR}/docker/micro-osd
+  docker kill micro-osd || true
   docker build -t micro-osd .
-  docker run --rm -d --net=host --volumes-from built-ceph-plugin \
+  docker run -d --net=host --volumes-from built-ceph-plugin \
+    --name micro-osd \
     -v /tmp/micro-osd:/micro-osd micro-osd
   sleep 10 # wait for osd to be up
   popd
