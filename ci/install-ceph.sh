@@ -38,7 +38,7 @@ case $ID in
   centos|fedora)
     $SUDO rpm --import 'https://download.ceph.com/keys/release.asc'
     $SUDO rpm -Uvh --replacepkgs --force \
-      https://download.ceph.com/rpm-kraken/el7/noarch/ceph-release-1-0.el7.noarch.rpm
+      https://download.ceph.com/rpm-jewel/el7/noarch/ceph-release-1-0.el7.noarch.rpm
 
     $SUDO yum install -y librados-devel
     ;;
