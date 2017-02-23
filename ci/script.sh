@@ -5,8 +5,10 @@ set -x
 
 if [[ "$OSTYPE" == "linux"* ]]; then
   export EXTRA_CMAKE_ARGS="-DWITH_CEPH=ON"
+  export CEPH_CONF="/tmp/micro-osd/ceph.conf"
 else
   export EXTRA_CMAKE_ARGS=""
+  export CEPH_CONF=""
 fi
 
 if [ ! -z ${DOCKER_IMAGE+x} ]; then
@@ -16,7 +18,7 @@ if [ ! -z ${DOCKER_IMAGE+x} ]; then
   fi
   docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog -w="/zlog" \
     $ci_env -e RUN_COVERAGE=${RUN_COVERAGE} \
-    ${DOCKER_IMAGE} /bin/bash -c "./install-deps.sh && ./ci/install-ceph.sh && EXTRA_CMAKE_ARGS=${EXTRA_CMAKE_ARGS} ./ci/run.sh"
+    ${DOCKER_IMAGE} /bin/bash -c "./install-deps.sh && ./ci/install-ceph.sh && CEPH_CONF=${CEPH_CONF} EXTRA_CMAKE_ARGS=${EXTRA_CMAKE_ARGS} ./ci/run.sh"
 else
   ${TRAVIS_BUILD_DIR}/install-deps.sh
   ${TRAVIS_BUILD_DIR}/ci/install-ceph.sh
