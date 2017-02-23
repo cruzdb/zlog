@@ -15,6 +15,7 @@ fi
 # osx has up-to-date cmake
 
 # skip ceph tests on osx
+if [[ "${TRAVIS_BRANCH}" != "coverity_scan" ]]; then
 if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
   # build ceph plugin
   pushd ${ZLOG_DIR}/docker/ceph-plugin
@@ -29,4 +30,5 @@ if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
   docker run --rm -d --net=host --volumes-from built-ceph-plugin \
     -v /tmp/micro-osd:/micro-osd micro-osd
   popd
+fi
 fi

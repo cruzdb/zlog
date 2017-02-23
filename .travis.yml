@@ -52,6 +52,7 @@ matrix:
 # all other job configurations only run ci/script.sh below which will handle
 # dependency installation.
 before_install:
+  - ci/before_install.sh
   - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh; fi
   - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} != 1 ]; then exit 0; fi
 
