@@ -36,11 +36,34 @@ case $ID in
     ;;
 
   centos|fedora)
-    $SUDO rpm --import 'https://download.ceph.com/keys/release.asc'
-    $SUDO rpm -Uvh --replacepkgs --force \
-      https://download.ceph.com/rpm-kraken/el7/noarch/ceph-release-1-0.el7.noarch.rpm
 
-    $SUDO yum install -y librados-devel
+$SUDO cat <<EOF > /etc/yum.repos.d/ceph.conf
+[ceph]
+name=Ceph packages for $basearch
+baseurl=https://download.ceph.com/rpm-kraken/el7/$basearch
+enabled=1
+priority=2
+gpgcheck=1
+gpgkey=https://download.ceph.com/keys/release.asc
+
+[ceph-noarch]
+name=Ceph noarch packages
+baseurl=https://download.ceph.com/rpm-kraken/el7/noarch
+enabled=1
+priority=2
+gpgcheck=1
+gpgkey=https://download.ceph.com/keys/release.asc
+
+[ceph-source]
+name=Ceph source packages
+baseurl=https://download.ceph.com/rpm-kraken/el7/SRPMS
+enabled=0
+priority=2
+gpgcheck=1
+gpgkey=https://download.ceph.com/keys/release.asc
+EOF
+
+    $SUDO yum install -y librados2-devel
     ;;
 
   *)

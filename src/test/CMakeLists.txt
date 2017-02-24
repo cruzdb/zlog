@@ -41,4 +41,17 @@ target_link_libraries(zstate-test
     zlog_backend_ceph
     ${Boost_SYSTEM_LIBRARY}
 )
+
+add_executable(zlog-test-cls-zlog
+    test_cls_zlog.cc
+    test_cls_zlog_v2.cc)
+target_link_libraries(zlog-test-cls-zlog
+    cls_zlog_client
+    ${LIBRADOS_LIBRARIES}
+    gtest_main)
+target_include_directories(zlog-test-cls-zlog
+    PUBLIC ${LIBRADOS_INCLUDE_DIRS}
+)
+install(TARGETS zlog-test-cls-zlog DESTINATION bin)
+
 endif(BUILD_CEPH_BACKEND)

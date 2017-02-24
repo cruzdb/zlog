@@ -29,7 +29,7 @@ DIR=$1
 # get rid of process and directories leftovers
 pkill ceph-mon || true
 pkill ceph-osd || true
-rm -fr $DIR
+rm -fr $DIR/*
 
 # cluster wide parameters
 mkdir -p ${DIR}/log
@@ -56,6 +56,7 @@ chdir = ""
 mon cluster log file = ${DIR}/log/mon-cluster.log
 mon data = ${MON_DATA}
 mon addr = 127.0.0.1
+mon allow pool delete = true
 EOF
 
 ceph-mon --id 0 --mkfs --keyring /dev/null
@@ -74,6 +75,8 @@ osd data = ${OSD_DATA}
 osd journal = ${OSD_DATA}.journal
 osd journal size = 100
 osd objectstore = memstore
+osd class load list = *
+osd class default list = *
 EOF
 
 OSD_ID=$(ceph osd create)
@@ -88,3 +91,5 @@ diff /etc/group ${DIR}/group
 ceph osd tree
 
 export CEPH_CONF="${DIR}/ceph.conf"
+
+ceph -w

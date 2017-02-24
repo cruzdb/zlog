@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZLOG_DIR=${THIS_DIR}/../
@@ -33,6 +34,13 @@ PATH=${INSTALL_DIR}/bin:$PATH
 # ram backend tests
 zlog-test-ram
 zlog-db-test
+
+# ceph backend tests
+if [ ! -z ${CEPH_CONF} ]; then
+  zlog-seqr --port 5678 --streams --daemon
+  zlog-test-cls-zlog
+  zlog-test-ceph
+fi
 
 if [ "${RUN_COVERAGE}" == 1 ]; then
   pushd ${BUILD_DIR}
