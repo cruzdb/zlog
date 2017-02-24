@@ -14,7 +14,7 @@ bool decode(ceph::bufferlist& bl, google::protobuf::Message* msg) {
   if (bl.length() == 0) {
     return false;
   }
-  if (!msg->ParseFromString(bl.to_str())) {
+  if (!msg->ParseFromArray(bl.c_str(), bl.length())) {
     std::cerr << "decode: unable to decode message" << std::endl;
     return false;
   }
@@ -54,7 +54,7 @@ void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
   zlog_ceph_proto::WriteOp call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  call.set_data(data.to_str());
+  call.set_data(data.c_str(), data.length());
   encode(in, call);
   op.exec("zlog", "write", in);
 }
@@ -141,7 +141,7 @@ void cls_zlog_write_v2(librados::ObjectWriteOperation& op, uint64_t epoch,
   zlog_ceph_proto::WriteOp call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  call.set_data(data.to_str());
+  call.set_data(data.c_str(), data.length());
   encode(in, call);
   op.exec("zlog", "write_v2", in);
 }
@@ -184,7 +184,7 @@ void cls_zlog_set_projection(librados::ObjectWriteOperation& op,
   ceph::bufferlist inbl;
   zlog_ceph_proto::SetProjectionOp call;
   call.set_epoch(epoch);
-  call.set_data(data.to_str());
+  call.set_data(data.c_str(), data.length());
   encode(inbl, call);
   op.exec("zlog", "set_projection", inbl);
 }

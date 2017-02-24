@@ -1684,7 +1684,7 @@ TEST(ClsZlog, GetLatestProjection) {
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
   ASSERT_EQ(epoch, (uint64_t)0);
-  ASSERT_EQ(data, inbl);
+  ASSERT_TRUE(data == inbl);
 
   // set epoch = 1
   memset(buf, 4, sizeof(buf));
@@ -1704,7 +1704,7 @@ TEST(ClsZlog, GetLatestProjection) {
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
   ASSERT_EQ(epoch, (uint64_t)1);
-  ASSERT_EQ(data, inbl);
+  ASSERT_TRUE(data == inbl);
 
   // set epoch = 2, 3
   wop = new_op();
@@ -1729,7 +1729,7 @@ TEST(ClsZlog, GetLatestProjection) {
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
   ASSERT_EQ(epoch, (uint64_t)3);
-  ASSERT_EQ(data, inbl);
+  ASSERT_TRUE(data == inbl);
 
   // shoudl see epoch = 3
   op = new_rop();
@@ -1740,7 +1740,7 @@ TEST(ClsZlog, GetLatestProjection) {
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
   ASSERT_EQ(epoch, (uint64_t)3);
-  ASSERT_EQ(data, inbl);
+  ASSERT_TRUE(data == inbl);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
 }
@@ -1797,7 +1797,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl0);
+  ASSERT_TRUE(data == inbl0);
 
   // other epochs still fail
   op = new_rop();
@@ -1824,7 +1824,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl1);
+  ASSERT_TRUE(data == inbl1);
 
   // set epoch = 2, 3
   wop = new_op();
@@ -1851,7 +1851,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl3);
+  ASSERT_TRUE(data == inbl3);
 
   // shoudl see epoch = 3
   op = new_rop();
@@ -1861,7 +1861,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl3);
+  ASSERT_TRUE(data == inbl3);
 
   // shoudl still be able to see past epochs
   op = new_rop();
@@ -1871,7 +1871,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl0);
+  ASSERT_TRUE(data == inbl0);
 
   op = new_rop();
   data.clear();
@@ -1880,7 +1880,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl1);
+  ASSERT_TRUE(data == inbl1);
 
   op = new_rop();
   data.clear();
@@ -1889,7 +1889,7 @@ TEST(ClsZlog, GetProjection) {
   ret = ioctx.operate("obj", op, &tmp);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(opret, 0);
-  ASSERT_EQ(data, inbl2);
+  ASSERT_TRUE(data == inbl2);
 
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, cluster));
 }
