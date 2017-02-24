@@ -3,10 +3,13 @@
 set -e
 set -x
 
+tar xzf ceph.tar.gz
+
 pushd /ceph
 git fetch origin
-git checkout origin/zlog/master-pb
+git checkout -b build origin/zlog/master-pb
 
+./install-deps.sh
 ./do_cmake.sh
 
 pushd build

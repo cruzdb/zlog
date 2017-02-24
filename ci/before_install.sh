@@ -10,6 +10,7 @@ ZLOG_DIR=${THIS_DIR}/../
 if [[ "${TRAVIS_BRANCH}" != "coverity_scan" ]]; then
 if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
   # build ceph plugin
+  docker pull zlog/ceph-plugin || true
   pushd ${ZLOG_DIR}/docker/ceph-plugin
   docker rm built-ceph-plugin || true
   docker build -t ceph-plugin .
@@ -17,6 +18,7 @@ if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
   popd
 
   # start micro-osd with plugin
+  docker pull zlog/micro-osd || true
   pushd ${ZLOG_DIR}/docker/micro-osd
   docker kill micro-osd || true
   docker build -t micro-osd .

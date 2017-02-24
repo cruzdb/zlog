@@ -1,14 +1,14 @@
 FROM ubuntu:xenial
 
 RUN apt-get update && apt-get install -y \
-        git ccache \
-        libprotobuf-dev protobuf-compiler # for cls_zlog
+        git \
+        libprotobuf-dev protobuf-compiler && \
+        apt-get clean -y
 
-ENV PATH "/usr/lib/ccache:$PATH"
-RUN ccache -M 5G
-
-RUN git clone --recursive https://github.com/noahdesu/ceph.git /ceph
-RUN cd /ceph && ./install-deps.sh && ./do_cmake.sh && git clean -dxf
+RUN git clone --recursive --branch zlog/master-pb https://github.com/noahdesu/ceph.git /ceph && \
+        cd /ceph && \
+        find ./ -name .git -execdir git gc --aggressive --prune ";" && \
+        cd .. && tar czf ceph.tar.gz ceph && rm -rf ceph
 
 VOLUME ["/ceph_zlog_plugin"]
 
