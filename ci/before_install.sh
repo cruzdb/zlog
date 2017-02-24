@@ -10,21 +10,24 @@ ZLOG_DIR=${THIS_DIR}/../
 if [[ "${TRAVIS_BRANCH}" != "coverity_scan" ]]; then
 if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
   # build ceph plugin
-  docker pull zlog/ceph-plugin || true
   pushd ${ZLOG_DIR}/docker/ceph-plugin
   docker rm built-ceph-plugin || true
-  docker build -t ceph-plugin .
-  docker run -v /ceph_zlog_plugin --name built-ceph-plugin ceph-plugin
+  docker pull zlog/ceph-plugin:latest || true
+  if [[ "$(docker images -q zlog/ceph-plugin:latest 2> /dev/null)" == "" ]]; then
+    docker build -t zlog/ceph-plugin:latest .
+  fi
+  docker run -v /ceph_zlog_plugin --name built-ceph-plugin zlog/ceph-plugin:latest
   popd
 
-  # start micro-osd with plugin
-  docker pull zlog/micro-osd || true
   pushd ${ZLOG_DIR}/docker/micro-osd
   docker kill micro-osd || true
-  docker build -t micro-osd .
+  docker pull zlog/micro-osd:latest || true
+  if [[ "$(docker images -q zlog/micro-osd:latest 2> /dev/null)" == "" ]]; then
+    docker build -t zlog/micro-osd:latest .
+  fi
   docker run -d --net=host --volumes-from built-ceph-plugin \
     --name micro-osd \
-    -v /tmp/micro-osd:/micro-osd micro-osd
+    -v /tmp/micro-osd:/micro-osd zlog/micro-osd:latest
   sleep 10 # wait for osd to be up
   popd
 fi
