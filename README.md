@@ -31,3 +31,17 @@ The base zlog project provides C, C++, and Java bindings.
 ## Getting Involved
 
 We welcome and encourage people to learn and contribute to the zlog project. If you are looking for ways to get started, we use the [E-easy](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy) and [E-intermediate](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate) labels to tag issues that are good candidates for new contributors.
+
+## Build Status
+
+| Distribution     | Status |
+| ------------     | ------ |
+| CentOS 7         | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=centos:7&label=centos:7)](https://travis-ci.org/noahdesu/zlog) |
+| Debian Jessie    | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=debian:jessie&label=debian:jessie)](https://travis-ci.org/noahdesu/zlog) |
+| Ubuntu 14.04 LTS | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:trusty&label=ubuntu:trusty)](https://travis-ci.org/noahdesu/zlog) |
+| Ubuntu 16.04 LTS | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:xenial&label=ubuntu:xenial)](https://travis-ci.org/noahdesu/zlog) |
+| Ubuntu 16.10     | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:yakkety&label=ubuntu:yakkety)](https://travis-ci.org/noahdesu/zlog) |
+| Ubuntu 17.04     | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:zesty&label=ubuntu:zesty)](https://travis-ci.org/noahdesu/zlog) |
+| Fedora 23        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:23&label=fedora:23)](https://travis-ci.org/noahdesu/zlog) |
+| Fedora 24        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:24&label=fedora:24)](https://travis-ci.org/noahdesu/zlog) |
+| Fedora 25        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:25&label=fedora:25)](https://travis-ci.org/noahdesu/zlog) |
