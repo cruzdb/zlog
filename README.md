@@ -17,8 +17,8 @@ More information:
 
 ## Getting Started
 
-* [Building from source](https://github.com/noahdesu/zlog/wiki/Building-from-source)
-* [Basic operations and documentation are on the wiki](https://github.com/noahdesu/zlog/wiki/Basic-Operations)
+* [Building from source](http://noahdesu.github.io/zlog/#building-from-source)
+* [Basic operations and documentation are on the wiki](http://noahdesu.github.io/zlog/api/)
 
 ## Language Bindings
 
