@@ -9,6 +9,7 @@ pushd /ceph
 git fetch origin
 git checkout -b build origin/zlog/master-pb
 
+apt-get update
 ./install-deps.sh
 ./do_cmake.sh
 
