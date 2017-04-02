@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <map>
+#include <cstdlib>
 #include "zlog/db.h"
 #include "zlog/backend/ram.h"
 
@@ -139,6 +140,14 @@ static void test_seek(const std::map<std::string, std::string>& truth,
 
 int main(int argc, char **argv)
 {
+  unsigned max_txn_size = 1000;
+
+  if (argc == 2) {
+    max_txn_size = atoi(argv[1]);
+    assert(max_txn_size > 0);
+  }
+  std::cout << "max num txns = " << max_txn_size << std::endl;
+
   std::srand(0);
 
   while (1) {
@@ -187,7 +196,7 @@ int main(int argc, char **argv)
     db_history.push_back(db->GetSnapshot());
 
     // number of transactions in tree
-    int num_txns = std::rand() % 1000;
+    int num_txns = std::rand() % max_txn_size;
 
     std::cout << "building tree with " <<
       num_txns << " transactions" << std::endl;

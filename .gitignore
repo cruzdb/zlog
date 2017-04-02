@@ -35,6 +35,7 @@ src/test/zlog-test-ram
 src/test/zstate-test
 src/test/zlog-db-test
 src/test/ceph_test_cls_zlog
+src/test/zlog-test-cls-zlog
 src/stream-stress
 src/append-check
 src/zlog
