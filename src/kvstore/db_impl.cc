@@ -311,6 +311,8 @@ void DBImpl::process_log_entry()
     // read and deserialize intention from log
     std::string i_snapshot;
     ret = log_->Read(next, &i_snapshot);
+    if (ret == -ENODEV)
+      continue;
     assert(ret == 0);
 
     kvstore_proto::Intention i;
