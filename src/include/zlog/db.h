@@ -33,6 +33,11 @@ class DB {
   /*
    *
    */
+  virtual void ReleaseSnapshot(Snapshot *snapshot) = 0;
+
+  /*
+   *
+   */
   virtual Iterator *NewIterator(Snapshot *snapshot) = 0;
 
   Iterator *NewIterator() {

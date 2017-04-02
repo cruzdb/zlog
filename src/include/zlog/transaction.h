@@ -3,6 +3,7 @@
 
 class Transaction {
  public:
+  virtual ~Transaction() {}
   virtual void Put(const std::string& key, const std::string& val) = 0;
   virtual void Delete(std::string key) = 0;
   virtual void Commit() = 0;

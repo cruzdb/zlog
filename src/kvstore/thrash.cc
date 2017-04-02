@@ -89,6 +89,7 @@ static std::map<std::string, std::string> get_map(DB *db,
       }
     }
   }
+  delete it;
   return map;
 }
 
@@ -111,6 +112,8 @@ static void test_seek(const std::map<std::string, std::string>& truth,
       assert(it->Valid());
       assert(it2->first == it->key());
     }
+
+    delete it;
   }
 
   int nkey = std::rand() % (MAX_KEY + 100); // 0-max+100
@@ -130,6 +133,7 @@ static void test_seek(const std::map<std::string, std::string>& truth,
     it->Next();
     it2++;
   }
+  delete it;
   assert(it2 == truth.end());
 }
 
@@ -218,6 +222,7 @@ int main(int argc, char **argv)
         }
       }
       txn->Commit();
+      delete txn;
 
       truth_history.push_back(truth);
       db_history.push_back(db->GetSnapshot());
@@ -239,6 +244,15 @@ int main(int argc, char **argv)
       test_seek(truth_history[i], db, db_history[i]);
     }
     std::cout << " complete! (" << count << ")" << std::endl;
+
+    for (Snapshot *snap : db_history) {
+      db->ReleaseSnapshot(snap);
+    }
+
+    delete db;
+    delete log;
+    delete client;
+    delete be;
   }
 
   return 0;

@@ -37,6 +37,10 @@ class DBImpl : public DB {
     return new Snapshot(root_, root_pos_, root_desc_);
   }
 
+  void ReleaseSnapshot(Snapshot *snapshot) {
+    delete snapshot;
+  }
+
   Iterator *NewIterator(Snapshot *snapshot) {
     return new IteratorImpl(snapshot);
   }
