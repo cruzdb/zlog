@@ -6,6 +6,7 @@
 #include "zlog/db.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend/ram.h"
+#include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
 

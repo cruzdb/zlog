@@ -3,6 +3,7 @@
 #include <iostream>
 #include "zlog/db.h"
 #include "zlog/backend/ram.h"
+#include "zlog/backend/fakeseqr.h"
 
 static inline std::string tostr(int value)
 {

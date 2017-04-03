@@ -5,7 +5,7 @@
 set -e
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  brew install boost protobuf cmake || true
+  brew install boost protobuf cmake lmdb || true
   exit 0
 fi
 

@@ -1,5 +1,9 @@
 #ifndef ZLOG_INCLUDE_ZLOG_BACKEND_H
 #define ZLOG_INCLUDE_ZLOG_BACKEND_H
+#include <cstdint>
+#include <functional>
+#include <string>
+
 #include "zlog/slice.h"
 #include "proto/zlog.pb.h"
 

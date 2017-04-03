@@ -5,7 +5,8 @@ set(libzlog_sources
   stream.cc
   stripe_history.cc
   log_mapper.cc
-  aio.cc)
+  aio.cc
+  backend/lmdb.cc)
 
 if(BUILD_CEPH_BACKEND)
   list(APPEND libzlog_sources capi.cc)
@@ -28,6 +29,7 @@ target_link_libraries(libzlog
     zlog_proto
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
+    lmdb
 )
 
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
