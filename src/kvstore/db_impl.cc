@@ -10,7 +10,6 @@ DBImpl::DBImpl(zlog::Log *log) :
   last_pos_ = 0;
   stop_ = false;
 
-  // todo: enable/disable debug
   validate_rb_tree(root_);
 
   log_processor_ = std::thread(&DBImpl::process_log_entry, this);
@@ -324,7 +323,7 @@ void DBImpl::process_log_entry()
     if (i.snapshot() != -1) assert(next > 0);
     if (i.snapshot() == (int64_t)last_pos_) {
       auto root = cache_.CacheIntention(i, next);
-      validate_rb_tree(root);
+      //validate_rb_tree(root);
       root_ = root;
       root_pos_ = next;
 

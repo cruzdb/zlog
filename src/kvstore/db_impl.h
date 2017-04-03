@@ -64,6 +64,10 @@ class DBImpl : public DB {
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out,
       std::vector<Snapshot*>& snapshots);
+  void validate() {
+    const auto snapshot = root_;
+    validate_rb_tree(snapshot);
+  }
 
   bool CommitResult(uint64_t pos);
 
