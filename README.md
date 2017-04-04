@@ -19,6 +19,7 @@ More information:
 
 * [Building from source](http://noahdesu.github.io/zlog/#building-from-source)
 * [Basic operations and documentation are on the wiki](http://noahdesu.github.io/zlog/api/)
+* [Gitter discussion channel](https://gitter.im/noahdesu-zlog)
 
 ## Language Bindings
 
