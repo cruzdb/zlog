@@ -48,6 +48,7 @@ class DBImpl : public DB {
  private:
   friend class TransactionImpl;
   friend class NodeCache;
+  friend class NodePtr;
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
@@ -57,7 +58,7 @@ class DBImpl : public DB {
   void _write_dot(std::ostream& out, NodeRef root, uint64_t& nullcount, bool scoped = false);
 
   int _validate_rb_tree(NodeRef root);
-  void validate_rb_tree(NodeRef root);
+  void validate_rb_tree(NodePtr root);
 
  public:
 
@@ -73,6 +74,14 @@ class DBImpl : public DB {
 
  private:
 
+  NodeRef fetch(int64_t csn, int offset) {
+    return cache_.fetch(csn, offset);
+  }
+
+  void SubmitTrace(std::vector<std::pair<int64_t, int>>& trace) {
+    cache_.SubmitTrace(trace);
+  }
+
   void print_path(std::ostream& out, std::deque<NodeRef>& path);
   void print_node(NodeRef node);
 
@@ -80,7 +89,7 @@ class DBImpl : public DB {
   // TODO: things like root_desc_ are properties of the transaction that
   // created the new root. we should encapsulate this metadata in a structure
   // rather than having it float around freely here.
-  NodeRef root_;
+  NodePtr root_;
   uint64_t root_pos_;
   std::vector<std::string> root_desc_;
 
@@ -102,6 +111,7 @@ class DBImpl : public DB {
 
   std::unordered_map<uint64_t, bool> committed_;
 
+  // TODO: how is this initialized?
   static uint64_t root_id_;
 };
 

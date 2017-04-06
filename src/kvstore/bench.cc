@@ -52,6 +52,25 @@ int main(int argc, char **argv)
     ret = DB::Open(log, true, &db);
     assert(ret == 0);
 
+    std::srand(0);
+
+#if 0
+    auto txn = db->BeginTransaction();
+    int nkey = std::rand();
+    std::string key = tostr(nkey);
+    txn->Put(key, key);
+    txn->Commit();
+    delete txn;
+
+    txn = db->BeginTransaction();
+    nkey = std::rand();
+    key = tostr(nkey);
+    txn->Put(key, key);
+    txn->Commit();
+    delete txn;
+
+    db->validate();
+#else
     uint64_t txn_count = 0;
     uint64_t start_ns = getns();
     while (true) {
@@ -79,4 +98,5 @@ int main(int argc, char **argv)
     delete client;
     be->Close();
     delete be;
+#endif
 }

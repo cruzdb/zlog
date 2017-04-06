@@ -50,8 +50,10 @@ NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
   assert(node != nullptr);
 
   if (node == Node::Nil()) {
-    auto nn = std::make_shared<Node>(key, val, true, Node::Nil(), Node::Nil(), rid_, -1, false);
+    auto nn = std::make_shared<Node>(key, val, true, Node::Nil(),
+        Node::Nil(), rid_, -1, false, db_);
     path.push_back(nn);
+    fresh_nodes_.push_back(nn);
     return nn;
   }
 
@@ -66,7 +68,7 @@ NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
     return nullptr;
 
   auto child = insert_recursive(path, key, val,
-      (less ? node->left.ref() : node->right.ref()));
+      (less ? node->left.ref(trace_) : node->right.ref(trace_)));
 
   if (child == nullptr)
     return child;
@@ -80,8 +82,10 @@ NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
   NodeRef copy;
   if (node->rid() == rid_)
     copy = node;
-  else
-    copy = Node::Copy(node, rid_);
+  else {
+    copy = Node::Copy(node, db_, rid_);
+    fresh_nodes_.push_back(copy);
+  }
 
   if (less)
     copy->left.set_ref(child);
@@ -100,11 +104,11 @@ NodeRef TransactionImpl::rotate(NodeRef parent,
   // copy over ref and csn/off because we might be moving a pointer that
   // points outside of the current intentino.
   NodePtr grand_child = child_b(child); // copy constructor makes grand_child read-only
-  child_b(child) = child_a(grand_child.ref());
+  child_b(child) = child_a(grand_child.ref(trace_));
 
   if (root == child) {
-    root = grand_child.ref();
-  } else if (child_a(parent).ref() == child)
+    root = grand_child.ref(trace_);
+  } else if (child_a(parent).ref(trace_) == child)
     child_a(parent) = grand_child;
   else
     child_b(parent) = grand_child;
@@ -113,9 +117,9 @@ NodeRef TransactionImpl::rotate(NodeRef parent,
   // in the current intention so its csn/off will be updated during intention
   // serialization step.
   assert(child->rid() == rid_);
-  child_a(grand_child.ref()).set_ref(child);
+  child_a(grand_child.ref(trace_)).set_ref(child);
 
-  return grand_child.ref();
+  return grand_child.ref(trace_);
 }
 
 template<typename ChildA, typename ChildB>
@@ -125,16 +129,19 @@ void TransactionImpl::insert_balance(NodeRef& parent, NodeRef& nn,
 {
   assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
-  if (uncle.ref()->red()) {
-    if (uncle.ref()->rid() != rid_)
-      uncle.set_ref(Node::Copy(uncle.ref(), rid_));
+  if (uncle.ref(trace_)->red()) {
+    if (uncle.ref(trace_)->rid() != rid_) {
+      auto n = Node::Copy(uncle.ref(trace_), db_, rid_);
+      fresh_nodes_.push_back(n);
+      uncle.set_ref(n);
+    }
     parent->set_red(false);
-    uncle.ref()->set_red(false);
+    uncle.ref(trace_)->set_red(false);
     path.front()->set_red(true);
     nn = pop_front(path);
     parent = pop_front(path);
   } else {
-    if (nn == child_b(parent).ref()) {
+    if (nn == child_b(parent).ref(trace_)) {
       std::swap(nn, parent);
       rotate(path.front(), nn, child_a, child_b, root);
     }
@@ -160,14 +167,16 @@ NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
     NodeRef copy;
     if (node->rid() == rid_)
       copy = node;
-    else
-      copy = Node::Copy(node, rid_);
+    else {
+      copy = Node::Copy(node, db_, rid_);
+      fresh_nodes_.push_back(copy);
+    }
     path.push_back(copy);
     return copy;
   }
 
   auto child = delete_recursive(path, key,
-      (less ? node->left.ref() : node->right.ref()));
+      (less ? node->left.ref(trace_) : node->right.ref(trace_)));
 
   if (child == nullptr) {
     return child;
@@ -182,8 +191,10 @@ NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
   NodeRef copy;
   if (node->rid() == rid_)
     copy = node;
-  else
-    copy = Node::Copy(node, rid_);
+  else {
+    copy = Node::Copy(node, db_, rid_);
+    fresh_nodes_.push_back(copy);
+  }
 
   if (less)
     copy->left.set_ref(child);
@@ -200,7 +211,7 @@ void TransactionImpl::transplant(NodeRef parent, NodeRef removed,
 {
   if (parent == Node::Nil()) {
     root = transplanted;
-  } else if (parent->left.ref() == removed) {
+  } else if (parent->left.ref(trace_) == removed) {
     parent->left.set_ref(transplanted);
   } else {
     parent->right.set_ref(transplanted);
@@ -211,12 +222,15 @@ NodeRef TransactionImpl::build_min_path(NodeRef node, std::deque<NodeRef>& path)
 {
   assert(node != nullptr);
   assert(node->left.ref() != nullptr);
-  while (node->left.ref() != Node::Nil()) {
+  while (node->left.ref(trace_) != Node::Nil()) {
     assert(node->left.ref() != nullptr);
-    if (node->left.ref()->rid() != rid_)
-      node->left.set_ref(Node::Copy(node->left.ref(), rid_));
+    if (node->left.ref(trace_)->rid() != rid_) {
+      auto n = Node::Copy(node->left.ref(trace_), db_, rid_);
+      fresh_nodes_.push_back(n);
+      node->left.set_ref(n);
+    }
     path.push_front(node);
-    node = node->left.ref();
+    node = node->left.ref(trace_);
     assert(node != nullptr);
   }
   return node;
@@ -226,20 +240,22 @@ template<typename ChildA, typename ChildB>
 void TransactionImpl::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
     std::deque<NodeRef>& path, ChildA child_a, ChildB child_b, NodeRef& root)
 {
-  NodeRef brother = child_b(parent).ref();
+  NodeRef brother = child_b(parent).ref(trace_);
 
   if (brother->red()) {
-    if (brother->rid() != rid_)
-      child_b(parent).set_ref(Node::Copy(brother, rid_));
-    else
+    if (brother->rid() != rid_) {
+      auto n = Node::Copy(brother, db_, rid_);
+      fresh_nodes_.push_back(n);
+      child_b(parent).set_ref(n);
+    } else
       child_b(parent).set_ref(brother);
-    brother = child_b(parent).ref();
+    brother = child_b(parent).ref(trace_);
 
     brother->swap_color(parent);
     rotate(path.front(), parent, child_a, child_b, root);
     path.push_front(brother);
 
-    brother = child_b(parent).ref();
+    brother = child_b(parent).ref(trace_);
   }
 
   assert(brother != nullptr);
@@ -247,41 +263,53 @@ void TransactionImpl::mirror_remove_balance(NodeRef& extra_black, NodeRef& paren
   assert(brother->left.ref() != nullptr);
   assert(brother->right.ref() != nullptr);
 
-  if (!brother->left.ref()->red() && !brother->right.ref()->red()) {
-    if (brother->rid() != rid_)
-      child_b(parent).set_ref(Node::Copy(brother, rid_));
-    else
+  if (!brother->left.ref(trace_)->red() && !brother->right.ref(trace_)->red()) {
+    if (brother->rid() != rid_) {
+      auto n = Node::Copy(brother, db_, rid_);
+      fresh_nodes_.push_back(n);
+      child_b(parent).set_ref(n);
+    } else
       child_b(parent).set_ref(brother);
-    brother = child_b(parent).ref();
+    brother = child_b(parent).ref(trace_);
 
     brother->set_red(true);
     extra_black = parent;
     parent = pop_front(path);
   } else {
-    if (!child_b(brother).ref()->red()) {
-      if (brother->rid() != rid_)
-        child_b(parent).set_ref(Node::Copy(brother, rid_));
-      else
+    if (!child_b(brother).ref(trace_)->red()) {
+      if (brother->rid() != rid_) {
+        auto n = Node::Copy(brother, db_, rid_);
+        fresh_nodes_.push_back(n);
+        child_b(parent).set_ref(n);
+      } else
         child_b(parent).set_ref(brother);
-      brother = child_b(parent).ref();
+      brother = child_b(parent).ref(trace_);
 
-      if (child_a(brother).ref()->rid() != rid_)
-        child_a(brother).set_ref(Node::Copy(child_a(brother).ref(), rid_));
-      brother->swap_color(child_a(brother).ref());
+      if (child_a(brother).ref(trace_)->rid() != rid_) {
+        auto n = Node::Copy(child_a(brother).ref(trace_), db_, rid_);
+        fresh_nodes_.push_back(n);
+        child_a(brother).set_ref(n);
+      }
+      brother->swap_color(child_a(brother).ref(trace_));
       brother = rotate(parent, brother, child_b, child_a, root);
     }
 
-    if (brother->rid() != rid_)
-      child_b(parent).set_ref(Node::Copy(brother, rid_));
-    else
+    if (brother->rid() != rid_) {
+      auto n = Node::Copy(brother, db_, rid_);
+      fresh_nodes_.push_back(n);
+      child_b(parent).set_ref(n);
+    } else
       child_b(parent).set_ref(brother);
-    brother = child_b(parent).ref();
+    brother = child_b(parent).ref(trace_);
 
-    if (child_b(brother).ref()->rid() != rid_)
-      child_b(brother).set_ref(Node::Copy(child_b(brother).ref(), rid_));
+    if (child_b(brother).ref(trace_)->rid() != rid_) {
+      auto n = Node::Copy(child_b(brother).ref(trace_), db_, rid_);
+      fresh_nodes_.push_back(n);
+      child_b(brother).set_ref(n);
+    }
     brother->set_red(parent->red());
     parent->set_red(false);
-    child_b(brother).ref()->set_red(false);
+    child_b(brother).ref(trace_)->set_red(false);
     rotate(path.front(), parent, child_a, child_b, root);
 
     extra_black = root;
@@ -302,7 +330,7 @@ void TransactionImpl::balance_delete(NodeRef extra_black,
   //assert(parent->left.ref() != nullptr);
 
   while (extra_black != root && !extra_black->red()) {
-    if (parent->left.ref() == extra_black)
+    if (parent->left.ref(trace_) == extra_black)
       mirror_remove_balance(extra_black, parent, path, left, right, root);
     else
       mirror_remove_balance(extra_black, parent, path, right, left, root);
@@ -311,8 +339,10 @@ void TransactionImpl::balance_delete(NodeRef extra_black,
   NodeRef new_node;
   if (extra_black->rid() == rid_)
     new_node = extra_black;
-  else
-    new_node = Node::Copy(extra_black, rid_);
+  else {
+    new_node = Node::Copy(extra_black, db_, rid_);
+    fresh_nodes_.push_back(new_node);
+  }
   transplant(parent, extra_black, new_node, root);
 
   /*
@@ -327,6 +357,10 @@ void TransactionImpl::balance_delete(NodeRef extra_black,
   if (new_node != Node::Nil())
     new_node->set_red(false);
 }
+
+// TODO we currently do not have any mechanism for dealing with large
+// intentions. we can't just trim it because we don't have an address for
+// nodes that aren't yet in the log..
 
 void TransactionImpl::serialize_intention(NodeRef node, int& field_index)
 {
@@ -373,7 +407,7 @@ void TransactionImpl::Put(const std::string& key, const std::string& val)
    */
   std::deque<NodeRef> path;
 
-  auto base_root = root_ == nullptr ? src_root_ : root_;
+  auto base_root = root_ == nullptr ? src_root_.ref(trace_) : root_;
   auto root = insert_recursive(path, key, val, base_root);
   if (root == nullptr) {
     /*
@@ -405,7 +439,7 @@ void TransactionImpl::Put(const std::string& key, const std::string& val)
   while (parent->red()) {
     assert(!path.empty());
     auto grand_parent = path.front();
-    if (grand_parent->left.ref() == parent)
+    if (grand_parent->left.ref(trace_) == parent)
       insert_balance(parent, nn, path, left, right, root);
     else
       insert_balance(parent, nn, path, right, left, root);
@@ -425,7 +459,7 @@ void TransactionImpl::Delete(std::string key)
   ss << "del: " << key;
   description_.emplace_back(ss.str());
 
-  auto base_root = root_ == nullptr ? src_root_ : root_;
+  auto base_root = root_ == nullptr ? src_root_.ref(trace_) : root_;
   auto root = delete_recursive(path, key, base_root);
   if (root == nullptr) {
     return;
@@ -442,26 +476,29 @@ void TransactionImpl::Delete(std::string key)
   assert(removed != nullptr);
   assert(removed->key() == key);
 
-  auto transplanted = removed->right.ref();
+  auto transplanted = removed->right.ref(trace_);
   assert(transplanted != nullptr);
 
-  if (removed->left.ref() == Node::Nil()) {
+  if (removed->left.ref(trace_) == Node::Nil()) {
     path.pop_front();
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
-  } else if (removed->right.ref() == Node::Nil()) {
+  } else if (removed->right.ref(trace_) == Node::Nil()) {
     path.pop_front();
     assert(removed->left.ref() != nullptr);
-    transplanted = removed->left.ref();
+    transplanted = removed->left.ref(trace_);
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
   } else {
     assert(transplanted != nullptr);
     auto temp = removed;
-    if (removed->right.ref()->rid() != rid_)
-      removed->right.set_ref(Node::Copy(removed->right.ref(), rid_));
-    removed = build_min_path(removed->right.ref(), path);
-    transplanted = removed->right.ref();
+    if (removed->right.ref(trace_)->rid() != rid_) {
+      auto n = Node::Copy(removed->right.ref(trace_), db_, rid_);
+      fresh_nodes_.push_back(n);
+      removed->right.set_ref(n);
+    }
+    removed = build_min_path(removed->right.ref(trace_), path);
+    transplanted = removed->right.ref(trace_);
     assert(transplanted != nullptr);
 
     //temp->key = std::move(removed->key);
@@ -485,6 +522,8 @@ void TransactionImpl::Commit()
   if (root_ == nullptr) {
     return;
   }
+
+  db_->SubmitTrace(trace_);
 
   // build the intention and fixup field offsets
   int field_index = 0;
@@ -519,7 +558,7 @@ void TransactionImpl::Commit()
 
 int TransactionImpl::Get(const std::string& key, std::string* val)
 {
-  NodeRef getter = src_root_;
+  NodeRef getter = src_root_.ref(trace_);
   // Keep looking until we're Nil (We've reached the end)
   while (getter != Node::Nil())
   {
@@ -529,7 +568,7 @@ int TransactionImpl::Get(const std::string& key, std::string* val)
       return 0;
     }
     // Next to look up if not yet found
-    getter = key < getter->key() ? getter->left.ref() : getter->right.ref();
+    getter = key < getter->key() ? getter->left.ref(trace_) : getter->right.ref(trace_);
   }
 
   return -ENOENT;

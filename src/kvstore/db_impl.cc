@@ -2,16 +2,10 @@
 #include <sstream>
 
 DBImpl::DBImpl(zlog::Log *log) :
-  log_(log), cache_(this)
+  root_(Node::Nil(), this, true), root_pos_(0), log_(log), cache_(this),
+  last_pos_(0), stop_(false)
 {
-  root_ = Node::Nil();
-  root_pos_ = 0;
-
-  last_pos_ = 0;
-  stop_ = false;
-
   validate_rb_tree(root_);
-
   log_processor_ = std::thread(&DBImpl::process_log_entry, this);
 }
 
@@ -58,6 +52,7 @@ DBImpl::~DBImpl()
   log_cond_.notify_all();
   lock_.unlock();
   log_processor_.join();
+  cache_.Stop();
 }
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
@@ -167,7 +162,7 @@ void DBImpl::write_dot(std::ostream& out, bool scoped)
   auto root = root_;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  _write_dot(out, root, nullcount, scoped);
+  _write_dot(out, root.ref(), nullcount, scoped);
   out << "}" << std::endl;
 }
 
@@ -189,10 +184,11 @@ void DBImpl::write_dot_history(std::ostream& out,
     label << "\"";
 
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    if ((*it)->root == Node::Nil()) {
+    auto ref = (*it)->root.ref();
+    if (ref == Node::Nil()) {
       out << "null" << ++nullcount << " [label=nil];" << std::endl;
     } else {
-      _write_dot(out, (*it)->root, nullcount, true);
+      _write_dot(out, ref, nullcount, true);
     }
 
 #if 0
@@ -273,9 +269,9 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   return 0;
 }
 
-void DBImpl::validate_rb_tree(NodeRef root)
+void DBImpl::validate_rb_tree(NodePtr root)
 {
-  assert(_validate_rb_tree(root) != 0);
+  assert(_validate_rb_tree(root.ref()) != 0);
 }
 
 Transaction *DBImpl::BeginTransaction()
@@ -323,8 +319,7 @@ void DBImpl::process_log_entry()
     if (i.snapshot() != -1) assert(next > 0);
     if (i.snapshot() == (int64_t)last_pos_) {
       auto root = cache_.CacheIntention(i, next);
-      //validate_rb_tree(root);
-      root_ = root;
+      root_.replace(root);
       root_pos_ = next;
 
       root_desc_.clear();

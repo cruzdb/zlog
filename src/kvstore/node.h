@@ -4,9 +4,13 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <vector>
 
 class Node;
 using NodeRef = std::shared_ptr<Node>;
+using WeakNodeRef = std::weak_ptr<Node>;
+
+class DBImpl;
 
 /*
  * The read-only flag is a temporary hack for enforcing read-only property on
@@ -16,6 +20,17 @@ using NodeRef = std::shared_ptr<Node>;
  * lets us have confidence in the correctness which is the priority right now.
  * There is probably a lot of overhead always returning copies of the
  * shared_ptr NodeRef.
+ *
+ * The NodePtr can point to Nil, which is represented by a NodeRef singleton.
+ * In this case ref() will resolve to the singleton heap address. Never let
+ * the Nil object be freed!
+ *
+ * In order to handle I/O errors gracefully, including timeouts, etc... we
+ * probably will want to allow NodePtr::ref return an error when resolving
+ * pointers from storage.
+ *
+ * Copy assertion should check if we are copying a null pointer that the
+ * physical address is defined.
  */
 class NodePtr {
  public:
@@ -25,6 +40,7 @@ class NodePtr {
     offset_ = other.offset_;
     csn_ = other.csn_;
     read_only_ = true;
+    db_ = other.db_;
   }
 
   NodePtr& operator=(const NodePtr& other) {
@@ -32,15 +48,25 @@ class NodePtr {
     ref_ = other.ref_;
     offset_ = other.offset_;
     csn_ = other.csn_;
+    db_ = other.db_;
     return *this;
   }
 
-  NodePtr(NodePtr&& other) = delete;
+  // TODO: now we can copy nodeptr. implications?
+  //NodePtr(NodePtr&& other) = delete;
   NodePtr& operator=(NodePtr&& other) & = delete;
 
-  NodePtr(NodeRef ref, bool read_only) :
-    ref_(ref), csn_(-1), offset_(-1), read_only_(read_only)
+  NodePtr(NodeRef ref, DBImpl *db, bool read_only) :
+    ref_(ref), csn_(-1), offset_(-1), db_(db), read_only_(read_only)
   {}
+
+  void replace(const NodePtr& other) {
+    ref_ = other.ref_;
+    offset_ = other.offset_;
+    csn_ = other.csn_;
+    read_only_ = true;
+    db_ = other.db_;
+  }
 
   inline bool read_only() const {
     return read_only_;
@@ -51,8 +77,21 @@ class NodePtr {
     read_only_ = true;
   }
 
-  inline NodeRef ref() const {
-    return ref_;
+  inline NodeRef ref() {
+    while (true) {
+      if (auto ret = ref_.lock()) {
+        return ret;
+      } else {
+        ref_ = fetch();
+      }
+    }
+  }
+
+  // this should probably just be handled by the caller... but for the time
+  // being it makes the transaction code must simpler.
+  inline NodeRef ref(std::vector<std::pair<int64_t, int>>& trace) {
+    trace.emplace_back(csn_, offset_);
+    return ref();
   }
 
   inline void set_ref(NodeRef ref) {
@@ -79,10 +118,16 @@ class NodePtr {
   }
 
  private:
-  NodeRef ref_;
+  // heap pointer (optional), and log address
+  WeakNodeRef ref_;
   int64_t csn_;
   int offset_;
+
+  DBImpl *db_;
+
   bool read_only_;
+
+  NodeRef fetch();
 };
 
 /*
@@ -95,23 +140,23 @@ class Node {
 
   // TODO: allow rid to have negative initialization value
   Node(std::string key, std::string val, bool red, NodeRef lr, NodeRef rr,
-      uint64_t rid, int field_index, bool read_only) :
-    left(lr, read_only), right(rr, read_only), key_(key), val_(val),
+      uint64_t rid, int field_index, bool read_only, DBImpl *db) :
+    left(lr, db, read_only), right(rr, db, read_only), key_(key), val_(val),
     red_(red), rid_(rid), field_index_(field_index), read_only_(read_only)
   {}
 
   static NodeRef& Nil() {
     static NodeRef node = std::make_shared<Node>("", "",
-        false, nullptr, nullptr, (uint64_t)-1, -1, true);
+        false, nullptr, nullptr, (uint64_t)-1, -1, true, nullptr);
     return node;
   }
 
-  static NodeRef Copy(NodeRef src, uint64_t rid) {
+  static NodeRef Copy(NodeRef src, DBImpl *db, uint64_t rid) {
     if (src == Nil())
       return Nil();
 
     auto node = std::make_shared<Node>(src->key(), src->val(), src->red(),
-        src->left.ref(), src->right.ref(), rid, -1, false);
+        src->left.ref(), src->right.ref(), rid, -1, false, db);
 
     node->left.set_csn(src->left.csn());
     node->left.set_offset(src->left.offset());

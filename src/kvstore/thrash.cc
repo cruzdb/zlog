@@ -16,6 +16,30 @@ static inline std::string tostr(int value)
   return ss.str();
 }
 
+static void print_map(const std::map<std::string, std::string>& m)
+{
+  for (auto kv : m)
+    std::cout << kv.first << " -> " << kv.second << std::endl;
+}
+
+static void check_history(const std::map<std::string, std::string>& a,
+    const std::map<std::string, std::string>& b)
+{
+  if (a.size() != b.size()) {
+    std::cout << "size " << a.size() << " != " << b.size() << std::endl;
+    assert(0);
+  }
+  for (auto kv : a) {
+    auto it = b.find(kv.first);
+    if (it == b.end()) {
+      print_map(b);
+      std::cout << "key \"" << kv.first  << "\" not found" << std::endl;
+      assert(0);
+    }
+    assert(kv.second == it->second);
+  }
+}
+
 static std::map<std::string, std::string> get_map(DB *db,
     Snapshot *snapshot, bool forward, size_t split)
 {
@@ -243,7 +267,9 @@ int main(int argc, char **argv)
     std::cout << std::flush;
     assert(truth_history.size() == db_history.size());
     for (unsigned i = 0; i < db_history.size(); i++) {
+      i = db_history.size() - 1;
       count += truth_history[i].size();
+      check_history(truth_history[i], get_map(db, db_history[i], true, 0));
       assert(truth_history[i] == get_map(db, db_history[i], true, 0));
       assert(truth_history[i] == get_map(db, db_history[i], false, 0));
       if (truth_history[i].size() > 10) {

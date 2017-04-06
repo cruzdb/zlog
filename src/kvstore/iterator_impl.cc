@@ -17,7 +17,7 @@ void IteratorImpl::SeekToFirst()
   stack_.swap(stack);
 
   // all the way to the left
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
     stack_.push(node);
     node = node->left.ref();
@@ -33,7 +33,7 @@ void IteratorImpl::SeekToLast()
   stack_.swap(stack);
 
   // all the way to the right
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
     stack_.push(node);
     node = node->right.ref();
@@ -48,7 +48,7 @@ void IteratorImpl::Seek(const std::string& key)
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
     if (key == node->key()) {
       stack_.push(node);
@@ -71,7 +71,7 @@ void IteratorImpl::SeekForward(const std::string& key)
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
     if (key == node->key()) {
       stack_.push(node);
@@ -94,7 +94,7 @@ void IteratorImpl::SeekPrevious(const std::string& key)
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
     if (key == node->key()) {
       stack_.push(node);

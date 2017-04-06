@@ -13,6 +13,7 @@ add_library(libkvstore SHARED
     transaction_impl.cc
     node_cache.cc
     iterator_impl.cc
+    node.cc
 )
 target_link_libraries(libkvstore libzlog kvstore_proto)
 install(TARGETS libkvstore LIBRARY DESTINATION lib)
