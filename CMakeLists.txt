@@ -25,8 +25,8 @@ else()
   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support.")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -g")
 
 find_package(Boost COMPONENTS system program_options REQUIRED)
 find_package(Protobuf REQUIRED)
