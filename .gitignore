@@ -54,3 +54,5 @@ build
 coverage
 
 build-doc
+
+db

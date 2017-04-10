@@ -76,6 +76,11 @@ class Slice {
     size_ -= n;
   }
 
+  std::string ToString() const {
+    std::string result(data_, size_);
+    return result;
+  }
+
 #if 0
   // Return a string that contains the copy of the referenced data.
   // when hex is true, returns a string of twice the length hex encoded (0-9A-F)

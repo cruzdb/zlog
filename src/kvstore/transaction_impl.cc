@@ -30,8 +30,8 @@ void TransactionImpl::serialize_node(kvstore_proto::Node *dst,
     NodeRef node, int field_index) const
 {
   dst->set_red(node->red());
-  dst->set_key(node->key());
-  dst->set_val(node->val());
+  dst->set_key(node->key().ToString());
+  dst->set_val(node->val().ToString());
 
   assert(node->field_index() == -1);
   // TODO: ideally we could set the field_index when we were
@@ -45,20 +45,22 @@ void TransactionImpl::serialize_node(kvstore_proto::Node *dst,
 }
 
 NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
-    std::string key, std::string val, const NodeRef& node)
+    const Slice& key, const Slice& value, const NodeRef& node)
 {
   assert(node != nullptr);
 
   if (node == Node::Nil()) {
-    auto nn = std::make_shared<Node>(key, val, true, Node::Nil(),
+    auto nn = std::make_shared<Node>(key, value, true, Node::Nil(),
         Node::Nil(), rid_, -1, false, db_);
     path.push_back(nn);
     fresh_nodes_.push_back(nn);
     return nn;
   }
 
-  bool less = key < node->key();
-  bool equal = !less && key == node->key();
+  int cmp = key.compare(Slice(node->key().data(),
+        node->key().size()));
+  bool less = cmp < 0;
+  bool equal = cmp == 0;
 
   /*
    * How should we handle key/value updates? What about when the values are
@@ -67,7 +69,7 @@ NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
   if (equal)
     return nullptr;
 
-  auto child = insert_recursive(path, key, val,
+  auto child = insert_recursive(path, key, value,
       (less ? node->left.ref(trace_) : node->right.ref(trace_)));
 
   if (child == nullptr)
@@ -152,7 +154,7 @@ void TransactionImpl::insert_balance(NodeRef& parent, NodeRef& nn,
 }
 
 NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
-    std::string key, const NodeRef& node)
+    const Slice& key, const NodeRef& node)
 {
   assert(node != nullptr);
 
@@ -160,8 +162,10 @@ NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
     return nullptr;
   }
 
-  bool less = key < node->key();
-  bool equal = !less && key == node->key();
+  int cmp = key.compare(Slice(node->key().data(),
+        node->key().size()));
+  bool less = cmp < 0;
+  bool equal = cmp == 0;
 
   if (equal) {
     NodeRef copy;
@@ -400,7 +404,7 @@ void TransactionImpl::set_intention_self_csn(NodeRef root, uint64_t pos) {
   set_intention_self_csn_recursive(root->rid(), root, pos);
 }
 
-void TransactionImpl::Put(const std::string& key, const std::string& val)
+void TransactionImpl::Put(const Slice& key, const Slice& value)
 {
   /*
    * build copy of path to new node
@@ -408,7 +412,7 @@ void TransactionImpl::Put(const std::string& key, const std::string& val)
   std::deque<NodeRef> path;
 
   auto base_root = root_ == nullptr ? src_root_.ref(trace_) : root_;
-  auto root = insert_recursive(path, key, val, base_root);
+  auto root = insert_recursive(path, key, value, base_root);
   if (root == nullptr) {
     /*
      * this is the update case that is transformed into delete + put. an
@@ -419,12 +423,12 @@ void TransactionImpl::Put(const std::string& key, const std::string& val)
     Delete(key); // first remove the key
     path.clear(); // new path will be built
     assert(root_ != nullptr); // delete set the root
-    root = insert_recursive(path, key, val, root_);
+    root = insert_recursive(path, key, value, root_);
     assert(root != nullptr); // a new root was added
   }
 
   std::stringstream ss;
-  ss << "put: " << key;
+  ss << "put: " << key.ToString(); // FIXME: wont work for binary
   description_.emplace_back(ss.str());
 
   path.push_back(Node::Nil());
@@ -451,12 +455,12 @@ void TransactionImpl::Put(const std::string& key, const std::string& val)
   root_ = root;
 }
 
-void TransactionImpl::Delete(std::string key)
+void TransactionImpl::Delete(const Slice& key)
 {
   std::deque<NodeRef> path;
 
   std::stringstream ss;
-  ss << "del: " << key;
+  ss << "del: " << key.ToString(); // FIXME: wont work for binary
   description_.emplace_back(ss.str());
 
   auto base_root = root_ == nullptr ? src_root_.ref(trace_) : root_;
@@ -556,20 +560,18 @@ void TransactionImpl::Commit()
   assert(committed);
 }
 
-int TransactionImpl::Get(const std::string& key, std::string* val)
+int TransactionImpl::Get(const Slice& key, std::string* val)
 {
-  NodeRef getter = src_root_.ref(trace_);
-  // Keep looking until we're Nil (We've reached the end)
-  while (getter != Node::Nil())
-  {
-    if (getter->key() == key)
-    {
-      *val = getter->val();
+  auto cur = root_ == nullptr ? src_root_.ref(trace_) : root_;
+  while (cur != Node::Nil()) {
+    int cmp = key.compare(Slice(cur->key().data(),
+          cur->key().size()));
+    if (cmp == 0) {
+      val->assign(cur->val().data(), cur->val().size());
       return 0;
     }
-    // Next to look up if not yet found
-    getter = key < getter->key() ? getter->left.ref(trace_) : getter->right.ref(trace_);
+    cur = cmp < 0 ? cur->left.ref(trace_) :
+      cur->right.ref(trace_);
   }
-
   return -ENOENT;
 }

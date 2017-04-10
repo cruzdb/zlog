@@ -42,7 +42,7 @@ void IteratorImpl::SeekToLast()
   dir = Reverse;
 }
 
-void IteratorImpl::Seek(const std::string& key)
+void IteratorImpl::Seek(const Slice& key)
 {
   // clear stack
   std::stack<NodeRef> stack;
@@ -50,22 +50,26 @@ void IteratorImpl::Seek(const std::string& key)
 
   NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
-    if (key == node->key()) {
+    int cmp = key.compare(Slice(node->key().data(),
+          node->key().size()));
+    if (cmp == 0) {
       stack_.push(node);
       break;
-    } else if (key < node->key()) {
+    } else if (cmp < 0) {
       stack_.push(node);
       node = node->left.ref();
     } else
       node = node->right.ref();
   }
 
-  assert(stack_.empty() || stack_.top()->key() >= key);
+  assert(stack_.empty() ||
+      Slice(stack_.top()->key().data(),
+        stack_.top()->key().size()).compare(key) >= 0);
 
   dir = Forward;
 }
 
-void IteratorImpl::SeekForward(const std::string& key)
+void IteratorImpl::SeekForward(const Slice& key)
 {
   // clear stack
   std::stack<NodeRef> stack;
@@ -73,22 +77,26 @@ void IteratorImpl::SeekForward(const std::string& key)
 
   NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
-    if (key == node->key()) {
+    int cmp = key.compare(Slice(node->key().data(),
+          node->key().size()));
+    if (cmp == 0) {
       stack_.push(node);
       break;
-    } else if (key < node->key()) {
+    } else if (cmp < 0) {
       stack_.push(node);
       node = node->left.ref();
     } else
       node = node->right.ref();
   }
 
-  assert(stack_.empty() || stack_.top()->key() == key);
+  assert(stack_.empty() ||
+      Slice(stack_.top()->key().data(),
+        stack_.top()->key().size()).compare(key) == 0);
 
   dir = Forward;
 }
 
-void IteratorImpl::SeekPrevious(const std::string& key)
+void IteratorImpl::SeekPrevious(const Slice& key)
 {
   // clear stack
   std::stack<NodeRef> stack;
@@ -96,10 +104,12 @@ void IteratorImpl::SeekPrevious(const std::string& key)
 
   NodeRef node = snapshot_->root.ref();
   while (node != Node::Nil()) {
-    if (key == node->key()) {
+    int cmp = key.compare(Slice(node->key().data(),
+          node->key().size()));
+    if (cmp == 0) {
       stack_.push(node);
       break;
-    } else if (key < node->key()) {
+    } else if (cmp < 0) {
       node = node->left.ref();
     } else {
       stack_.push(node);
@@ -107,7 +117,9 @@ void IteratorImpl::SeekPrevious(const std::string& key)
     }
   }
 
-  assert(stack_.empty() || stack_.top()->key() == key);
+  assert(stack_.empty() ||
+      Slice(stack_.top()->key().data(),
+        stack_.top()->key().size()).compare(key) == 0);
 
   dir = Reverse;
 }
@@ -144,14 +156,16 @@ void IteratorImpl::Prev()
   }
 }
 
-std::string IteratorImpl::key() const
+Slice IteratorImpl::key() const
 {
   assert(Valid());
-  return stack_.top()->key();
+  return Slice(stack_.top()->key().data(),
+      stack_.top()->key().size());
 }
 
-std::string IteratorImpl::value() const
+Slice IteratorImpl::value() const
 {
   assert(Valid());
-  return stack_.top()->val();
+  return Slice(stack_.top()->val().data(),
+      stack_.top()->val().size());
 }

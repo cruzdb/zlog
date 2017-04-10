@@ -17,12 +17,12 @@ class TransactionImpl : public Transaction {
     db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid)
   {}
 
-  void Put(const std::string& key, const std::string& val);
-  void Delete(std::string key);
+  void Put(const Slice& key, const Slice& value);
+  void Delete(const Slice& key);
 
   void Commit();
 
-  int Get(const std::string& key, std::string *val);
+  int Get(const Slice& key, std::string *value);
 
  private:
   DBImpl *db_;
@@ -66,7 +66,7 @@ class TransactionImpl : public Transaction {
   }
 
   NodeRef insert_recursive(std::deque<NodeRef>& path,
-      std::string key, std::string val, const NodeRef& node);
+      const Slice& key, const Slice& value, const NodeRef& node);
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodeRef& parent, NodeRef& nn,
@@ -77,7 +77,7 @@ class TransactionImpl : public Transaction {
       ChildA child_a, ChildB child_b, NodeRef& root);
 
   NodeRef delete_recursive(std::deque<NodeRef>& path,
-      std::string key, const NodeRef& node);
+      const Slice& key, const NodeRef& node);
 
   void transplant(NodeRef parent, NodeRef removed,
       NodeRef transplanted, NodeRef& root);

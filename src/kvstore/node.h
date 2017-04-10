@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <zlog/slice.h>
 
 class Node;
 using NodeRef = std::shared_ptr<Node>;
@@ -139,9 +140,10 @@ class Node {
   NodePtr right;
 
   // TODO: allow rid to have negative initialization value
-  Node(std::string key, std::string val, bool red, NodeRef lr, NodeRef rr,
+  Node(const Slice& key, const Slice& val, bool red, NodeRef lr, NodeRef rr,
       uint64_t rid, int field_index, bool read_only, DBImpl *db) :
-    left(lr, db, read_only), right(rr, db, read_only), key_(key), val_(val),
+    left(lr, db, read_only), right(rr, db, read_only),
+    key_(key.data(), key.size()), val_(val.data(), val.size()),
     red_(red), rid_(rid), field_index_(field_index), read_only_(read_only)
   {}
 
@@ -207,13 +209,13 @@ class Node {
   }
 
   // TODO: return const reference?
-  inline std::string key() const {
-    return key_;
+  inline Slice key() const {
+    return Slice(key_.data(), key_.size());
   }
 
   // TODO: return const reference?
-  inline std::string val() const {
-    return val_;
+  inline Slice val() const {
+    return Slice(val_.data(), val_.size());
   }
 
   inline void steal_payload(NodeRef& other) {

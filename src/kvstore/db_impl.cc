@@ -57,7 +57,7 @@ DBImpl::~DBImpl()
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
 {
-  out << "node(" << n.get() << "):" << n->key() << ": ";
+  out << "node(" << n.get() << "):" << n->key().ToString() << ": ";
   out << (n->red() ? "red " : "blk ");
   out << "fi " << n->field_index() << " ";
   out << "left=[p" << n->left.csn() << ",o" << n->left.offset() << ",";
@@ -127,7 +127,7 @@ void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
     return;
 
   out << "\"" << node.get() << "\" ["
-    << "label=\"" << node->key() << "_" << node->val() << "\",style=filled,"
+    << "label=\"" << node->key().ToString() << "_" << node->val().ToString() << "\",style=filled,"
     << "fillcolor=" << (node->red() ? "red" :
         "black,fontcolor=white")
     << "]" << std::endl;
@@ -209,7 +209,7 @@ void DBImpl::print_node(NodeRef node)
   if (node == Node::Nil())
     std::cout << "nil:" << (node->red() ? "r" : "b");
   else
-    std::cout << node->key() << ":" << (node->red() ? "r" : "b");
+    std::cout << node->key().ToString() << ":" << (node->red() ? "r" : "b");
 }
 
 void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
@@ -223,7 +223,7 @@ void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
       if (node == Node::Nil())
         out << "nil:" << (node->red() ? "r " : "b ");
       else
-        out << node->key() << ":" << (node->red() ? "r " : "b ");
+        out << node->key().ToString() << ":" << (node->red() ? "r " : "b ");
     }
     out << "]";
   }
@@ -256,8 +256,8 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   int lh = _validate_rb_tree(ln);
   int rh = _validate_rb_tree(rn);
 
-  if ((ln != Node::Nil() && ln->key() >= root->key()) ||
-      (rn != Node::Nil() && rn->key() <= root->key()))
+  if ((ln != Node::Nil() && ln->key().compare(root->key()) >= 0) ||
+      (rn != Node::Nil() && rn->key().compare(root->key()) <= 0))
     return 0;
 
   if (lh != 0 && rh != 0 && lh != rh)
