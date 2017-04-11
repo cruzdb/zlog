@@ -34,8 +34,8 @@ class NodeCache {
  public:
   explicit NodeCache(DBImpl *db) :
     db_(db),
-    stop_(false),
-    used_bytes_(0)
+    used_bytes_(0),
+    stop_(false)
   {
     vaccum_ = std::thread(&NodeCache::do_vaccum_, this);
   }
