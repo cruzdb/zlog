@@ -15,7 +15,9 @@ class TransactionImpl : public Transaction {
  public:
   TransactionImpl(DBImpl *db, NodePtr root, uint64_t snapshot, uint64_t rid) :
     db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid)
-  {}
+  {
+    // TODO: reserve trace as average height
+  }
 
   void Put(const Slice& key, const Slice& value);
   void Delete(const Slice& key);
@@ -25,6 +27,8 @@ class TransactionImpl : public Transaction {
   int Get(const Slice& key, std::string *value);
 
  private:
+  friend class TraceApplier;
+
   DBImpl *db_;
 
   // snapshot
@@ -36,11 +40,11 @@ class TransactionImpl : public Transaction {
   const uint64_t rid_;
   kvstore_proto::Intention intention_;
 
-  // access trace; used to upate lru cache. NOTE: in the current version the
-  // access time is the same for all nodes in the trace. this may cause
-  // problems for long running queries. it may also be useful to structure the
-  // trace so that we can deal with larger traces.
+  // access trace used to update lru cache. the trace is applied and reset
+  // after each operation (e.g. get/put/etc) or if the transaction accesses
+  // the cache to resolve a pointer (e.g. accessing the log).
   std::vector<std::pair<int64_t, int>> trace_;
+  void UpdateLRU();
 
   // keep new nodes alive for the duration of the transaction until we
   // construct the intention. this is needed because NodePtr contains weak_ptr
@@ -94,9 +98,9 @@ class TransactionImpl : public Transaction {
 
   // turn a transaction into a serialized protocol buffer
   void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,
-      const std::string& dir) const;
+      const std::string& dir);
   void serialize_node(kvstore_proto::Node *dst, NodeRef node,
-      int field_index) const;
+      int field_index);
   void serialize_intention(NodeRef node, int& field_index);
 
   void set_intention_self_csn_recursive(uint64_t rid, NodeRef node,

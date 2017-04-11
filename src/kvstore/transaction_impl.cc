@@ -2,23 +2,42 @@
 #include <sstream>
 #include "db_impl.h"
 
-void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
-    NodePtr& src, const std::string& dir) const
+class TraceApplier {
+ public:
+  explicit TraceApplier(TransactionImpl *txn) :
+    txn_(txn)
+  {}
+
+  ~TraceApplier() {
+    txn_->UpdateLRU();
+  }
+
+ private:
+  TransactionImpl *txn_;
+};
+
+void TransactionImpl::UpdateLRU()
 {
-  if (src.ref() == Node::Nil()) {
+  db_->UpdateLRU(trace_);
+}
+
+void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
+    NodePtr& src, const std::string& dir)
+{
+  if (src.ref(trace_) == Node::Nil()) {
     dst->set_nil(true);
     dst->set_self(false);
     dst->set_csn(0);
     dst->set_off(0);
-  } else if (src.ref()->rid() == rid_) {
+  } else if (src.ref(trace_)->rid() == rid_) {
     dst->set_nil(false);
     dst->set_self(true);
     dst->set_csn(0);
-    assert(src.ref()->field_index() >= 0);
-    dst->set_off(src.ref()->field_index());
-    src.set_offset(src.ref()->field_index());
+    assert(src.ref(trace_)->field_index() >= 0);
+    dst->set_off(src.ref(trace_)->field_index());
+    src.set_offset(src.ref(trace_)->field_index());
   } else {
-    assert(src.ref() != nullptr);
+    assert(src.ref(trace_) != nullptr);
     dst->set_nil(false);
     dst->set_self(false);
     dst->set_csn(src.csn());
@@ -27,7 +46,7 @@ void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
 }
 
 void TransactionImpl::serialize_node(kvstore_proto::Node *dst,
-    NodeRef node, int field_index) const
+    NodeRef node, int field_index)
 {
   dst->set_red(node->red());
   dst->set_key(node->key().ToString());
@@ -225,9 +244,9 @@ void TransactionImpl::transplant(NodeRef parent, NodeRef removed,
 NodeRef TransactionImpl::build_min_path(NodeRef node, std::deque<NodeRef>& path)
 {
   assert(node != nullptr);
-  assert(node->left.ref() != nullptr);
+  assert(node->left.ref(trace_) != nullptr);
   while (node->left.ref(trace_) != Node::Nil()) {
-    assert(node->left.ref() != nullptr);
+    assert(node->left.ref(trace_) != nullptr);
     if (node->left.ref(trace_)->rid() != rid_) {
       auto n = Node::Copy(node->left.ref(trace_), db_, rid_);
       fresh_nodes_.push_back(n);
@@ -264,8 +283,8 @@ void TransactionImpl::mirror_remove_balance(NodeRef& extra_black, NodeRef& paren
 
   assert(brother != nullptr);
 
-  assert(brother->left.ref() != nullptr);
-  assert(brother->right.ref() != nullptr);
+  assert(brother->left.ref(trace_) != nullptr);
+  assert(brother->right.ref(trace_) != nullptr);
 
   if (!brother->left.ref(trace_)->red() && !brother->right.ref(trace_)->red()) {
     if (brother->rid() != rid_) {
@@ -373,8 +392,8 @@ void TransactionImpl::serialize_intention(NodeRef node, int& field_index)
   if (node == Node::Nil() || node->rid() != rid_)
     return;
 
-  serialize_intention(node->left.ref(), field_index);
-  serialize_intention(node->right.ref(), field_index);
+  serialize_intention(node->left.ref(trace_), field_index);
+  serialize_intention(node->right.ref(trace_), field_index);
 
   // new serialized node in the intention
   kvstore_proto::Node *dst = intention_.add_tree();
@@ -388,16 +407,16 @@ void TransactionImpl::set_intention_self_csn_recursive(uint64_t rid,
   if (node == Node::Nil() || node->rid() != rid)
     return;
 
-  if (node->right.ref() != Node::Nil() && node->right.ref()->rid() == rid) {
+  if (node->right.ref(trace_) != Node::Nil() && node->right.ref(trace_)->rid() == rid) {
     node->right.set_csn(pos);
   }
 
-  if (node->left.ref() != Node::Nil() && node->left.ref()->rid() == rid) {
+  if (node->left.ref(trace_) != Node::Nil() && node->left.ref(trace_)->rid() == rid) {
     node->left.set_csn(pos);
   }
 
-  set_intention_self_csn_recursive(rid, node->right.ref(), pos);
-  set_intention_self_csn_recursive(rid, node->left.ref(), pos);
+  set_intention_self_csn_recursive(rid, node->right.ref(trace_), pos);
+  set_intention_self_csn_recursive(rid, node->left.ref(trace_), pos);
 }
 
 void TransactionImpl::set_intention_self_csn(NodeRef root, uint64_t pos) {
@@ -406,6 +425,8 @@ void TransactionImpl::set_intention_self_csn(NodeRef root, uint64_t pos) {
 
 void TransactionImpl::Put(const Slice& key, const Slice& value)
 {
+  TraceApplier ta(this);
+
   /*
    * build copy of path to new node
    */
@@ -457,6 +478,8 @@ void TransactionImpl::Put(const Slice& key, const Slice& value)
 
 void TransactionImpl::Delete(const Slice& key)
 {
+  TraceApplier ta(this);
+
   std::deque<NodeRef> path;
 
   std::stringstream ss;
@@ -489,7 +512,7 @@ void TransactionImpl::Delete(const Slice& key)
     assert(transplanted != nullptr);
   } else if (removed->right.ref(trace_) == Node::Nil()) {
     path.pop_front();
-    assert(removed->left.ref() != nullptr);
+    assert(removed->left.ref(trace_) != nullptr);
     transplanted = removed->left.ref(trace_);
     transplant(path.front(), removed, transplanted, root);
     assert(transplanted != nullptr);
@@ -522,12 +545,12 @@ void TransactionImpl::Delete(const Slice& key)
 
 void TransactionImpl::Commit()
 {
+  assert(trace_.empty());
+
   // nothing to do
   if (root_ == nullptr) {
     return;
   }
-
-  db_->SubmitTrace(trace_);
 
   // build the intention and fixup field offsets
   int field_index = 0;
@@ -562,6 +585,8 @@ void TransactionImpl::Commit()
 
 int TransactionImpl::Get(const Slice& key, std::string* val)
 {
+  TraceApplier ta(this);
+
   auto cur = root_ == nullptr ? src_root_.ref(trace_) : root_;
   while (cur != Node::Nil()) {
     int cmp = key.compare(Slice(cur->key().data(),

@@ -34,7 +34,7 @@ class DBImpl : public DB {
 
   Snapshot *GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
-    return new Snapshot(root_, root_pos_, root_desc_);
+    return new Snapshot(this, root_, root_pos_, root_desc_);
   }
 
   void ReleaseSnapshot(Snapshot *snapshot) {
@@ -49,6 +49,7 @@ class DBImpl : public DB {
   friend class TransactionImpl;
   friend class NodeCache;
   friend class NodePtr;
+  friend class IteratorTraceApplier;
 
   void write_dot_recursive(std::ostream& out, uint64_t rid,
       NodeRef node, uint64_t& nullcount, bool scoped);
@@ -74,12 +75,13 @@ class DBImpl : public DB {
 
  private:
 
-  NodeRef fetch(int64_t csn, int offset) {
-    return cache_.fetch(csn, offset);
+  NodeRef fetch(std::vector<std::pair<int64_t, int>>& trace,
+      int64_t csn, int offset) {
+    return cache_.fetch(trace, csn, offset);
   }
 
-  void SubmitTrace(std::vector<std::pair<int64_t, int>>& trace) {
-    cache_.SubmitTrace(trace);
+  void UpdateLRU(std::vector<std::pair<int64_t, int>>& trace) {
+    cache_.UpdateLRU(trace);
   }
 
   void print_path(std::ostream& out, std::deque<NodeRef>& path);

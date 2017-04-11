@@ -1,8 +1,7 @@
 #include "db_impl.h"
 
-NodeRef NodePtr::fetch()
+NodeRef NodePtr::fetch(std::vector<std::pair<int64_t, int>>& trace)
 {
   assert(db_);
-  //std::cout << "NodePtr::fetch: " << csn_ << "/" << offset_ << std::endl;
-  return db_->fetch(csn_, offset_);
+  return db_->fetch(trace, csn_, offset_);
 }

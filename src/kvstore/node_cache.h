@@ -5,6 +5,7 @@
 #include <utility>
 #include <thread>
 #include <list>
+#include <condition_variable>
 #include "node.h"
 #include "kvstore/kvstore.pb.h"
 
@@ -36,33 +37,45 @@ class NodeCache {
   {
     stop_ = false;
     vaccum_ = std::thread(&NodeCache::do_vaccum_, this);
+    used_bytes_ = 0;
   }
 
   NodePtr CacheIntention(const kvstore_proto::Intention& i,
       uint64_t pos);
 
-  NodeRef fetch(int64_t csn, int offset);
+  NodeRef fetch(std::vector<std::pair<int64_t, int>>& trace,
+      int64_t csn, int offset);
 
   void Stop() {
     lock_.lock();
     stop_ = true;
     lock_.unlock();
+    cond_.notify_one();
     vaccum_.join();
   }
 
-  void SubmitTrace(std::vector<std::pair<int64_t, int>>& trace) {
-    std::lock_guard<std::mutex> l(lock_);
-    traces_.push_front(trace);
+  void UpdateLRU(std::vector<std::pair<int64_t, int>>& trace) {
+    if (!trace.empty()) {
+      std::lock_guard<std::mutex> l(lock_);
+      traces_.emplace_front();
+      traces_.front().swap(trace);
+      cond_.notify_one();
+    }
   }
 
  private:
   DBImpl *db_;
   std::mutex lock_;
+  size_t used_bytes_;
 
   struct entry {
     NodeRef node;
     std::list<std::pair<uint64_t, int>>::iterator lru_iter;
   };
+
+  size_t UsedBytes() const {
+    return used_bytes_;
+  }
 
   std::unordered_map<std::pair<uint64_t, int>, entry, pair_hash> nodes_;
   std::list<std::pair<uint64_t, int>> nodes_lru_;
@@ -75,6 +88,7 @@ class NodeCache {
       uint64_t pos, int index);
 
   std::thread vaccum_;
+  std::condition_variable cond_;
   void do_vaccum_();
   bool stop_;
 };

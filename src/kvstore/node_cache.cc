@@ -2,40 +2,25 @@
 #include "db_impl.h"
 #include <time.h>
 #include <deque>
+#include <condition_variable>
+
+// TODO: if usage goes above high marker block new txns
+static const size_t low_marker  =  4*1024*1024;
+//static const size_t high_marker = 8*1024*1024;
 
 void NodeCache::do_vaccum_()
 {
   while (true) {
-    sleep(1);
-
     std::unique_lock<std::mutex> l(lock_);
+
+    cond_.wait(l, [this]{
+        return !traces_.empty() || UsedBytes() > low_marker || stop_;
+    });
 
     if (stop_)
       return;
 
-    if (traces_.empty()) {
-      //cond_.wait(l);
-      continue;
-    }
-
-    // there is a trade off between integrating new traces, the freshness of
-    // lru state, and how fast work accumulates, how long we hold the lock
-    // above, etc... i've added a basic version that prioritizes memory usage,
-    // and then adds a hard cap on the number of traces outstanding.
-
-    // free nodes in lru order
-    size_t before = nodes_.size();
-    while (nodes_.size() > 1000000) {
-      assert(!nodes_lru_.empty());
-      auto key = nodes_lru_.back();
-      auto nit = nodes_.find(key);
-      assert(nit != nodes_.end());
-      nodes_.erase(nit);
-      nodes_lru_.pop_back();
-    }
-
-    // apply traces to lru cache
-    size_t count = 0;
+    // apply lru updates
     for (auto trace : traces_) {
       for (auto key : trace) {
         auto node_it = nodes_.find(key);
@@ -45,24 +30,41 @@ void NodeCache::do_vaccum_()
         nodes_lru_.erase(e.lru_iter);
         nodes_lru_.emplace_front(key);
         e.lru_iter = nodes_lru_.begin();
-        count++;
       }
     }
     traces_.clear();
 
-    std::cout << "applied " << count << " trace nodes; size " << before
-      << "/" << nodes_.size() << std::endl << std::flush;
+    while (UsedBytes() > low_marker) {
+      assert(!nodes_lru_.empty());
+      auto key = nodes_lru_.back();
+      auto nit = nodes_.find(key);
+      assert(nit != nodes_.end());
+      used_bytes_ -= nit->second.node->ByteSize();
+      nodes_.erase(nit);
+      nodes_lru_.pop_back();
+    }
   }
 }
 
 // when resolving a node we only resolve the single node. figuring out when to
 // resolve an entire intention would be interesting.
-NodeRef NodeCache::fetch(int64_t csn, int offset)
+NodeRef NodeCache::fetch(std::vector<std::pair<int64_t, int>>& trace,
+    int64_t csn, int offset)
 {
   std::lock_guard<std::mutex> l(lock_);
 
-  // no lru update; those are handled by txn traces
+  // update traces since we already have the lock. more importantly, we want
+  // to update the traces here because if we have a cache hit below we'll need
+  // to go to storage to resolve the pointer.
+  if (!trace.empty()) {
+    traces_.emplace_front();
+    traces_.front().swap(trace);
+    cond_.notify_one();
+  }
+
   auto key = std::make_pair(csn, offset);
+
+  // lru update
   auto it = nodes_.find(key);
   if (it != nodes_.end()) {
     entry& e = it->second;
@@ -84,6 +86,7 @@ NodeRef NodeCache::fetch(int64_t csn, int offset)
 
   assert(nn->read_only());
 
+  used_bytes_ += nn->ByteSize();
   nodes_lru_.emplace_front(key);
   auto iter = nodes_lru_.begin();
   auto res = nodes_.insert(
@@ -102,6 +105,7 @@ void NodeCache::ResolveNodePtr(NodePtr& ptr)
   if (node_it == nodes_.end())
     return;
 
+  // lru update
   entry& e = node_it->second;
   nodes_lru_.erase(e.lru_iter);
   nodes_lru_.emplace_front(key);
@@ -126,6 +130,7 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
 
     assert(nn->read_only());
 
+    used_bytes_ += nn->ByteSize();
     auto key = std::make_pair(pos, idx);
     nodes_lru_.emplace_front(key);
     auto iter = nodes_lru_.begin();

@@ -7,10 +7,11 @@
 
 class Snapshot {
  public:
-  Snapshot(const NodePtr root, uint64_t seq, std::vector<std::string> desc) :
-    root(root), seq(seq), desc(desc)
+  Snapshot(DBImpl *db, const NodePtr root, uint64_t seq, std::vector<std::string> desc) :
+    db(db), root(root), seq(seq), desc(desc)
   {}
 
+  DBImpl *db;
   NodePtr root;
   const uint64_t seq;
 

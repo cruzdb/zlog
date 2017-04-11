@@ -78,21 +78,24 @@ class NodePtr {
     read_only_ = true;
   }
 
-  inline NodeRef ref() {
+  inline NodeRef ref(std::vector<std::pair<int64_t, int>>& trace) {
+    trace.emplace_back(csn_, offset_);
     while (true) {
       if (auto ret = ref_.lock()) {
         return ret;
       } else {
-        ref_ = fetch();
+        ref_ = fetch(trace);
       }
     }
   }
 
-  // this should probably just be handled by the caller... but for the time
-  // being it makes the transaction code must simpler.
-  inline NodeRef ref(std::vector<std::pair<int64_t, int>>& trace) {
-    trace.emplace_back(csn_, offset_);
-    return ref();
+  // deference a node without providing a trace. this is used by the db that
+  // doesn't maintain a trace. ideally we want to always (or nearly always)
+  // have a trace. this is only for convenience in some routines that do
+  // things like print the tree.
+  inline NodeRef ref_notrace() {
+    std::vector<std::pair<int64_t, int>> trace;
+    return ref(trace);
   }
 
   inline void set_ref(NodeRef ref) {
@@ -128,7 +131,7 @@ class NodePtr {
 
   bool read_only_;
 
-  NodeRef fetch();
+  NodeRef fetch(std::vector<std::pair<int64_t, int>>& trace);
 };
 
 /*
@@ -157,8 +160,10 @@ class Node {
     if (src == Nil())
       return Nil();
 
+    // TODO: we don't need to use the version of ref() that resolves here
+    // because the caller will likely only traverse down one side.
     auto node = std::make_shared<Node>(src->key(), src->val(), src->red(),
-        src->left.ref(), src->right.ref(), rid, -1, false, db);
+        src->left.ref_notrace(), src->right.ref_notrace(), rid, -1, false, db);
 
     node->left.set_csn(src->left.csn());
     node->left.set_offset(src->left.offset());
@@ -223,6 +228,10 @@ class Node {
     assert(!other->read_only());
     key_ = std::move(other->key_);
     val_ = std::move(other->val_);
+  }
+
+  size_t ByteSize() {
+    return sizeof(*this) + key_.size() + val_.size();
   }
 
  private:
