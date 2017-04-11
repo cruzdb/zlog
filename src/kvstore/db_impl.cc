@@ -3,10 +3,12 @@
 
 DBImpl::DBImpl(zlog::Log *log) :
   root_(Node::Nil(), this, true), root_pos_(0), log_(log), cache_(this),
-  last_pos_(0), stop_(false)
+  stop_(false),
+  cur_txn_(nullptr)
 {
   validate_rb_tree(root_);
-  log_processor_ = std::thread(&DBImpl::process_log_entry, this);
+
+  txn_finisher_ = std::thread(&DBImpl::TransactionFinisher, this);
 }
 
 int DB::Open(zlog::Log *log, bool create_if_empty, DB **db)
@@ -47,11 +49,12 @@ DB::~DB()
 
 DBImpl::~DBImpl()
 {
-  lock_.lock();
-  stop_ = true;
-  log_cond_.notify_all();
-  lock_.unlock();
-  log_processor_.join();
+  {
+    std::lock_guard<std::mutex> l(lock_);
+    stop_ = true;
+  }
+  txn_finisher_cond_.notify_one();
+  txn_finisher_.join();
   cache_.Stop();
 }
 
@@ -277,78 +280,77 @@ void DBImpl::validate_rb_tree(NodePtr root)
 Transaction *DBImpl::BeginTransaction()
 {
   std::lock_guard<std::mutex> l(lock_);
-  return new TransactionImpl(this, root_, root_pos_, root_id_++);
+  auto txn = new TransactionImpl(this, root_, root_pos_, root_id_++);
+  // FIXME: this is a temporary check; we currently do not have any tests or
+  // benchmarks that are multi-threaded. soon we will actually block new
+  // transactions from starting until the current txn finishes.
+  assert(!cur_txn_);
+  cur_txn_ = txn;
+  return txn;
 }
 
-void DBImpl::process_log_entry()
+void DBImpl::TransactionFinisher()
 {
-  for (;;) {
-    std::unique_lock<std::mutex> l(lock_);
+  while (true) {
+    std::unique_lock<std::mutex> lk(lock_);
 
     if (stop_)
       return;
 
-    uint64_t tail;
-    int ret = log_->CheckTail(&tail);
-    assert(ret == 0);
-
-    assert(last_pos_ < tail);
-
-    if ((last_pos_ + 1) == tail) {
-      log_cond_.wait(l);
-      continue; // try again
+    if (!cur_txn_ || !cur_txn_->Committed()) {
+      txn_finisher_cond_.wait(lk);
+      continue;
     }
 
-    // process log in strict serial order
-    uint64_t next = last_pos_ + 1;
-    assert(next < tail);
+    // serialize the transaction after image
+    std::string blob;
+    cur_txn_->SerializeAfterImage(&blob);
 
-    // read and deserialize intention from log
-    std::string i_snapshot;
-    ret = log_->Read(next, &i_snapshot);
-    if (ret == -ENODEV)
-      continue;
+    // append after image to the log
+    uint64_t pos;
+    int ret = log_->Append(blob, &pos);
     assert(ret == 0);
 
+    // deserialize after image
     kvstore_proto::Intention i;
-    assert(i.ParseFromString(i_snapshot));
+    assert(i.ParseFromString(blob));
     assert(i.IsInitialized());
 
-    // meld-subset: only allow serial intentions
-    if (i.snapshot() == -1) assert(next == 0);
-    if (i.snapshot() != -1) assert(next > 0);
-    if (i.snapshot() == (int64_t)last_pos_) {
-      auto root = cache_.CacheIntention(i, next);
-      root_.replace(root);
-      root_pos_ = next;
+    // update root ptr with new position etc...
+    auto root = cache_.CacheIntention(i, pos);
+    root_.replace(root);
+    root_pos_ = pos;
 
-      root_desc_.clear();
-      for (int idx = 0; idx < i.description_size(); idx++)
-        root_desc_.push_back(i.description(idx));
+    root_desc_.clear();
+    for (int idx = 0; idx < i.description_size(); idx++)
+      root_desc_.push_back(i.description(idx));
 
-      auto res = committed_.emplace(std::make_pair(next, true));
-      assert(res.second);
-    } else {
-      auto res = committed_.emplace(std::make_pair(next, false));
-      assert(res.second);
-    }
+    // mark complete
+    cur_txn_->MarkComplete();
+    cur_txn_ = nullptr;
 
-    result_cv_.notify_all();
-
-    last_pos_ = next;
+    // optimizations:
+    //   1. add intention to cache rather than waiting on cache miss
+    //   2. better than (1): fold txn in-memory repr. into cache
   }
 }
 
-bool DBImpl::CommitResult(uint64_t pos)
+void DBImpl::AbortTransaction(TransactionImpl *txn)
 {
-  for (;;) {
-    std::unique_lock<std::mutex> l(lock_);
-    auto it = committed_.find(pos);
-    if (it != committed_.end()) {
-      bool ret = it->second;
-      committed_.erase(it);
-      return ret;
-    }
-    result_cv_.wait(l);
-  }
+  assert(txn == cur_txn_);
+  assert(!txn->Committed());
+  assert(!txn->Completed());
+
+  std::lock_guard<std::mutex> lk(lock_);
+  cur_txn_ = nullptr;
+}
+
+void DBImpl::CompleteTransaction(TransactionImpl *txn)
+{
+  assert(txn == cur_txn_);
+  assert(txn->Committed());
+  assert(!txn->Completed());
+
+  // notify txn finisher
+  txn_finisher_cond_.notify_one();
 }

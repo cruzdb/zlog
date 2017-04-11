@@ -14,17 +14,35 @@ class DBImpl;
 class TransactionImpl : public Transaction {
  public:
   TransactionImpl(DBImpl *db, NodePtr root, uint64_t snapshot, uint64_t rid) :
-    db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid)
+    db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid),
+    committed_(false),
+    completed_(false)
   {
     // TODO: reserve trace as average height
   }
 
-  void Put(const Slice& key, const Slice& value);
-  void Delete(const Slice& key);
+  virtual void Put(const Slice& key, const Slice& value) override;
+  virtual void Delete(const Slice& key) override;
+  virtual int Get(const Slice& key, std::string *value) override;
+  virtual void Commit() override;
 
-  void Commit();
+ public:
+  bool Committed() const {
+    return committed_;
+  }
 
-  int Get(const Slice& key, std::string *value);
+  bool Completed() const {
+    return completed_;
+  }
+
+  void MarkComplete() {
+    lock_.lock();
+    completed_ = true;
+    lock_.unlock();
+    completed_cond_.notify_one();
+  }
+
+  void SerializeAfterImage(std::string *blob);
 
  private:
   class TraceApplier {
@@ -43,14 +61,29 @@ class TransactionImpl : public Transaction {
 
   DBImpl *db_;
 
-  // snapshot
+  // database snapshot
   NodePtr src_root_;
   const uint64_t snapshot_;
 
-  // after image
+  // transaction after image
   NodeRef root_;
   const uint64_t rid_;
-  kvstore_proto::Intention intention_;
+
+  std::mutex lock_;
+
+  /*
+   * committed_: when the client calls Commit
+   * completed_: when its safe to ack the client
+   */
+  bool committed_;
+  bool completed_;
+
+  std::condition_variable completed_cond_;
+
+  void WaitComplete() {
+    std::unique_lock<std::mutex> lk(lock_);
+    completed_cond_.wait(lk, [this]{ return completed_; });
+  }
 
   // access trace used to update lru cache. the trace is applied and reset
   // after each operation (e.g. get/put/etc) or if the transaction accesses
@@ -113,7 +146,8 @@ class TransactionImpl : public Transaction {
       const std::string& dir);
   void serialize_node(kvstore_proto::Node *dst, NodeRef node,
       int field_index);
-  void serialize_intention(NodeRef node, int& field_index);
+  void serialize_intention(kvstore_proto::Intention& i,
+      NodeRef node, int& field_index);
 
   void set_intention_self_csn_recursive(uint64_t rid, NodeRef node,
       uint64_t pos);

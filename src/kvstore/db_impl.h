@@ -71,7 +71,9 @@ class DBImpl : public DB {
     validate_rb_tree(snapshot);
   }
 
-  bool CommitResult(uint64_t pos);
+ public:
+  void CompleteTransaction(TransactionImpl *txn);
+  void AbortTransaction(TransactionImpl *txn);
 
  private:
 
@@ -97,24 +99,20 @@ class DBImpl : public DB {
 
   std::mutex lock_;
 
-  std::condition_variable log_cond_;
   zlog::Log *log_;
 
   NodeCache cache_;
 
-  uint64_t last_pos_;
-  std::thread log_processor_;
-  void process_log_entry();
-
-  volatile bool stop_;
-
-  // polling vs cond var vs hybrid
-  std::condition_variable result_cv_;
-
-  std::unordered_map<uint64_t, bool> committed_;
+  bool stop_;
 
   // TODO: how is this initialized?
   static uint64_t root_id_;
+
+  // current transaction handling
+  TransactionImpl *cur_txn_;
+  std::thread txn_finisher_;
+  void TransactionFinisher();
+  std::condition_variable txn_finisher_cond_;
 };
 
 #endif

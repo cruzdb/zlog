@@ -371,18 +371,19 @@ void TransactionImpl::balance_delete(NodeRef extra_black,
 // intentions. we can't just trim it because we don't have an address for
 // nodes that aren't yet in the log..
 
-void TransactionImpl::serialize_intention(NodeRef node, int& field_index)
+void TransactionImpl::serialize_intention(kvstore_proto::Intention& i,
+    NodeRef node, int& field_index)
 {
   assert(node != nullptr);
 
   if (node == Node::Nil() || node->rid() != rid_)
     return;
 
-  serialize_intention(node->left.ref(trace_), field_index);
-  serialize_intention(node->right.ref(trace_), field_index);
+  serialize_intention(i, node->left.ref(trace_), field_index);
+  serialize_intention(i, node->right.ref(trace_), field_index);
 
   // new serialized node in the intention
-  kvstore_proto::Node *dst = intention_.add_tree();
+  kvstore_proto::Node *dst = i.add_tree();
   serialize_node(dst, node, field_index);
   field_index++;
 }
@@ -411,6 +412,8 @@ void TransactionImpl::set_intention_self_csn(NodeRef root, uint64_t pos) {
 
 void TransactionImpl::Put(const Slice& key, const Slice& value)
 {
+  assert(!committed_);
+
   TraceApplier ta(this);
 
   /*
@@ -464,6 +467,8 @@ void TransactionImpl::Put(const Slice& key, const Slice& value)
 
 void TransactionImpl::Delete(const Slice& key)
 {
+  assert(!committed_);
+
   TraceApplier ta(this);
 
   std::deque<NodeRef> path;
@@ -531,46 +536,38 @@ void TransactionImpl::Delete(const Slice& key)
 
 void TransactionImpl::Commit()
 {
+  assert(!committed_);
+
   assert(trace_.empty());
 
   // nothing to do
   if (root_ == nullptr) {
+    db_->AbortTransaction(this);
+    committed_ = true;
+    completed_ = true;
     return;
   }
 
-  // build the intention and fixup field offsets
-  int field_index = 0;
-  assert(root_ != nullptr);
-  if (root_ == Node::Nil()) {
-  } else
-    assert(root_->rid() == rid_);
+  // after setting this to true, a spurious wake-up could cause the txn
+  // finisher to start processing this transaction, so make sure we are ready
+  // for that...
+  committed_ = true;
 
-  serialize_intention(root_, field_index);
-  intention_.set_snapshot(snapshot_);
+  db_->CompleteTransaction(this);
+  WaitComplete();
 
-  for (const auto& s : description_)
-    intention_.add_description(s);
+  //// update the in-memory intention ptrs
+  //set_intention_self_csn(root_, pos);
 
-  // append to the database log
-  std::string blob;
-  assert(intention_.IsInitialized());
-  assert(intention_.SerializeToString(&blob));
-
-  uint64_t pos;
-  int ret = db_->log_->Append(blob, &pos);
-  assert(ret == 0);
-  db_->log_cond_.notify_all();
-
-  // update the in-memory intention ptrs
-  set_intention_self_csn(root_, pos);
-
-  // wait for result
-  bool committed = db_->CommitResult(pos);
-  assert(committed);
+  //// wait for result
+  //bool committed = db_->CommitResult(pos);
+  //assert(committed);
 }
 
 int TransactionImpl::Get(const Slice& key, std::string* val)
 {
+  assert(!committed_);
+
   TraceApplier ta(this);
 
   auto cur = root_ == nullptr ? src_root_.ref(trace_) : root_;
@@ -585,4 +582,26 @@ int TransactionImpl::Get(const Slice& key, std::string* val)
       cur->right.ref(trace_);
   }
   return -ENOENT;
+}
+
+void TransactionImpl::SerializeAfterImage(std::string *blob)
+{
+  assert(committed_);
+
+  int field_index = 0;
+  assert(root_ != nullptr);
+  if (root_ == Node::Nil()) {
+    // ???
+  } else
+    assert(root_->rid() == rid_);
+
+  kvstore_proto::Intention i;
+  serialize_intention(i, root_, field_index);
+  i.set_snapshot(snapshot_);
+
+  for (const auto& s : description_)
+    i.add_description(s);
+
+  assert(i.IsInitialized());
+  assert(i.SerializeToString(blob));
 }
