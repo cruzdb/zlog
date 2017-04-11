@@ -27,7 +27,19 @@ class TransactionImpl : public Transaction {
   int Get(const Slice& key, std::string *value);
 
  private:
-  friend class TraceApplier;
+  class TraceApplier {
+   public:
+    explicit TraceApplier(TransactionImpl *txn) :
+      txn_(txn)
+    {}
+
+    ~TraceApplier() {
+      txn_->UpdateLRU();
+    }
+
+   private:
+    TransactionImpl *txn_;
+  };
 
   DBImpl *db_;
 

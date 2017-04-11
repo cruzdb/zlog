@@ -2,20 +2,6 @@
 #include <sstream>
 #include "db_impl.h"
 
-class TraceApplier {
- public:
-  explicit TraceApplier(TransactionImpl *txn) :
-    txn_(txn)
-  {}
-
-  ~TraceApplier() {
-    txn_->UpdateLRU();
-  }
-
- private:
-  TransactionImpl *txn_;
-};
-
 void TransactionImpl::UpdateLRU()
 {
   db_->UpdateLRU(trace_);
