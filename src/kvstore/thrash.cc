@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include "zlog/db.h"
 #include "zlog/backend/ram.h"
+#include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
 
@@ -13,6 +14,30 @@ static inline std::string tostr(int value)
   std::stringstream ss;
   ss << std::setw(3) << std::setfill('0') << value;
   return ss.str();
+}
+
+static void print_map(const std::map<std::string, std::string>& m)
+{
+  for (auto kv : m)
+    std::cout << kv.first << " -> " << kv.second << std::endl;
+}
+
+static void check_history(const std::map<std::string, std::string>& a,
+    const std::map<std::string, std::string>& b)
+{
+  if (a.size() != b.size()) {
+    std::cout << "size " << a.size() << " != " << b.size() << std::endl;
+    assert(0);
+  }
+  for (auto kv : a) {
+    auto it = b.find(kv.first);
+    if (it == b.end()) {
+      print_map(b);
+      std::cout << "key \"" << kv.first  << "\" not found" << std::endl;
+      assert(0);
+    }
+    assert(kv.second == it->second);
+  }
 }
 
 static std::map<std::string, std::string> get_map(DB *db,
@@ -32,7 +57,7 @@ static std::map<std::string, std::string> get_map(DB *db,
       // insert that range moving backward
       assert(it->Valid());
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Prev();
       }
 
@@ -45,7 +70,7 @@ static std::map<std::string, std::string> get_map(DB *db,
 
       // add the last half
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Next();
       }
     } else {
@@ -58,7 +83,7 @@ static std::map<std::string, std::string> get_map(DB *db,
       // insert that range moving forward
       assert(it->Valid());
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Next();
       }
 
@@ -71,7 +96,7 @@ static std::map<std::string, std::string> get_map(DB *db,
 
       // add the frst half
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Prev();
       }
     }
@@ -79,13 +104,13 @@ static std::map<std::string, std::string> get_map(DB *db,
     if (forward) {
       it->SeekToFirst();
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Next();
       }
     } else {
       it->SeekToLast();
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Prev();
       }
     }
@@ -242,7 +267,9 @@ int main(int argc, char **argv)
     std::cout << std::flush;
     assert(truth_history.size() == db_history.size());
     for (unsigned i = 0; i < db_history.size(); i++) {
+      i = db_history.size() - 1;
       count += truth_history[i].size();
+      check_history(truth_history[i], get_map(db, db_history[i], true, 0));
       assert(truth_history[i] == get_map(db, db_history[i], true, 0));
       assert(truth_history[i] == get_map(db, db_history[i], false, 0));
       if (truth_history[i].size() > 10) {

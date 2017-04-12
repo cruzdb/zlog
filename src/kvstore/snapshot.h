@@ -7,11 +7,12 @@
 
 class Snapshot {
  public:
-  Snapshot(const NodeRef root, uint64_t seq, std::vector<std::string> desc) :
-    root(root), seq(seq), desc(desc)
+  Snapshot(DBImpl *db, const NodePtr root, uint64_t seq, std::vector<std::string> desc) :
+    db(db), root(root), seq(seq), desc(desc)
   {}
 
-  const NodeRef root;
+  DBImpl *db;
+  NodePtr root;
   const uint64_t seq;
 
   // TODO: remove in favor of some sort of pointer to this state. for example

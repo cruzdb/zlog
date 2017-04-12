@@ -8,4 +8,5 @@ Build-Depends: cmake,
   libboost-system-dev,
   libboost-program-options-dev,
   lcov,
-  default-jdk
+  default-jdk,
+  liblmdb-dev

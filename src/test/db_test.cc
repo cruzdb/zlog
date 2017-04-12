@@ -6,6 +6,7 @@
 #include "zlog/db.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend/ram.h"
+#include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
 
@@ -33,7 +34,7 @@ static std::map<std::string, std::string> get_map(DB *db,
       // insert that range moving backward
       assert(it->Valid());
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Prev();
       }
 
@@ -46,7 +47,7 @@ static std::map<std::string, std::string> get_map(DB *db,
 
       // add the last half
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Next();
       }
     } else {
@@ -59,7 +60,7 @@ static std::map<std::string, std::string> get_map(DB *db,
       // insert that range moving forward
       assert(it->Valid());
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Next();
       }
 
@@ -72,7 +73,7 @@ static std::map<std::string, std::string> get_map(DB *db,
 
       // add the frst half
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Prev();
       }
     }
@@ -80,13 +81,13 @@ static std::map<std::string, std::string> get_map(DB *db,
     if (forward) {
       it->SeekToFirst();
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Next();
       }
     } else {
       it->SeekToLast();
       while (it->Valid()) {
-        map[it->key()] = it->value();
+        map[it->key().ToString()] = it->value().ToString();
         it->Prev();
       }
     }

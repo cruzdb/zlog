@@ -2,18 +2,13 @@
 #include <sstream>
 
 DBImpl::DBImpl(zlog::Log *log) :
-  log_(log), cache_(this)
+  root_(Node::Nil(), this, true), root_pos_(0), log_(log), cache_(this),
+  stop_(false),
+  cur_txn_(nullptr)
 {
-  root_ = Node::Nil();
-  root_pos_ = 0;
-
-  last_pos_ = 0;
-  stop_ = false;
-
-  // todo: enable/disable debug
   validate_rb_tree(root_);
 
-  log_processor_ = std::thread(&DBImpl::process_log_entry, this);
+  txn_finisher_ = std::thread(&DBImpl::TransactionFinisher, this);
 }
 
 int DB::Open(zlog::Log *log, bool create_if_empty, DB **db)
@@ -54,29 +49,31 @@ DB::~DB()
 
 DBImpl::~DBImpl()
 {
-  lock_.lock();
-  stop_ = true;
-  log_cond_.notify_all();
-  lock_.unlock();
-  log_processor_.join();
+  {
+    std::lock_guard<std::mutex> l(lock_);
+    stop_ = true;
+  }
+  txn_finisher_cond_.notify_one();
+  txn_finisher_.join();
+  cache_.Stop();
 }
 
 std::ostream& operator<<(std::ostream& out, const NodeRef& n)
 {
-  out << "node(" << n.get() << "):" << n->key() << ": ";
+  out << "node(" << n.get() << "):" << n->key().ToString() << ": ";
   out << (n->red() ? "red " : "blk ");
   out << "fi " << n->field_index() << " ";
   out << "left=[p" << n->left.csn() << ",o" << n->left.offset() << ",";
-  if (n->left.ref() == Node::Nil())
+  if (n->left.ref_notrace() == Node::Nil())
     out << "nil";
   else
-    out << n->left.ref().get();
+    out << n->left.ref_notrace().get();
   out << "] ";
   out << "right=[p" << n->right.csn() << ",o" << n->right.offset() << ",";
-  if (n->right.ref() == Node::Nil())
+  if (n->right.ref_notrace() == Node::Nil())
     out << "nil";
   else
-    out << n->right.ref().get();
+    out << n->right.ref_notrace().get();
   out << "] ";
   return out;
 }
@@ -121,7 +118,7 @@ void DBImpl::write_dot_node(std::ostream& out,
     NodeRef parent, NodePtr& child, const std::string& dir)
 {
   out << "\"" << parent.get() << "\":" << dir << " -> ";
-  out << "\"" << child.ref().get() << "\"";
+  out << "\"" << child.ref_notrace().get() << "\"";
   out << " [label=\"" << child.csn() << ":"
     << child.offset() << "\"];" << std::endl;
 }
@@ -133,25 +130,25 @@ void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
     return;
 
   out << "\"" << node.get() << "\" ["
-    << "label=\"" << node->key() << "_" << node->val() << "\",style=filled,"
+    << "label=\"" << node->key().ToString() << "_" << node->val().ToString() << "\",style=filled,"
     << "fillcolor=" << (node->red() ? "red" :
         "black,fontcolor=white")
     << "]" << std::endl;
 
-  assert(node->left.ref() != nullptr);
-  if (node->left.ref() == Node::Nil())
+  assert(node->left.ref_notrace() != nullptr);
+  if (node->left.ref_notrace() == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
     write_dot_node(out, node, node->left, "sw");
-    write_dot_recursive(out, rid, node->left.ref(), nullcount, scoped);
+    write_dot_recursive(out, rid, node->left.ref_notrace(), nullcount, scoped);
   }
 
-  assert(node->right.ref() != nullptr);
-  if (node->right.ref() == Node::Nil())
+  assert(node->right.ref_notrace() != nullptr);
+  if (node->right.ref_notrace() == Node::Nil())
     write_dot_null(out, node, nullcount);
   else {
     write_dot_node(out, node, node->right, "se");
-    write_dot_recursive(out, rid, node->right.ref(), nullcount, scoped);
+    write_dot_recursive(out, rid, node->right.ref_notrace(), nullcount, scoped);
   }
 }
 
@@ -168,7 +165,7 @@ void DBImpl::write_dot(std::ostream& out, bool scoped)
   auto root = root_;
   uint64_t nullcount = 0;
   out << "digraph ptree {" << std::endl;
-  _write_dot(out, root, nullcount, scoped);
+  _write_dot(out, root.ref_notrace(), nullcount, scoped);
   out << "}" << std::endl;
 }
 
@@ -190,10 +187,11 @@ void DBImpl::write_dot_history(std::ostream& out,
     label << "\"";
 
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
-    if ((*it)->root == Node::Nil()) {
+    auto ref = (*it)->root.ref_notrace();
+    if (ref == Node::Nil()) {
       out << "null" << ++nullcount << " [label=nil];" << std::endl;
     } else {
-      _write_dot(out, (*it)->root, nullcount, true);
+      _write_dot(out, ref, nullcount, true);
     }
 
 #if 0
@@ -214,7 +212,7 @@ void DBImpl::print_node(NodeRef node)
   if (node == Node::Nil())
     std::cout << "nil:" << (node->red() ? "r" : "b");
   else
-    std::cout << node->key() << ":" << (node->red() ? "r" : "b");
+    std::cout << node->key().ToString() << ":" << (node->red() ? "r" : "b");
 }
 
 void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
@@ -228,7 +226,7 @@ void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
       if (node == Node::Nil())
         out << "nil:" << (node->red() ? "r " : "b ");
       else
-        out << node->key() << ":" << (node->red() ? "r " : "b ");
+        out << node->key().ToString() << ":" << (node->red() ? "r " : "b ");
     }
     out << "]";
   }
@@ -249,11 +247,11 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   if (root == Node::Nil())
     return 1;
 
-  assert(root->left.ref());
-  assert(root->right.ref());
+  assert(root->left.ref_notrace());
+  assert(root->right.ref_notrace());
 
-  NodeRef ln = root->left.ref();
-  NodeRef rn = root->right.ref();
+  NodeRef ln = root->left.ref_notrace();
+  NodeRef rn = root->right.ref_notrace();
 
   if (root->red() && (ln->red() || rn->red()))
     return 0;
@@ -261,8 +259,8 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   int lh = _validate_rb_tree(ln);
   int rh = _validate_rb_tree(rn);
 
-  if ((ln != Node::Nil() && ln->key() >= root->key()) ||
-      (rn != Node::Nil() && rn->key() <= root->key()))
+  if ((ln != Node::Nil() && ln->key().compare(root->key()) >= 0) ||
+      (rn != Node::Nil() && rn->key().compare(root->key()) <= 0))
     return 0;
 
   if (lh != 0 && rh != 0 && lh != rh)
@@ -274,87 +272,85 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   return 0;
 }
 
-void DBImpl::validate_rb_tree(NodeRef root)
+void DBImpl::validate_rb_tree(NodePtr root)
 {
-  assert(_validate_rb_tree(root) != 0);
+  assert(_validate_rb_tree(root.ref_notrace()) != 0);
 }
 
 Transaction *DBImpl::BeginTransaction()
 {
   std::lock_guard<std::mutex> l(lock_);
-  return new TransactionImpl(this, root_, root_pos_, root_id_++);
+  auto txn = new TransactionImpl(this, root_, root_pos_, root_id_++);
+  // FIXME: this is a temporary check; we currently do not have any tests or
+  // benchmarks that are multi-threaded. soon we will actually block new
+  // transactions from starting until the current txn finishes.
+  assert(!cur_txn_);
+  cur_txn_ = txn;
+  return txn;
 }
 
-void DBImpl::process_log_entry()
+void DBImpl::TransactionFinisher()
 {
-  for (;;) {
-    std::unique_lock<std::mutex> l(lock_);
+  while (true) {
+    std::unique_lock<std::mutex> lk(lock_);
 
     if (stop_)
       return;
 
-    uint64_t tail;
-    int ret = log_->CheckTail(&tail);
-    assert(ret == 0);
-
-    assert(last_pos_ < tail);
-
-    if ((last_pos_ + 1) == tail) {
-      log_cond_.wait(l);
-      continue; // try again
+    if (!cur_txn_ || !cur_txn_->Committed()) {
+      txn_finisher_cond_.wait(lk);
+      continue;
     }
 
-    // process log in strict serial order
-    uint64_t next = last_pos_ + 1;
-    assert(next < tail);
+    // serialize the transaction after image
+    std::string blob;
+    cur_txn_->SerializeAfterImage(&blob);
 
-    // read and deserialize intention from log
-    std::string i_snapshot;
-    ret = log_->Read(next, &i_snapshot);
-    if (ret == -ENODEV)
-      continue;
+    // append after image to the log
+    uint64_t pos;
+    int ret = log_->Append(blob, &pos);
     assert(ret == 0);
 
+    // deserialize after image
     kvstore_proto::Intention i;
-    assert(i.ParseFromString(i_snapshot));
+    assert(i.ParseFromString(blob));
     assert(i.IsInitialized());
 
-    // meld-subset: only allow serial intentions
-    if (i.snapshot() == -1) assert(next == 0);
-    if (i.snapshot() != -1) assert(next > 0);
-    if (i.snapshot() == (int64_t)last_pos_) {
-      auto root = cache_.CacheIntention(i, next);
-      validate_rb_tree(root);
-      root_ = root;
-      root_pos_ = next;
+    // update root ptr with new position etc...
+    auto root = cache_.CacheIntention(i, pos);
+    root_.replace(root);
+    root_pos_ = pos;
 
-      root_desc_.clear();
-      for (int idx = 0; idx < i.description_size(); idx++)
-        root_desc_.push_back(i.description(idx));
+    root_desc_.clear();
+    for (int idx = 0; idx < i.description_size(); idx++)
+      root_desc_.push_back(i.description(idx));
 
-      auto res = committed_.emplace(std::make_pair(next, true));
-      assert(res.second);
-    } else {
-      auto res = committed_.emplace(std::make_pair(next, false));
-      assert(res.second);
-    }
+    // mark complete
+    cur_txn_->MarkComplete();
+    cur_txn_ = nullptr;
 
-    result_cv_.notify_all();
-
-    last_pos_ = next;
+    // optimizations:
+    //   1. add intention to cache rather than waiting on cache miss
+    //   2. better than (1): fold txn in-memory repr. into cache
   }
 }
 
-bool DBImpl::CommitResult(uint64_t pos)
+void DBImpl::AbortTransaction(TransactionImpl *txn)
 {
-  for (;;) {
-    std::unique_lock<std::mutex> l(lock_);
-    auto it = committed_.find(pos);
-    if (it != committed_.end()) {
-      bool ret = it->second;
-      committed_.erase(it);
-      return ret;
-    }
-    result_cv_.wait(l);
-  }
+  assert(txn == cur_txn_);
+  assert(!txn->Committed());
+  assert(!txn->Completed());
+
+  std::lock_guard<std::mutex> lk(lock_);
+  cur_txn_ = nullptr;
+}
+
+void DBImpl::CompleteTransaction(TransactionImpl *txn)
+{
+  assert(txn == cur_txn_);
+  assert(txn->Committed());
+  assert(!txn->Completed());
+
+  // notify txn finisher
+  txn_finisher_cond_.notify_one();
 }

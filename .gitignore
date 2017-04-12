@@ -32,6 +32,7 @@ src/zlog-seqr
 
 src/test/zlog-test-ceph
 src/test/zlog-test-ram
+src/test/zlog-test-lmdb
 src/test/zstate-test
 src/test/zlog-db-test
 src/test/ceph_test_cls_zlog
@@ -41,10 +42,12 @@ src/append-check
 src/zlog
 src/physical-design
 src/zlog-bench
+src/kvstore/bench
 
 CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
+compile_commands.json
 *.so
 
 build
@@ -52,3 +55,5 @@ build
 coverage
 
 build-doc
+
+db

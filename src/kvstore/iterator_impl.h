@@ -2,6 +2,7 @@
 #define ZLOG_KVSTORE_ITERATOR_H
 // interface derived from facebook/rocksdb/iterator
 #include <stack>
+#include <zlog/slice.h>
 #include "node.h"
 #include "snapshot.h"
 #include "zlog/iterator.h"
@@ -25,7 +26,7 @@ class IteratorImpl : public Iterator {
   // Position at the first key in the source that at or past target
   // The iterator is Valid() after this call iff the source contains
   // an entry that comes at or past target.
-  void Seek(const std::string& target);
+  void Seek(const Slice& target);
 
   // Moves to the next entry in the source.  After this call, Valid() is
   // true iff the iterator was not positioned at the last entry in the source.
@@ -41,13 +42,13 @@ class IteratorImpl : public Iterator {
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: Valid()
-  std::string key() const;
+  Slice key() const;
 
   // Return the value for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: !AtEnd() && !AtStart()
-  std::string value() const;
+  Slice value() const;
 
 #if 0
   // If an error has occurred, return it.  Else return an ok status.
@@ -78,8 +79,8 @@ class IteratorImpl : public Iterator {
     Reverse
   };
 
-  void SeekForward(const std::string& target);
-  void SeekPrevious(const std::string& target);
+  void SeekForward(const Slice& target);
+  void SeekPrevious(const Slice& target);
 
   std::stack<NodeRef> stack_; // curr or unvisited parents
   Snapshot *snapshot_;

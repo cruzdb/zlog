@@ -49,6 +49,7 @@ class DB {
    */
   virtual void write_dot_history(std::ostream& out,
       std::vector<Snapshot*>& snapshots) = 0;
+  virtual void validate() = 0;
 };
 
 #endif

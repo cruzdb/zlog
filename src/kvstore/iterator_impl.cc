@@ -1,4 +1,21 @@
 #include "iterator_impl.h"
+#include "db_impl.h"
+
+class IteratorTraceApplier {
+ public:
+  explicit IteratorTraceApplier(DBImpl *db) :
+    db_(db)
+  {}
+
+  ~IteratorTraceApplier() {
+    db_->UpdateLRU(trace);
+  }
+
+  std::vector<std::pair<int64_t, int>> trace;
+
+ private:
+  DBImpl *db_;
+};
 
 IteratorImpl::IteratorImpl(Snapshot *snapshot) :
   snapshot_(snapshot)
@@ -12,15 +29,17 @@ bool IteratorImpl::Valid() const
 
 void IteratorImpl::SeekToFirst()
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
   // all the way to the left
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref(ta.trace);
   while (node != Node::Nil()) {
     stack_.push(node);
-    node = node->left.ref();
+    node = node->left.ref(ta.trace);
   }
 
   dir = Forward;
@@ -28,130 +47,156 @@ void IteratorImpl::SeekToFirst()
 
 void IteratorImpl::SeekToLast()
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
   // all the way to the right
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref(ta.trace);
   while (node != Node::Nil()) {
     stack_.push(node);
-    node = node->right.ref();
+    node = node->right.ref(ta.trace);
   }
 
   dir = Reverse;
 }
 
-void IteratorImpl::Seek(const std::string& key)
+void IteratorImpl::Seek(const Slice& key)
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref(ta.trace);
   while (node != Node::Nil()) {
-    if (key == node->key()) {
+    int cmp = key.compare(Slice(node->key().data(),
+          node->key().size()));
+    if (cmp == 0) {
       stack_.push(node);
       break;
-    } else if (key < node->key()) {
+    } else if (cmp < 0) {
       stack_.push(node);
-      node = node->left.ref();
+      node = node->left.ref(ta.trace);
     } else
-      node = node->right.ref();
+      node = node->right.ref(ta.trace);
   }
 
-  assert(stack_.empty() || stack_.top()->key() >= key);
+  assert(stack_.empty() ||
+      Slice(stack_.top()->key().data(),
+        stack_.top()->key().size()).compare(key) >= 0);
 
   dir = Forward;
 }
 
-void IteratorImpl::SeekForward(const std::string& key)
+void IteratorImpl::SeekForward(const Slice& key)
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref(ta.trace);
   while (node != Node::Nil()) {
-    if (key == node->key()) {
+    int cmp = key.compare(Slice(node->key().data(),
+          node->key().size()));
+    if (cmp == 0) {
       stack_.push(node);
       break;
-    } else if (key < node->key()) {
+    } else if (cmp < 0) {
       stack_.push(node);
-      node = node->left.ref();
+      node = node->left.ref(ta.trace);
     } else
-      node = node->right.ref();
+      node = node->right.ref(ta.trace);
   }
 
-  assert(stack_.empty() || stack_.top()->key() == key);
+  assert(stack_.empty() ||
+      Slice(stack_.top()->key().data(),
+        stack_.top()->key().size()).compare(key) == 0);
 
   dir = Forward;
 }
 
-void IteratorImpl::SeekPrevious(const std::string& key)
+void IteratorImpl::SeekPrevious(const Slice& key)
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   // clear stack
   std::stack<NodeRef> stack;
   stack_.swap(stack);
 
-  NodeRef node = snapshot_->root;
+  NodeRef node = snapshot_->root.ref(ta.trace);
   while (node != Node::Nil()) {
-    if (key == node->key()) {
+    int cmp = key.compare(Slice(node->key().data(),
+          node->key().size()));
+    if (cmp == 0) {
       stack_.push(node);
       break;
-    } else if (key < node->key()) {
-      node = node->left.ref();
+    } else if (cmp < 0) {
+      node = node->left.ref(ta.trace);
     } else {
       stack_.push(node);
-      node = node->right.ref();
+      node = node->right.ref(ta.trace);
     }
   }
 
-  assert(stack_.empty() || stack_.top()->key() == key);
+  assert(stack_.empty() ||
+      Slice(stack_.top()->key().data(),
+        stack_.top()->key().size()).compare(key) == 0);
 
   dir = Reverse;
 }
 
 void IteratorImpl::Next()
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   assert(Valid());
   if (dir == Reverse) {
     SeekForward(key());
     assert(dir == Forward);
   }
   assert(Valid());
-  NodeRef node = stack_.top()->right.ref();
+  NodeRef node = stack_.top()->right.ref(ta.trace);
   stack_.pop();
   while (node != Node::Nil()) {
     stack_.push(node);
-    node = node->left.ref();
+    node = node->left.ref(ta.trace);
   }
 }
 
 void IteratorImpl::Prev()
 {
+  IteratorTraceApplier ta(snapshot_->db);
+
   assert(Valid());
   if (dir == Forward) {
     SeekPrevious(key());
     assert(dir == Reverse);
   }
   assert(Valid());
-  NodeRef node = stack_.top()->left.ref();
+  NodeRef node = stack_.top()->left.ref(ta.trace);
   stack_.pop();
   while (node != Node::Nil()) {
     stack_.push(node);
-    node = node->right.ref();
+    node = node->right.ref(ta.trace);
   }
 }
 
-std::string IteratorImpl::key() const
+Slice IteratorImpl::key() const
 {
   assert(Valid());
-  return stack_.top()->key();
+  return Slice(stack_.top()->key().data(),
+      stack_.top()->key().size());
 }
 
-std::string IteratorImpl::value() const
+Slice IteratorImpl::value() const
 {
   assert(Valid());
-  return stack_.top()->val();
+  return Slice(stack_.top()->val().data(),
+      stack_.top()->val().size());
 }

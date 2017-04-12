@@ -31,9 +31,12 @@ popd
 
 PATH=${INSTALL_DIR}/bin:$PATH
 
+mkdir db
+
 # ram backend tests
 zlog-test-ram
 zlog-db-test
+zlog-test-lmdb
 
 # ceph backend tests
 if [ ! -z ${CEPH_CONF} ]; then
@@ -44,7 +47,8 @@ fi
 
 if [ "${RUN_COVERAGE}" == 1 ]; then
   pushd ${BUILD_DIR}
-  for test in zlog-test-ram-cov zlog-db-test-cov; do
+  mkdir db
+  for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov; do
     make $test
     rm -rf coverage*
     lcov --directory . --capture --output-file coverage.info

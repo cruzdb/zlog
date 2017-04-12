@@ -13,6 +13,7 @@ add_library(libkvstore SHARED
     transaction_impl.cc
     node_cache.cc
     iterator_impl.cc
+    node.cc
 )
 target_link_libraries(libkvstore libzlog kvstore_proto)
 install(TARGETS libkvstore LIBRARY DESTINATION lib)
@@ -22,3 +23,6 @@ target_link_libraries(thrash libzlog zlog_seqr libkvstore zlog_seqr)
 
 add_executable(rbt rbt.cc)
 target_link_libraries(rbt libkvstore zlog_seqr)
+
+add_executable(bench bench.cc)
+target_link_libraries(bench libzlog zlog_seqr libkvstore zlog_seqr lmdb)

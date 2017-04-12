@@ -13,25 +13,95 @@ class DBImpl;
  */
 class TransactionImpl : public Transaction {
  public:
-  TransactionImpl(DBImpl *db, NodeRef root, uint64_t snapshot, uint64_t rid) :
-    db_(db), src_root_(root), snapshot_(snapshot), rid_(rid), root_(nullptr)
-  {}
+  TransactionImpl(DBImpl *db, NodePtr root, uint64_t snapshot, uint64_t rid) :
+    db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid),
+    committed_(false),
+    completed_(false)
+  {
+    // TODO: reserve trace as average height
+  }
 
-  void Put(const std::string& key, const std::string& val);
-  void Delete(std::string key);
+  virtual void Put(const Slice& key, const Slice& value) override;
+  virtual void Delete(const Slice& key) override;
+  virtual int Get(const Slice& key, std::string *value) override;
+  virtual void Commit() override;
 
-  void Commit();
+ public:
+  bool Committed() const {
+    return committed_;
+  }
 
-  int Get(const std::string& key, std::string *val);
+  bool Completed() const {
+    return completed_;
+  }
+
+  void MarkComplete() {
+    lock_.lock();
+    completed_ = true;
+    lock_.unlock();
+    completed_cond_.notify_one();
+  }
+
+  void SerializeAfterImage(std::string *blob);
 
  private:
+  class TraceApplier {
+   public:
+    explicit TraceApplier(TransactionImpl *txn) :
+      txn_(txn)
+    {}
+
+    ~TraceApplier() {
+      txn_->UpdateLRU();
+    }
+
+   private:
+    TransactionImpl *txn_;
+  };
+
   DBImpl *db_;
-  // root that transaction started with
-  const NodeRef src_root_;
+
+  // database snapshot
+  NodePtr src_root_;
   const uint64_t snapshot_;
-  const uint64_t rid_;
+
+  // transaction after image
   NodeRef root_;
-  kvstore_proto::Intention intention_;
+  const uint64_t rid_;
+
+  std::mutex lock_;
+
+  /*
+   * committed_: when the client calls Commit
+   * completed_: when its safe to ack the client
+   */
+  bool committed_;
+  bool completed_;
+
+  std::condition_variable completed_cond_;
+
+  void WaitComplete() {
+    std::unique_lock<std::mutex> lk(lock_);
+    completed_cond_.wait(lk, [this]{ return completed_; });
+  }
+
+  // access trace used to update lru cache. the trace is applied and reset
+  // after each operation (e.g. get/put/etc) or if the transaction accesses
+  // the cache to resolve a pointer (e.g. accessing the log).
+  std::vector<std::pair<int64_t, int>> trace_;
+  void UpdateLRU();
+
+  // keep new nodes alive for the duration of the transaction until we
+  // construct the intention. this is needed because NodePtr contains weak_ptr
+  // so new NodeRef nodes (see: insert_recursive) just disappear, and we can't
+  // let that happen because we don't store them in the the log or any other
+  // type of cache. future options:
+  //
+  //   1. use a SharedNodePtr type in transactions
+  //   2. probably better: integrate some sort of cache so that we can support
+  //   transactions that are really large
+  //
+  std::vector<NodeRef> fresh_nodes_;
 
   static inline NodePtr& left(NodeRef n) { return n->left; };
   static inline NodePtr& right(NodeRef n) { return n->right; };
@@ -45,7 +115,7 @@ class TransactionImpl : public Transaction {
   }
 
   NodeRef insert_recursive(std::deque<NodeRef>& path,
-      std::string key, std::string val, const NodeRef& node);
+      const Slice& key, const Slice& value, const NodeRef& node);
 
   template<typename ChildA, typename ChildB>
   void insert_balance(NodeRef& parent, NodeRef& nn,
@@ -56,7 +126,7 @@ class TransactionImpl : public Transaction {
       ChildA child_a, ChildB child_b, NodeRef& root);
 
   NodeRef delete_recursive(std::deque<NodeRef>& path,
-      std::string key, const NodeRef& node);
+      const Slice& key, const NodeRef& node);
 
   void transplant(NodeRef parent, NodeRef removed,
       NodeRef transplanted, NodeRef& root);
@@ -73,10 +143,11 @@ class TransactionImpl : public Transaction {
 
   // turn a transaction into a serialized protocol buffer
   void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,
-      const std::string& dir) const;
+      const std::string& dir);
   void serialize_node(kvstore_proto::Node *dst, NodeRef node,
-      int field_index) const;
-  void serialize_intention(NodeRef node, int& field_index);
+      int field_index);
+  void serialize_intention(kvstore_proto::Intention& i,
+      NodeRef node, int& field_index);
 
   void set_intention_self_csn_recursive(uint64_t rid, NodeRef node,
       uint64_t pos);
