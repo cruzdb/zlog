@@ -58,7 +58,7 @@ DBImpl::~DBImpl()
   cache_.Stop();
 }
 
-std::ostream& operator<<(std::ostream& out, const NodeRef& n)
+std::ostream& operator<<(std::ostream& out, const SharedNodeRef& n)
 {
   out << "node(" << n.get() << "):" << n->key().ToString() << ": ";
   out << (n->red() ? "red " : "blk ");
@@ -105,7 +105,7 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i)
 uint64_t DBImpl::root_id_ = 928734;
 
 void DBImpl::write_dot_null(std::ostream& out,
-    NodeRef node, uint64_t& nullcount)
+    SharedNodeRef node, uint64_t& nullcount)
 {
   nullcount++;
   out << "null" << nullcount << " [shape=point];"
@@ -115,7 +115,7 @@ void DBImpl::write_dot_null(std::ostream& out,
 }
 
 void DBImpl::write_dot_node(std::ostream& out,
-    NodeRef parent, NodePtr& child, const std::string& dir)
+    SharedNodeRef parent, NodePtr& child, const std::string& dir)
 {
   out << "\"" << parent.get() << "\":" << dir << " -> ";
   out << "\"" << child.ref_notrace().get() << "\"";
@@ -124,7 +124,7 @@ void DBImpl::write_dot_node(std::ostream& out,
 }
 
 void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
-    NodeRef node, uint64_t& nullcount, bool scoped)
+    SharedNodeRef node, uint64_t& nullcount, bool scoped)
 {
   if (scoped && node->rid() != rid)
     return;
@@ -152,7 +152,7 @@ void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
   }
 }
 
-void DBImpl::_write_dot(std::ostream& out, NodeRef root,
+void DBImpl::_write_dot(std::ostream& out, SharedNodeRef root,
     uint64_t& nullcount, bool scoped)
 {
   assert(root != nullptr);
@@ -207,7 +207,7 @@ void DBImpl::write_dot_history(std::ostream& out,
   out << "}" << std::endl;
 }
 
-void DBImpl::print_node(NodeRef node)
+void DBImpl::print_node(SharedNodeRef node)
 {
   if (node == Node::Nil())
     std::cout << "nil:" << (node->red() ? "r" : "b");
@@ -215,7 +215,7 @@ void DBImpl::print_node(NodeRef node)
     std::cout << node->key().ToString() << ":" << (node->red() ? "r" : "b");
 }
 
-void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
+void DBImpl::print_path(std::ostream& out, std::deque<SharedNodeRef>& path)
 {
   out << "path: ";
   if (path.empty()) {
@@ -236,7 +236,7 @@ void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
 /*
  *
  */
-int DBImpl::_validate_rb_tree(const NodeRef root)
+int DBImpl::_validate_rb_tree(const SharedNodeRef root)
 {
   assert(root != nullptr);
 
@@ -250,8 +250,8 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   assert(root->left.ref_notrace());
   assert(root->right.ref_notrace());
 
-  NodeRef ln = root->left.ref_notrace();
-  NodeRef rn = root->right.ref_notrace();
+  SharedNodeRef ln = root->left.ref_notrace();
+  SharedNodeRef rn = root->right.ref_notrace();
 
   if (root->red() && (ln->red() || rn->red()))
     return 0;

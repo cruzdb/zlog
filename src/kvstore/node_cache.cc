@@ -48,7 +48,7 @@ void NodeCache::do_vaccum_()
 
 // when resolving a node we only resolve the single node. figuring out when to
 // resolve an entire intention would be interesting.
-NodeRef NodeCache::fetch(std::vector<std::pair<int64_t, int>>& trace,
+SharedNodeRef NodeCache::fetch(std::vector<std::pair<int64_t, int>>& trace,
     int64_t csn, int offset)
 {
   std::lock_guard<std::mutex> l(lock_);
@@ -124,7 +124,7 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
     return ret;
   }
 
-  NodeRef nn = nullptr;
+  SharedNodeRef nn = nullptr;
   for (int idx = 0; idx < i.tree_size(); idx++) {
     nn = deserialize_node(i, pos, idx);
 
@@ -147,7 +147,7 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
   return ret;
 }
 
-NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
+SharedNodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
     uint64_t pos, int index)
 {
   const kvstore_proto::Node& n = i.tree(index);
