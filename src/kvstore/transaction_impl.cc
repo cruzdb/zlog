@@ -372,42 +372,21 @@ void TransactionImpl::balance_delete(SharedNodeRef extra_black,
 // nodes that aren't yet in the log..
 
 void TransactionImpl::serialize_intention(kvstore_proto::Intention& i,
-    SharedNodeRef node, int& field_index)
+    SharedNodeRef node, int& field_index, std::vector<SharedNodeRef>& delta)
 {
   assert(node != nullptr);
 
   if (node == Node::Nil() || node->rid() != rid_)
     return;
 
-  serialize_intention(i, node->left.ref(trace_), field_index);
-  serialize_intention(i, node->right.ref(trace_), field_index);
+  serialize_intention(i, node->left.ref(trace_), field_index, delta);
+  serialize_intention(i, node->right.ref(trace_), field_index, delta);
 
   // new serialized node in the intention
   kvstore_proto::Node *dst = i.add_tree();
   serialize_node(dst, node, field_index);
+  delta.push_back(node);
   field_index++;
-}
-
-void TransactionImpl::set_intention_self_csn_recursive(uint64_t rid,
-    SharedNodeRef node, uint64_t pos) {
-
-  if (node == Node::Nil() || node->rid() != rid)
-    return;
-
-  if (node->right.ref(trace_) != Node::Nil() && node->right.ref(trace_)->rid() == rid) {
-    node->right.set_csn(pos);
-  }
-
-  if (node->left.ref(trace_) != Node::Nil() && node->left.ref(trace_)->rid() == rid) {
-    node->left.set_csn(pos);
-  }
-
-  set_intention_self_csn_recursive(rid, node->right.ref(trace_), pos);
-  set_intention_self_csn_recursive(rid, node->left.ref(trace_), pos);
-}
-
-void TransactionImpl::set_intention_self_csn(SharedNodeRef root, uint64_t pos) {
-  set_intention_self_csn_recursive(root->rid(), root, pos);
 }
 
 void TransactionImpl::Put(const Slice& key, const Slice& value)
@@ -555,13 +534,6 @@ void TransactionImpl::Commit()
 
   db_->CompleteTransaction(this);
   WaitComplete();
-
-  //// update the in-memory intention ptrs
-  //set_intention_self_csn(root_, pos);
-
-  //// wait for result
-  //bool committed = db_->CommitResult(pos);
-  //assert(committed);
 }
 
 int TransactionImpl::Get(const Slice& key, std::string* val)
@@ -584,7 +556,8 @@ int TransactionImpl::Get(const Slice& key, std::string* val)
   return -ENOENT;
 }
 
-void TransactionImpl::SerializeAfterImage(std::string *blob)
+void TransactionImpl::SerializeAfterImage(kvstore_proto::Intention& i,
+    std::vector<SharedNodeRef>& delta)
 {
   assert(committed_);
 
@@ -595,13 +568,22 @@ void TransactionImpl::SerializeAfterImage(std::string *blob)
   } else
     assert(root_->rid() == rid_);
 
-  kvstore_proto::Intention i;
-  serialize_intention(i, root_, field_index);
+  serialize_intention(i, root_, field_index, delta);
   i.set_snapshot(snapshot_);
 
   for (const auto& s : description_)
     i.add_description(s);
+}
 
-  assert(i.IsInitialized());
-  assert(i.SerializeToString(blob));
+void TransactionImpl::SetDeltaPosition(std::vector<SharedNodeRef>& delta,
+    uint64_t pos)
+{
+  for (const auto nn : delta) {
+    if (nn->left.ref_notrace()->rid() == rid_) {
+      nn->left.set_csn(pos);
+    }
+    if (nn->right.ref_notrace()->rid() == rid_) {
+      nn->right.set_csn(pos);
+    }
+  }
 }

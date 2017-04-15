@@ -42,7 +42,9 @@ class TransactionImpl : public Transaction {
     completed_cond_.notify_one();
   }
 
-  void SerializeAfterImage(std::string *blob);
+  void SerializeAfterImage(kvstore_proto::Intention& i,
+      std::vector<SharedNodeRef>& delta);
+  void SetDeltaPosition(std::vector<SharedNodeRef>& delta, uint64_t pos);
 
  private:
   class TraceApplier {
@@ -147,12 +149,8 @@ class TransactionImpl : public Transaction {
   void serialize_node(kvstore_proto::Node *dst, SharedNodeRef node,
       int field_index);
   void serialize_intention(kvstore_proto::Intention& i,
-      SharedNodeRef node, int& field_index);
-
-  void set_intention_self_csn_recursive(uint64_t rid, SharedNodeRef node,
-      uint64_t pos);
-
-  void set_intention_self_csn(SharedNodeRef root, uint64_t pos);
+      SharedNodeRef node, int& field_index,
+      std::vector<SharedNodeRef>& delta);
 };
 
 #endif

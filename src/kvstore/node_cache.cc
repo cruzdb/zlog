@@ -192,3 +192,34 @@ SharedNodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
 
   return nn;
 }
+
+NodePtr NodeCache::ApplyAfterImageDelta(
+    const std::vector<SharedNodeRef>& delta,
+    uint64_t pos)
+{
+  std::lock_guard<std::mutex> l(lock_);
+
+  if (delta.empty()) {
+    NodePtr ret(Node::Nil(), nullptr, true);
+    return ret;
+  }
+
+  for (auto nn : delta) {
+    nn->set_read_only();
+
+    used_bytes_ += nn->ByteSize();
+    auto key = std::make_pair(pos, nn->field_index());
+    nodes_lru_.emplace_front(key);
+    auto iter = nodes_lru_.begin();
+    auto res = nodes_.insert(
+        std::make_pair(key, entry{nn, iter}));
+    assert(res.second);
+  }
+
+  auto root = delta.back();
+  NodePtr ret(root, db_, false);
+  ret.set_csn(pos);
+  ret.set_offset(root->field_index());
+  ret.set_read_only();
+  return ret;
+}

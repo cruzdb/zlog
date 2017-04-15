@@ -42,6 +42,8 @@ class NodeCache {
 
   NodePtr CacheIntention(const kvstore_proto::Intention& i,
       uint64_t pos);
+  NodePtr ApplyAfterImageDelta(const std::vector<SharedNodeRef>& delta,
+      uint64_t pos);
 
   SharedNodeRef fetch(std::vector<std::pair<int64_t, int>>& trace,
       int64_t csn, int offset);

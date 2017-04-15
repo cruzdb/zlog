@@ -302,22 +302,25 @@ void DBImpl::TransactionFinisher()
       continue;
     }
 
-    // serialize the transaction after image
+    // serialize the after image
+    kvstore_proto::Intention i;
+    std::vector<SharedNodeRef> delta;
+    cur_txn_->SerializeAfterImage(i, delta);
+
     std::string blob;
-    cur_txn_->SerializeAfterImage(&blob);
+    assert(i.IsInitialized());
+    assert(i.SerializeToString(&blob));
 
     // append after image to the log
     uint64_t pos;
     int ret = log_->Append(blob, &pos);
     assert(ret == 0);
 
-    // deserialize after image
-    kvstore_proto::Intention i;
-    assert(i.ParseFromString(blob));
-    assert(i.IsInitialized());
+    // apply the log position to the after image nodes
+    cur_txn_->SetDeltaPosition(delta, pos);
 
-    // update root ptr with new position etc...
-    auto root = cache_.CacheIntention(i, pos);
+    // fold afterimage into node cache and update db root
+    auto root = cache_.ApplyAfterImageDelta(delta, pos);
     root_.replace(root);
     root_pos_ = pos;
 
@@ -328,10 +331,6 @@ void DBImpl::TransactionFinisher()
     // mark complete
     cur_txn_->MarkComplete();
     cur_txn_ = nullptr;
-
-    // optimizations:
-    //   1. add intention to cache rather than waiting on cache miss
-    //   2. better than (1): fold txn in-memory repr. into cache
   }
 }
 
