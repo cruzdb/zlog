@@ -124,8 +124,9 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
     return ret;
   }
 
+  int idx;
   SharedNodeRef nn = nullptr;
-  for (int idx = 0; idx < i.tree_size(); idx++) {
+  for (idx = 0; idx < i.tree_size(); idx++) {
     nn = deserialize_node(i, pos, idx);
 
     assert(nn->read_only());
@@ -142,7 +143,7 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
   assert(nn != nullptr);
   NodePtr ret(nn, db_, false);
   ret.set_csn(pos);
-  ret.set_offset(nn->field_index());
+  ret.set_offset(idx - 1);
   ret.set_read_only();
   return ret;
 }
@@ -157,13 +158,12 @@ SharedNodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
   //
   // TODO: initialize so it can be read-only after creation
   auto nn = std::make_shared<Node>(n.key(), n.val(), n.red(),
-      nullptr, nullptr, pos, index, false, db_);
+      nullptr, nullptr, pos, false, db_);
 
   // the left and right pointers are undefined. make sure to handle the case
   // correctly in which a child is nil vs defined on storage but not resolved
   // into the heap.
 
-  assert(nn->field_index() == index);
   if (!n.left().nil()) {
     nn->left.set_offset(n.left().off());
     if (n.left().self()) {
@@ -204,22 +204,24 @@ NodePtr NodeCache::ApplyAfterImageDelta(
     return ret;
   }
 
+  int offset = 0;
   for (auto nn : delta) {
     nn->set_read_only();
 
     used_bytes_ += nn->ByteSize();
-    auto key = std::make_pair(pos, nn->field_index());
+    auto key = std::make_pair(pos, offset);
     nodes_lru_.emplace_front(key);
     auto iter = nodes_lru_.begin();
     auto res = nodes_.insert(
         std::make_pair(key, entry{nn, iter}));
     assert(res.second);
+    offset++;
   }
 
   auto root = delta.back();
   NodePtr ret(root, db_, false);
   ret.set_csn(pos);
-  ret.set_offset(root->field_index());
+  ret.set_offset(offset - 1);
   ret.set_read_only();
   return ret;
 }

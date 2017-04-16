@@ -144,15 +144,15 @@ class Node {
 
   // TODO: allow rid to have negative initialization value
   Node(const Slice& key, const Slice& val, bool red, SharedNodeRef lr, SharedNodeRef rr,
-      uint64_t rid, int field_index, bool read_only, DBImpl *db) :
+      uint64_t rid, bool read_only, DBImpl *db) :
     left(lr, db, read_only), right(rr, db, read_only),
     key_(key.data(), key.size()), val_(val.data(), val.size()),
-    red_(red), rid_(rid), field_index_(field_index), read_only_(read_only)
+    red_(red), rid_(rid), read_only_(read_only)
   {}
 
   static SharedNodeRef& Nil() {
     static SharedNodeRef node = std::make_shared<Node>("", "",
-        false, nullptr, nullptr, (uint64_t)-1, -1, true, nullptr);
+        false, nullptr, nullptr, (uint64_t)-1, true, nullptr);
     return node;
   }
 
@@ -163,7 +163,7 @@ class Node {
     // TODO: we don't need to use the version of ref() that resolves here
     // because the caller will likely only traverse down one side.
     auto node = std::make_shared<Node>(src->key(), src->val(), src->red(),
-        src->left.ref_notrace(), src->right.ref_notrace(), rid, -1, false, db);
+        src->left.ref_notrace(), src->right.ref_notrace(), rid, false, db);
 
     node->left.set_csn(src->left.csn());
     node->left.set_offset(src->left.offset());
@@ -200,15 +200,6 @@ class Node {
     std::swap(red_, other->red_);
   }
 
-  inline int field_index() const {
-    return field_index_;
-  }
-
-  inline void set_field_index(int field_index) {
-    assert(!read_only());
-    field_index_ = field_index;
-  }
-
   inline uint64_t rid() const {
     return rid_;
   }
@@ -239,7 +230,6 @@ class Node {
   std::string val_;
   bool red_;
   uint64_t rid_;
-  int field_index_;
   bool read_only_;
 };
 

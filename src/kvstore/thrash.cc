@@ -267,7 +267,6 @@ int main(int argc, char **argv)
     std::cout << std::flush;
     assert(truth_history.size() == db_history.size());
     for (unsigned i = 0; i < db_history.size(); i++) {
-      i = db_history.size() - 1;
       count += truth_history[i].size();
       check_history(truth_history[i], get_map(db, db_history[i], true, 0));
       assert(truth_history[i] == get_map(db, db_history[i], true, 0));

@@ -62,7 +62,7 @@ std::ostream& operator<<(std::ostream& out, const SharedNodeRef& n)
 {
   out << "node(" << n.get() << "):" << n->key().ToString() << ": ";
   out << (n->red() ? "red " : "blk ");
-  out << "fi " << n->field_index() << " ";
+  //out << "fi " << n->field_index() << " ";
   out << "left=[p" << n->left.csn() << ",o" << n->left.offset() << ",";
   if (n->left.ref_notrace() == Node::Nil())
     out << "nil";

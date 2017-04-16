@@ -8,7 +8,7 @@ void TransactionImpl::UpdateLRU()
 }
 
 void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
-    NodePtr& src, const std::string& dir)
+    NodePtr& src, int maybe_offset)
 {
   if (src.ref(trace_) == Node::Nil()) {
     dst->set_nil(true);
@@ -19,9 +19,8 @@ void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     dst->set_nil(false);
     dst->set_self(true);
     dst->set_csn(0);
-    assert(src.ref(trace_)->field_index() >= 0);
-    dst->set_off(src.ref(trace_)->field_index());
-    src.set_offset(src.ref(trace_)->field_index());
+    dst->set_off(maybe_offset);
+    src.set_offset(maybe_offset); // move up a level
   } else {
     assert(src.ref(trace_) != nullptr);
     dst->set_nil(false);
@@ -32,21 +31,14 @@ void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
 }
 
 void TransactionImpl::serialize_node(kvstore_proto::Node *dst,
-    SharedNodeRef node, int field_index)
+    SharedNodeRef node, int maybe_left_offset, int maybe_right_offset)
 {
   dst->set_red(node->red());
   dst->set_key(node->key().ToString());
   dst->set_val(node->val().ToString());
 
-  assert(node->field_index() == -1);
-  // TODO: ideally we could set the field_index when we were
-  // balancing/path-building to avoid this process of fixing up the
-  // transaction state.
-  node->set_field_index(field_index);
-  assert(node->field_index() >= 0);
-
-  serialize_node_ptr(dst->mutable_left(), node->left, "left");
-  serialize_node_ptr(dst->mutable_right(), node->right, "right");
+  serialize_node_ptr(dst->mutable_left(), node->left, maybe_left_offset);
+  serialize_node_ptr(dst->mutable_right(), node->right, maybe_right_offset);
 }
 
 SharedNodeRef TransactionImpl::insert_recursive(std::deque<SharedNodeRef>& path,
@@ -56,7 +48,7 @@ SharedNodeRef TransactionImpl::insert_recursive(std::deque<SharedNodeRef>& path,
 
   if (node == Node::Nil()) {
     auto nn = std::make_shared<Node>(key, value, true, Node::Nil(),
-        Node::Nil(), rid_, -1, false, db_);
+        Node::Nil(), rid_, false, db_);
     path.push_back(nn);
     fresh_nodes_.push_back(nn);
     return nn;
@@ -367,10 +359,6 @@ void TransactionImpl::balance_delete(SharedNodeRef extra_black,
     new_node->set_red(false);
 }
 
-// TODO we currently do not have any mechanism for dealing with large
-// intentions. we can't just trim it because we don't have an address for
-// nodes that aren't yet in the log..
-
 void TransactionImpl::serialize_intention(kvstore_proto::Intention& i,
     SharedNodeRef node, int& field_index, std::vector<SharedNodeRef>& delta)
 {
@@ -379,12 +367,20 @@ void TransactionImpl::serialize_intention(kvstore_proto::Intention& i,
   if (node == Node::Nil() || node->rid() != rid_)
     return;
 
+  // serialize the left side of the tree. after the call returns,
+  // maybe_left_offset will contain the offset of the last node that was
+  // serialized. if the node is non-nil and is a new node in the afterimage,
+  // then maybe_left_offset is valid (its validity is checked in
+  // serialize_node_ptr).
   serialize_intention(i, node->left.ref(trace_), field_index, delta);
+  auto maybe_left_offset = field_index - 1;
+
   serialize_intention(i, node->right.ref(trace_), field_index, delta);
+  auto maybe_right_offset = field_index - 1;
 
   // new serialized node in the intention
   kvstore_proto::Node *dst = i.add_tree();
-  serialize_node(dst, node, field_index);
+  serialize_node(dst, node, maybe_left_offset, maybe_right_offset);
   delta.push_back(node);
   field_index++;
 }

@@ -145,9 +145,9 @@ class TransactionImpl : public Transaction {
 
   // turn a transaction into a serialized protocol buffer
   void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,
-      const std::string& dir);
+      int maybe_offset);
   void serialize_node(kvstore_proto::Node *dst, SharedNodeRef node,
-      int field_index);
+      int maybe_left_offset, int maybe_right_offset);
   void serialize_intention(kvstore_proto::Intention& i,
       SharedNodeRef node, int& field_index,
       std::vector<SharedNodeRef>& delta);
