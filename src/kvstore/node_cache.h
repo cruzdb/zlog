@@ -42,8 +42,10 @@ class NodeCache {
 
   NodePtr CacheIntention(const kvstore_proto::Intention& i,
       uint64_t pos);
+  NodePtr ApplyAfterImageDelta(const std::vector<SharedNodeRef>& delta,
+      uint64_t pos);
 
-  NodeRef fetch(std::vector<std::pair<int64_t, int>>& trace,
+  SharedNodeRef fetch(std::vector<std::pair<int64_t, int>>& trace,
       int64_t csn, int offset);
 
   void Stop() {
@@ -69,7 +71,7 @@ class NodeCache {
   size_t used_bytes_;
 
   struct entry {
-    NodeRef node;
+    SharedNodeRef node;
     std::list<std::pair<uint64_t, int>>::iterator lru_iter;
   };
 
@@ -84,7 +86,7 @@ class NodeCache {
 
   void ResolveNodePtr(NodePtr& ptr);
 
-  NodeRef deserialize_node(const kvstore_proto::Intention& i,
+  SharedNodeRef deserialize_node(const kvstore_proto::Intention& i,
       uint64_t pos, int index);
 
   std::thread vaccum_;

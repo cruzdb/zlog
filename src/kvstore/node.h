@@ -8,7 +8,7 @@
 #include <zlog/slice.h>
 
 class Node;
-using NodeRef = std::shared_ptr<Node>;
+using SharedNodeRef = std::shared_ptr<Node>;
 using WeakNodeRef = std::weak_ptr<Node>;
 
 class DBImpl;
@@ -57,7 +57,7 @@ class NodePtr {
   //NodePtr(NodePtr&& other) = delete;
   NodePtr& operator=(NodePtr&& other) & = delete;
 
-  NodePtr(NodeRef ref, DBImpl *db, bool read_only) :
+  NodePtr(SharedNodeRef ref, DBImpl *db, bool read_only) :
     ref_(ref), csn_(-1), offset_(-1), db_(db), read_only_(read_only)
   {}
 
@@ -78,7 +78,7 @@ class NodePtr {
     read_only_ = true;
   }
 
-  inline NodeRef ref(std::vector<std::pair<int64_t, int>>& trace) {
+  inline SharedNodeRef ref(std::vector<std::pair<int64_t, int>>& trace) {
     trace.emplace_back(csn_, offset_);
     while (true) {
       if (auto ret = ref_.lock()) {
@@ -93,12 +93,12 @@ class NodePtr {
   // doesn't maintain a trace. ideally we want to always (or nearly always)
   // have a trace. this is only for convenience in some routines that do
   // things like print the tree.
-  inline NodeRef ref_notrace() {
+  inline SharedNodeRef ref_notrace() {
     std::vector<std::pair<int64_t, int>> trace;
     return ref(trace);
   }
 
-  inline void set_ref(NodeRef ref) {
+  inline void set_ref(SharedNodeRef ref) {
     assert(!read_only());
     ref_ = ref;
   }
@@ -131,7 +131,7 @@ class NodePtr {
 
   bool read_only_;
 
-  NodeRef fetch(std::vector<std::pair<int64_t, int>>& trace);
+  SharedNodeRef fetch(std::vector<std::pair<int64_t, int>>& trace);
 };
 
 /*
@@ -143,27 +143,27 @@ class Node {
   NodePtr right;
 
   // TODO: allow rid to have negative initialization value
-  Node(const Slice& key, const Slice& val, bool red, NodeRef lr, NodeRef rr,
-      uint64_t rid, int field_index, bool read_only, DBImpl *db) :
+  Node(const Slice& key, const Slice& val, bool red, SharedNodeRef lr, SharedNodeRef rr,
+      uint64_t rid, bool read_only, DBImpl *db) :
     left(lr, db, read_only), right(rr, db, read_only),
     key_(key.data(), key.size()), val_(val.data(), val.size()),
-    red_(red), rid_(rid), field_index_(field_index), read_only_(read_only)
+    red_(red), rid_(rid), read_only_(read_only)
   {}
 
-  static NodeRef& Nil() {
-    static NodeRef node = std::make_shared<Node>("", "",
-        false, nullptr, nullptr, (uint64_t)-1, -1, true, nullptr);
+  static SharedNodeRef& Nil() {
+    static SharedNodeRef node = std::make_shared<Node>("", "",
+        false, nullptr, nullptr, (uint64_t)-1, true, nullptr);
     return node;
   }
 
-  static NodeRef Copy(NodeRef src, DBImpl *db, uint64_t rid) {
+  static SharedNodeRef Copy(SharedNodeRef src, DBImpl *db, uint64_t rid) {
     if (src == Nil())
       return Nil();
 
     // TODO: we don't need to use the version of ref() that resolves here
     // because the caller will likely only traverse down one side.
     auto node = std::make_shared<Node>(src->key(), src->val(), src->red(),
-        src->left.ref_notrace(), src->right.ref_notrace(), rid, -1, false, db);
+        src->left.ref_notrace(), src->right.ref_notrace(), rid, false, db);
 
     node->left.set_csn(src->left.csn());
     node->left.set_offset(src->left.offset());
@@ -194,19 +194,10 @@ class Node {
     red_ = red;
   }
 
-  inline void swap_color(NodeRef other) {
+  inline void swap_color(SharedNodeRef other) {
     assert(!read_only());
     assert(!other->read_only());
     std::swap(red_, other->red_);
-  }
-
-  inline int field_index() const {
-    return field_index_;
-  }
-
-  inline void set_field_index(int field_index) {
-    assert(!read_only());
-    field_index_ = field_index;
   }
 
   inline uint64_t rid() const {
@@ -223,7 +214,7 @@ class Node {
     return Slice(val_.data(), val_.size());
   }
 
-  inline void steal_payload(NodeRef& other) {
+  inline void steal_payload(SharedNodeRef& other) {
     assert(!read_only());
     assert(!other->read_only());
     key_ = std::move(other->key_);
@@ -239,7 +230,6 @@ class Node {
   std::string val_;
   bool red_;
   uint64_t rid_;
-  int field_index_;
   bool read_only_;
 };
 

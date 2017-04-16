@@ -58,11 +58,11 @@ DBImpl::~DBImpl()
   cache_.Stop();
 }
 
-std::ostream& operator<<(std::ostream& out, const NodeRef& n)
+std::ostream& operator<<(std::ostream& out, const SharedNodeRef& n)
 {
   out << "node(" << n.get() << "):" << n->key().ToString() << ": ";
   out << (n->red() ? "red " : "blk ");
-  out << "fi " << n->field_index() << " ";
+  //out << "fi " << n->field_index() << " ";
   out << "left=[p" << n->left.csn() << ",o" << n->left.offset() << ",";
   if (n->left.ref_notrace() == Node::Nil())
     out << "nil";
@@ -105,7 +105,7 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i)
 uint64_t DBImpl::root_id_ = 928734;
 
 void DBImpl::write_dot_null(std::ostream& out,
-    NodeRef node, uint64_t& nullcount)
+    SharedNodeRef node, uint64_t& nullcount)
 {
   nullcount++;
   out << "null" << nullcount << " [shape=point];"
@@ -115,7 +115,7 @@ void DBImpl::write_dot_null(std::ostream& out,
 }
 
 void DBImpl::write_dot_node(std::ostream& out,
-    NodeRef parent, NodePtr& child, const std::string& dir)
+    SharedNodeRef parent, NodePtr& child, const std::string& dir)
 {
   out << "\"" << parent.get() << "\":" << dir << " -> ";
   out << "\"" << child.ref_notrace().get() << "\"";
@@ -124,7 +124,7 @@ void DBImpl::write_dot_node(std::ostream& out,
 }
 
 void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
-    NodeRef node, uint64_t& nullcount, bool scoped)
+    SharedNodeRef node, uint64_t& nullcount, bool scoped)
 {
   if (scoped && node->rid() != rid)
     return;
@@ -152,7 +152,7 @@ void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
   }
 }
 
-void DBImpl::_write_dot(std::ostream& out, NodeRef root,
+void DBImpl::_write_dot(std::ostream& out, SharedNodeRef root,
     uint64_t& nullcount, bool scoped)
 {
   assert(root != nullptr);
@@ -207,7 +207,7 @@ void DBImpl::write_dot_history(std::ostream& out,
   out << "}" << std::endl;
 }
 
-void DBImpl::print_node(NodeRef node)
+void DBImpl::print_node(SharedNodeRef node)
 {
   if (node == Node::Nil())
     std::cout << "nil:" << (node->red() ? "r" : "b");
@@ -215,7 +215,7 @@ void DBImpl::print_node(NodeRef node)
     std::cout << node->key().ToString() << ":" << (node->red() ? "r" : "b");
 }
 
-void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
+void DBImpl::print_path(std::ostream& out, std::deque<SharedNodeRef>& path)
 {
   out << "path: ";
   if (path.empty()) {
@@ -236,7 +236,7 @@ void DBImpl::print_path(std::ostream& out, std::deque<NodeRef>& path)
 /*
  *
  */
-int DBImpl::_validate_rb_tree(const NodeRef root)
+int DBImpl::_validate_rb_tree(const SharedNodeRef root)
 {
   assert(root != nullptr);
 
@@ -250,8 +250,8 @@ int DBImpl::_validate_rb_tree(const NodeRef root)
   assert(root->left.ref_notrace());
   assert(root->right.ref_notrace());
 
-  NodeRef ln = root->left.ref_notrace();
-  NodeRef rn = root->right.ref_notrace();
+  SharedNodeRef ln = root->left.ref_notrace();
+  SharedNodeRef rn = root->right.ref_notrace();
 
   if (root->red() && (ln->red() || rn->red()))
     return 0;
@@ -302,22 +302,25 @@ void DBImpl::TransactionFinisher()
       continue;
     }
 
-    // serialize the transaction after image
+    // serialize the after image
+    kvstore_proto::Intention i;
+    std::vector<SharedNodeRef> delta;
+    cur_txn_->SerializeAfterImage(i, delta);
+
     std::string blob;
-    cur_txn_->SerializeAfterImage(&blob);
+    assert(i.IsInitialized());
+    assert(i.SerializeToString(&blob));
 
     // append after image to the log
     uint64_t pos;
     int ret = log_->Append(blob, &pos);
     assert(ret == 0);
 
-    // deserialize after image
-    kvstore_proto::Intention i;
-    assert(i.ParseFromString(blob));
-    assert(i.IsInitialized());
+    // apply the log position to the after image nodes
+    cur_txn_->SetDeltaPosition(delta, pos);
 
-    // update root ptr with new position etc...
-    auto root = cache_.CacheIntention(i, pos);
+    // fold afterimage into node cache and update db root
+    auto root = cache_.ApplyAfterImageDelta(delta, pos);
     root_.replace(root);
     root_pos_ = pos;
 
@@ -328,10 +331,6 @@ void DBImpl::TransactionFinisher()
     // mark complete
     cur_txn_->MarkComplete();
     cur_txn_ = nullptr;
-
-    // optimizations:
-    //   1. add intention to cache rather than waiting on cache miss
-    //   2. better than (1): fold txn in-memory repr. into cache
   }
 }
 

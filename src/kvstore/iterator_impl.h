@@ -82,7 +82,7 @@ class IteratorImpl : public Iterator {
   void SeekForward(const Slice& target);
   void SeekPrevious(const Slice& target);
 
-  std::stack<NodeRef> stack_; // curr or unvisited parents
+  std::stack<SharedNodeRef> stack_; // curr or unvisited parents
   Snapshot *snapshot_;
   Direction dir;
 };

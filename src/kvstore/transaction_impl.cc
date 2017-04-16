@@ -8,7 +8,7 @@ void TransactionImpl::UpdateLRU()
 }
 
 void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
-    NodePtr& src, const std::string& dir)
+    NodePtr& src, int maybe_offset)
 {
   if (src.ref(trace_) == Node::Nil()) {
     dst->set_nil(true);
@@ -19,9 +19,8 @@ void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
     dst->set_nil(false);
     dst->set_self(true);
     dst->set_csn(0);
-    assert(src.ref(trace_)->field_index() >= 0);
-    dst->set_off(src.ref(trace_)->field_index());
-    src.set_offset(src.ref(trace_)->field_index());
+    dst->set_off(maybe_offset);
+    src.set_offset(maybe_offset); // move up a level
   } else {
     assert(src.ref(trace_) != nullptr);
     dst->set_nil(false);
@@ -32,31 +31,24 @@ void TransactionImpl::serialize_node_ptr(kvstore_proto::NodePtr *dst,
 }
 
 void TransactionImpl::serialize_node(kvstore_proto::Node *dst,
-    NodeRef node, int field_index)
+    SharedNodeRef node, int maybe_left_offset, int maybe_right_offset)
 {
   dst->set_red(node->red());
   dst->set_key(node->key().ToString());
   dst->set_val(node->val().ToString());
 
-  assert(node->field_index() == -1);
-  // TODO: ideally we could set the field_index when we were
-  // balancing/path-building to avoid this process of fixing up the
-  // transaction state.
-  node->set_field_index(field_index);
-  assert(node->field_index() >= 0);
-
-  serialize_node_ptr(dst->mutable_left(), node->left, "left");
-  serialize_node_ptr(dst->mutable_right(), node->right, "right");
+  serialize_node_ptr(dst->mutable_left(), node->left, maybe_left_offset);
+  serialize_node_ptr(dst->mutable_right(), node->right, maybe_right_offset);
 }
 
-NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
-    const Slice& key, const Slice& value, const NodeRef& node)
+SharedNodeRef TransactionImpl::insert_recursive(std::deque<SharedNodeRef>& path,
+    const Slice& key, const Slice& value, const SharedNodeRef& node)
 {
   assert(node != nullptr);
 
   if (node == Node::Nil()) {
     auto nn = std::make_shared<Node>(key, value, true, Node::Nil(),
-        Node::Nil(), rid_, -1, false, db_);
+        Node::Nil(), rid_, false, db_);
     path.push_back(nn);
     fresh_nodes_.push_back(nn);
     return nn;
@@ -86,7 +78,7 @@ NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
    * is updated without updating the csn/offset, which are fixed later when
    * the intention is build.
    */
-  NodeRef copy;
+  SharedNodeRef copy;
   if (node->rid() == rid_)
     copy = node;
   else {
@@ -105,8 +97,8 @@ NodeRef TransactionImpl::insert_recursive(std::deque<NodeRef>& path,
 }
 
 template<typename ChildA, typename ChildB >
-NodeRef TransactionImpl::rotate(NodeRef parent,
-    NodeRef child, ChildA child_a, ChildB child_b, NodeRef& root)
+SharedNodeRef TransactionImpl::rotate(SharedNodeRef parent,
+    SharedNodeRef child, ChildA child_a, ChildB child_b, SharedNodeRef& root)
 {
   // copy over ref and csn/off because we might be moving a pointer that
   // points outside of the current intentino.
@@ -130,9 +122,9 @@ NodeRef TransactionImpl::rotate(NodeRef parent,
 }
 
 template<typename ChildA, typename ChildB>
-void TransactionImpl::insert_balance(NodeRef& parent, NodeRef& nn,
-    std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
-    NodeRef& root)
+void TransactionImpl::insert_balance(SharedNodeRef& parent, SharedNodeRef& nn,
+    std::deque<SharedNodeRef>& path, ChildA child_a, ChildB child_b,
+    SharedNodeRef& root)
 {
   assert(path.front() != Node::Nil());
   NodePtr& uncle = child_b(path.front());
@@ -158,8 +150,8 @@ void TransactionImpl::insert_balance(NodeRef& parent, NodeRef& nn,
   }
 }
 
-NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
-    const Slice& key, const NodeRef& node)
+SharedNodeRef TransactionImpl::delete_recursive(std::deque<SharedNodeRef>& path,
+    const Slice& key, const SharedNodeRef& node)
 {
   assert(node != nullptr);
 
@@ -173,7 +165,7 @@ NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
   bool equal = cmp == 0;
 
   if (equal) {
-    NodeRef copy;
+    SharedNodeRef copy;
     if (node->rid() == rid_)
       copy = node;
     else {
@@ -197,7 +189,7 @@ NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
    * is updated without updating the csn/offset, which are fixed later when
    * the intention is build.
    */
-  NodeRef copy;
+  SharedNodeRef copy;
   if (node->rid() == rid_)
     copy = node;
   else {
@@ -215,8 +207,8 @@ NodeRef TransactionImpl::delete_recursive(std::deque<NodeRef>& path,
   return copy;
 }
 
-void TransactionImpl::transplant(NodeRef parent, NodeRef removed,
-    NodeRef transplanted, NodeRef& root)
+void TransactionImpl::transplant(SharedNodeRef parent, SharedNodeRef removed,
+    SharedNodeRef transplanted, SharedNodeRef& root)
 {
   if (parent == Node::Nil()) {
     root = transplanted;
@@ -227,7 +219,7 @@ void TransactionImpl::transplant(NodeRef parent, NodeRef removed,
   }
 }
 
-NodeRef TransactionImpl::build_min_path(NodeRef node, std::deque<NodeRef>& path)
+SharedNodeRef TransactionImpl::build_min_path(SharedNodeRef node, std::deque<SharedNodeRef>& path)
 {
   assert(node != nullptr);
   assert(node->left.ref(trace_) != nullptr);
@@ -246,10 +238,10 @@ NodeRef TransactionImpl::build_min_path(NodeRef node, std::deque<NodeRef>& path)
 }
 
 template<typename ChildA, typename ChildB>
-void TransactionImpl::mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
-    std::deque<NodeRef>& path, ChildA child_a, ChildB child_b, NodeRef& root)
+void TransactionImpl::mirror_remove_balance(SharedNodeRef& extra_black, SharedNodeRef& parent,
+    std::deque<SharedNodeRef>& path, ChildA child_a, ChildB child_b, SharedNodeRef& root)
 {
-  NodeRef brother = child_b(parent).ref(trace_);
+  SharedNodeRef brother = child_b(parent).ref(trace_);
 
   if (brother->red()) {
     if (brother->rid() != rid_) {
@@ -326,8 +318,8 @@ void TransactionImpl::mirror_remove_balance(NodeRef& extra_black, NodeRef& paren
   }
 }
 
-void TransactionImpl::balance_delete(NodeRef extra_black,
-    std::deque<NodeRef>& path, NodeRef& root)
+void TransactionImpl::balance_delete(SharedNodeRef extra_black,
+    std::deque<SharedNodeRef>& path, SharedNodeRef& root)
 {
   auto parent = pop_front(path);
 
@@ -345,7 +337,7 @@ void TransactionImpl::balance_delete(NodeRef extra_black,
       mirror_remove_balance(extra_black, parent, path, right, left, root);
   }
 
-  NodeRef new_node;
+  SharedNodeRef new_node;
   if (extra_black->rid() == rid_)
     new_node = extra_black;
   else {
@@ -367,47 +359,30 @@ void TransactionImpl::balance_delete(NodeRef extra_black,
     new_node->set_red(false);
 }
 
-// TODO we currently do not have any mechanism for dealing with large
-// intentions. we can't just trim it because we don't have an address for
-// nodes that aren't yet in the log..
-
 void TransactionImpl::serialize_intention(kvstore_proto::Intention& i,
-    NodeRef node, int& field_index)
+    SharedNodeRef node, int& field_index, std::vector<SharedNodeRef>& delta)
 {
   assert(node != nullptr);
 
   if (node == Node::Nil() || node->rid() != rid_)
     return;
 
-  serialize_intention(i, node->left.ref(trace_), field_index);
-  serialize_intention(i, node->right.ref(trace_), field_index);
+  // serialize the left side of the tree. after the call returns,
+  // maybe_left_offset will contain the offset of the last node that was
+  // serialized. if the node is non-nil and is a new node in the afterimage,
+  // then maybe_left_offset is valid (its validity is checked in
+  // serialize_node_ptr).
+  serialize_intention(i, node->left.ref(trace_), field_index, delta);
+  auto maybe_left_offset = field_index - 1;
+
+  serialize_intention(i, node->right.ref(trace_), field_index, delta);
+  auto maybe_right_offset = field_index - 1;
 
   // new serialized node in the intention
   kvstore_proto::Node *dst = i.add_tree();
-  serialize_node(dst, node, field_index);
+  serialize_node(dst, node, maybe_left_offset, maybe_right_offset);
+  delta.push_back(node);
   field_index++;
-}
-
-void TransactionImpl::set_intention_self_csn_recursive(uint64_t rid,
-    NodeRef node, uint64_t pos) {
-
-  if (node == Node::Nil() || node->rid() != rid)
-    return;
-
-  if (node->right.ref(trace_) != Node::Nil() && node->right.ref(trace_)->rid() == rid) {
-    node->right.set_csn(pos);
-  }
-
-  if (node->left.ref(trace_) != Node::Nil() && node->left.ref(trace_)->rid() == rid) {
-    node->left.set_csn(pos);
-  }
-
-  set_intention_self_csn_recursive(rid, node->right.ref(trace_), pos);
-  set_intention_self_csn_recursive(rid, node->left.ref(trace_), pos);
-}
-
-void TransactionImpl::set_intention_self_csn(NodeRef root, uint64_t pos) {
-  set_intention_self_csn_recursive(root->rid(), root, pos);
 }
 
 void TransactionImpl::Put(const Slice& key, const Slice& value)
@@ -419,7 +394,7 @@ void TransactionImpl::Put(const Slice& key, const Slice& value)
   /*
    * build copy of path to new node
    */
-  std::deque<NodeRef> path;
+  std::deque<SharedNodeRef> path;
 
   auto base_root = root_ == nullptr ? src_root_.ref(trace_) : root_;
   auto root = insert_recursive(path, key, value, base_root);
@@ -471,7 +446,7 @@ void TransactionImpl::Delete(const Slice& key)
 
   TraceApplier ta(this);
 
-  std::deque<NodeRef> path;
+  std::deque<SharedNodeRef> path;
 
   std::stringstream ss;
   ss << "del: " << key.ToString(); // FIXME: wont work for binary
@@ -555,13 +530,6 @@ void TransactionImpl::Commit()
 
   db_->CompleteTransaction(this);
   WaitComplete();
-
-  //// update the in-memory intention ptrs
-  //set_intention_self_csn(root_, pos);
-
-  //// wait for result
-  //bool committed = db_->CommitResult(pos);
-  //assert(committed);
 }
 
 int TransactionImpl::Get(const Slice& key, std::string* val)
@@ -584,7 +552,8 @@ int TransactionImpl::Get(const Slice& key, std::string* val)
   return -ENOENT;
 }
 
-void TransactionImpl::SerializeAfterImage(std::string *blob)
+void TransactionImpl::SerializeAfterImage(kvstore_proto::Intention& i,
+    std::vector<SharedNodeRef>& delta)
 {
   assert(committed_);
 
@@ -595,13 +564,22 @@ void TransactionImpl::SerializeAfterImage(std::string *blob)
   } else
     assert(root_->rid() == rid_);
 
-  kvstore_proto::Intention i;
-  serialize_intention(i, root_, field_index);
+  serialize_intention(i, root_, field_index, delta);
   i.set_snapshot(snapshot_);
 
   for (const auto& s : description_)
     i.add_description(s);
+}
 
-  assert(i.IsInitialized());
-  assert(i.SerializeToString(blob));
+void TransactionImpl::SetDeltaPosition(std::vector<SharedNodeRef>& delta,
+    uint64_t pos)
+{
+  for (const auto nn : delta) {
+    if (nn->left.ref_notrace()->rid() == rid_) {
+      nn->left.set_csn(pos);
+    }
+    if (nn->right.ref_notrace()->rid() == rid_) {
+      nn->right.set_csn(pos);
+    }
+  }
 }

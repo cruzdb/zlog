@@ -42,7 +42,9 @@ class TransactionImpl : public Transaction {
     completed_cond_.notify_one();
   }
 
-  void SerializeAfterImage(std::string *blob);
+  void SerializeAfterImage(kvstore_proto::Intention& i,
+      std::vector<SharedNodeRef>& delta);
+  void SetDeltaPosition(std::vector<SharedNodeRef>& delta, uint64_t pos);
 
  private:
   class TraceApplier {
@@ -66,7 +68,7 @@ class TransactionImpl : public Transaction {
   const uint64_t snapshot_;
 
   // transaction after image
-  NodeRef root_;
+  SharedNodeRef root_;
   const uint64_t rid_;
 
   std::mutex lock_;
@@ -101,58 +103,54 @@ class TransactionImpl : public Transaction {
   //   2. probably better: integrate some sort of cache so that we can support
   //   transactions that are really large
   //
-  std::vector<NodeRef> fresh_nodes_;
+  std::vector<SharedNodeRef> fresh_nodes_;
 
-  static inline NodePtr& left(NodeRef n) { return n->left; };
-  static inline NodePtr& right(NodeRef n) { return n->right; };
+  static inline NodePtr& left(SharedNodeRef n) { return n->left; };
+  static inline NodePtr& right(SharedNodeRef n) { return n->right; };
 
   std::vector<std::string> description_;
 
-  static inline NodeRef pop_front(std::deque<NodeRef>& d) {
+  static inline SharedNodeRef pop_front(std::deque<SharedNodeRef>& d) {
     auto front = d.front();
     d.pop_front();
     return front;
   }
 
-  NodeRef insert_recursive(std::deque<NodeRef>& path,
-      const Slice& key, const Slice& value, const NodeRef& node);
+  SharedNodeRef insert_recursive(std::deque<SharedNodeRef>& path,
+      const Slice& key, const Slice& value, const SharedNodeRef& node);
 
   template<typename ChildA, typename ChildB>
-  void insert_balance(NodeRef& parent, NodeRef& nn,
-      std::deque<NodeRef>& path, ChildA, ChildB, NodeRef& root);
+  void insert_balance(SharedNodeRef& parent, SharedNodeRef& nn,
+      std::deque<SharedNodeRef>& path, ChildA, ChildB, SharedNodeRef& root);
 
   template <typename ChildA, typename ChildB >
-  NodeRef rotate(NodeRef parent, NodeRef child,
-      ChildA child_a, ChildB child_b, NodeRef& root);
+  SharedNodeRef rotate(SharedNodeRef parent, SharedNodeRef child,
+      ChildA child_a, ChildB child_b, SharedNodeRef& root);
 
-  NodeRef delete_recursive(std::deque<NodeRef>& path,
-      const Slice& key, const NodeRef& node);
+  SharedNodeRef delete_recursive(std::deque<SharedNodeRef>& path,
+      const Slice& key, const SharedNodeRef& node);
 
-  void transplant(NodeRef parent, NodeRef removed,
-      NodeRef transplanted, NodeRef& root);
+  void transplant(SharedNodeRef parent, SharedNodeRef removed,
+      SharedNodeRef transplanted, SharedNodeRef& root);
 
-  NodeRef build_min_path(NodeRef node, std::deque<NodeRef>& path);
+  SharedNodeRef build_min_path(SharedNodeRef node, std::deque<SharedNodeRef>& path);
 
-  void balance_delete(NodeRef extra_black,
-      std::deque<NodeRef>& path, NodeRef& root);
+  void balance_delete(SharedNodeRef extra_black,
+      std::deque<SharedNodeRef>& path, SharedNodeRef& root);
 
   template<typename ChildA, typename ChildB>
-  void mirror_remove_balance(NodeRef& extra_black, NodeRef& parent,
-      std::deque<NodeRef>& path, ChildA child_a, ChildB child_b,
-      NodeRef& root);
+  void mirror_remove_balance(SharedNodeRef& extra_black, SharedNodeRef& parent,
+      std::deque<SharedNodeRef>& path, ChildA child_a, ChildB child_b,
+      SharedNodeRef& root);
 
   // turn a transaction into a serialized protocol buffer
   void serialize_node_ptr(kvstore_proto::NodePtr *dst, NodePtr& src,
-      const std::string& dir);
-  void serialize_node(kvstore_proto::Node *dst, NodeRef node,
-      int field_index);
+      int maybe_offset);
+  void serialize_node(kvstore_proto::Node *dst, SharedNodeRef node,
+      int maybe_left_offset, int maybe_right_offset);
   void serialize_intention(kvstore_proto::Intention& i,
-      NodeRef node, int& field_index);
-
-  void set_intention_self_csn_recursive(uint64_t rid, NodeRef node,
-      uint64_t pos);
-
-  void set_intention_self_csn(NodeRef root, uint64_t pos);
+      SharedNodeRef node, int& field_index,
+      std::vector<SharedNodeRef>& delta);
 };
 
 #endif

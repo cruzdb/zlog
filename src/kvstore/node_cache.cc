@@ -48,7 +48,7 @@ void NodeCache::do_vaccum_()
 
 // when resolving a node we only resolve the single node. figuring out when to
 // resolve an entire intention would be interesting.
-NodeRef NodeCache::fetch(std::vector<std::pair<int64_t, int>>& trace,
+SharedNodeRef NodeCache::fetch(std::vector<std::pair<int64_t, int>>& trace,
     int64_t csn, int offset)
 {
   std::lock_guard<std::mutex> l(lock_);
@@ -124,8 +124,9 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
     return ret;
   }
 
-  NodeRef nn = nullptr;
-  for (int idx = 0; idx < i.tree_size(); idx++) {
+  int idx;
+  SharedNodeRef nn = nullptr;
+  for (idx = 0; idx < i.tree_size(); idx++) {
     nn = deserialize_node(i, pos, idx);
 
     assert(nn->read_only());
@@ -142,12 +143,12 @@ NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
   assert(nn != nullptr);
   NodePtr ret(nn, db_, false);
   ret.set_csn(pos);
-  ret.set_offset(nn->field_index());
+  ret.set_offset(idx - 1);
   ret.set_read_only();
   return ret;
 }
 
-NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
+SharedNodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
     uint64_t pos, int index)
 {
   const kvstore_proto::Node& n = i.tree(index);
@@ -157,13 +158,12 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
   //
   // TODO: initialize so it can be read-only after creation
   auto nn = std::make_shared<Node>(n.key(), n.val(), n.red(),
-      nullptr, nullptr, pos, index, false, db_);
+      nullptr, nullptr, pos, false, db_);
 
   // the left and right pointers are undefined. make sure to handle the case
   // correctly in which a child is nil vs defined on storage but not resolved
   // into the heap.
 
-  assert(nn->field_index() == index);
   if (!n.left().nil()) {
     nn->left.set_offset(n.left().off());
     if (n.left().self()) {
@@ -191,4 +191,37 @@ NodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
   nn->set_read_only();
 
   return nn;
+}
+
+NodePtr NodeCache::ApplyAfterImageDelta(
+    const std::vector<SharedNodeRef>& delta,
+    uint64_t pos)
+{
+  std::lock_guard<std::mutex> l(lock_);
+
+  if (delta.empty()) {
+    NodePtr ret(Node::Nil(), nullptr, true);
+    return ret;
+  }
+
+  int offset = 0;
+  for (auto nn : delta) {
+    nn->set_read_only();
+
+    used_bytes_ += nn->ByteSize();
+    auto key = std::make_pair(pos, offset);
+    nodes_lru_.emplace_front(key);
+    auto iter = nodes_lru_.begin();
+    auto res = nodes_.insert(
+        std::make_pair(key, entry{nn, iter}));
+    assert(res.second);
+    offset++;
+  }
+
+  auto root = delta.back();
+  NodePtr ret(root, db_, false);
+  ret.set_csn(pos);
+  ret.set_offset(offset - 1);
+  ret.set_read_only();
+  return ret;
 }
