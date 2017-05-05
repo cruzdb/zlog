@@ -1,22 +1,23 @@
 #ifndef ZLOG_KVSTORE_DB_H
 #define ZLOG_KVSTORE_DB_H
 #include <cassert>
+#include <condition_variable>
 #include <deque>
-#include <set>
 #include <iostream>
 #include <memory>
-#include <condition_variable>
+#include <mutex>
+#include <set>
 #include <stack>
 #include <thread>
-#include <mutex>
 #include <unordered_map>
 #include <vector>
+
+#include "iterator_impl.h"
 #include "kvstore/kvstore.pb.h"
 #include "node.h"
-#include "transaction_impl.h"
 #include "node_cache.h"
 #include "snapshot.h"
-#include "iterator_impl.h"
+#include "transaction_impl.h"
 #include "zlog/db.h"
 #include "zlog/log.h"
 
