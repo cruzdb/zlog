@@ -2,13 +2,14 @@
 #include <sstream>
 
 DBImpl::DBImpl(zlog::Log *log) :
-  root_(Node::Nil(), this, true), log_(log), cache_(this),
+  log_(log),
+  cache_(this),
   stop_(false),
-  cur_txn_(nullptr)
+  root_(Node::Nil(), this, true),
+  cur_txn_(nullptr),
+  txn_finisher_(std::thread(&DBImpl::TransactionFinisher, this))
 {
   validate_rb_tree(root_);
-
-  txn_finisher_ = std::thread(&DBImpl::TransactionFinisher, this);
 }
 
 int DB::Open(zlog::Log *log, bool create_if_empty, DB **db)

@@ -90,21 +90,24 @@ class DBImpl : public DB {
   void print_path(std::ostream& out, std::deque<SharedNodeRef>& path);
   void print_node(SharedNodeRef node);
 
-  // latest committed state
-  NodePtr root_;
-
   std::mutex lock_;
-
   zlog::Log *log_;
-
   NodeCache cache_;
-
   bool stop_;
 
-  // TODO: how is this initialized?
+  // tree from last tranascation
+  NodePtr root_;
+
+  // TODO: generate a new unique root_id_ for each transaction. this id is
+  // added to new nodes generated during txn processing to identify nodes in
+  // an intention from nodes outside the intention for the given txn. there is
+  // currently a bug in the way this is handled: during node deserialization
+  // in node_cache the csn is used as the rid value, but there is no mechanism
+  // to prevent new transactions from being assigned a root_id that would
+  // conflict with a csn value.
   static uint64_t root_id_;
 
-  // current transaction handling
+  // transaction handling
   TransactionImpl *cur_txn_;
   std::thread txn_finisher_;
   void TransactionFinisher();
