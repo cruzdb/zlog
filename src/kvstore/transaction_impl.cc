@@ -412,10 +412,6 @@ void TransactionImpl::Put(const Slice& key, const Slice& value)
     assert(root != nullptr); // a new root was added
   }
 
-  std::stringstream ss;
-  ss << "put: " << key.ToString(); // FIXME: wont work for binary
-  description_.emplace_back(ss.str());
-
   path.push_back(Node::Nil());
   assert(path.size() >= 2);
 
@@ -447,10 +443,6 @@ void TransactionImpl::Delete(const Slice& key)
   TraceApplier ta(this);
 
   std::deque<SharedNodeRef> path;
-
-  std::stringstream ss;
-  ss << "del: " << key.ToString(); // FIXME: wont work for binary
-  description_.emplace_back(ss.str());
 
   auto base_root = root_ == nullptr ? src_root_.ref(trace_) : root_;
   auto root = delete_recursive(path, key, base_root);
@@ -565,10 +557,7 @@ void TransactionImpl::SerializeAfterImage(kvstore_proto::Intention& i,
     assert(root_->rid() == rid_);
 
   serialize_intention(i, root_, field_index, delta);
-  i.set_snapshot(snapshot_);
-
-  for (const auto& s : description_)
-    i.add_description(s);
+  i.set_snapshot(src_root_.csn());
 }
 
 void TransactionImpl::SetDeltaPosition(std::vector<SharedNodeRef>& delta,

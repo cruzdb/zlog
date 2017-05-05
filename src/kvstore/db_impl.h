@@ -1,22 +1,23 @@
 #ifndef ZLOG_KVSTORE_DB_H
 #define ZLOG_KVSTORE_DB_H
 #include <cassert>
+#include <condition_variable>
 #include <deque>
-#include <set>
 #include <iostream>
 #include <memory>
-#include <condition_variable>
+#include <mutex>
+#include <set>
 #include <stack>
 #include <thread>
-#include <mutex>
 #include <unordered_map>
 #include <vector>
+
+#include "iterator_impl.h"
 #include "kvstore/kvstore.pb.h"
 #include "node.h"
-#include "transaction_impl.h"
 #include "node_cache.h"
 #include "snapshot.h"
-#include "iterator_impl.h"
+#include "transaction_impl.h"
 #include "zlog/db.h"
 #include "zlog/log.h"
 
@@ -34,7 +35,7 @@ class DBImpl : public DB {
 
   Snapshot *GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
-    return new Snapshot(this, root_, root_pos_, root_desc_);
+    return new Snapshot(this, root_);
   }
 
   void ReleaseSnapshot(Snapshot *snapshot) {
@@ -89,26 +90,24 @@ class DBImpl : public DB {
   void print_path(std::ostream& out, std::deque<SharedNodeRef>& path);
   void print_node(SharedNodeRef node);
 
-  // latest committed state
-  // TODO: things like root_desc_ are properties of the transaction that
-  // created the new root. we should encapsulate this metadata in a structure
-  // rather than having it float around freely here.
-  NodePtr root_;
-  uint64_t root_pos_;
-  std::vector<std::string> root_desc_;
-
   std::mutex lock_;
-
   zlog::Log *log_;
-
   NodeCache cache_;
-
   bool stop_;
 
-  // TODO: how is this initialized?
+  // tree from last tranascation
+  NodePtr root_;
+
+  // TODO: generate a new unique root_id_ for each transaction. this id is
+  // added to new nodes generated during txn processing to identify nodes in
+  // an intention from nodes outside the intention for the given txn. there is
+  // currently a bug in the way this is handled: during node deserialization
+  // in node_cache the csn is used as the rid value, but there is no mechanism
+  // to prevent new transactions from being assigned a root_id that would
+  // conflict with a csn value.
   static uint64_t root_id_;
 
-  // current transaction handling
+  // transaction handling
   TransactionImpl *cur_txn_;
   std::thread txn_finisher_;
   void TransactionFinisher();

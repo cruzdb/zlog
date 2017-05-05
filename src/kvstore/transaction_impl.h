@@ -13,8 +13,8 @@ class DBImpl;
  */
 class TransactionImpl : public Transaction {
  public:
-  TransactionImpl(DBImpl *db, NodePtr root, uint64_t snapshot, uint64_t rid) :
-    db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid),
+  TransactionImpl(DBImpl *db, NodePtr root, uint64_t rid) :
+    db_(db), src_root_(root), root_(nullptr), rid_(rid),
     committed_(false),
     completed_(false)
   {
@@ -65,7 +65,6 @@ class TransactionImpl : public Transaction {
 
   // database snapshot
   NodePtr src_root_;
-  const uint64_t snapshot_;
 
   // transaction after image
   SharedNodeRef root_;
@@ -107,8 +106,6 @@ class TransactionImpl : public Transaction {
 
   static inline NodePtr& left(SharedNodeRef n) { return n->left; };
   static inline NodePtr& right(SharedNodeRef n) { return n->right; };
-
-  std::vector<std::string> description_;
 
   static inline SharedNodeRef pop_front(std::deque<SharedNodeRef>& d) {
     auto front = d.front();
