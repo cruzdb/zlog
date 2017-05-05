@@ -108,8 +108,6 @@ class TransactionImpl : public Transaction {
   static inline NodePtr& left(SharedNodeRef n) { return n->left; };
   static inline NodePtr& right(SharedNodeRef n) { return n->right; };
 
-  std::vector<std::string> description_;
-
   static inline SharedNodeRef pop_front(std::deque<SharedNodeRef>& d) {
     auto front = d.front();
     d.pop_front();

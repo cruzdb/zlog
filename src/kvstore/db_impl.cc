@@ -182,8 +182,6 @@ void DBImpl::write_dot_history(std::ostream& out,
     // build sub-graph label
     std::stringstream label;
     label << "label = \"root: " << (*it)->seq;
-    for (const auto& s : (*it)->desc)
-      label << "\n" << s;
     label << "\"";
 
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
@@ -323,10 +321,6 @@ void DBImpl::TransactionFinisher()
     auto root = cache_.ApplyAfterImageDelta(delta, pos);
     root_.replace(root);
     root_pos_ = pos;
-
-    root_desc_.clear();
-    for (int idx = 0; idx < i.description_size(); idx++)
-      root_desc_.push_back(i.description(idx));
 
     // mark complete
     cur_txn_->MarkComplete();

@@ -34,7 +34,7 @@ class DBImpl : public DB {
 
   Snapshot *GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
-    return new Snapshot(this, root_, root_pos_, root_desc_);
+    return new Snapshot(this, root_, root_pos_);
   }
 
   void ReleaseSnapshot(Snapshot *snapshot) {
@@ -95,7 +95,6 @@ class DBImpl : public DB {
   // rather than having it float around freely here.
   NodePtr root_;
   uint64_t root_pos_;
-  std::vector<std::string> root_desc_;
 
   std::mutex lock_;
 
