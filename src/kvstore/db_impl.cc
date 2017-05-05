@@ -2,7 +2,7 @@
 #include <sstream>
 
 DBImpl::DBImpl(zlog::Log *log) :
-  root_(Node::Nil(), this, true), root_pos_(0), log_(log), cache_(this),
+  root_(Node::Nil(), this, true), log_(log), cache_(this),
   stop_(false),
   cur_txn_(nullptr)
 {
@@ -181,7 +181,7 @@ void DBImpl::write_dot_history(std::ostream& out,
 
     // build sub-graph label
     std::stringstream label;
-    label << "label = \"root: " << (*it)->seq;
+    label << "label = \"root: " << (*it)->root.csn();
     label << "\"";
 
     out << "subgraph cluster_" << trees++ << " {" << std::endl;
@@ -278,7 +278,7 @@ void DBImpl::validate_rb_tree(NodePtr root)
 Transaction *DBImpl::BeginTransaction()
 {
   std::lock_guard<std::mutex> l(lock_);
-  auto txn = new TransactionImpl(this, root_, root_pos_, root_id_++);
+  auto txn = new TransactionImpl(this, root_, root_id_++);
   // FIXME: this is a temporary check; we currently do not have any tests or
   // benchmarks that are multi-threaded. soon we will actually block new
   // transactions from starting until the current txn finishes.
@@ -320,7 +320,6 @@ void DBImpl::TransactionFinisher()
     // fold afterimage into node cache and update db root
     auto root = cache_.ApplyAfterImageDelta(delta, pos);
     root_.replace(root);
-    root_pos_ = pos;
 
     // mark complete
     cur_txn_->MarkComplete();

@@ -557,7 +557,7 @@ void TransactionImpl::SerializeAfterImage(kvstore_proto::Intention& i,
     assert(root_->rid() == rid_);
 
   serialize_intention(i, root_, field_index, delta);
-  i.set_snapshot(snapshot_);
+  i.set_snapshot(src_root_.csn());
 }
 
 void TransactionImpl::SetDeltaPosition(std::vector<SharedNodeRef>& delta,

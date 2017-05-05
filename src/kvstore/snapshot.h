@@ -7,13 +7,12 @@
 
 class Snapshot {
  public:
-  Snapshot(DBImpl *db, const NodePtr root, uint64_t seq) :
-    db(db), root(root), seq(seq)
+  Snapshot(DBImpl *db, const NodePtr root) :
+    db(db), root(root)
   {}
 
   DBImpl *db;
   NodePtr root;
-  const uint64_t seq;
 };
 
 #endif

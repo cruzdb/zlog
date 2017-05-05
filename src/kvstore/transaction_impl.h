@@ -13,8 +13,8 @@ class DBImpl;
  */
 class TransactionImpl : public Transaction {
  public:
-  TransactionImpl(DBImpl *db, NodePtr root, uint64_t snapshot, uint64_t rid) :
-    db_(db), src_root_(root), snapshot_(snapshot), root_(nullptr), rid_(rid),
+  TransactionImpl(DBImpl *db, NodePtr root, uint64_t rid) :
+    db_(db), src_root_(root), root_(nullptr), rid_(rid),
     committed_(false),
     completed_(false)
   {
@@ -65,7 +65,6 @@ class TransactionImpl : public Transaction {
 
   // database snapshot
   NodePtr src_root_;
-  const uint64_t snapshot_;
 
   // transaction after image
   SharedNodeRef root_;

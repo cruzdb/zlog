@@ -34,7 +34,7 @@ class DBImpl : public DB {
 
   Snapshot *GetSnapshot() {
     std::lock_guard<std::mutex> l(lock_);
-    return new Snapshot(this, root_, root_pos_);
+    return new Snapshot(this, root_);
   }
 
   void ReleaseSnapshot(Snapshot *snapshot) {
@@ -90,11 +90,7 @@ class DBImpl : public DB {
   void print_node(SharedNodeRef node);
 
   // latest committed state
-  // TODO: things like root_desc_ are properties of the transaction that
-  // created the new root. we should encapsulate this metadata in a structure
-  // rather than having it float around freely here.
   NodePtr root_;
-  uint64_t root_pos_;
 
   std::mutex lock_;
 
