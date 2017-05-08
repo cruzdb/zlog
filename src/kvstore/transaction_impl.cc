@@ -571,4 +571,9 @@ void TransactionImpl::SetDeltaPosition(std::vector<SharedNodeRef>& delta,
       nn->right.set_csn(pos);
     }
   }
+
+  // set the rid of these nodes to the log position where they are stored.
+  for (auto nn : delta) {
+    nn->set_rid(pos);
+  }
 }
