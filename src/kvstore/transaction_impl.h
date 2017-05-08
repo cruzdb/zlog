@@ -13,12 +13,15 @@ class DBImpl;
  */
 class TransactionImpl : public Transaction {
  public:
-  TransactionImpl(DBImpl *db, NodePtr root, uint64_t rid) :
-    db_(db), src_root_(root), root_(nullptr), rid_(rid),
+  TransactionImpl(DBImpl *db, NodePtr root, int64_t rid) :
+    db_(db),
+    src_root_(root),
+    root_(nullptr),
+    rid_(rid),
     committed_(false),
     completed_(false)
   {
-    // TODO: reserve trace as average height
+    assert(rid_ < 0);
   }
 
   virtual void Put(const Slice& key, const Slice& value) override;
@@ -68,7 +71,7 @@ class TransactionImpl : public Transaction {
 
   // transaction after image
   SharedNodeRef root_;
-  const uint64_t rid_;
+  const int64_t rid_;
 
   std::mutex lock_;
 

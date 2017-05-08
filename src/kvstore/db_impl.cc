@@ -5,6 +5,7 @@ DBImpl::DBImpl(zlog::Log *log) :
   log_(log),
   cache_(this),
   stop_(false),
+  root_id_(-1),
   root_(Node::Nil(), this, true),
   cur_txn_(nullptr),
   txn_finisher_(std::thread(&DBImpl::TransactionFinisher, this))
@@ -103,8 +104,6 @@ std::ostream& operator<<(std::ostream& out, const kvstore_proto::Intention& i)
   return out;
 }
 
-uint64_t DBImpl::root_id_ = 928734;
-
 void DBImpl::write_dot_null(std::ostream& out,
     SharedNodeRef node, uint64_t& nullcount)
 {
@@ -124,7 +123,7 @@ void DBImpl::write_dot_node(std::ostream& out,
     << child.offset() << "\"];" << std::endl;
 }
 
-void DBImpl::write_dot_recursive(std::ostream& out, uint64_t rid,
+void DBImpl::write_dot_recursive(std::ostream& out, int64_t rid,
     SharedNodeRef node, uint64_t& nullcount, bool scoped)
 {
   if (scoped && node->rid() != rid)
@@ -279,7 +278,7 @@ void DBImpl::validate_rb_tree(NodePtr root)
 Transaction *DBImpl::BeginTransaction()
 {
   std::lock_guard<std::mutex> l(lock_);
-  auto txn = new TransactionImpl(this, root_, root_id_++);
+  auto txn = new TransactionImpl(this, root_, root_id_--);
   // FIXME: this is a temporary check; we currently do not have any tests or
   // benchmarks that are multi-threaded. soon we will actually block new
   // transactions from starting until the current txn finishes.

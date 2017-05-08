@@ -200,8 +200,15 @@ class Node {
     std::swap(red_, other->red_);
   }
 
-  inline uint64_t rid() const {
+  inline int64_t rid() const {
     return rid_;
+  }
+
+  inline void set_rid(int64_t rid) {
+    assert(!read_only());
+    assert(rid_ < 0);
+    assert(rid >= 0);
+    rid_ = rid;
   }
 
   // TODO: return const reference?
@@ -229,7 +236,7 @@ class Node {
   std::string key_;
   std::string val_;
   bool red_;
-  uint64_t rid_;
+  int64_t rid_;
   bool read_only_;
 };
 

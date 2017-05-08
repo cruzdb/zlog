@@ -52,7 +52,7 @@ class DBImpl : public DB {
   friend class NodePtr;
   friend class IteratorTraceApplier;
 
-  void write_dot_recursive(std::ostream& out, uint64_t rid,
+  void write_dot_recursive(std::ostream& out, int64_t rid,
       SharedNodeRef node, uint64_t& nullcount, bool scoped);
   void write_dot_null(std::ostream& out, SharedNodeRef node, uint64_t& nullcount);
   void write_dot_node(std::ostream& out, SharedNodeRef parent,
@@ -95,17 +95,13 @@ class DBImpl : public DB {
   NodeCache cache_;
   bool stop_;
 
+  // counter to generate a unique root id for in-flight transactions.
+  // committed transactions use their position in the log as a root id, and
+  // this counter is always negative to produce non-conflicting values.
+  int64_t root_id_;
+
   // tree from last tranascation
   NodePtr root_;
-
-  // TODO: generate a new unique root_id_ for each transaction. this id is
-  // added to new nodes generated during txn processing to identify nodes in
-  // an intention from nodes outside the intention for the given txn. there is
-  // currently a bug in the way this is handled: during node deserialization
-  // in node_cache the csn is used as the rid value, but there is no mechanism
-  // to prevent new transactions from being assigned a root_id that would
-  // conflict with a csn value.
-  static uint64_t root_id_;
 
   // transaction handling
   TransactionImpl *cur_txn_;
