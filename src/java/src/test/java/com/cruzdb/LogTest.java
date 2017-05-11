@@ -8,18 +8,20 @@ import org.junit.*;
 public class LogTest {
 
   // LogException is thrown when the Log cannot be created
-  @Test(expected=LogException.class)
-  public void openThrows() throws LogException {
-    Random rand = new Random();
-    String logname = "" + rand.nextInt();
-    Log log = Log.open("xyz", "abc", 5678, logname);
-  }
+  //@Test(expected=LogException.class)
+  //public void openThrows() throws LogException {
+  //  Random rand = new Random();
+  //  String logname = "" + rand.nextInt();
+  //  Log log = Log.openLMDB(logname);
+  //  //Log log = Log.openLMDB("xyz", "abc", 5678, logname);
+  //}
 
   @Test(expected=NullPointerException.class)
   public void appendNullAppend() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     log.append(null);
   }
 
@@ -27,7 +29,8 @@ public class LogTest {
   public void append() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     long pos = log.append(new byte[20]);
     assertEquals(pos, 0); // first append
     pos = log.append(new byte[20]);
@@ -40,7 +43,8 @@ public class LogTest {
   public void readNotWritten() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     log.read(20);
   }
 
@@ -48,7 +52,8 @@ public class LogTest {
   public void readFilled() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     log.fill(20);
     log.read(20);
   }
@@ -57,7 +62,8 @@ public class LogTest {
   public void read() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     byte[] indata = "this is the input".getBytes();
     long pos = log.append(indata);
     byte[] outdata = log.read(pos);
@@ -68,7 +74,8 @@ public class LogTest {
   public void fillReadOnly() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     long pos = log.append("asdf".getBytes());
     log.fill(pos);
   }
@@ -77,7 +84,8 @@ public class LogTest {
   public void fill() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     log.fill(33);
   }
 
@@ -85,7 +93,8 @@ public class LogTest {
   public void trim() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     log.trim(33);
     long pos = log.append("asdf".getBytes());
     log.trim(pos);
@@ -95,7 +104,8 @@ public class LogTest {
   public void tail() throws LogException {
     Random rand = new Random();
     String logname = "" + rand.nextInt();
-    Log log = Log.open("rbd", "localhost", 5678, logname);
+    Log log = Log.openLMDB(logname);
+    //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
     long pos = log.tail();
     assertEquals(pos, 0);
     pos = log.tail();

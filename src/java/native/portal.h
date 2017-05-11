@@ -3,10 +3,16 @@
 
 #include <jni.h>
 #include <cassert>
-#include <rados/librados.hpp>
 #include "zlog/log.h"
 #include "zlog/backend.h"
-#include "zlog/backend/ceph.h"
+
+#include "zlog/backend/lmdb.h"
+#include "zlog/backend/fakeseqr.h"
+
+#ifdef WITH_RADOS
+# include <rados/librados.hpp>
+# include "zlog/backend/ceph.h"
+#endif
 
 template<class PTR, class DERIVED> class ZlogNativeClass {
  public:
@@ -34,14 +40,12 @@ template<class PTR, class DERIVED> class ZlogNativeClass {
   }
 };
 
-/*
- * The Java API doesn't require the RADOS connection to be setup, so we need
- * some place here at the JNI level to stash this state.
- */
 class LogWrapper {
  public:
   LogWrapper() :
-    log(nullptr), seqr_client(nullptr)
+    be(nullptr),
+    log(nullptr),
+    seqr_client(nullptr)
   {}
 
   ~LogWrapper() {
@@ -49,12 +53,18 @@ class LogWrapper {
       delete log;
     if (seqr_client)
       delete seqr_client;
+    if (be)
+      delete be;
   }
 
+  Backend *be;
   zlog::Log *log;
   zlog::SeqrClient *seqr_client;
+
+#ifdef WITH_RADOS
   librados::Rados rados;
   librados::IoCtx ioctx;
+#endif
 };
 
 class ZlogJni : public ZlogNativeClass<LogWrapper*, ZlogJni> {

@@ -1,5 +1,3 @@
-if(BUILD_CEPH_BACKEND)
-
 find_package(Java COMPONENTS Development REQUIRED)
 find_package(JNI REQUIRED)
 include(UseJava)
@@ -37,9 +35,15 @@ add_custom_target(
   DEPENDS ${java_h})
 add_dependencies(jni_headers zlog_jar)
 
-#create_javah(TARGET jni_headers
-#  CLASSES ${java_classes}
-#  CLASSPATH zlog_jar
-#  OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/native)
-
-endif(BUILD_CEPH_BACKEND)
+find_jar(JUNIT_JAR
+  NAMES junit junit4
+  PATHS "/usr/share/java")
+if(JUNIT_JAR)
+  set(CMAKE_JAVA_INCLUDE_PATH ${JUNIT_JAR} ${zlog_jar_path})
+  set(java_test_srcs
+    src/test/java/com/cruzdb/AllTests.java
+    src/test/java/com/cruzdb/LogTest.java)
+  add_jar(zlog-test ${java_test_srcs})
+  add_dependencies(zlog-test zlog_jar)
+  install_jar(zlog-test share/java)
+endif(JUNIT_JAR)
