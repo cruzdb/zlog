@@ -40,8 +40,6 @@ class NodeCache {
     vaccum_ = std::thread(&NodeCache::do_vaccum_, this);
   }
 
-  NodePtr CacheIntention(const kvstore_proto::Intention& i,
-      uint64_t pos);
   NodePtr ApplyAfterImageDelta(const std::vector<SharedNodeRef>& delta,
       uint64_t pos);
 
