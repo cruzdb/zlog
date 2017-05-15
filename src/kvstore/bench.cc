@@ -40,6 +40,11 @@ static inline std::string tostr(int value)
 
 int main(int argc, char **argv)
 {
+  int stop_after = 0;
+  if (argc > 1) {
+    stop_after = atoi(argv[1]);
+  }
+
     zlog::Log *log;
     //auto be = new RAMBackend();
     auto be = new LMDBBackend();
@@ -72,6 +77,7 @@ int main(int argc, char **argv)
     db->validate();
 #else
     uint64_t txn_count = 0;
+    int total_txn_count = 0;
     uint64_t start_ns = getns();
     while (true) {
       auto txn = db->BeginTransaction();
@@ -91,6 +97,10 @@ int main(int argc, char **argv)
         txn_count = 0;
         start_ns = getns();
       }
+
+      total_txn_count++;
+      if (stop_after  && total_txn_count >= stop_after)
+        break;
     }
 
     delete db;
