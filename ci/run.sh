@@ -37,6 +37,7 @@ mkdir db
 zlog-test-ram
 zlog-db-test
 zlog-test-lmdb
+${BUILD_DIR}/src/kvstore/bench 10000
 
 if [[ "$OSTYPE" != "darwin"* ]]; then
   pushd ${BUILD_DIR}/src/java
@@ -73,7 +74,7 @@ fi
 if [ "${RUN_COVERAGE}" == 1 ]; then
   pushd ${BUILD_DIR}
   mkdir db
-  for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov; do
+  for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov bench-cov; do
     make $test
     rm -rf coverage*
     lcov --directory . --capture --output-file coverage.info
