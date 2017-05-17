@@ -37,6 +37,32 @@ mkdir db
 zlog-test-ram
 zlog-db-test
 zlog-test-lmdb
+${BUILD_DIR}/src/kvstore/bench 10000
+
+if [[ "$OSTYPE" != "darwin"* ]]; then
+  pushd ${BUILD_DIR}/src/java
+
+  export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:$LD_LIBRARY_PATH
+  # i'm giving up for the time being on how to fix a dynamic library loading
+  # issue that is only showing up on debian jessie. see issue #143
+  OS_ID=$(lsb_release -si)
+  OS_CODE=$(lsb_release -sc)
+  if [[ ${OS_ID} == "Debian" && ${OS_CODE} == "jessie" ]]; then
+    export LD_LIBRARY_PATH=/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/amd64/xawt/:$LD_LIBRARY_PATH
+  fi
+
+  export CP=${INSTALL_DIR}/share/java/zlog.jar
+  export CP=$CP:${INSTALL_DIR}/share/java/zlog-test.jar
+  export CP=$CP:/usr/share/java/junit.jar
+  export CP=$CP:/usr/share/java/junit4.jar
+  export CP=$CP:/usr/share/java/hamcrest-core.jar
+  export CP=$CP:/usr/share/java/hamcrest/core.jar
+
+  mkdir db
+  java -cp $CP org.junit.runner.JUnitCore com.cruzdb.AllTests
+
+  popd
+fi
 
 # ceph backend tests
 if [ ! -z ${CEPH_CONF} ]; then
@@ -48,7 +74,7 @@ fi
 if [ "${RUN_COVERAGE}" == 1 ]; then
   pushd ${BUILD_DIR}
   mkdir db
-  for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov; do
+  for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov bench-cov; do
     make $test
     rm -rf coverage*
     lcov --directory . --capture --output-file coverage.info

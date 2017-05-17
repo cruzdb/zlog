@@ -4,7 +4,6 @@
 
 #include "com_cruzdb_Log.h"
 #include "portal.h"
-#include "zlog/backend/ceph.h"
 
 void Java_com_cruzdb_Log_disposeInternal(
     JNIEnv *env, jobject jobj, jlong jhandle)
@@ -13,6 +12,45 @@ void Java_com_cruzdb_Log_disposeInternal(
   delete reinterpret_cast<LogWrapper*>(jhandle);
 }
 
+void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
+    jstring jlog_name)
+{
+  // backend
+  auto client = new FakeSeqrClient();
+  auto be = new LMDBBackend;
+  be->Init();
+
+  // hold log state for java
+  auto log = new LogWrapper;
+  log->be = be;
+  log->seqr_client = client;
+
+  // create or open the log
+  const char *log_name = env->GetStringUTFChars(jlog_name, 0);
+  int ret = zlog::Log::OpenOrCreate(log->be, log_name,
+      log->seqr_client, &log->log);
+  if (ret)
+    goto out;
+
+  env->ReleaseStringUTFChars(jlog_name, log_name);
+  if (ret)
+    goto out;
+
+  ZlogJni::setHandle(env, jobj, log);
+  return;
+
+out:
+  ZlogExceptionJni::ThrowNew(env, ret);
+  delete log;
+}
+
+#ifndef WITH_RADOS
+void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
+    jstring jseqr_server, jint jseqr_port, jstring jlog_name)
+{
+  ZlogExceptionJni::ThrowNew(env, -ENOTSUP);
+}
+#else
 void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
     jstring jseqr_server, jint jseqr_port, jstring jlog_name)
 {
@@ -82,6 +120,7 @@ out:
 out_noexcept:
   delete log;
 }
+#endif
 
 jlong Java_com_cruzdb_Log_append(JNIEnv *env, jobject jlog,
     jlong jlog_handle, jbyteArray jdata, jint jdata_len)

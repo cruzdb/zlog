@@ -26,3 +26,6 @@ target_link_libraries(rbt libkvstore zlog_seqr)
 
 add_executable(bench bench.cc)
 target_link_libraries(bench libzlog zlog_seqr libkvstore zlog_seqr lmdb)
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+  setup_target_for_coverage(bench-cov bench coverage "10000")
+endif()
