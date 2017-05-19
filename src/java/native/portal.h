@@ -4,7 +4,9 @@
 #include <jni.h>
 #include <cassert>
 #include "zlog/log.h"
+#include "zlog/db.h"
 #include "zlog/backend.h"
+#include "zlog/slice.h"
 
 #include "zlog/backend/lmdb.h"
 #include "zlog/backend/fakeseqr.h"
@@ -65,6 +67,13 @@ class LogWrapper {
   librados::Rados rados;
   librados::IoCtx ioctx;
 #endif
+};
+
+class ZlogDBJni : public ZlogNativeClass<DB*, ZlogDBJni> {
+ public:
+  static jclass getJClass(JNIEnv *env) {
+    return ZlogNativeClass::getJClass(env, "com/cruzdb/DB");
+  }
 };
 
 class ZlogJni : public ZlogNativeClass<LogWrapper*, ZlogJni> {
