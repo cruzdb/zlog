@@ -19,15 +19,22 @@ class TransactionImpl : public Transaction {
     root_(nullptr),
     rid_(rid),
     committed_(false),
+    aborted_(false),
     completed_(false)
   {
     assert(rid_ < 0);
+  }
+
+  ~TransactionImpl() {
+    if (!aborted_ && !committed_)
+      Abort();
   }
 
   virtual void Put(const Slice& key, const Slice& value) override;
   virtual void Delete(const Slice& key) override;
   virtual int Get(const Slice& key, std::string *value) override;
   virtual void Commit() override;
+  virtual void Abort() override;
 
  public:
   bool Committed() const {
@@ -80,6 +87,7 @@ class TransactionImpl : public Transaction {
    * completed_: when its safe to ack the client
    */
   bool committed_;
+  bool aborted_;
   bool completed_;
 
   std::condition_variable completed_cond_;

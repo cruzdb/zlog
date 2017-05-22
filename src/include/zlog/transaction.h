@@ -10,6 +10,7 @@ class Transaction {
   virtual int Get(const Slice& key, std::string *value) = 0;
   virtual void Delete(const Slice& key) = 0;
   virtual void Commit() = 0;
+  virtual void Abort() = 0;
 };
 
 #endif
