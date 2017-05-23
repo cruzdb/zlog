@@ -57,6 +57,8 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
   export CP=$CP:/usr/share/java/junit4.jar
   export CP=$CP:/usr/share/java/hamcrest-core.jar
   export CP=$CP:/usr/share/java/hamcrest/core.jar
+  export CP=$CP:/usr/share/java/assertj-core/assertj-core.jar
+  export CP=$CP:/usr/share/java/assertj-core.jar
 
   mkdir db
   java -cp $CP org.junit.runner.JUnitCore com.cruzdb.AllTests

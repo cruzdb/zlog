@@ -10,4 +10,5 @@ Build-Depends: cmake,
   lcov,
   default-jdk,
   liblmdb-dev,
-  junit4
+  junit4,
+  assertj-core
