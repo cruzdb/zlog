@@ -72,6 +72,7 @@ find_jar(ASSERTJ_JAR
   NAMES assertj-core
   PATHS "/usr/share/java/assertj-core")
 if(JUNIT_JAR)
+if(ASSERTJ_JAR)
   set(CMAKE_JAVA_INCLUDE_PATH ${JUNIT_JAR} ${ASSERTJ_JAR} ${zlog_jar_path})
   set(java_test_srcs
     src/test/java/com/cruzdb/AllTests.java
@@ -79,4 +80,5 @@ if(JUNIT_JAR)
   add_jar(zlog-test ${java_test_srcs})
   add_dependencies(zlog-test zlog_jar)
   install_jar(zlog-test share/java)
+endif(ASSERTJ_JAR)
 endif(JUNIT_JAR)
