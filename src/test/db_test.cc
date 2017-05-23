@@ -6,6 +6,7 @@
 #include "zlog/db.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend/ram.h"
+#include "include/zlog/backend/lmdb.h"
 #include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
@@ -306,4 +307,81 @@ TEST(DB, Get) {
   ASSERT_EQ(val, "b");
 
   txn->Commit();
+}
+
+TEST(DB, ReOpen) {
+  // populate a database and close it
+  std::map<std::string, std::string> prev_db;
+  {
+    auto *client = new FakeSeqrClient();
+    auto *be = new LMDBBackend("fakepool");
+    be->Init();
+
+    zlog::Log *log;
+    int ret = zlog::Log::Create(be, "log", client, &log);
+    ASSERT_EQ(ret, 0);
+
+    client->Init(log, "fakepool", "log");
+
+    DB *db;
+    ret = DB::Open(log, true, &db);
+    ASSERT_EQ(0, ret);
+
+    for (int i = 0; i < 100; i++) {
+      std::stringstream ss;
+      ss << "key-" << i;
+      std::string key = ss.str();
+      ss << "-val";
+      std::string val = ss.str();
+
+      auto *txn = db->BeginTransaction();
+
+      std::string val_out;
+      ret = txn->Get(key, &val_out);
+      ASSERT_EQ(-ENOENT, ret);
+
+      txn->Put(key, val);
+      prev_db[key] = val;
+
+      txn->Commit();
+      delete txn;
+    }
+
+    delete db;
+    delete log;
+    delete client;
+    be->Close();
+    delete be;
+  }
+
+  // re-open the database and verify the previous inserts
+  auto *client = new FakeSeqrClient();
+  auto *be = new LMDBBackend("fakepool");
+  be->Init(false);
+
+  zlog::Log *log;
+  int ret = zlog::Log::Open(be, "log", client, &log);
+  ASSERT_EQ(ret, 0);
+
+  client->Init(log, "fakepool", "log");
+
+  DB *db;
+  ret = DB::Open(log, false, &db);
+  ASSERT_EQ(0, ret);
+
+  std::map<std::string, std::string> curr_db;
+  auto *it = db->NewIterator();
+  it->SeekToFirst();
+  while (it->Valid()) {
+    curr_db[it->key().ToString()] = it->value().ToString();
+    it->Next();
+  }
+
+  ASSERT_EQ(prev_db, curr_db);
+
+  delete db;
+  delete log;
+  delete client;
+  be->Close();
+  delete be;
 }
