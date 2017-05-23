@@ -20,7 +20,11 @@ class LMDBBackend : public Backend {
 
   ~LMDBBackend();
 
-  void Init(bool empty = true);
+  void Init(const std::string& path, bool empty);
+
+  void Init(bool empty = true) {
+    Init("db", empty);
+  }
 
   void Close();
 

@@ -206,12 +206,14 @@ jlong Java_com_cruzdb_DB_transaction(JNIEnv *env, jobject jdb,
 }
 
 void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
-    jstring jlog_name)
+    jstring jdb_path, jstring jlog_name)
 {
   // backend
+  const char *db_path = env->GetStringUTFChars(jdb_path, 0);
   auto client = new FakeSeqrClient();
-  auto be = new LMDBBackend;
-  be->Init();
+  auto be = new LMDBBackend("fakepool");
+  be->Init(db_path, false);
+  env->ReleaseStringUTFChars(jdb_path, db_path);
 
   // hold log state for java
   auto log = new LogWrapper;
@@ -224,6 +226,8 @@ void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
       log->seqr_client, &log->log);
   if (ret)
     goto out;
+
+  client->Init(log->log, "fakepool", log_name);
 
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)

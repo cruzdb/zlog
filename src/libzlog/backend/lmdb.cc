@@ -457,7 +457,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
   return ZLOG_OK;
 }
 
-void LMDBBackend::Init(bool empty)
+void LMDBBackend::Init(const std::string& path, bool empty)
 {
   int ret = mdb_env_create(&env);
   assert(ret == 0);
@@ -469,7 +469,7 @@ void LMDBBackend::Init(bool empty)
   assert(ret == 0);
 
   unsigned int flags = MDB_MAPASYNC | MDB_WRITEMAP | MDB_NOMEMINIT;
-  ret = mdb_env_open(env, "db", flags, 0644);
+  ret = mdb_env_open(env, path.c_str(), flags, 0644);
   assert(ret == 0);
 
   MDB_txn *txn;
