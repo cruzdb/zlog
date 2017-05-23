@@ -32,14 +32,13 @@ int DB::Open(zlog::Log *log, bool create_if_empty, DB **db)
 
     ret = log->Append(blob, &tail);
     assert(ret == 0);
-    assert(tail == 0);
-
-    ret = log->CheckTail(&tail);
-    assert(ret == 0);
-    assert(tail == 1);
   }
 
   DBImpl *impl = new DBImpl(log);
+  ret = impl->RestoreFromLog();
+  if (ret)
+    return ret;
+
   *db = impl;
 
   return 0;
@@ -58,6 +57,29 @@ DBImpl::~DBImpl()
   txn_finisher_cond_.notify_one();
   txn_finisher_.join();
   cache_.Stop();
+}
+
+int DBImpl::RestoreFromLog()
+{
+  uint64_t tail;
+  int ret = log_->CheckTail(&tail);
+  assert(ret == 0);
+
+  std::string data;
+  while (true) {
+    ret = log_->Read(tail, &data);
+    if (tail == 0 || ret == 0)
+      break;
+    tail--;
+  }
+
+  kvstore_proto::Intention i;
+  assert(i.ParseFromString(data));
+  assert(i.IsInitialized());
+  auto root = cache_.CacheIntention(i, tail);
+  root_.replace(root);
+
+  return 0;
 }
 
 std::ostream& operator<<(std::ostream& out, const SharedNodeRef& n)

@@ -46,6 +46,8 @@ class DBImpl : public DB {
     return new IteratorImpl(snapshot);
   }
 
+  int RestoreFromLog();
+
  private:
   friend class TransactionImpl;
   friend class NodeCache;
