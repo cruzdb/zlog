@@ -1,6 +1,7 @@
 #ifndef ZLOG_INCLUDE_ZLOG_FAKESEQR_H
 #define ZLOG_INCLUDE_ZLOG_FAKESEQR_H
 #include <deque>
+#include "libzlog/log_impl.h"
 
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
@@ -8,6 +9,26 @@ class FakeSeqrClient : public zlog::SeqrClient {
   {}
 
   void Connect() {}
+
+  /*
+   * The networked sequencer opens a target log to initialize its state. The
+   * fake sequencer can initialize its state from a log instance, otherwise it
+   * will initialize its state assuming the log is empty.
+   *
+   * doesn't handle stream interface...
+   */
+  void Init(zlog::Log *baselog, std::string pool, std::string name) {
+    uint64_t epoch;
+    uint64_t position;
+    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
+    int ret = log->CreateCut(&epoch, &position);
+    if (ret) {
+      std::cerr << "failed to create cut ret " << ret << std::endl;
+      assert(0);
+    }
+    entry *e = &entries_[std::make_pair(pool, name)];
+    e->seq = position;
+  }
 
   virtual int CheckTail(uint64_t epoch, const std::string& pool,
       const std::string& name, uint64_t *position, bool next)

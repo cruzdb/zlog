@@ -14,6 +14,12 @@ class LMDBBackend : public Backend {
     pool_ = ss.str();
   }
 
+  explicit LMDBBackend(std::string pool) :
+    pool_(pool)
+  {}
+
+  ~LMDBBackend();
+
   void Init(bool empty = true);
 
   void Close();
@@ -28,24 +34,15 @@ class LMDBBackend : public Backend {
       const zlog_proto::MetaLog& data);
 
   virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const zlog_proto::MetaLog& data) {
-    assert(0);
-    return 0;
-  }
+      const zlog_proto::MetaLog& data);
 
   virtual int LatestProjection(const std::string& oid,
       uint64_t *epoch, zlog_proto::MetaLog& config);
 
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos) {
-    assert(0);
-    return 0;
-  }
+      uint64_t *pos);
 
-  virtual int Seal(const std::string& oid, uint64_t epoch) {
-    assert(0);
-    return 0;
-  }
+  virtual int Seal(const std::string& oid, uint64_t epoch);
 
   virtual int Write(const std::string& oid, const Slice& data,
       uint64_t epoch, uint64_t position);
@@ -79,9 +76,12 @@ class LMDBBackend : public Backend {
   };
 
   struct LogObject {
-    bool sealed;
     uint64_t epoch;
-    LogObject() : sealed(false), epoch(0) {}
+    LogObject() : epoch(0) {}
+  };
+
+  struct LogMaxPos {
+    uint64_t maxpos;
   };
 
   struct LogEntry {
@@ -158,6 +158,13 @@ class LMDBBackend : public Backend {
     return ss.str();
   }
 
+  std::string MaxPosKey(const std::string& oid)
+  {
+    std::stringstream ss;
+    ss << pool_ << "." << oid << ".maxpos";
+    return ss.str();
+  }
+
   std::string ObjectKey(const std::string& oid)
   {
     std::stringstream ss;
@@ -172,7 +179,8 @@ class LMDBBackend : public Backend {
     return ss.str();
   }
 
-  int CheckEpoch(Transaction& txn, uint64_t epoch, const std::string& oid);
+  int CheckEpoch(Transaction& txn, uint64_t epoch, const std::string& oid,
+      bool eq = false);
 };
 
 #endif

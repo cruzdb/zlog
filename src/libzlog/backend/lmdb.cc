@@ -23,6 +23,11 @@ LMDBBackend::Transaction LMDBBackend::NewTransaction(bool read_only)
   return Transaction(txn, this);
 }
 
+LMDBBackend::~LMDBBackend()
+{
+  mdb_env_sync(env, 1);
+}
+
 int LMDBBackend::Exists(const std::string& oid)
 {
   auto txn = NewTransaction(true);
@@ -119,6 +124,59 @@ int LMDBBackend::LatestProjection(const std::string& oid,
   return ZLOG_OK;
 }
 
+int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
+      const zlog_proto::MetaLog& data)
+{
+  auto txn = NewTransaction();
+
+  MDB_val val;
+  std::string oid_key = ObjectKey(oid);
+  int ret = txn.Get(oid_key, val);
+  if (ret) {
+    if (ret == -ENOENT) {
+      assert(epoch == 0);
+    } else {
+      txn.Abort();
+      return ret;
+    }
+  }
+
+  // there is a case for handling enoent in the distributed version, but it
+  // seems we do not need that case for the lmdb backend, yet.
+  assert(ret == 0);
+
+  ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
+  assert(val.mv_size == sizeof(*proj_obj));
+  assert(epoch == (proj_obj->latest_epoch + 1));
+
+  std::string blob;
+  assert(data.IsInitialized());
+  assert(data.SerializeToString(&blob));
+
+  // write new projection
+  MDB_val proj_val;
+  std::string proj_key = ProjectionKey(oid, epoch);
+  proj_val.mv_data = (void*)blob.data();
+  proj_val.mv_size = blob.size();
+  ret = txn.Put(proj_key, proj_val, true);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  proj_obj->latest_epoch = epoch;
+  val.mv_data = proj_obj;
+  val.mv_size = sizeof(*proj_obj);
+  ret = txn.Put(oid_key, val, false);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  txn.Commit();
+  return ZLOG_OK;
+}
+
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
     uint64_t epoch, uint64_t position)
 {
@@ -128,6 +186,20 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
   if (ret) {
     txn.Abort();
     return ret;
+  }
+
+  // read max position
+  uint64_t pos = 0;
+  MDB_val maxval;
+  auto maxkey = MaxPosKey(oid);
+  ret = txn.Get(maxkey, maxval);
+  if (ret < 0 && ret != -ENOENT) {
+    txn.Abort();
+    return ret;
+  } else if (ret == 0) {
+    LogMaxPos *maxpos = (LogMaxPos*)maxval.mv_data;
+    assert(maxval.mv_size == sizeof(*maxpos));
+    pos = maxpos->maxpos;
   }
 
   LogEntry entry;
@@ -145,6 +217,13 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
     txn.Abort();
     return Backend::ZLOG_READ_ONLY;
   }
+
+  // update max pos
+  LogMaxPos new_maxpos;
+  new_maxpos.maxpos = std::max(pos, position);
+  maxval.mv_data = &new_maxpos;
+  maxval.mv_size = sizeof(new_maxpos);
+  txn.Put(maxkey, maxval, false);
 
   ret = txn.Commit();
   if (ret)
@@ -294,7 +373,7 @@ int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
-    const std::string& oid)
+    const std::string& oid, bool eq)
 {
   MDB_val val;
   auto key = ObjectKey(oid);
@@ -303,9 +382,79 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
     return 0;
   LogObject *obj = (LogObject*)val.mv_data;
   assert(val.mv_size == sizeof(*obj));
-  if (obj->sealed && epoch <= obj->epoch)
+  if (eq) { 
+    if (epoch != obj->epoch) {
+      return -EINVAL;
+    }
+  } else if (epoch <= obj->epoch) {
     return Backend::ZLOG_STALE_EPOCH;
+  }
   return 0;
+}
+
+int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
+    uint64_t *pos)
+{
+  auto txn = NewTransaction(true);
+
+  int ret = CheckEpoch(txn, epoch, oid, true);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  MDB_val val;
+  auto key = MaxPosKey(oid);
+  ret = txn.Get(key, val);
+  if (ret < 0) {
+    if (ret == -ENOENT) {
+      *pos = 0;
+      txn.Commit();
+      return 0;
+    }
+    txn.Abort();
+    return ret;
+  }
+
+  LogMaxPos *maxpos = (LogMaxPos*)val.mv_data;
+  assert(val.mv_size == sizeof(*maxpos));
+  txn.Commit();
+  *pos = maxpos->maxpos + 1;
+  return 0;
+}
+
+int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
+{
+  auto txn = NewTransaction();
+
+  // read current epoch value (if its been set yet)
+  MDB_val val;
+  auto key = ObjectKey(oid);
+  int ret = txn.Get(key, val);
+  assert(ret == 0 || ret == -ENOENT);
+
+  // if exists, verify the new epoch is larger
+  LogObject obj;
+  if (ret == 0) {
+    assert(val.mv_size == sizeof(obj));
+    obj = *((LogObject*)val.mv_data);
+    if (epoch <= obj.epoch) {
+      txn.Abort();
+      return Backend::ZLOG_INVALID_EPOCH;
+    }
+  }
+
+  // write new epoch
+  obj.epoch = epoch;
+  val.mv_data = &obj;
+  val.mv_size = sizeof(obj);
+  txn.Put(key, val, false);
+
+  ret = txn.Commit();
+  if (ret)
+    return ret;
+
+  return ZLOG_OK;
 }
 
 void LMDBBackend::Init(bool empty)
