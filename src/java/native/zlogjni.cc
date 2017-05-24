@@ -29,14 +29,12 @@ static jbyteArray copyBytes(JNIEnv* env, std::string bytes) {
 void Java_com_cruzdb_Log_disposeInternal(
     JNIEnv *env, jobject jobj, jlong jhandle)
 {
-  std::cout << "delete log" << std::endl;
   delete reinterpret_cast<LogWrapper*>(jhandle);
 }
 
 void Java_com_cruzdb_DB_disposeInternal(JNIEnv *env, jobject jobj,
     jlong jhandle)
 {
-  std::cout << "delete db" << std::endl;
   delete reinterpret_cast<DB*>(jhandle);
 }
 

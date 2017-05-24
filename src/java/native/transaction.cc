@@ -30,7 +30,6 @@ static jbyteArray copyBytes(JNIEnv* env, std::string bytes) {
 void Java_com_cruzdb_Transaction_disposeInternal
   (JNIEnv *env, jobject jtxn, jlong jtxnHandle)
 {
-  std::cout << "delete db" << std::endl;
   delete reinterpret_cast<Transaction*>(jtxnHandle);
 }
 
