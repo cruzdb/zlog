@@ -297,16 +297,22 @@ void DBImpl::validate_rb_tree(NodePtr root)
   assert(_validate_rb_tree(root.ref_notrace()) != 0);
 }
 
+/*
+ * TODO:
+ *  - we way want to add a policy that allows a long-running transaction to be
+ *  forced to abort so that it doesn't hold up other transactions waiting.
+ */
 Transaction *DBImpl::BeginTransaction()
 {
-  std::lock_guard<std::mutex> l(lock_);
-  auto txn = new TransactionImpl(this, root_, root_id_--);
-  // FIXME: this is a temporary check; we currently do not have any tests or
-  // benchmarks that are multi-threaded. soon we will actually block new
-  // transactions from starting until the current txn finishes.
-  assert(!cur_txn_);
-  cur_txn_ = txn;
-  return txn;
+  std::unique_lock<std::mutex> lk(lock_);
+  while (true) {
+    if (cur_txn_ == nullptr) {
+      cur_txn_ = new TransactionImpl(this, root_, root_id_--);
+      return cur_txn_;
+    } else {
+      cur_txn_cond_.wait(lk);
+    }
+  }
 }
 
 void DBImpl::TransactionFinisher()
@@ -346,6 +352,7 @@ void DBImpl::TransactionFinisher()
     // mark complete
     cur_txn_->MarkComplete();
     cur_txn_ = nullptr;
+    cur_txn_cond_.notify_one();
   }
 }
 
@@ -357,6 +364,7 @@ void DBImpl::AbortTransaction(TransactionImpl *txn)
 
   std::lock_guard<std::mutex> lk(lock_);
   cur_txn_ = nullptr;
+  cur_txn_cond_.notify_one();
 }
 
 void DBImpl::CompleteTransaction(TransactionImpl *txn)

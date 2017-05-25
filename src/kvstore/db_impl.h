@@ -110,6 +110,7 @@ class DBImpl : public DB {
   std::thread txn_finisher_;
   void TransactionFinisher();
   std::condition_variable txn_finisher_cond_;
+  std::condition_variable cur_txn_cond_;
 };
 
 #endif
