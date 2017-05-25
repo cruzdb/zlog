@@ -32,12 +32,11 @@ public class LogTest {
     String logname = "" + rand.nextInt();
     Log log = Log.openLMDB(logname);
     //Log log = Log.openLMDB("rbd", "localhost", 5678, logname);
+    long first_pos = log.append(new byte[20]);
     long pos = log.append(new byte[20]);
-    assertEquals(pos, 0); // first append
+    assertEquals(pos, first_pos+1);
     pos = log.append(new byte[20]);
-    assertEquals(pos, 1);
-    pos = log.append(new byte[20]);
-    assertEquals(pos, 2);
+    assertEquals(pos, first_pos+2);
   }
 
   @Test(expected=NotWrittenException.class)
@@ -112,9 +111,8 @@ public class LogTest {
     pos = log.tail();
     assertEquals(pos, 0);
     long pos2 = log.append("asdf".getBytes());
-    assertEquals(pos2, 0);
     pos = log.tail();
-    assertEquals(pos, 1);
+    assertEquals(pos, pos2+1);
   }
 
   @Test
