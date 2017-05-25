@@ -14,8 +14,6 @@ BuildRequires:	java-devel
 BuildRequires:	lcov
 BuildRequires:  libatomic
 BuildRequires:  lmdb-devel
-BuildRequires:  junit
-BuildRequires:  assertj-core
 
 %description
 distributed shared log

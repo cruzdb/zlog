@@ -9,6 +9,4 @@ Build-Depends: cmake,
   libboost-program-options-dev,
   lcov,
   default-jdk,
-  liblmdb-dev,
-  junit4,
-  assertj-core
+  liblmdb-dev
