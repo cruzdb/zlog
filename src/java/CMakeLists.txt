@@ -33,7 +33,7 @@ set(java_classes
 
 get_property(zlog_jar_path TARGET zlog_jar PROPERTY JAR_FILE)
 
-set(JAVA_TEST_LIBDIR ${PROJECT_SOURCE_DIR}/java/test-libs)
+set(JAVA_TEST_LIBDIR ${CMAKE_CURRENT_SOURCE_DIR}/test-libs)
 set(JAVA_TMP_JAR ${JAVA_TEST_LIBDIR}/tmp.jar)
 set(JAVA_JUNIT_JAR ${JAVA_TEST_LIBDIR}/junit-4.12.jar)
 set(JAVA_HAMCR_JAR ${JAVA_TEST_LIBDIR}/hamcrest-core-1.3.jar)
