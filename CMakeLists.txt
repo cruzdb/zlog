@@ -48,4 +48,7 @@ IF("${isSystemDir}" STREQUAL "-1")
   SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
+include(CheckIncludeFile)
+CHECK_INCLUDE_FILE(rados/objclass.h HAVE_RADOS_OBJECT_CLASS_H)
+
 add_subdirectory(src)

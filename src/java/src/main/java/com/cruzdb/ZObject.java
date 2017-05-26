@@ -6,6 +6,11 @@ public abstract class ZObject {
     owningHandle_ = true;
   }
 
+  protected ZObject(long handle) {
+    nativeHandle_ = handle;
+    owningHandle_ = true;
+  }
+
   public final synchronized void dispose() {
     if (isOwningNativeHandle() && isInitialized()) {
       disposeInternal();

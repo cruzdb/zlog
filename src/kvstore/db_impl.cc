@@ -32,14 +32,13 @@ int DB::Open(zlog::Log *log, bool create_if_empty, DB **db)
 
     ret = log->Append(blob, &tail);
     assert(ret == 0);
-    assert(tail == 0);
-
-    ret = log->CheckTail(&tail);
-    assert(ret == 0);
-    assert(tail == 1);
   }
 
   DBImpl *impl = new DBImpl(log);
+  ret = impl->RestoreFromLog();
+  if (ret)
+    return ret;
+
   *db = impl;
 
   return 0;
@@ -58,6 +57,29 @@ DBImpl::~DBImpl()
   txn_finisher_cond_.notify_one();
   txn_finisher_.join();
   cache_.Stop();
+}
+
+int DBImpl::RestoreFromLog()
+{
+  uint64_t tail;
+  int ret = log_->CheckTail(&tail);
+  assert(ret == 0);
+
+  std::string data;
+  while (true) {
+    ret = log_->Read(tail, &data);
+    if (tail == 0 || ret == 0)
+      break;
+    tail--;
+  }
+
+  kvstore_proto::Intention i;
+  assert(i.ParseFromString(data));
+  assert(i.IsInitialized());
+  auto root = cache_.CacheIntention(i, tail);
+  root_.replace(root);
+
+  return 0;
 }
 
 std::ostream& operator<<(std::ostream& out, const SharedNodeRef& n)
@@ -275,16 +297,22 @@ void DBImpl::validate_rb_tree(NodePtr root)
   assert(_validate_rb_tree(root.ref_notrace()) != 0);
 }
 
+/*
+ * TODO:
+ *  - we way want to add a policy that allows a long-running transaction to be
+ *  forced to abort so that it doesn't hold up other transactions waiting.
+ */
 Transaction *DBImpl::BeginTransaction()
 {
-  std::lock_guard<std::mutex> l(lock_);
-  auto txn = new TransactionImpl(this, root_, root_id_--);
-  // FIXME: this is a temporary check; we currently do not have any tests or
-  // benchmarks that are multi-threaded. soon we will actually block new
-  // transactions from starting until the current txn finishes.
-  assert(!cur_txn_);
-  cur_txn_ = txn;
-  return txn;
+  std::unique_lock<std::mutex> lk(lock_);
+  while (true) {
+    if (cur_txn_ == nullptr) {
+      cur_txn_ = new TransactionImpl(this, root_, root_id_--);
+      return cur_txn_;
+    } else {
+      cur_txn_cond_.wait(lk);
+    }
+  }
 }
 
 void DBImpl::TransactionFinisher()
@@ -324,6 +352,7 @@ void DBImpl::TransactionFinisher()
     // mark complete
     cur_txn_->MarkComplete();
     cur_txn_ = nullptr;
+    cur_txn_cond_.notify_one();
   }
 }
 
@@ -335,6 +364,7 @@ void DBImpl::AbortTransaction(TransactionImpl *txn)
 
   std::lock_guard<std::mutex> lk(lock_);
   cur_txn_ = nullptr;
+  cur_txn_cond_.notify_one();
 }
 
 void DBImpl::CompleteTransaction(TransactionImpl *txn)

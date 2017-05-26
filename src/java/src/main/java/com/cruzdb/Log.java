@@ -52,10 +52,18 @@ public class Log extends ZObject {
    *
    */
   public static Log openLMDB(String logName) throws LogException {
+    return openLMDB("db", logName);
+  }
+
+  /**
+   *
+   */
+  public static Log openLMDB(String dbPath, String logName) throws LogException {
     Log log = new Log();
-    log.openLMDBNative(logName);
+    log.openLMDBNative(dbPath, logName);
     return log;
   }
+
 
   /**
    * Append "data" to the tail of the log.
@@ -127,7 +135,7 @@ public class Log extends ZObject {
   private native void disposeInternal(long handle);
   private native void openNative(String pool, String seqr_server,
       int seqr_port, String log_name) throws LogException;
-  private native void openLMDBNative(String logName) throws LogException;
+  private native void openLMDBNative(String dbPath, String logName) throws LogException;
   private native long append(long handle, byte[] data, int dataLen) throws LogException;
   private native byte[] read(long handle, long position) throws LogException;
   private native void fill(long handle, long position) throws LogException;

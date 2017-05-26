@@ -388,6 +388,7 @@ void TransactionImpl::serialize_intention(kvstore_proto::Intention& i,
 void TransactionImpl::Put(const Slice& key, const Slice& value)
 {
   assert(!committed_);
+  assert(!aborted_);
 
   TraceApplier ta(this);
 
@@ -439,6 +440,7 @@ void TransactionImpl::Put(const Slice& key, const Slice& value)
 void TransactionImpl::Delete(const Slice& key)
 {
   assert(!committed_);
+  assert(!aborted_);
 
   TraceApplier ta(this);
 
@@ -501,9 +503,18 @@ void TransactionImpl::Delete(const Slice& key)
   root_ = root;
 }
 
+void TransactionImpl::Abort()
+{
+  assert(!committed_);
+  assert(!aborted_);
+  aborted_ = true;
+  db_->AbortTransaction(this);
+}
+
 void TransactionImpl::Commit()
 {
   assert(!committed_);
+  assert(!aborted_);
 
   assert(trace_.empty());
 
@@ -527,6 +538,7 @@ void TransactionImpl::Commit()
 int TransactionImpl::Get(const Slice& key, std::string* val)
 {
   assert(!committed_);
+  assert(!aborted_);
 
   TraceApplier ta(this);
 

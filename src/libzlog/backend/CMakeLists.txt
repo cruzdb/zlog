@@ -29,3 +29,12 @@ target_include_directories(zlog_backend_ceph
 )
 install(TARGETS zlog_backend_ceph DESTINATION lib)
 endif(BUILD_CEPH_BACKEND)
+
+if(HAVE_RADOS_OBJECT_CLASS_H)
+  add_library(cls_zlog SHARED cls_zlog.cc)
+  target_link_libraries(cls_zlog zlog_ceph_proto)
+  set_target_properties(cls_zlog PROPERTIES
+    VERSION "1.0.0"
+    SOVERSION "1")
+  install(TARGETS cls_zlog DESTINATION "/usr/lib/rados-classes")
+endif(HAVE_RADOS_OBJECT_CLASS_H)

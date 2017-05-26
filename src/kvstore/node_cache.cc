@@ -114,6 +114,40 @@ void NodeCache::ResolveNodePtr(NodePtr& ptr)
   ptr.set_ref(e.node);
 }
 
+NodePtr NodeCache::CacheIntention(const kvstore_proto::Intention& i,
+    uint64_t pos)
+{
+  std::lock_guard<std::mutex> l(lock_);
+
+  if (i.tree_size() == 0) {
+    NodePtr ret(Node::Nil(), nullptr, true);
+    return ret;
+  }
+
+  int idx;
+  SharedNodeRef nn = nullptr;
+  for (idx = 0; idx < i.tree_size(); idx++) {
+    nn = deserialize_node(i, pos, idx);
+
+    assert(nn->read_only());
+
+    used_bytes_ += nn->ByteSize();
+    auto key = std::make_pair(pos, idx);
+    nodes_lru_.emplace_front(key);
+    auto iter = nodes_lru_.begin();
+    auto res = nodes_.insert(
+        std::make_pair(key, entry{nn, iter}));
+    assert(res.second);
+  }
+
+  assert(nn != nullptr);
+  NodePtr ret(nn, db_, false);
+  ret.set_csn(pos);
+  ret.set_offset(idx - 1);
+  ret.set_read_only();
+  return ret;
+}
+
 SharedNodeRef NodeCache::deserialize_node(const kvstore_proto::Intention& i,
     uint64_t pos, int index)
 {

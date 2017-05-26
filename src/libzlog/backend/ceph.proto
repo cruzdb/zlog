@@ -61,3 +61,13 @@ message SetLatestProjectionOp {
 message GetEpochOp {
   required uint64 epoch = 1;
 }
+
+message LogEntry {
+  enum Flags {
+    DEFAULT = 0;
+    INVALIDATED = 1;
+    TRIMMED = 2;
+  }
+  optional Flags flags = 1 [default = DEFAULT];
+  optional bytes data = 2;
+}

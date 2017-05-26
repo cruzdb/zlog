@@ -52,11 +52,10 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
   fi
 
   export CP=${INSTALL_DIR}/share/java/zlog.jar
-  export CP=$CP:${INSTALL_DIR}/share/java/zlog-test.jar
-  export CP=$CP:/usr/share/java/junit.jar
-  export CP=$CP:/usr/share/java/junit4.jar
-  export CP=$CP:/usr/share/java/hamcrest-core.jar
-  export CP=$CP:/usr/share/java/hamcrest/core.jar
+  export CP=${CP}:${INSTALL_DIR}/share/java/zlog-test.jar
+  export CP=${CP}:${ZLOG_DIR}/src/java/test-libs/junit-4.12.jar
+  export CP=${CP}:${ZLOG_DIR}/src/java/test-libs/hamcrest-core-1.3.jar
+  export CP=${CP}:${ZLOG_DIR}/src/java/test-libs/assertj-core-1.7.1.jar
 
   mkdir db
   java -cp $CP org.junit.runner.JUnitCore com.cruzdb.AllTests

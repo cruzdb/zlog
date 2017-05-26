@@ -14,7 +14,6 @@ BuildRequires:	java-devel
 BuildRequires:	lcov
 BuildRequires:  libatomic
 BuildRequires:  lmdb-devel
-BuildRequires:  junit
 
 %description
 distributed shared log
