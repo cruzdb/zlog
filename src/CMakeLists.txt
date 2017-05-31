@@ -7,9 +7,16 @@ add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(kvstore)
 add_subdirectory(include)
-add_subdirectory(java)
 add_subdirectory(googletest/googlemock)
 add_subdirectory(test)
+
+option(WITH_JNI "build with JNI" OFF)
+if(WITH_JNI)
+  message(STATUS "JNI library is enabled")
+  add_subdirectory(java)
+else()
+  message(STATUS "JNI library is disabled")
+endif(WITH_JNI)
 
 ################################################################################
 ################################################################################

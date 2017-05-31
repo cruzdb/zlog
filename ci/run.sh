@@ -23,7 +23,7 @@ fi
 
 # build and install zlog
 pushd ${BUILD_DIR}
-cmake -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DWITH_JNI=1 \
   -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${ZLOG_DIR} ${EXTRA_CMAKE_ARGS}
 make -j$(nproc)
 make install
