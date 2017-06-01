@@ -107,10 +107,18 @@ class DBImpl : public DB {
 
   // transaction handling
   TransactionImpl *cur_txn_;
-  std::thread txn_finisher_;
   void TransactionFinisher();
   std::condition_variable txn_finisher_cond_;
   std::condition_variable cur_txn_cond_;
+
+  // from the spec "Then, nonstatic data members shall be initialized in the
+  // order they were declared in the class definition (again regardless of the
+  // order of the mem-initializers)."
+  //
+  // since the thread will immediately start interacting with this class,
+  // everything needs to be initialized. in particular the condition
+  // variables.
+  std::thread txn_finisher_;
 };
 
 #endif
