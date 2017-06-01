@@ -4,7 +4,7 @@
 #include <rados/buffer.h>
 using namespace ceph;
 #include <rados/objclass.h>
-#include "ceph.pb.h"
+#include "libzlog/backend/ceph.pb.h"
 
 namespace zlog {
 
