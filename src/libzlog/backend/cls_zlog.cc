@@ -2,6 +2,7 @@
 #include <sstream>
 #include <boost/lexical_cast.hpp>
 #include <rados/buffer.h>
+using namespace ceph;
 #include <rados/objclass.h>
 #include "ceph.pb.h"
 
