@@ -3,6 +3,14 @@
 set -e
 set -x
 
-cp -a /ceph_zlog_plugin/libcls_zlog.so* /usr/lib/rados-classes
+dir=$(mktemp -d)
+pushd $dir
+cmake /src/zlog
+make -j$(nproc) cls_zlog
 
-./micro-osd.sh /micro-osd
+pushd src/libzlog/backend
+make install
+popd
+popd
+
+/micro-osd.sh /micro-osd
