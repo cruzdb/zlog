@@ -9,13 +9,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y wget && 
         libprotobuf9v5 uuid-runtime && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# install just the minimum extras to build the ceph plugin
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y \
-    rados-objclass-dev cmake libprotobuf-dev protobuf-compiler \
-    libboost-system-dev libboost-program-options-dev liblmdb-dev g++ && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-VOLUME ["/src/zlog"]
+VOLUME ["/ceph_plugin"]
 
 WORKDIR /
 
