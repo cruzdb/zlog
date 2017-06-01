@@ -18,6 +18,9 @@ else()
   message(STATUS "JNI library is disabled")
 endif(WITH_JNI)
 
+include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/rapidjson/include")
+add_subdirectory(tools)
+
 ################################################################################
 ################################################################################
 ################################################################################

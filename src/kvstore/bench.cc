@@ -34,7 +34,7 @@ static inline uint64_t getns()
 static inline std::string tostr(int value)
 {
   std::stringstream ss;
-  ss << std::setw(3) << std::setfill('0') << value;
+  ss << std::setw(9) << std::setfill('0') << value;
   return ss.str();
 }
 
@@ -64,9 +64,11 @@ int main(int argc, char **argv)
   uint64_t txn_count = 0;
   int total_txn_count = 0;
   uint64_t start_ns = getns();
+
+  int x = 0;
   while (true) {
     auto txn = db->BeginTransaction();
-    int nkey = std::rand();
+    int nkey = x++;//std::rand();
     const std::string key = tostr(nkey);
     txn->Put(key, key);
     txn->Commit();
