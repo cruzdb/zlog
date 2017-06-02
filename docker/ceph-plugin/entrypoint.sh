@@ -3,18 +3,18 @@
 set -e
 set -x
 
-tar xzf ceph.tar.gz
+if [ ! -d "/src/zlog" ]; then
+  git clone --recursive https://github.com/noahdesu/zlog /src/zlog
+fi
 
-pushd /ceph
-git fetch origin
-git checkout -b build origin/zlog/master-pb
-
-apt-get update
-./install-deps.sh
-./do_cmake.sh
-
-pushd build
+dir=$(mktemp -d)
+pushd $dir
+cmake /src/zlog
 make -j$(nproc) cls_zlog
 
-rm -rf /ceph_zlog_plugin/*
-cp -a lib/libcls_zlog.so* /ceph_zlog_plugin/
+pushd src/libzlog/backend
+make install
+popd
+popd
+
+cp -a /usr/lib/rados-classes/libcls_zlog.so* /ceph_plugin/

@@ -1,16 +1,23 @@
-FROM ubuntu:xenial
+FROM ubuntu:16.04
 
-RUN apt-get update && apt-get install -y \
-        git \
-        libprotobuf-dev protobuf-compiler && \
-        apt-get clean -y
+# keep in sync with the first layer of the micro-osd image
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y wget && \
+    wget -q -O- 'https://download.ceph.com/keys/release.asc' | apt-key add - && \
+    echo "deb http://download.ceph.com/debian-luminous/ xenial main" | \
+		tee /etc/apt/sources.list.d/ceph-luminous.list && \
+    apt-get update && apt-get install -y --force-yes ceph-mon ceph-osd \
+        libprotobuf9v5 uuid-runtime && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN git clone --recursive --branch zlog/master-pb https://github.com/noahdesu/ceph.git /ceph && \
-        cd /ceph && \
-        find ./ -name .git -execdir git gc --aggressive --prune ";" && \
-        cd .. && tar czf ceph.tar.gz ceph && rm -rf ceph
+# install just the minimum extras to build the ceph plugin
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y \
+    git rados-objclass-dev cmake libprotobuf-dev protobuf-compiler \
+    libboost-system-dev libboost-program-options-dev liblmdb-dev g++ && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-VOLUME ["/ceph_zlog_plugin"]
+VOLUME /ceph_plugin
+
+WORKDIR /
 
 ADD entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]

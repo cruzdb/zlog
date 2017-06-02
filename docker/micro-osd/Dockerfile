@@ -1,26 +1,18 @@
-FROM ubuntu:xenial
+FROM ubuntu:16.04
 
-ENV DEBIAN_FRONTEND=noninteractive
+# keep in sync with the first layer of the micro-osd image
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y wget && \
+    wget -q -O- 'https://download.ceph.com/keys/release.asc' | apt-key add - && \
+    echo "deb http://download.ceph.com/debian-luminous/ xenial main" | \
+		tee /etc/apt/sources.list.d/ceph-luminous.list && \
+    apt-get update && apt-get install -y --force-yes ceph-mon ceph-osd \
+        libprotobuf9v5 uuid-runtime && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN apt-get update && apt-get install -y wget \
-        software-properties-common apt-transport-https \
-        uuid-runtime libprotobuf9v5 libprotobuf-lite9v5 && \
-        apt-get clean -y && \
-        apt-get autoclean -y && \
-        apt-get autoremove -y
+VOLUME ["/ceph_plugin"]
 
-RUN wget -q -O- 'https://download.ceph.com/keys/release.asc' | apt-key add -
-RUN apt-add-repository "deb https://download.ceph.com/debian-kraken/ xenial main"
+WORKDIR /
 
-RUN apt-get update && apt-get install -y ceph && \
-        apt-get clean -y && \
-        apt-get autoclean -y && \
-        apt-get autoremove -y
-
-VOLUME ["/cls_zlog_plugin"]
-VOLUME ["/micro-osd"]
-
-ADD micro-osd.sh /micro-osd.sh
-ADD entrypoint.sh /entrypoint.sh
-
-ENTRYPOINT ["./entrypoint.sh"]
+ADD micro-osd.sh /
+ADD entrypoint.sh /
+ENTRYPOINT ["/entrypoint.sh"]
