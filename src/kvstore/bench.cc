@@ -34,7 +34,7 @@ static inline uint64_t getns()
 static inline std::string tostr(int value)
 {
   std::stringstream ss;
-  ss << std::setw(3) << std::setfill('0') << value;
+  ss << std::setw(9) << std::setfill('0') << value;
   return ss.str();
 }
 
@@ -45,68 +45,54 @@ int main(int argc, char **argv)
     stop_after = atoi(argv[1]);
   }
 
-    zlog::Log *log;
-    //auto be = new RAMBackend();
-    auto be = new LMDBBackend();
-    be->Init();
-    auto client = new FakeSeqrClient();
-    int ret = zlog::Log::Create(be, "log", client, &log);
-    assert(ret == 0);
+  auto client = new FakeSeqrClient();
+  auto be = new LMDBBackend("fakepool");
+  be->Init("/tmp/zlog-db", false);
 
-    DB *db;
-    ret = DB::Open(log, true, &db);
-    assert(ret == 0);
+  zlog::Log *log;
+  int ret = zlog::Log::OpenOrCreate(be, "log", client, &log);
+  assert(ret == 0);
 
-    std::srand(0);
+  client->Init(log, "fakepool", "log");
 
-#if 0
+  DB *db;
+  ret = DB::Open(log, true, &db);
+  assert(ret == 0);
+
+  std::srand(0);
+
+  uint64_t txn_count = 0;
+  int total_txn_count = 0;
+  uint64_t start_ns = getns();
+
+  int x = 0;
+  while (true) {
     auto txn = db->BeginTransaction();
-    int nkey = std::rand();
-    std::string key = tostr(nkey);
+    int nkey = x++;//std::rand();
+    const std::string key = tostr(nkey);
     txn->Put(key, key);
     txn->Commit();
     delete txn;
 
-    txn = db->BeginTransaction();
-    nkey = std::rand();
-    key = tostr(nkey);
-    txn->Put(key, key);
-    txn->Commit();
-    delete txn;
-
-    db->validate();
-#else
-    uint64_t txn_count = 0;
-    int total_txn_count = 0;
-    uint64_t start_ns = getns();
-    while (true) {
-      auto txn = db->BeginTransaction();
-      int nkey = std::rand();
-      const std::string key = tostr(nkey);
-      txn->Put(key, key);
-      txn->Commit();
-      delete txn;
-
-      if (++txn_count == 2000) {
-        uint64_t dur_ns = getns() - start_ns;
-        double iops = (double)(txn_count * 1000000000ULL) / (double)dur_ns;
-        std::cout << "sha1 dev-backend hostname: iops " << iops << std::endl;
-        std::cout << "validating tree..." << std::flush;
-        //db->validate();
-        std::cout << " done" << std::endl << std::flush;
-        txn_count = 0;
-        start_ns = getns();
-      }
-
-      total_txn_count++;
-      if (stop_after  && total_txn_count >= stop_after)
-        break;
+    if (++txn_count == 2000) {
+      uint64_t dur_ns = getns() - start_ns;
+      double iops = (double)(txn_count * 1000000000ULL) / (double)dur_ns;
+      std::cout << "sha1 dev-backend hostname: iops " << iops << std::endl;
+      std::cout << "validating tree..." << std::flush;
+      //db->validate();
+      std::cout << " done" << std::endl << std::flush;
+      txn_count = 0;
+      start_ns = getns();
     }
 
-    delete db;
-    delete log;
-    delete client;
-    be->Close();
-    delete be;
-#endif
+    total_txn_count++;
+    if (stop_after  && total_txn_count >= stop_after)
+      break;
+  }
+
+  delete db;
+  delete log;
+  delete client;
+  be->Close();
+  delete be;
 }
