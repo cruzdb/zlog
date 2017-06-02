@@ -1,4 +1,5 @@
 import sys
+import csv
 import json
 
 class NodePtr(object):
@@ -41,12 +42,20 @@ class Log(object):
         for k, v in tmp.iteritems():
             self.entries[k] = v
 
-log = Log(sys.stdin)
+    def written_positions(self):
+        snapshots = []
+        for i in range(len(self.entries)):
+            if self.entries[i] is not None:
+                snapshots.append(i)
+        return snapshots
 
 class Database(object):
-    def __init__(self, log):
+    def __init__(self, log, snapshot=None):
         self.log = log
-        self.root = self.log.entries[-1][-1]
+        if snapshot is None:
+            snapshot = -1
+        tree = self.log.entries[snapshot]
+        self.root = tree[-1] if tree else None
 
     def resolve(self, ptr):
         if ptr.nil:
@@ -55,19 +64,24 @@ class Database(object):
 
     def get(self, key):
         curr = self.root
+        count = 0
         while curr:
+            count += 1
             if curr.key == key:
-                return curr.val
+                return curr.val, count
             elif curr.key > key:
                 curr = self.resolve(curr.left)
             else:
                 curr = self.resolve(curr.right)
-        return None
+        return None, count
 
-db = Database(log)
-print db.get(303)
-print db.get(0)
-print db.get(1)
-print db.get(33)
-print db.get(99)
-print db.get(100)
+log = Log(sys.stdin)
+
+writer = csv.writer(sys.stdout)
+writer.writerow(("snapshot", "resolves"))
+snapshots = log.written_positions()
+for snapshot in snapshots:
+    db = Database(log, snapshot)
+    val, resolves = db.get(-1)
+    assert val is None
+    writer.writerow((snapshot, resolves))
