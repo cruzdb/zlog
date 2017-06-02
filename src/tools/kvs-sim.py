@@ -35,7 +35,7 @@ class Log(object):
             for node in entry["tree"]:
                 n = Node(pos, node)
                 nodes.append(n)
-            tmp[pos] = nodes
+            tmp[pos] = (nodes, entry["bytes"])
         # move to list for direct indexing
         maxpos = max(tmp)
         self.entries = (maxpos + 1) * [None]
@@ -54,34 +54,38 @@ class Database(object):
         self.log = log
         if snapshot is None:
             snapshot = -1
-        tree = self.log.entries[snapshot]
+        tree, nbytes = self.log.entries[snapshot]
         self.root = tree[-1] if tree else None
+
+        # stats
+        self.resolves = 1
+        self.nbytes = nbytes
 
     def resolve(self, ptr):
         if ptr.nil:
             return None
-        return self.log.entries[ptr.pos][ptr.off]
+        self.resolves += 1
+        tree, nbytes = self.log.entries[ptr.pos]
+        self.nbytes += nbytes
+        return tree[ptr.off]
 
     def get(self, key):
         curr = self.root
-        count = 0
         while curr:
-            count += 1
             if curr.key == key:
-                return curr.val, count
+                return curr.val
             elif curr.key > key:
                 curr = self.resolve(curr.left)
             else:
                 curr = self.resolve(curr.right)
-        return None, count
+        return None
 
 log = Log(sys.stdin)
 
 writer = csv.writer(sys.stdout)
-writer.writerow(("snapshot", "resolves"))
+writer.writerow(("snapshot", "resolves", "nbytes"))
 snapshots = log.written_positions()
 for snapshot in snapshots:
     db = Database(log, snapshot)
-    val, resolves = db.get(-1)
-    assert val is None
-    writer.writerow((snapshot, resolves))
+    assert db.get(-1) is None
+    writer.writerow((snapshot, db.resolves, db.nbytes))
