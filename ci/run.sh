@@ -32,6 +32,7 @@ popd
 PATH=${INSTALL_DIR}/bin:$PATH
 
 mkdir db
+mkdir /tmp/zlog-db
 
 # ram backend tests
 zlog-test-ram
