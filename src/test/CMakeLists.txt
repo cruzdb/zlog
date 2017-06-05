@@ -18,7 +18,7 @@ install(TARGETS zlog-test-ram DESTINATION bin)
 add_executable(zlog-test-lmdb test_lmdb.cc)
 #test/test_internal.cc
 target_link_libraries(zlog-test-lmdb
-    libzlog gtest_main zlog_seqr ${Boost_SYSTEM_LIBRARY} lmdb
+    libzlog gtest_main zlog_seqr ${Boost_SYSTEM_LIBRARY} ${LMDB_LIBRARIES}
 )
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     setup_target_for_coverage(zlog-test-lmdb-cov zlog-test-lmdb coverage)

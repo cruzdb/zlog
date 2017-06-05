@@ -29,7 +29,7 @@ target_link_libraries(libzlog
     zlog_proto
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
-    lmdb
+    ${LMDB_LIBRARIES}
 )
 
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")

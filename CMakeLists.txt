@@ -31,6 +31,10 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -g")
 find_package(Boost COMPONENTS system program_options REQUIRED)
 find_package(Protobuf REQUIRED)
 
+if(NOT PROTOBUF_PROTOC_EXECUTABLE)
+  message(FATAL_ERROR "cannot find protobuf compiler")
+endif()
+
 find_package(librados)
 option(WITH_CEPH "Build Ceph backend" OFF)
 if(${LIBRADOS_FOUND})
@@ -50,5 +54,7 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 
 include(CheckIncludeFile)
 CHECK_INCLUDE_FILE(rados/objclass.h HAVE_RADOS_OBJECT_CLASS_H)
+
+find_package(LMDB REQUIRED)
 
 add_subdirectory(src)
