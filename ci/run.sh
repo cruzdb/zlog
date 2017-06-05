@@ -10,7 +10,11 @@ ZLOG_DIR=${THIS_DIR}/../
 BUILD_DIR=$(mktemp -d)
 DOCS_DIR=$(mktemp -d)
 INSTALL_DIR=$(mktemp -d)
-trap "rm -rf ${BUILD_DIR} ${DOCS_DIR} ${INSTALL_DIR}" EXIT
+
+# temp db directory
+DB_DIR=$(mktemp -d)
+
+trap "rm -rf ${DB_DIR} ${BUILD_DIR} ${DOCS_DIR} ${INSTALL_DIR}" EXIT
 
 # build documentation
 ${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
@@ -31,14 +35,11 @@ popd
 
 PATH=${INSTALL_DIR}/bin:$PATH
 
-mkdir db
-mkdir /tmp/zlog-db
-
 # ram backend tests
 zlog-test-ram
 zlog-db-test
 zlog-test-lmdb
-${BUILD_DIR}/src/kvstore/bench 10000
+${BUILD_DIR}/src/kvstore/bench ${DB_DIR} 10000
 
 if [[ "$OSTYPE" != "darwin"* ]]; then
   pushd ${BUILD_DIR}/src/java
@@ -72,8 +73,9 @@ if [ ! -z ${CEPH_CONF} ]; then
 fi
 
 if [ "${RUN_COVERAGE}" == 1 ]; then
+  rm -rf /tmp/zlog-db
+  mkdir /tmp/zlog-db # for bench-cov (see src/kvstore/CMakeLists.txt)
   pushd ${BUILD_DIR}
-  mkdir db
   for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov bench-cov; do
     make $test
     rm -rf coverage*
