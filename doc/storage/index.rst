@@ -69,7 +69,7 @@ the build completes the plugin can be found in a local directory named
 
 .. code-block:: bash
 
-    #> docker/build-ceph-plugin.sh -i ubuntu:xenial -c luminous
+    $> docker/build-ceph-plugin.sh -i ubuntu:xenial -c luminous
 
     [nwatkins@martini zlog]$ ls -l libcls_zlog_ubuntu\:xenial.luminous/
     total 740
