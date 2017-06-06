@@ -9,19 +9,21 @@ backend is designed to provide high-performance and reliability.
 Development Backend
 ###################
 
-The development backend is built-in, so there are no special build
-instructions. It is currently limited to single-process test cases. There is
-an open ticket for using LMDB to provide a development backend that will
-support multi-process and sequencer testing (see
-https://github.com/noahdesu/zlog/issues/108).
+There are two development backends available, one that stores the entire log
+in RAM, and one that stores the log in an LMDB database. Both are are built-in
+automatically so there are no additional steps required to make these backends
+available.
 
-##############
-Ceph and RADOS
-##############
+############
+Ceph Backend
+############
 
 Running ZLog on Ceph provides high-performance, durability, and scalability.
 In order to use Ceph the ZLog library must be built with Ceph support, and a
 special ZLog plugin loaded into your Ceph cluster.
+
+Building ZLog With Ceph Support
+-------------------------------
 
 The ZLog tree will build with Ceph support automatically if the RADOS
 development packages are installed. Typically this can be accomplished using
@@ -53,56 +55,56 @@ backend will be built.
 That's it. Now ZLog can communicate with Ceph, but the Ceph plugin still needs
 to be built and installed.
 
-.. note::
+Building the Ceph Plugin
+------------------------
 
-    As of February 2017 work has begun on a Ceph plugin framework that will
-    significantly simplify the process of building and installing a Ceph
-    plugin. Please get in touch with us if you have any issues with the
-    current instructions. Thanks!
+The easiest way to build the Ceph plugin is to use the `build-ceph-plugin.sh`
+script found in the ZLog source tree. This script builds the plugin for a
+variety of OS distributions and Ceph versions.
 
-********************
-Docker image builder
-********************
-
-Our continuous integration suite always builds the Ceph plugin from scratch
-using a Docker container. This has the added benefit of completely
-documenting the process of how to build the plugin. We recommend first using
-this container to build the plugin. It is currently configured to build with
-Ubuntu, but we can provide additional images on demand (see :ref:`community`
-to get in touch with us).
-
-This is an example of how the plugin can be built with the Docker image
-located https://github.com/noahdesu/zlog/tree/master/docker/ceph-plugin.
+The following example shows how to use the script to build the plugin for
+the Ceph `luminous` release targetting an OSD running `ubuntu:xenial`. After
+the build completes the plugin can be found in a local directory named
+`libcls_zlog_ubuntu<identifier>`:
 
 .. code-block:: bash
 
-    mkdir ~/ceph-plugin/
-    docker run -v ~/ceph-plugin:/ceph_zlog_plugin zlog/ceph-plugin:latest
+    #> docker/build-ceph-plugin.sh -i ubuntu:xenial -c luminous
 
-After running the Docker image a set of ``libcls_zlog.so*`` object files
-should be present in the ``~/ceph-plugin/`` directory.
+    [nwatkins@martini zlog]$ ls -l libcls_zlog_ubuntu\:xenial.luminous/
+    total 740
+    lrwxrwxrwx. 1 nwatkins nwatkins     16 Jun  5 22:37 libcls_zlog.so -> libcls_zlog.so.1
+    lrwxrwxrwx. 1 nwatkins nwatkins     20 Jun  5 22:37 libcls_zlog.so.1 -> libcls_zlog.so.1.0.0
+    -rwxr-xr-x. 1 nwatkins nwatkins 754704 Jun  5 22:37 libcls_zlog.so.1.0.0
 
-********************
-Building from source
-********************
+The `build-ceph-plugin.sh` script has been tested with the following
+configurations. Please contact us if you need a different configuration, such
+as support for an older version of Ceph (see :ref:`community` to get in touch
+with us).
 
-We would like to avoid duplicating the instructions for building the plugin.
-If you find that the Docker image instructions above do not meet your needs
-please let us know and we can update them or provide instructions to meet your
-specific needs.
+* Luminous v12.0.0 (or newer)
+    * ubuntu:{trusty,xenial}
+    * debian:jessie
+    * fedora:{24,25}
+    * centos:7
 
-**************************
-Installing the Ceph plugin
-**************************
+Installation
+------------
 
 The Ceph plugin library needs to be copied onto each OSD in your cluster.
 
 .. code-block:: bash
 
-    sudo cp -a ~/ceph-plugin/libcls_zlog.so* /usr/lib/rados-classes
+    sudo cp -a libcls_zlog/libcls_zlog.so* /usr/lib/rados-classes
 
     # or on fedora/rhel/centos
-    sudo cp -a ~/ceph-plugin/libcls_zlog.so* /usr/lib64/rados-classes
+    sudo cp -a libcls_zlog/libcls_zlog.so* /usr/lib64/rados-classes
+
+.. important::
+
+    The plugin requires Google Protocol Buffers be installed on the OSDs. Be
+    sure to install it on each OSD node using your system's package manager
+    (e.g. `yum install protobuf-devel` or `apt-get install libprotobuf-dev`).
 
 .. note::
 
