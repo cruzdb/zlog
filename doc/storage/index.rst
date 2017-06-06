@@ -91,27 +91,50 @@ with us).
 Installation
 ------------
 
-The Ceph plugin library needs to be copied onto each OSD in your cluster.
+The Ceph plugin library needs to be copied onto each OSD in your cluster so
+that Ceph can find it at runtime.  In the code snippet below the folder
+containing the plugin, `libcls_zlog_<identifer>` will be named according to
+the configuration it was built with. For example,
+`libcls_zlog_ubuntu:xenial_luminous`. Copy the libraries into the
+`rados-classes` directory, found at `/usr/lib/rados-classes` and Debian-based
+systems, and `/usr/lib64/rados-classes` on Fedora, CentOS, and RHEL.
 
 .. code-block:: bash
 
-    sudo cp -a libcls_zlog/libcls_zlog.so* /usr/lib/rados-classes
+    sudo cp -a libcls_zlog_<identifer>/libcls_zlog.so* /usr/lib/rados-classes
 
     # or on fedora/rhel/centos
-    sudo cp -a libcls_zlog/libcls_zlog.so* /usr/lib64/rados-classes
+    sudo cp -a libcls_zlog_<identifer>/libcls_zlog.so* /usr/lib64/rados-classes
 
 .. important::
 
-    The plugin requires Google Protocol Buffers be installed on the OSDs. Be
-    sure to install it on each OSD node using your system's package manager
-    (e.g. `yum install protobuf-devel` or `apt-get install libprotobuf-dev`).
+    The plugin requires (1) Google Protocol buffers to be installed on the OSDs,
+    and (2) Ceph must be configured to support external plugins. See next:
+
+Install Google Protocol Buffers using your system's package manager. This must
+be done on each node in the system running an OSD:
+
+.. code-block:: bash
+
+    # Debian-based systems
+    apt-get install libprotobuf-dev
+
+    # CentOS, Fedora, RHEL
+    yum install protobuf-devel
+
+Configure Ceph to allow external plugins by adding the following to
+`ceph.conf`, either system wide or locally on each OSD ndoe.
+
+.. code-block:: bash
+
+    osd class load list = *
+    osd class default list = *
 
 .. note::
 
-    If the ZLog plugin is being updated then each OSD needs to be restarted to
-    pick-up the new plugin version. Don't forget to update 'osd class load
-    list' and 'osd class default list' in your ceph.conf to allow the ZLog
-    plugin to be loaded.
+    Each OSD needs to be restarted after editing the `ceph.conf`
+    configuration. After installing the plugin, each OSD needs to be restarted
+    only if the installation is an upgrade of the plugin.
 
 *********************
 Run Ceph-backed tests
