@@ -3,6 +3,8 @@
 #include <random>
 #include <vector>
 #include <map>
+#include <unistd.h>
+#include <stdlib.h>
 #include "zlog/db.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend/ram.h"
@@ -10,6 +12,24 @@
 #include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
+
+class TempDir {
+ public:
+  TempDir() {
+    memset(path, 0, sizeof(path));
+    sprintf(path, "/tmp/zlog.db.XXXXXX");
+    assert(mkdtemp(path));
+  }
+
+  ~TempDir() {
+    char cmd[64];
+    memset(cmd, 0, sizeof(cmd));
+    sprintf(cmd, "rm -rf %s", path);
+    system(cmd);
+  }
+
+  char path[32];
+};
 
 static inline std::string tostr(int value)
 {
@@ -310,12 +330,14 @@ TEST(DB, Get) {
 }
 
 TEST(DB, ReOpen) {
+  TempDir tdir;
+
   // populate a database and close it
   std::map<std::string, std::string> prev_db;
   {
     auto *client = new FakeSeqrClient();
     auto *be = new LMDBBackend("fakepool");
-    be->Init();
+    be->Init(tdir.path, true);
 
     zlog::Log *log;
     int ret = zlog::Log::Create(be, "log", client, &log);
@@ -357,7 +379,7 @@ TEST(DB, ReOpen) {
   // re-open the database and verify the previous inserts
   auto *client = new FakeSeqrClient();
   auto *be = new LMDBBackend("fakepool");
-  be->Init(false);
+  be->Init(tdir.path, false);
 
   zlog::Log *log;
   int ret = zlog::Log::Open(be, "log", client, &log);

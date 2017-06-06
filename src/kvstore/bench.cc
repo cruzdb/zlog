@@ -41,13 +41,22 @@ static inline std::string tostr(int value)
 int main(int argc, char **argv)
 {
   int stop_after = 0;
-  if (argc > 1) {
-    stop_after = atoi(argv[1]);
+  char *db_path;
+
+  if (argc < 2) {
+    fprintf(stderr, "must provide db path\n");
+    return 1;
+  }
+
+  db_path = argv[1];
+
+  if (argc > 2) {
+    stop_after = atoi(argv[2]);
   }
 
   auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
-  be->Init("/tmp/zlog-db", false);
+  be->Init(db_path, false);
 
   zlog::Log *log;
   int ret = zlog::Log::OpenOrCreate(be, "log", client, &log);

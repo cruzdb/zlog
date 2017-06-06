@@ -22,10 +22,6 @@ class LMDBBackend : public Backend {
 
   void Init(const std::string& path, bool empty);
 
-  void Init(bool empty = true) {
-    Init("db", empty);
-  }
-
   void Close();
 
   virtual std::string pool() {
