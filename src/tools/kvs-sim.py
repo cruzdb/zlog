@@ -2,6 +2,14 @@ import sys
 import csv
 import json
 
+class LogDist(object):
+    def __init__(self, nobjs):
+        self.nobjs = nobjs
+
+    def address(self, pos):
+        oid = pos % self.nobjs
+        return oid
+
 class NodePtr(object):
     __slots__ = ('nil', 'same', 'pos', 'off')
     def __init__(self, logpos, ptr):
@@ -23,11 +31,12 @@ class Node(object):
         self.right = NodePtr(pos, node["right"])
 
 class Log(object):
-    __slots__ = ('entries')
-    def __init__(self, f):
+    __slots__ = ('dist', '_entries')
+    def __init__(self, dist, f):
+        self.dist = dist
         # build index of log entries
         tmp = {}
-        for line in sys.stdin.xreadlines():
+        for line in f.xreadlines():
             entry = json.loads(line)
             pos = entry["pos"]
             assert pos not in tmp
@@ -38,14 +47,19 @@ class Log(object):
             tmp[pos] = (nodes, entry["bytes"])
         # move to list for direct indexing
         maxpos = max(tmp)
-        self.entries = (maxpos + 1) * [None]
+        self._entries = (maxpos + 1) * [None]
         for k, v in tmp.iteritems():
-            self.entries[k] = v
+            self._entries[k] = v
+
+    def read(self, pos):
+        address = self.dist.address(pos)
+        tree, nbytes = self._entries[pos]
+        return tree, nbytes, address
 
     def written_positions(self):
         snapshots = []
-        for i in range(len(self.entries)):
-            if self.entries[i] is not None:
+        for i in range(len(self._entries)):
+            if self._entries[i] is not None:
                 snapshots.append(i)
         return snapshots
 
@@ -54,18 +68,26 @@ class Database(object):
         self.log = log
         if snapshot is None:
             snapshot = -1
-        tree, nbytes = self.log.entries[snapshot]
+        tree, nbytes, addr = self.log.read(snapshot)
         self.root = tree[-1] if tree else None
 
         # stats
-        self.resolves = 1
+        self.total_resolves = 1
+        self.remote_resolves = 1
+        self.object_local_resolves = 0
         self.nbytes = nbytes
+        self.last_address = addr
 
     def resolve(self, ptr):
         if ptr.nil:
             return None
-        self.resolves += 1
-        tree, nbytes = self.log.entries[ptr.pos]
+        tree, nbytes, addr = self.log.read(ptr.pos)
+        self.total_resolves += 1
+        if addr == self.last_address:
+            self.object_local_resolves += 1
+        else:
+            self.last_address = addr
+            self.remote_resolves += 1
         self.nbytes += nbytes
         return tree[ptr.off]
 
@@ -80,12 +102,15 @@ class Database(object):
                 curr = self.resolve(curr.right)
         return None
 
-log = Log(sys.stdin)
+dist = LogDist(1)
+log = Log(dist, sys.stdin)
 
 writer = csv.writer(sys.stdout)
-writer.writerow(("snapshot", "resolves", "nbytes"))
+writer.writerow(("snapshot", "total_resolves", "remote_resolves",
+            "object_local_resolves", "nbytes"))
 snapshots = log.written_positions()
-for snapshot in snapshots:
+for snapshot in snapshots[-2:-1]:
     db = Database(log, snapshot)
     assert db.get(-1) is None
-    writer.writerow((snapshot, db.resolves, db.nbytes))
+    writer.writerow((snapshot, db.total_resolves, db.remote_resolves,
+                db.object_local_resolves, db.nbytes))
