@@ -4,6 +4,7 @@
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/9894/badge.svg)](https://scan.coverity.com/projects/noahdesu-zlog)
 [![codecov](https://codecov.io/gh/noahdesu/zlog/branch/master/graph/badge.svg)](https://codecov.io/gh/noahdesu/zlog)
 [![docs](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://noahdesu.github.io/zlog)
+[![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/noahdesu-zlog/Lobby)
 
 ZLog is a strongly consistent shared log designed to run on top of Ceph.
 Specifically, it is an implementation of the CORFU protocol adapted for RADOS,
