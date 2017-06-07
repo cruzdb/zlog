@@ -19,7 +19,7 @@ Community
 #########
 
 * Mailing list: https://groups.google.com/group/cruzdb/
-* Slack https://cruzdb.slack.com/
+* Gitter channel: https://gitter.im/noahdesu-zlog
 * Tracker: https://github.com/noahdesu/zlog/issues
 
 We welcome and encourage people to learn and contribute to the ZLog project.
