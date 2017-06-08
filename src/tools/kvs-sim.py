@@ -77,6 +77,37 @@ class Database(object):
 
         # stats
         self.total_resolves = 1
+        self.nbytes = nbytes
+
+    def resolve(self, ptr):
+        if ptr.nil:
+            return None
+        tree, nbytes, addr = self.log.read(ptr.pos)
+        self.total_resolves += 1
+        self.nbytes += nbytes
+        return tree[ptr.off]
+
+    def get(self, key):
+        curr = self.root
+        while curr:
+            if curr.key == key:
+                return curr.val
+            elif curr.key > key:
+                curr = self.resolve(curr.left)
+            else:
+                curr = self.resolve(curr.right)
+        return None
+
+class Database2(object):
+    def __init__(self, log, snapshot=None):
+        self.log = log
+        if snapshot is None:
+            snapshot = -1
+        tree, nbytes, addr = self.log.read(snapshot)
+        self.root = tree[-1] if tree else None
+
+        # stats
+        self.total_resolves = 1
         self.remote_resolves = 1
         self.object_local_resolves = 0
         self.nbytes = nbytes
@@ -110,11 +141,10 @@ dist = LogDist(1)
 log = Log(dist, sys.stdin)
 
 writer = csv.writer(sys.stdout)
-writer.writerow(("snapshot", "total_resolves", "remote_resolves",
-            "object_local_resolves", "nbytes"))
+writer.writerow(("snapshot", "total_resolves", "nbytes"))
+
 snapshots = log.written_positions()
-for snapshot in snapshots[-2:-1]:
+for snapshot in snapshots:
     db = Database(log, snapshot)
     assert db.get(-1) is None
-    writer.writerow((snapshot, db.total_resolves, db.remote_resolves,
-                db.object_local_resolves, db.nbytes))
+    writer.writerow((snapshot, db.total_resolves, db.nbytes))
