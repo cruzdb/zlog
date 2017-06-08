@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 
   std::cerr << "tail: " << tail << std::endl;
 
-  uint64_t pos = tail;
+  uint64_t pos = 0;
   do {
     std::string data;
     ret = log->Read(pos, &data);
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     } else {
       std::cerr << "pos " << pos << " err " << ret << std::endl;
     }
-  } while (pos--);
+  } while (++pos <= tail);
 
   return 0;
 }
