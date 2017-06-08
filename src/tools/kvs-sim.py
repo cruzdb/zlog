@@ -32,7 +32,7 @@ class Node(object):
 
 class Log(object):
     __slots__ = ('dist', '_entries')
-    def __init__(self, dist, f):
+    def __init__(self, dist, f, stop_after=None):
         self.dist = dist
         # build index of log entries
         tmp = {}
@@ -45,6 +45,10 @@ class Log(object):
                 n = Node(pos, node)
                 nodes.append(n)
             tmp[pos] = (nodes, entry["bytes"])
+            if stop_after is not None:
+                stop_after -= 1
+                if stop_after == 0:
+                    break
         # move to list for direct indexing
         maxpos = max(tmp)
         self._entries = (maxpos + 1) * [None]
