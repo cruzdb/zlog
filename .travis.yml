@@ -22,8 +22,6 @@ env:
 
 # the first 
 matrix:
-  allow_failures:
-    - os: osx
   include:
     - os: linux
       compiler: gcc

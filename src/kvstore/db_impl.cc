@@ -352,6 +352,8 @@ void DBImpl::TransactionFinisher()
     // mark complete
     cur_txn_->MarkComplete();
     cur_txn_ = nullptr;
+
+    lk.unlock();
     cur_txn_cond_.notify_one();
   }
 }
@@ -362,16 +364,26 @@ void DBImpl::AbortTransaction(TransactionImpl *txn)
   assert(!txn->Committed());
   assert(!txn->Completed());
 
-  std::lock_guard<std::mutex> lk(lock_);
+  lock_.lock();
   cur_txn_ = nullptr;
+  lock_.unlock();
+
   cur_txn_cond_.notify_one();
 }
 
 void DBImpl::CompleteTransaction(TransactionImpl *txn)
 {
   assert(txn == cur_txn_);
-  assert(txn->Committed());
+  assert(!txn->Committed());
   assert(!txn->Completed());
+
+  // it's important to mark the txn as committed while holding this lock
+  // because the committed state is examined before blocking on a condition
+  // variable in the txn finisher thread. otherwise there is a race that will
+  // cause the finisher to miss the state change and wakeup.
+  lock_.lock();
+  cur_txn_->MarkCommitted();
+  lock_.unlock();
 
   // notify txn finisher
   txn_finisher_cond_.notify_one();

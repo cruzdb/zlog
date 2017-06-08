@@ -45,6 +45,10 @@ class TransactionImpl : public Transaction {
     return completed_;
   }
 
+  void MarkCommitted() {
+    committed_ = true;
+  }
+
   void MarkComplete() {
     lock_.lock();
     completed_ = true;

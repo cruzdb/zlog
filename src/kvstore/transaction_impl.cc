@@ -526,11 +526,6 @@ void TransactionImpl::Commit()
     return;
   }
 
-  // after setting this to true, a spurious wake-up could cause the txn
-  // finisher to start processing this transaction, so make sure we are ready
-  // for that...
-  committed_ = true;
-
   db_->CompleteTransaction(this);
   WaitComplete();
 }
