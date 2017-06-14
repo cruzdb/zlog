@@ -102,20 +102,12 @@ jint Java_com_cruzdb_DB_get(JNIEnv *env, jobject jdb, jlong jdbHandle,
   Slice key_slice(reinterpret_cast<char*>(key), jkeyLength);
 
   std::string value;
-  auto *txn = db->BeginTransaction();
-  int ret = txn->Get(key_slice, &value);
-  txn->Commit();
-  delete txn;
+  int ret = db->Get(key_slice, &value);
 
   delete [] key;
 
   if (ret == -ENOENT)
     return -1;
-
-  if (ret) {
-    ZlogExceptionJni::ThrowNew(env, ret);
-    return -2;
-  }
 
   const jint value_length = static_cast<jint>(value.size());
   const jint length = std::min(jvalLength, value_length);
@@ -144,20 +136,12 @@ jbyteArray Java_com_cruzdb_DB_get__J_3BII
   Slice key_slice(reinterpret_cast<char*>(key), jkeyLength);
 
   std::string value;
-  auto *txn = db->BeginTransaction();
-  int ret = txn->Get(key_slice, &value);
-  txn->Commit();
-  delete txn;
+  int ret = db->Get(key_slice, &value);
 
   delete [] key;
 
   if (ret == -ENOENT)
     return nullptr;
-
-  if (ret) {
-    ZlogExceptionJni::ThrowNew(env, ret);
-    return nullptr;
-  }
 
   jbyteArray jret_value = copyBytes(env, value);
   if (jret_value == nullptr)
