@@ -6,6 +6,7 @@ set -x
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZLOG_DIR=${THIS_DIR}/../../../
 
+: ${PREFIX:="result"}
 : ${NUM_THREADS:=1}
 : ${YCSB_HOME:=$HOME/YCSB}
 : ${LMDB_PATH:=${THIS_DIR}/db}
@@ -18,20 +19,26 @@ function resetdb {
 export LD_LIBRARY_PATH=${ZLOG_DIR}/src/java/native
 export ZLOG_LMDB_BE_SIZE=100
 
-pushd ${YCSB_HOME}
-for workload in a b c d e f; do
-  resetdb
+for nthreads in $NUM_THREADS; do
+  resultdir=${THIS_DIR}/${PREFIX}.${nthreads}_threads
+  mkdir $resultdir
 
-  name="workload_${workload}"
+  pushd ${YCSB_HOME}
+  for workload in a b c d e f; do
+    resetdb
 
-  bin/ycsb load cruzdb -s \
-    -P workloads/workload${workload} \
-    -P ${THIS_DIR}/big.conf \
-    -p cruzdb.lmdb.dir=${LMDB_PATH} 2>&1 | tee ${THIS_DIR}/${name}.load.txt
+    name="workload_${workload}"
 
-  bin/ycsb run cruzdb -threads ${NUM_THREADS} -s \
-    -P workloads/workload${workload} \
-    -P ${THIS_DIR}/big.conf \
-    -p cruzdb.lmdb.dir=${LMDB_PATH} 2>&1 | tee ${THIS_DIR}/${name}.run.txt
+    # only one thread used for load
+    bin/ycsb load cruzdb -s \
+      -P workloads/workload${workload} \
+      -P ${THIS_DIR}/big.conf \
+      -p cruzdb.lmdb.dir=${LMDB_PATH} 2>&1 | tee ${resultdir}/${name}.load.txt
+
+    bin/ycsb run cruzdb -threads ${nthreads} -s \
+      -P workloads/workload${workload} \
+      -P ${THIS_DIR}/big.conf \
+      -p cruzdb.lmdb.dir=${LMDB_PATH} 2>&1 | tee ${resultdir}/${name}.run.txt
+  done
+  popd
 done
-popd
