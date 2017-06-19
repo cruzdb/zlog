@@ -465,10 +465,17 @@ void LMDBBackend::Init(const std::string& path, bool empty)
   ret = mdb_env_set_maxdbs(env, 2);
   assert(ret == 0);
 
-  ret = mdb_env_set_mapsize(env, 1<<30);
+  size_t gbs = 1;
+  char *size_str = getenv("ZLOG_LMDB_BE_SIZE");
+  if (size_str) {
+    gbs = atoi(size_str);
+  }
+
+  gbs = gbs << 30;
+  ret = mdb_env_set_mapsize(env, gbs);
   assert(ret == 0);
 
-  unsigned int flags = MDB_MAPASYNC | MDB_WRITEMAP | MDB_NOMEMINIT;
+  unsigned int flags = MDB_NOSYNC | MDB_NOMETASYNC | MDB_WRITEMAP | MDB_NOMEMINIT;
   ret = mdb_env_open(env, path.c_str(), flags, 0644);
   assert(ret == 0);
 
@@ -490,5 +497,6 @@ void LMDBBackend::Init(const std::string& path, bool empty)
 
 void LMDBBackend::Close()
 {
+  mdb_env_sync(env, 1);
   mdb_env_close(env);
 }
