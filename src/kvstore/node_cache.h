@@ -1,5 +1,6 @@
 #ifndef ZLOG_KVSTORE_NODE_CACHE_H
 #define ZLOG_KVSTORE_NODE_CACHE_H
+#include <atomic>
 #include <unordered_map>
 #include <mutex>
 #include <utility>
@@ -35,8 +36,12 @@ class NodeCache {
   explicit NodeCache(DBImpl *db) :
     db_(db),
     used_bytes_(0),
-    stop_(false)
+    stop_(false),
+    num_slots_(8)
   {
+    for (size_t i = 0; i < num_slots_; i++) {
+      shards_.push_back(std::unique_ptr<shard>(new shard));
+    }
     vaccum_ = std::thread(&NodeCache::do_vaccum_, this);
   }
 
@@ -68,31 +73,37 @@ class NodeCache {
  private:
   DBImpl *db_;
   std::mutex lock_;
-  size_t used_bytes_;
+  std::atomic_size_t used_bytes_;
+  bool stop_;
+  const size_t num_slots_;
 
   struct entry {
     SharedNodeRef node;
     std::list<std::pair<uint64_t, int>>::iterator lru_iter;
   };
 
+  struct shard {
+    std::mutex lock;
+    std::unordered_map<std::pair<uint64_t, int>, entry, pair_hash> nodes;
+    std::list<std::pair<uint64_t, int>> lru;
+  };
+
+  std::vector<std::unique_ptr<shard>> shards_;
+
   size_t UsedBytes() const {
     return used_bytes_;
   }
 
-  std::unordered_map<std::pair<uint64_t, int>, entry, pair_hash> nodes_;
-  std::list<std::pair<uint64_t, int>> nodes_lru_;
-
   std::list<std::vector<std::pair<int64_t, int>>> traces_;
 
-  void ResolveNodePtr(NodePtr& ptr);
+  //void ResolveNodePtr(NodePtr& ptr);
 
   SharedNodeRef deserialize_node(const kvstore_proto::Intention& i,
-      uint64_t pos, int index);
+      uint64_t pos, int index) const;
 
   std::thread vaccum_;
   std::condition_variable cond_;
   void do_vaccum_();
-  bool stop_;
 };
 
 #endif
