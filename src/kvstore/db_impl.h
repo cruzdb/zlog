@@ -31,18 +31,18 @@ class DBImpl : public DB {
   explicit DBImpl(zlog::Log *log);
   ~DBImpl();
 
-  Transaction *BeginTransaction();
+  Transaction *BeginTransaction() override;
 
-  Snapshot *GetSnapshot() {
+  Snapshot *GetSnapshot() override {
     std::lock_guard<std::mutex> l(lock_);
     return new Snapshot(this, root_);
   }
 
-  void ReleaseSnapshot(Snapshot *snapshot) {
+  void ReleaseSnapshot(Snapshot *snapshot) override {
     delete snapshot;
   }
 
-  Iterator *NewIterator(Snapshot *snapshot) {
+  Iterator *NewIterator(Snapshot *snapshot) override {
     return new IteratorImpl(snapshot);
   }
 
@@ -70,8 +70,8 @@ class DBImpl : public DB {
 
   void write_dot(std::ostream& out, bool scoped = false);
   void write_dot_history(std::ostream& out,
-      std::vector<Snapshot*>& snapshots);
-  void validate() {
+      std::vector<Snapshot*>& snapshots) override;
+  void validate() override {
     const auto snapshot = root_;
     validate_rb_tree(snapshot);
   }

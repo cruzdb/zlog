@@ -13,42 +13,42 @@ class IteratorImpl : public Iterator {
 
   // An iterator is either positioned at a key/value pair, or
   // not valid.  This method returns true iff the iterator is valid.
-  bool Valid() const;
+  bool Valid() const override;
 
   // Position at the first key in the source.  The iterator is Valid()
   // after this call iff the source is not empty.
-  void SeekToFirst();
+  void SeekToFirst() override;
 
   // Position at the last key in the source.  The iterator is
   // Valid() after this call iff the source is not empty.
-  void SeekToLast();
+  void SeekToLast() override;
 
   // Position at the first key in the source that at or past target
   // The iterator is Valid() after this call iff the source contains
   // an entry that comes at or past target.
-  void Seek(const Slice& target);
+  void Seek(const Slice& target) override;
 
   // Moves to the next entry in the source.  After this call, Valid() is
   // true iff the iterator was not positioned at the last entry in the source.
   // REQUIRES: Valid()
-  void Next();
+  void Next() override;
 
   // Moves to the previous entry in the source.  After this call, Valid() is
   // true iff the iterator was not positioned at the first entry in source.
   // REQUIRES: Valid()
-  void Prev();
+  void Prev() override;
 
   // Return the key for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: Valid()
-  Slice key() const;
+  Slice key() const override;
 
   // Return the value for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: !AtEnd() && !AtStart()
-  Slice value() const;
+  Slice value() const override;
 
 #if 0
   // If an error has occurred, return it.  Else return an ok status.
