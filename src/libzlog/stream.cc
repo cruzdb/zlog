@@ -161,12 +161,12 @@ class StreamImpl : public zlog::Stream {
   std::set<uint64_t>::const_iterator prevpos;
   std::set<uint64_t>::const_iterator curpos;
 
-  int Append(const Slice& data, uint64_t *pposition = NULL);
-  int ReadNext(std::string *data, uint64_t *pposition = NULL);
-  int Reset();
-  int Sync();
-  uint64_t Id() const;
-  std::vector<uint64_t> History() const;
+  int Append(const Slice& data, uint64_t *pposition = NULL) override;
+  int ReadNext(std::string *data, uint64_t *pposition = NULL) override;
+  int Reset() override;
+  int Sync() override;
+  uint64_t Id() const override;
+  std::vector<uint64_t> History() const override;
 };
 
 std::vector<uint64_t> StreamImpl::History() const

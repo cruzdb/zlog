@@ -35,7 +35,7 @@ class LogImpl : public Log {
    * Find and optionally increment the current tail position.
    */
   int CheckTail(uint64_t *pposition, bool increment);
-  int CheckTail(uint64_t *pposition);
+  int CheckTail(uint64_t *pposition) override;
 
   /*
    * Return a batch of positions.
@@ -45,47 +45,47 @@ class LogImpl : public Log {
   /*
    * Append data to the log and return its position.
    */
-  int Append(const Slice& data, uint64_t *pposition = NULL);
+  int Append(const Slice& data, uint64_t *pposition = NULL) override;
 
-  int OpenStream(uint64_t stream_id, zlog::Stream **streamptr);
+  int OpenStream(uint64_t stream_id, zlog::Stream **streamptr) override;
 
   /*
    * Append data to multiple streams and return its position.
    */
   int MultiAppend(const Slice& data,
-      const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL);
+      const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) override;
 
   /*
    * Append data asynchronously to the log and return its position.
    */
   int AioAppend(zlog::AioCompletion *c, const Slice& data,
-      uint64_t *pposition = NULL);
+      uint64_t *pposition = NULL) override;
 
   /*
    * Read data asynchronously from the log.
    */
   int AioRead(uint64_t position, zlog::AioCompletion *c,
-      std::string *datap);
+      std::string *datap) override;
 
   /*
    * Mark a position as unused.
    */
-  int Fill(uint64_t position);
+  int Fill(uint64_t position) override;
 
   /*
    *
    */
-  int Read(uint64_t position, std::string *data);
+  int Read(uint64_t position, std::string *data) override;
 
   /*
    *
    */
-  int Trim(uint64_t position);
+  int Trim(uint64_t position) override;
 
   /*
    * Return the stream membership for a log entry position.
    */
-  int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position);
+  int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) override;
   int StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position);
   int Fill(uint64_t epoch, uint64_t position);
 
@@ -118,7 +118,7 @@ class LogImpl : public Log {
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);
 
-  int StripeWidth();
+  int StripeWidth() override;
 
   std::string pool2_;
   std::string name_;
