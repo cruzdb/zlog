@@ -3,9 +3,13 @@ import csv
 import json
 from collections import defaultdict
 import numpy as np
-import pandas as pd
+#import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+rcParams.update({'figure.autolayout': True})
+
 
 class LogDist(object):
     __slots__ = ('nobjs')
