@@ -5,13 +5,13 @@ from collections import defaultdict
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
-#import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
-
 rcParams.update({'figure.autolayout': True})
+from matplotlib.ticker import MaxNLocator
+import seaborn as sns
 
+sns.set_style("whitegrid", {'grid.linestyle': '--'})
 
 class LogDist(object):
     __slots__ = ('nobjs')
@@ -27,21 +27,22 @@ class NodePtr(object):
     __slots__ = ('nil', 'same', 'pos', 'off')
 
     def __init__(self, pos, ptr):
-        self.nil = ptr["nil"]
-        self.same = ptr["self"]
+        self.nil = bool(ptr["nil"])
+        self.same = bool(ptr["self"])
         if self.same:
-            self.pos = pos
+            self.pos = int(pos)
         else:
-            self.pos = ptr["csn"]
-        self.off = ptr["off"]
+            self.pos = int(ptr["csn"])
+        self.off = int(ptr["off"])
 
 class Node(object):
-    __slots__= ('key', 'val', 'red', 'left', 'right')
+    #__slots__= ('key', 'val', 'red', 'left', 'right')
+    __slots__= ('key', 'val', 'left', 'right')
 
     def __init__(self, pos, node):
         self.key = int(node["key"])
         self.val = int(node["val"])
-        self.red = node["red"]
+        #self.red = node["red"]
         self.left = NodePtr(pos, node["left"])
         self.right = NodePtr(pos, node["right"])
 
@@ -70,6 +71,8 @@ class Log(object):
         self._entries = (maxpos + 1) * [None]
         for k, v in tmp.iteritems():
             self._entries[k] = v
+
+        del tmp
 
     def read(self, pos, dist):
         address = dist.address(pos)
@@ -168,9 +171,10 @@ for width in widths:
     fig, ax = plt.subplots(figsize=(8,4))
     figs[width] = fig, ax
 
+tgt_snapshot = 500000
 log = Log(sys.stdin)
 snapshots = log.snapshots()
-for snapshot in snapshots[4500:4501]:
+for snapshot in snapshots[tgt_snapshot:tgt_snapshot+1]:
     keys = Database(log, 1, snapshot).keys()
     for width in widths:
         nresolves = []
@@ -188,12 +192,21 @@ for snapshot in snapshots[4500:4501]:
         nresolves.append(db.total_resolves)
     for f in figs.itervalues():
         plot(f[1], nresolves, 'no-opt')
+    plot(noopt_fig[1], nresolves, 'no-opt')
+    noopt_fig[1].set_ylabel('Probability')
+    noopt_fig[1].set_xlabel('Pointer Hops')
+    noopt_fig[1].legend()
+    noopt_fig[1].set_ylim(bottom=0.0, top=1.0)
+    noopt_fig[1].xaxis.set_major_locator(MaxNLocator(integer=True))
+    noopt_fig[0].savefig('no-opt.png')
 
 count = 0
 for f in figs.itervalues():
     f[1].set_ylabel('Probability')
     f[1].set_xlabel('Pointer Hops')
     f[1].legend()
+    f[1].set_ylim(bottom=0.0, top=1.0)
+    f[1].xaxis.set_major_locator(MaxNLocator(integer=True))
     f[0].savefig("%d.png" % (count,))
     count += 1
 
