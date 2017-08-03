@@ -155,29 +155,41 @@ def plot(ax, x, l):
     xs = np.sort(x)
     ax.step(xs, n, label=l)
 
-fig, ax = plt.subplots(figsize=(8,4))
+figs = {}
+noopt_fig = plt.subplots(figsize=(8,4))
+widths = (1, 2, 4, 8, 16, 32, 64, 128, 1024)
+for width in widths:
+    fig, ax = plt.subplots(figsize=(8,4))
+    figs[width] = fig, ax
 
 log = Log(sys.stdin)
 snapshots = log.snapshots()
-for snapshot in snapshots[400:401]:
+for snapshot in snapshots[4500:4501]:
     keys = Database(log, 1, snapshot).keys()
-    for width in (1, 10, 100, 1000):
+    for width in widths:
         nresolves = []
         for key in keys:
             db = Database(log, width, snapshot)
             assert db.get(key) is not None
             nresolves.append(db.remote_resolves)
-        plot(ax, nresolves, `width`)
+        for w, f in figs.iteritems():
+            if w >= width:
+                plot(f[1], nresolves, `width`)
     nresolves = []
     for key in keys:
         db = Database(log, 1, snapshot)
         assert db.get(key) is not None
         nresolves.append(db.total_resolves)
-    plot(ax, nresolves, 'no-opt')
+    for f in figs.itervalues():
+        plot(f[1], nresolves, 'no-opt')
 
-ax.set_ylabel('Probability')
-ax.set_xlabel('Pointer Hops')
-ax.legend()
+count = 0
+for f in figs.itervalues():
+    f[1].set_ylabel('Probability')
+    f[1].set_xlabel('Pointer Hops')
+    f[1].legend()
+    f[0].savefig("%d.png" % (count,))
+    count += 1
 
 #    width_db = (Database(log, w, snapshot) for w in (1, 10, 100))
 #    for db in width_db:
@@ -209,7 +221,7 @@ ax.legend()
 #        histtype='step', bins=50, cumulative=True)
 #ax.hist(df['remote'], bins=50, normed=1,
 #        histtype='step', cumulative=True)
-fig.savefig('x.png')
+#fig.savefig('x.png')
 
 #p = sns.distplot(df, hist=False, kde_kws=dict(cumulative=True))
 #p = sns.distplot(df, hist_kws=dict(cumulative=True), kde=False)

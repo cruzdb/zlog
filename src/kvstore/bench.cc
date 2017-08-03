@@ -77,7 +77,6 @@ int main(int argc, char **argv)
     auto txn = db->BeginTransaction();
     int nkey = dis(gen);
     const std::string key = tostr(nkey);
-    std::cout << key << std::endl;
     txn->Put(key, key);
     txn->Commit();
     delete txn;
