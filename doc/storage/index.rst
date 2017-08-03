@@ -58,6 +58,10 @@ to be built and installed.
 Building the Ceph Plugin
 ------------------------
 
+.. note::
+
+    See the next section below for Jewel support.
+
 The easiest way to build the Ceph plugin is to use the `build-ceph-plugin.sh`
 script found in the ZLog source tree. This script builds the plugin for a
 variety of OS distributions and Ceph versions.
@@ -88,6 +92,48 @@ with us).
     * fedora:{24,25}
     * centos:7
 
+Notes on Jewel Support
+----------------------
+
+This section is only relevant for Jewel. The following notes are for building
+the Ceph ZLog plugin from source for Jewel. The Jewel plugin is not included
+in our CI system. Please let us know if you have any issue on other
+distributions.
+
+.. code-block:: bash
+
+    # grab the source tree with the plugin
+    git clone --recursive --branch=zlog/jewel \
+        https://github.com/noahdesu/ceph.git
+    cd ceph
+
+    # prepare the build
+
+    apt-get install libprotobuf-dev protobuf-compiler
+    # or yum/dnf install protobuf-devel protobuf-compiler
+
+    ./install-dep.sh
+    ./autogen.sh
+    ./configure
+
+    # build the plugin
+    cd src
+    make cls/zlog/zlog.pb.cc
+    make libcls_zlog.la
+
+The resulting plugin is located in the `.libs` directory:
+
+.. code-block:: bash
+
+    nwatkins@node0:/mnt/data/ceph/src$ ls -l .libs | grep libcls_zlog
+    -rw-r--r-- 1 nwatkins zlog-PG0     82 Aug  3 15:34 libcls_zlog.exp
+    lrwxrwxrwx 1 nwatkins zlog-PG0     17 Aug  3 15:34 libcls_zlog.la -> ../libcls_zlog.la
+    -rw-r--r-- 1 nwatkins zlog-PG0   1021 Aug  3 15:34 libcls_zlog.lai
+    -rwxr-xr-x 1 nwatkins zlog-PG0 899808 Aug  3 15:34 libcls_zlog.so
+
+Below in the installation section, use the generated `.so` file in place
+of the libraries produced by Docker.
+
 Installation
 ------------
 
@@ -105,6 +151,18 @@ systems, and `/usr/lib64/rados-classes` on Fedora, CentOS, and RHEL.
 
     # or on fedora/rhel/centos
     sudo cp -a libcls_zlog_<identifer>/libcls_zlog.so* /usr/lib64/rados-classes
+
+A note about Jewel support. When installing from Jewel, if you followed the
+Jewel-specific instructions above, then you'll want to install the plugin like
+this:
+
+.. code-block:: bash
+
+    sudo cp -a .libs/libcls_zlog.so /usr/lib/rados-classes
+
+    # or on fedora/rhel/centos
+    sudo cp -a .libs/libcls_zlog.so /usr/lib64/rados-classes
+
 
 .. important::
 
