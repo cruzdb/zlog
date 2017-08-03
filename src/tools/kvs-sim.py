@@ -2,6 +2,8 @@ import sys
 import csv
 import json
 from collections import defaultdict
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 #import pandas as pd
 import seaborn as sns
