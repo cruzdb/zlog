@@ -349,7 +349,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->data.assign(data.data(), data.size());
   impl->position = position;
   impl->pposition = pposition;
-  impl->backend = new_backend;
+  impl->backend = be;
   impl->type = ZLOG_AIO_APPEND;
 
   uint64_t epoch;
@@ -363,7 +363,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
   impl->get(); // backend now has a reference
 
-  ret = new_backend->AioWrite(oid, epoch, position, data,
+  ret = be->AioWrite(oid, epoch, position, data,
       impl, AioCompletionImpl::aio_safe_cb_append);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -385,7 +385,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   impl->log = this;
   impl->datap = datap;
   impl->position = position;
-  impl->backend = new_backend;
+  impl->backend = be;
   impl->type = ZLOG_AIO_READ;
 
   impl->get(); // backend now has a reference
@@ -394,7 +394,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   std::string oid;
   mapper_.FindObject(position, &oid, &epoch);
 
-  int ret = new_backend->AioRead(oid, epoch, position, &impl->data,
+  int ret = be->AioRead(oid, epoch, position, &impl->data,
       impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

@@ -57,7 +57,7 @@ int LogImpl::MultiAppend(const Slice& data,
     std::string oid;
     mapper_.FindObject(position, &oid, &epoch);
 
-    ret = new_backend->Write(oid, Slice(out_data), epoch, position);
+    ret = be->Write(oid, Slice(out_data), epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;

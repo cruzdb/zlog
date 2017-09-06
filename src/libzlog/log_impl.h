@@ -122,7 +122,7 @@ class LogImpl : public Log {
   std::string metalog_oid_;
   SeqrClient *seqr;
 
-  Backend *new_backend;
+  Backend *be;
 
   LogMapper mapper_;
 
