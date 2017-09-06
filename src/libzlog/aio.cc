@@ -215,14 +215,6 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
     ret = impl->log->RefreshProjection();
     if (ret)
       finish = true;
-#if BACKEND_SUPPORT_DISABLE
-  } else if (ret == -EFBIG) {
-    assert(impl->log->backend_ver == 2);
-    impl->log->CreateNewStripe(impl->epoch);
-    ret = impl->log->RefreshProjection();
-    if (ret)
-      finish = true;
-#endif
   } else if (ret < 0) {
     /*
      * Encountered a RADOS error.

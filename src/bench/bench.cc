@@ -365,12 +365,8 @@ int main(int argc, char **argv)
       // this is the default case
       break;
     case 2:
-#ifdef BACKEND_SUPPORT_DISABLED
-      std::cerr << "backend support disabled temporarily" << std::endl << std::flush;
       assert(0);
-      log_impl->set_backend_v2();
-#endif
-      break;
+      exit(1);
     default:
       assert(0);
       exit(1);

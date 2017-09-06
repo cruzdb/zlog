@@ -12,9 +12,6 @@ namespace zlog {
 class LogImpl : public Log {
  public:
   LogImpl() {}
-#if BACKEND_SUPPORT_DISABLED
-  LogImpl() : backend(NULL), backend_ver(2), new_stripe_pending_(false) {}
-#endif
 
   /*
    * Create cut.
@@ -126,20 +123,6 @@ class LogImpl : public Log {
   SeqrClient *seqr;
 
   Backend *new_backend;
-
-#if BACKEND_SUPPORT_DISABLE
-  TmpBackend *backend;
-  int backend_ver;
-
-  void set_backend_v2() {
-    assert(backend);
-    delete backend;
-    backend = TmpBackend::CreateV2();
-    backend_ver = 2;
-  }
-
-  bool new_stripe_pending_;
-#endif
 
   LogMapper mapper_;
 

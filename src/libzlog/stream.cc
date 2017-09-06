@@ -76,17 +76,6 @@ int LogImpl::MultiAppend(const Slice& data,
       continue;
     }
 
-#ifdef BACKEND_SUPPORT_DISALBED
-    if (ret == -EFBIG) {
-      assert(backend_ver == 2);
-      CreateNewStripe(epoch);
-      ret = RefreshProjection();
-      if (ret)
-        return ret;
-      continue;
-    }
-#endif
-
     assert(ret == Backend::ZLOG_READ_ONLY);
   }
   assert(0);
