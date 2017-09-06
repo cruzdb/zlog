@@ -33,72 +33,44 @@ class Backend {
    */
   virtual int Exists(const std::string& oid) = 0;
 
-  /*
-   *
-   */
   virtual int CreateHeadObject(const std::string& oid,
       const zlog_proto::MetaLog& data) = 0;
 
-  /*
-   *
-   */
   virtual int SetProjection(const std::string& oid, uint64_t epoch,
       const zlog_proto::MetaLog& data) = 0;
 
-  /*
-   *
-   */
   virtual int LatestProjection(const std::string& oid,
       uint64_t *epoch, zlog_proto::MetaLog& data) = 0;
 
-  /*
-   *
-   */
-  virtual int Seal(const std::string& oid, uint64_t epoch) = 0;
 
-  /*
-   *
-   */
-  virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos) = 0;
-
-  /*
-   *
-   */
+  // Write data into a log position.
   virtual int Write(const std::string& oid, const Slice& data,
       uint64_t epoch, uint64_t position) = 0;
 
-  /*
-   *
-   */
-  virtual int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data) = 0;
-
-  /*
-   *
-   */
-  virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) = 0;
-
-  /*
-   *
-   */
-  virtual int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position) = 0;
-
-  /*
-   *
-   */
-  virtual int AioAppend(const std::string& oid, uint64_t epoch,
+  virtual int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback) = 0;
 
-  /*
-   *
-   */
+  // Read the contents of a log position.
+  virtual int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data) = 0;
+
   virtual int AioRead(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data, void *arg,
       std::function<void(void*, int)> callback) = 0;
+
+  // Invalidate a log position.
+  virtual int Fill(const std::string& oid, uint64_t epoch,
+      uint64_t position) = 0;
+
+  // Force invalidate a log position.
+  virtual int Trim(const std::string& oid, uint64_t epoch,
+      uint64_t position) = 0;
+
+  virtual int Seal(const std::string& oid, uint64_t epoch) = 0;
+
+  virtual int MaxPos(const std::string& oid, uint64_t epoch,
+      uint64_t *pos) = 0;
 };
 
 #endif

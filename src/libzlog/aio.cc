@@ -251,7 +251,7 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
       // submit new aio op
       // TODO: can we avoid all the data copying between impl->data and the
       // backend? the backend may even make another copy...
-      ret = impl->backend->AioAppend(oid, epoch, impl->position,
+      ret = impl->backend->AioWrite(oid, epoch, impl->position,
           Slice(impl->data.data(), impl->data.size()),
           impl, AioCompletionImpl::aio_safe_cb_append);
       if (ret)
@@ -363,7 +363,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
   impl->get(); // backend now has a reference
 
-  ret = new_backend->AioAppend(oid, epoch, position, data,
+  ret = new_backend->AioWrite(oid, epoch, position, data,
       impl, AioCompletionImpl::aio_safe_cb_append);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

@@ -56,7 +56,7 @@ class LMDBBackend : public Backend {
   virtual int Fill(const std::string& oid, uint64_t epoch,
       uint64_t position);
 
-  virtual int AioAppend(const std::string& oid, uint64_t epoch,
+  virtual int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback);
 

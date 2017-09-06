@@ -354,7 +354,7 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
   return ZLOG_OK;
 }
 
-int LMDBBackend::AioAppend(const std::string& oid, uint64_t epoch,
+int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
     uint64_t position, const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
