@@ -129,24 +129,6 @@ int LogImpl::StripeWidth()
   return mapper_.CurrentStripeWidth();
 }
 
-class new_stripe_notifier {
- public:
-  new_stripe_notifier(std::mutex *lock, std::condition_variable *cond, bool *pred) :
-    lock_(lock), cond_(cond), pred_(pred)
-  {}
-
-  ~new_stripe_notifier() {
-    std::unique_lock<std::mutex> l(*lock_);
-    *pred_ = false;
-    cond_->notify_all();
-  }
-
- private:
-  std::mutex *lock_;
-  std::condition_variable *cond_;
-  bool *pred_;
-};
-
 int LogImpl::SetStripeWidth(int width)
 {
   /*
