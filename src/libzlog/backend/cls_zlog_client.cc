@@ -11,9 +11,6 @@ void encode(ceph::buffer::list& bl, google::protobuf::Message& msg) {
 }
 
 bool decode(ceph::bufferlist& bl, google::protobuf::Message* msg) {
-  if (bl.length() == 0) {
-    return false;
-  }
   if (!msg->ParseFromArray(bl.c_str(), bl.length())) {
     std::cerr << "decode: unable to decode message" << std::endl;
     return false;
@@ -27,71 +24,76 @@ bool decode(ceph::bufferlist& bl, google::protobuf::Message* msg) {
 
 namespace zlog {
 
-void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::SealOp call;
-  call.set_epoch(epoch);
-  encode(in, call);
-  op.exec("zlog", "seal", in);
-}
-
-void cls_zlog_fill(librados::ObjectWriteOperation& op, uint64_t epoch,
+void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
     uint64_t position)
 {
-  ceph::bufferlist in;
-  zlog_ceph_proto::FillOp call;
+  ceph::bufferlist bl;
+  zlog_ceph_proto::ReadEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  encode(in, call);
-  op.exec("zlog", "fill", in);
+  encode(bl, call);
+  op.exec("zlog", "read", bl);
 }
 
 void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
     uint64_t position, ceph::bufferlist& data)
 {
-  ceph::bufferlist in;
-  zlog_ceph_proto::WriteOp call;
+  ceph::bufferlist bl;
+  zlog_ceph_proto::WriteEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
   call.set_data(data.c_str(), data.length());
-  encode(in, call);
-  op.exec("zlog", "write", in);
+  encode(bl, call);
+  op.exec("zlog", "write", bl);
 }
 
-void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t position)
+static void invalidate(librados::ObjectWriteOperation& op, uint64_t epoch,
+    uint64_t position, bool force)
 {
-  ceph::bufferlist in;
-  zlog_ceph_proto::ReadOp call;
+  ceph::bufferlist bl;
+  zlog_ceph_proto::InvalidateEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  encode(in, call);
-  op.exec("zlog", "read", in);
+  call.set_force(force);
+  encode(bl, call);
+  op.exec("zlog", "invalidate", bl);
 }
+
+void cls_zlog_fill(librados::ObjectWriteOperation& op, uint64_t epoch,
+    uint64_t position)
+{
+  invalidate(op, epoch, position, false);
+}
+
 
 void cls_zlog_trim(librados::ObjectWriteOperation& op, uint64_t epoch,
     uint64_t position)
 {
-  ceph::bufferlist in;
-  zlog_ceph_proto::TrimOp call;
+  invalidate(op, epoch, position, true);
+}
+
+void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch)
+{
+  ceph::bufferlist bl;
+  zlog_ceph_proto::Seal call;
   call.set_epoch(epoch);
-  call.set_pos(position);
-  encode(in, call);
-  op.exec("zlog", "trim", in);
+  encode(bl, call);
+  op.exec("zlog", "seal", bl);
 }
 
 class ClsZlogMaxPositionReply : public librados::ObjectOperationCompletion {
  public:
-  ClsZlogMaxPositionReply(uint64_t *pposition, int *pret) :
-    pposition_(pposition), pret_(pret)
+  ClsZlogMaxPositionReply(uint64_t *pposition, bool *pempty, int *pret) :
+    pposition_(pposition), pempty_(pempty), pret_(pret)
   {}
 
   void handle_completion(int ret, ceph::bufferlist& outbl) {
     if (ret == CLS_ZLOG_OK) {
-      zlog_ceph_proto::MaxPositionRet reply;
+      zlog_ceph_proto::MaxPos reply;
       if (decode(outbl, &reply)) {
-        *pposition_ = reply.pos();
+        *pempty_ = !reply.has_pos();
+        if (reply.has_pos())
+          *pposition_ = reply.pos();
       } else {
         ret = -EIO;
       }
@@ -101,142 +103,41 @@ class ClsZlogMaxPositionReply : public librados::ObjectOperationCompletion {
 
  private:
   uint64_t *pposition_;
+  bool *pempty_;
   int *pret_;
 };
 
 void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t *pposition, int *pret)
+    uint64_t *pposition, bool *pempty, int *pret)
 {
-  ceph::bufferlist in;
-  zlog_ceph_proto::MaxPositionOp call;
+  ceph::bufferlist bl;
+  zlog_ceph_proto::ReadMaxPos call;
   call.set_epoch(epoch);
-  encode(in, call);
-  op.exec("zlog", "max_position", in, new ClsZlogMaxPositionReply(pposition, pret));
+  encode(bl, call);
+  op.exec("zlog", "max_position", bl,
+      new ClsZlogMaxPositionReply(pposition, pempty, pret));
 }
 
-void cls_zlog_seal_v2(librados::ObjectWriteOperation& op, uint64_t epoch)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::SealOp call;
-  call.set_epoch(epoch);
-  encode(in, call);
-  op.exec("zlog", "seal_v2", in);
-}
-
-void cls_zlog_fill_v2(librados::ObjectWriteOperation& op, uint64_t epoch,
-    uint64_t position)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::FillOp call;
-  call.set_epoch(epoch);
-  call.set_pos(position);
-  encode(in, call);
-  op.exec("zlog", "fill_v2", in);
-}
-
-void cls_zlog_write_v2(librados::ObjectWriteOperation& op, uint64_t epoch,
-    uint64_t position, ceph::bufferlist& data)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::WriteOp call;
-  call.set_epoch(epoch);
-  call.set_pos(position);
-  call.set_data(data.c_str(), data.length());
-  encode(in, call);
-  op.exec("zlog", "write_v2", in);
-}
-
-void cls_zlog_read_v2(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t position)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::ReadOp call;
-  call.set_epoch(epoch);
-  call.set_pos(position);
-  encode(in, call);
-  op.exec("zlog", "read_v2", in);
-}
-
-void cls_zlog_trim_v2(librados::ObjectWriteOperation& op, uint64_t epoch,
-    uint64_t position)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::TrimOp call;
-  call.set_epoch(epoch);
-  call.set_pos(position);
-  encode(in, call);
-  op.exec("zlog", "trim_v2", in);
-}
-
-void cls_zlog_max_position_v2(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t *pposition, int *pret)
-{
-  ceph::bufferlist in;
-  zlog_ceph_proto::MaxPositionOp call;
-  call.set_epoch(epoch);
-  encode(in, call);
-  op.exec("zlog", "max_position_v2", in, new ClsZlogMaxPositionReply(pposition, pret));
-}
-
-void cls_zlog_set_projection(librados::ObjectWriteOperation& op,
+void cls_zlog_create_view(librados::ObjectWriteOperation& op,
     uint64_t epoch, ceph::bufferlist& data)
 {
-  ceph::bufferlist inbl;
-  zlog_ceph_proto::SetProjectionOp call;
+  zlog_ceph_proto::CreateView call;
   call.set_epoch(epoch);
   call.set_data(data.c_str(), data.length());
-  encode(inbl, call);
-  op.exec("zlog", "set_projection", inbl);
+
+  ceph::bufferlist bl;
+  encode(bl, call);
+  op.exec("zlog", "view_create", bl);
 }
 
-class GetProjectionReply : public librados::ObjectOperationCompletion {
- public:
-  GetProjectionReply(int *pret, uint64_t *pepoch, ceph::bufferlist *out) :
-    pret_(pret), pepoch_(pepoch), out_(out)
-  {}
-
-  void handle_completion(int ret, ceph::bufferlist& outbl) {
-    if (ret == 0) {
-      zlog_ceph_proto::GetProjectionRet reply;
-      if (decode(outbl, &reply)) {
-        if (pepoch_)
-          *pepoch_ = reply.epoch();
-        out_->append(reply.out());
-      } else {
-        ret = -EIO;
-      }
-    }
-    *pret_ = ret;
-  }
-
- private:
-  int *pret_;
-  uint64_t *pepoch_;
-  ceph::bufferlist *out_;
-};
-
-static void __get_projection(librados::ObjectReadOperation& op,
-    uint64_t epoch, bool latest, int *pret, uint64_t *pepoch, ceph::bufferlist *out)
+void cls_zlog_read_view(librados::ObjectReadOperation& op,
+    uint64_t epoch)
 {
-  ceph::bufferlist inbl;
-  zlog_ceph_proto::GetProjectionOp call;
+  ceph::bufferlist bl;
+  zlog_ceph_proto::ReadView call;
   call.set_epoch(epoch);
-  call.set_latest(latest);
-  encode(inbl, call);
-  op.exec("zlog", "get_projection", inbl,
-      new GetProjectionReply(pret, pepoch, out));
-}
-
-void cls_zlog_get_latest_projection(librados::ObjectReadOperation& op,
-    int *pret, uint64_t *pepoch, ceph::bufferlist *out)
-{
-  __get_projection(op, 0, true, pret, pepoch, out);
-}
-
-void cls_zlog_get_projection(librados::ObjectReadOperation& op, int *pret,
-    uint64_t epoch, ceph::bufferlist *out)
-{
-  __get_projection(op, epoch, false, pret, NULL, out);
+  encode(bl, call);
+  op.exec("zlog", "view_read", bl);
 }
 
 }

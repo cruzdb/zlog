@@ -13,6 +13,26 @@ class RAMBackend : public Backend {
     pool_ = ss.str();
   }
 
+  int CreateLog(const std::string& name,
+      const std::string& initial_view) override {
+    assert(0);
+  }
+
+  virtual int OpenLog(const std::string& name,
+      std::string& prefix) {
+    assert(0);
+  }
+
+  int ProposeView(const std::string& hoid,
+      uint64_t epoch, const std::string& view) {
+    assert(0);
+  }
+
+  int ReadViews(const std::string& hoid, uint64_t epoch,
+      std::map<uint64_t, std::string>& views) override {
+    assert(0);
+  }
+
   virtual std::string pool() {
     return pool_;
   }
@@ -45,6 +65,7 @@ class RAMBackend : public Backend {
     return ZLOG_OK;
   }
 
+#if 0
   virtual int SetProjection(const std::string& oid, uint64_t epoch,
       const zlog_proto::MetaLog& data) {
     std::lock_guard<std::mutex> l(lock_);
@@ -86,9 +107,11 @@ class RAMBackend : public Backend {
     *epoch = it2->first;
     return ZLOG_OK;
   }
+#endif
 
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos) {
+      uint64_t *pos, bool *empty) {
+    assert(0);
     std::lock_guard<std::mutex> l(lock_);
 
     auto it = db_.find(oid);

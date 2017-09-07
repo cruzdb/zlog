@@ -4,6 +4,11 @@ package zlog_proto;
 
 option optimize_for = SPEED;
 
+message View {
+  required uint64 position = 1;
+  required uint32 width = 2;
+}
+
 message MetaLog {
     message StripeHistoryEntry {
         required uint64 pos = 1;

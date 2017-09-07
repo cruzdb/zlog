@@ -1,96 +1,99 @@
 #include "stripe_history.h"
+#include <sstream>
 #include "proto/zlog.pb.h"
 
-zlog_proto::MetaLog StripeHistory::Serialize() const
+Striper::Mapping Striper::MapPosition(uint64_t position) const
 {
-  zlog_proto::MetaLog config;
+  std::lock_guard<std::mutex> l(lock_);
+  assert(!views_.empty());
+  auto it = views_.upper_bound(position);
+  it--;
 
-  for (const auto& stripe : history_) {
-    uint64_t position = stripe.first;
-    const Stripe& s = stripe.second;
+  auto width = it->second;
+  auto oid = oids_[position % width];
 
-    zlog_proto::MetaLog_StripeHistoryEntry *entry;
-    entry = config.add_stripe_history();
-    entry->set_pos(position);
-    entry->set_epoch(s.epoch);
-    entry->set_width(s.width);
-  }
-
-  return config;
+  return Mapping{epoch_, oid};
 }
 
-int StripeHistory::Deserialize(const zlog_proto::MetaLog& config)
+std::string Striper::BuildViewData(uint64_t pos,
+    uint32_t width)
 {
-  for (unsigned i = 0; i < (unsigned)config.stripe_history_size(); i++) {
-    const zlog_proto::MetaLog_StripeHistoryEntry& e = config.stripe_history(i);
-    uint64_t position = e.pos();
-    assert(history_.find(position) == history_.end());
-    Stripe stripe = { e.epoch(), (int)e.width() };
-    history_[position] = stripe;
+  zlog_proto::View view;
+  view.set_position(pos);
+  view.set_width(width);
+
+  std::string result;
+  assert(view.SerializeToString(&result));
+  return result;
+}
+
+std::string Striper::NewViewData(uint64_t pos) const
+{
+  std::lock_guard<std::mutex> l(lock_);
+  assert(!views_.empty());
+  auto width = views_.rbegin()->second;
+  return BuildViewData(pos, width);
+}
+
+std::string Striper::NewResumeViewData() const
+{
+  std::lock_guard<std::mutex> l(lock_);
+  assert(!views_.empty());
+  auto pos = views_.rbegin()->first;
+  auto width = views_.rbegin()->second;
+  return BuildViewData(pos, width);
+}
+
+std::string Striper::InitViewData(uint32_t width)
+{
+  return BuildViewData(0, width);
+}
+
+int Striper::Add(uint64_t epoch, const std::string& data)
+{
+  zlog_proto::View view;
+  if (!view.ParseFromString(data)) {
+    return -EIO;
+  }
+
+  assert(view.width() > 0);
+
+  std::lock_guard<std::mutex> l(lock_);
+
+  if (views_.empty()) {
+    assert(epoch == 0);
+    assert(view.position() == 0);
+    views_.emplace(0, view.width());
+    epoch_ = 0;
+    GenerateObjects();
+  } else {
+    assert(epoch == (epoch_ + 1));
+    assert(views_.rbegin()->first <= view.position());
+    if (views_.rbegin()->second != view.width()) {
+      auto res = views_.emplace(view.position(), view.width());
+      assert(res.second);
+      GenerateObjects();
+    }
+    epoch_ = epoch;
   }
 
   return 0;
 }
 
-bool StripeHistory::Empty() const {
-  return history_.empty();
-}
-
-void StripeHistory::AddStripe(uint64_t position, uint64_t epoch, int width)
+void Striper::GenerateObjects()
 {
-  const auto it = history_.lower_bound(position);
-  assert(it == history_.end());
-  assert(width > 0);
-  Stripe stripe = { epoch, width };
-  history_[position] = stripe;
-}
+  assert(!views_.empty());
 
-void StripeHistory::CloneLatestStripe(uint64_t position, uint64_t epoch)
-{
-  uint64_t latest_pos;
-  Stripe latest = LatestStripe(&latest_pos);
-  latest.epoch = epoch;
+  auto it = views_.rbegin();
+  auto position = it->first;
+  auto width = it->second;
 
-  /*
-   * This should probably be handled later in Seal after we make Seal aware of
-   * cls_zlog v2. But basically what is happening here is that a stripe was
-   * previously sealed. The history might look like [0, 11, 21, +inf) where
-   * position 21 is mapped to the latest stripe. But when we seal and clone
-   * the latest no writes actually occurred to the stripe so we get back
-   * max_pos of 0.
-   *
-   * The basic solution we are using here is to create a new stripe starting
-   * at the next position. The new history is [0, 11, 21, 22, +inf) so that
-   * new stripe is left with only 21 mapping into it.
-   *
-   * FIXME: ideally I think we should use a data structure that lets us
-   * explicitly represent what happened. That is allow duplicate positions in
-   * the map. So each position would be a list with the last element being the
-   * active stripe and the others being empty.
-   */
-  if (position == 0)
-    position = latest_pos + 1;
+  std::vector<std::string> oids;
+  for (uint32_t i = 0; i < width; i++) {
+    std::stringstream oid;
+    oid << prefix_ << "." << position << "." << i;
+    oids.push_back(oid.str());
+  }
 
-  const auto it = history_.lower_bound(position);
-  assert(it == history_.end());
-
-  history_[position] = latest;
-}
-
-StripeHistory::Stripe StripeHistory::FindStripe(uint64_t position) const
-{
-  assert(!history_.empty());
-  auto it = history_.upper_bound(position);
-  assert(it != history_.begin());
-  it--;
-  return it->second;
-}
-
-StripeHistory::Stripe StripeHistory::LatestStripe(uint64_t *pos) const
-{
-  const auto it = history_.rbegin();
-  assert(it != history_.rend());
-  if (pos)
-    *pos = it->first;
-  return it->second;
+  oids_.swap(oids);
 }

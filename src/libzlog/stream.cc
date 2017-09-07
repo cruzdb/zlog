@@ -53,11 +53,9 @@ int LogImpl::MultiAppend(const Slice& data,
       out_data.append(data.data(), data.size());
     }
 
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    ret = be->Write(oid, Slice(out_data), epoch, position);
+    ret = be->Write(mapping.oid, Slice(out_data), mapping.epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;

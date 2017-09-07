@@ -46,37 +46,15 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
     return -EINVAL;
   }
 
-  // Setup the first projection
-  StripeHistory hist;
-  hist.AddStripe(0, 0, stripe_size);
-  const auto hist_data = hist.Serialize();
-
-  // create the log metadata/head object
-  std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = backend->CreateHeadObject(metalog_oid, hist_data);
-  if (ret != Backend::ZLOG_OK) {
+  auto views = Striper::InitViewData(stripe_size);
+  int ret = backend->CreateLog(name, views);
+  if (ret) {
     std::cerr << "Failed to create log " << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
     return ret;
   }
 
-  LogImpl *impl = new LogImpl;
-
-  impl->be = backend;
-  impl->name_ = name;
-  impl->metalog_oid_ = metalog_oid;
-  impl->seqr = seqr;
-  impl->mapper_.SetName(name);
-
-  ret = impl->RefreshProjection();
-  if (ret) {
-    delete impl;
-    return ret;
-  }
-
-  *logptr = impl;
-
-  return 0;
+  return Open(backend, name, seqr, logptr);
 }
 
 int Log::Create(Backend *backend, const std::string& name,
@@ -88,35 +66,30 @@ int Log::Create(Backend *backend, const std::string& name,
 int Log::Open(Backend *backend, const std::string& name,
     SeqrClient *seqr, Log **logptr)
 {
-  if (name.length() == 0) {
-    std::cerr << "Invalid log name (empty string)" << std::endl;
+  if (name.empty())
     return -EINVAL;
-  }
 
-  /*
-   * Check that the log metadata/head object exists. The projection and other
-   * state is read during RefreshProjection.
-   */
-  std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = backend->Exists(metalog_oid);
+  // TODO: don't use hoid as prefix
+  std::string hoid;
+  int ret = backend->OpenLog(name, hoid);
   if (ret) {
-    std::cerr << "Failed to open log meta object " << metalog_oid << " ret " <<
-      ret << std::endl;
     return ret;
   }
 
-  LogImpl *impl = new LogImpl;
+  LogImpl *impl = new LogImpl(backend, hoid);
 
-  impl->be = backend;
   impl->name_ = name;
-  impl->metalog_oid_ = metalog_oid;
   impl->seqr = seqr;
-  impl->mapper_.SetName(name);
 
-  ret = impl->RefreshProjection();
+  ret = impl->UpdateView();
   if (ret) {
     delete impl;
     return ret;
+  }
+
+  if (impl->striper.Empty()) {
+    delete impl;
+    return -EINVAL;
   }
 
   *logptr = impl;
@@ -124,11 +97,35 @@ int Log::Open(Backend *backend, const std::string& name,
   return 0;
 }
 
-int LogImpl::StripeWidth()
+int LogImpl::UpdateView()
 {
-  return mapper_.CurrentStripeWidth();
+  // striper initialized from epoch 0
+  uint64_t epoch = striper.Empty() ? 0 : striper.Epoch() + 1;
+
+  while (true) {
+    std::map<uint64_t, std::string> views;
+    int ret = be->ReadViews(hoid, epoch, views);
+    if (ret)
+      return ret;
+    if (views.empty())
+      return 0;
+    for (auto it = views.begin(); it != views.end(); it++) {
+      if (it->first != epoch) {
+        // gap: bad...
+        return -EIO;
+      }
+      striper.Add(it->first, it->second);
+      epoch++;
+    }
+  }
 }
 
+int LogImpl::StripeWidth()
+{
+  return striper.GetCurrent().width;
+}
+
+#if 0
 int LogImpl::SetStripeWidth(int width)
 {
   /*
@@ -175,61 +172,71 @@ int LogImpl::SetStripeWidth(int width)
 
   return 0;
 }
+#endif
 
-int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
+// Construct a new epoch view with an identifical configuration to the current
+// view and return the maximum position.
+//
+// TODO
+//  - there are probably several scenarios in which we might want to retry cut
+//  creation (as opposed to just returning an error) if we encounter an error
+//  that is resulting from races with other clients.
+//  - the epoch return value seems weird.
+//
+int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos)
 {
-  /*
-   * Get the current projection. We'll make a copy of this as the next
-   * projection.
-   */
-  uint64_t epoch;
-  zlog_proto::MetaLog config;
-  int ret = be->LatestProjection(metalog_oid_, &epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to get projection ret " << ret << std::endl;
-    return ret;
-  }
-
-  StripeHistory hist;
-  ret = hist.Deserialize(config);
+  // make sure we are up-to-date
+  int ret = UpdateView();
   if (ret)
     return ret;
-  assert(!hist.Empty());
 
-  std::vector<std::string> objects;
-  mapper_.LatestObjectSet(objects, hist);
+  // get current configuration
+  auto conf = striper.StripeObjects();
+  auto epoch = conf.first;
+  auto oids = conf.second;
 
+  bool empty;
   uint64_t max_position;
-  ret = Seal(objects, epoch, &max_position);
+  auto next_epoch = epoch + 1;
+  ret = Seal(oids, next_epoch, &max_position, &empty);
   if (ret) {
     std::cerr << "failed to seal " << ret << std::endl;
     return ret;
   }
 
-  /*
-   * Propose the next epoch / projection.
-   */
-  uint64_t next_epoch = epoch + 1;
-  ret = be->SetProjection(metalog_oid_, next_epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to set new epoch " << next_epoch
-      << " ret " << ret << std::endl;
-    return ret;
+  std::string data;
+  if (empty) {
+    data = striper.NewResumeViewData();
+  } else {
+    data = striper.NewViewData(max_position + 1);
   }
 
-  *pepoch = next_epoch;
-  *maxpos = max_position;
+  ret = be->ProposeView(hoid, next_epoch, data);
+  if (ret)
+    return ret;
+
+  ret = UpdateView();
+  if (ret)
+    return ret;
+
+  auto info = striper.GetCurrent();
+  if (info.epoch < next_epoch)
+    return -EINVAL;
+
+  *pepoch = info.epoch;
+  *pmaxpos = info.maxpos;
 
   return 0;
 }
 
+// TODO
+//  - use asynchronous methods
+//
 int LogImpl::Seal(const std::vector<std::string>& objects,
-    uint64_t epoch, uint64_t *next_pos)
+    uint64_t epoch, uint64_t *pmaxpos, bool *pempty)
 {
-  /*
-   * Seal each object
-   */
-  for (const auto& oid : objects) {
+  // seal objects
+  for (auto oid : objects) {
     int ret = be->Seal(oid, epoch);
     if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to seal object" << std::endl;
@@ -237,79 +244,49 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
     }
   }
 
-  /*
-   * Get next position from each object
-   */
   uint64_t max_position;
-  bool first = true;
-  for (const auto& oid : objects) {
-    /*
-     * The max_position function should only be called on objects that have
-     * been sealed, thus here we return from any error includes -ENOENT. The
-     * epoch tag must also match the sealed epoch in the object otherwise
-     * we'll receive -EINVAL.
-     */
-    uint64_t this_pos;
-    int ret = be->MaxPos(oid, epoch, &this_pos);
+  bool initialized = false;
+  for (auto oid : objects) {
+    bool empty;
+    uint64_t pos;
+    int ret = be->MaxPos(oid, epoch, &pos, &empty);
     if (ret != Backend::ZLOG_OK) {
       std::cerr << "failed to find max pos ret " << ret << std::endl;
       return ret;
     }
 
-    if (first) {
-      max_position = this_pos;
-      first = false;
+    if (!empty && !initialized) {
+      max_position = pos;
+      initialized = true;
       continue;
     }
 
-    max_position = std::max(max_position, this_pos);
+    max_position = std::max(max_position, pos);
   }
 
-  *next_pos = max_position;
+  *pempty = !initialized;
+  if (initialized)
+    *pmaxpos = max_position;
 
   return 0;
 }
 
 int LogImpl::RefreshProjection()
 {
-  for (;;) {
-    uint64_t epoch;
-    zlog_proto::MetaLog config;
-    int ret = be->LatestProjection(metalog_oid_, &epoch, config);
-    if (ret != Backend::ZLOG_OK) {
-      std::cerr << "failed to get projection ret " << ret << std::endl;
-      sleep(1);
-      continue;
-    }
-
-    StripeHistory hist;
-    ret = hist.Deserialize(config);
-    if (ret) {
-      std::cerr << "RefreshProjection: failed to decode..." << std::endl << std::flush;
-      return ret;
-    }
-    assert(!hist.Empty());
-
-    mapper_.SetHistory(hist, epoch);
-
-    break;
-  }
-
-  return 0;
+  assert(0);
 }
 
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(mapper_.Epoch(), be->pool(),
+    int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
         name_, pposition, increment);
     if (ret == -EAGAIN) {
-      //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
-      //std::cerr << "check tail ret -ERANGE" << std::endl;
-      ret = RefreshProjection();
+      std::cerr << "check tail ret -ERANGE" << std::endl;
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
@@ -331,7 +308,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 
   for (;;) {
     std::vector<uint64_t> result;
-    int ret = seqr->CheckTail(mapper_.Epoch(), be->pool(),
+    int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
         name_, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
@@ -356,7 +333,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(mapper_.Epoch(), be->pool(),
+    int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
         name_, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -EAGAIN" << std::endl;
@@ -399,11 +376,9 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
     if (ret)
       return ret;
 
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    ret = be->Write(oid, data, epoch, position);
+    ret = be->Write(mapping.oid, data, mapping.epoch, position);
     if (ret < 0 && ret != -EFBIG) {
       std::cerr << "append: failed ret " << ret << std::endl;
       return ret;
@@ -431,10 +406,9 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
 int LogImpl::Fill(uint64_t epoch, uint64_t position)
 {
   for (;;) {
-    std::string oid;
-    mapper_.FindObject(position, &oid, NULL);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = be->Fill(oid, epoch, position);
+    int ret = be->Fill(mapping.oid, epoch, position);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
       return ret;
@@ -458,11 +432,9 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
 int LogImpl::Fill(uint64_t position)
 {
   for (;;) {
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = be->Fill(oid, epoch, position);
+    int ret = be->Fill(mapping.oid, mapping.epoch, position);
     if (ret < 0) {
       std::cerr << "fill: failed ret " << ret << std::endl;
       return ret;
@@ -486,11 +458,9 @@ int LogImpl::Fill(uint64_t position)
 int LogImpl::Trim(uint64_t position)
 {
   for (;;) {
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = be->Trim(oid, epoch, position);
+    int ret = be->Trim(mapping.oid, mapping.epoch, position);
     if (ret < 0) {
       std::cerr << "trim: failed ret " << ret << std::endl;
       return ret;
@@ -513,10 +483,9 @@ int LogImpl::Trim(uint64_t position)
 int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
 {
   for (;;) {
-    std::string oid;
-    mapper_.FindObject(position, &oid, NULL);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = be->Read(oid, epoch, position, data);
+    int ret = be->Read(mapping.oid, epoch, position, data);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;
@@ -544,11 +513,9 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
 int LogImpl::Read(uint64_t position, std::string *data)
 {
   for (;;) {
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = be->Read(oid, epoch, position, data);
+    int ret = be->Read(mapping.oid, mapping.epoch, position, data);
     if (ret < 0) {
       std::cerr << "read failed ret " << ret << std::endl;
       return ret;

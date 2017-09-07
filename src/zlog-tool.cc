@@ -52,7 +52,8 @@ int main(int argc, char **argv)
 
   if (width != -1) {
     if (width > 0) {
-      ret = log->SetStripeWidth(width);
+      assert(0);
+      //ret = log->SetStripeWidth(width);
       if (ret)
         std::cerr << "set-width: failed to set width " << width
           << " ret " << ret << std::endl;

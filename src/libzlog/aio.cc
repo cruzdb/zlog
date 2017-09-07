@@ -157,14 +157,12 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
    * stale epoch that we refresh, or if the position was marked read-only.
    */
   if (!finish) {
-    uint64_t epoch;
-    std::string oid;
-    impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+    auto mapping = impl->log->striper.MapPosition(impl->position);
 
     // don't need impl->get(): reuse reference
 
     // submit new aio op
-    ret = impl->backend->AioRead(oid, epoch, impl->position, &impl->data,
+    ret = impl->backend->AioRead(mapping.oid, mapping.epoch, impl->position, &impl->data,
         impl, AioCompletionImpl::aio_safe_cb_read);
     if (ret)
       finish = true;
@@ -239,19 +237,17 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
 
     // we are still good. build a new aio
     if (!finish) {
-      uint64_t epoch;
-      std::string oid;
-      impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+      auto mapping = impl->log->striper.MapPosition(impl->position);
 
       // refresh
-      impl->epoch = epoch;
+      impl->epoch = mapping.epoch;
 
       // don't need impl->get(): reuse reference
 
       // submit new aio op
       // TODO: can we avoid all the data copying between impl->data and the
       // backend? the backend may even make another copy...
-      ret = impl->backend->AioWrite(oid, epoch, impl->position,
+      ret = impl->backend->AioWrite(mapping.oid, mapping.epoch, impl->position,
           Slice(impl->data.data(), impl->data.size()),
           impl, AioCompletionImpl::aio_safe_cb_append);
       if (ret)
@@ -352,18 +348,16 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->backend = be;
   impl->type = ZLOG_AIO_APPEND;
 
-  uint64_t epoch;
-  std::string oid;
-  mapper_.FindObject(position, &oid, &epoch);
+  auto mapping = striper.MapPosition(position);
 
   // used to identify if state changes have occurred since dispatching the
   // request in order to avoid reconfiguration later (important when lots of
   // threads or contexts try to do the same thing).
-  impl->epoch = epoch;
+  impl->epoch = mapping.epoch;
 
   impl->get(); // backend now has a reference
 
-  ret = be->AioWrite(oid, epoch, position, data,
+  ret = be->AioWrite(mapping.oid, mapping.epoch, position, data,
       impl, AioCompletionImpl::aio_safe_cb_append);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -390,11 +384,9 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
 
   impl->get(); // backend now has a reference
 
-  uint64_t epoch;
-  std::string oid;
-  mapper_.FindObject(position, &oid, &epoch);
+  auto mapping = striper.MapPosition(position);
 
-  int ret = be->AioRead(oid, epoch, position, &impl->data,
+  int ret = be->AioRead(mapping.oid, mapping.epoch, position, &impl->data,
       impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

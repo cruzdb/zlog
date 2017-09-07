@@ -91,6 +91,7 @@ int LMDBBackend::CreateHeadObject(const std::string& oid,
   return ZLOG_OK;
 }
 
+#if 0
 int LMDBBackend::LatestProjection(const std::string& oid,
     uint64_t *epoch, zlog_proto::MetaLog& config)
 {
@@ -176,6 +177,7 @@ int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
   txn.Commit();
   return ZLOG_OK;
 }
+#endif
 
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
     uint64_t epoch, uint64_t position)
@@ -393,8 +395,9 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
 }
 
 int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
-    uint64_t *pos)
+    uint64_t *pos, bool *empty)
 {
+  assert(0);
   auto txn = NewTransaction(true);
 
   int ret = CheckEpoch(txn, epoch, oid, true);

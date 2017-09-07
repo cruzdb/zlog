@@ -4,7 +4,6 @@ set(libzlog_sources
   log_impl.cc
   stream.cc
   stripe_history.cc
-  log_mapper.cc
   aio.cc
   backend/lmdb.cc)
 

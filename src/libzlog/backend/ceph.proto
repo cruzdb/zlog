@@ -1,73 +1,80 @@
+syntax = "proto2";
+option optimize_for = SPEED;
 package zlog_ceph_proto;
 
-option optimize_for = SPEED;
+// metadata for objects linking to head object
+message LinkObjectHeader {
+  required string hoid = 1;
+}
 
-message WriteOp {
+// metadata for head objects
+message HeadObjectHeader {
+  required bool deleted = 1;
+  optional uint64 max_epoch = 2;
+}
+
+// head object methods and replies
+message CreateView {
+  required uint64 epoch = 1;
+  required bytes data = 2;
+}
+
+message ReadView {
+  required uint64 epoch = 1;
+  optional uint32 max_views = 2 [default = 100];
+}
+
+message View {
+  required uint64 epoch = 1;
+  required bytes data = 2;
+}
+
+message Views {
+  repeated View views = 1;
+}
+
+// metadata for objects storing log entries
+message LogObjectHeader {
+  optional uint64 epoch = 1;
+  optional uint64 max_pos = 2;
+}
+
+// single log entry
+message LogEntry {
+  enum Flags {
+    INVALID = 1;
+    FORCED  = 2;
+  }
+  optional uint32 flags = 1 [default = 0];
+  optional bytes data = 2;
+}
+
+// log object methods and replies
+message ReadMaxPos {
+  required uint64 epoch = 1;
+}
+
+message MaxPos {
+  optional uint64 pos = 1;
+}
+
+message Seal {
+  required uint64 epoch = 1;
+}
+
+message WriteEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
   required bytes data = 3;
 }
 
-message FillOp {
+message ReadEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
 }
 
-message ReadOp {
+message InvalidateEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
-}
-
-message TrimOp {
-  required uint64 epoch = 1;
-  required uint64 pos = 2;
-}
-
-message SealOp {
-  required uint64 epoch = 1;  
-}
-
-message MaxPositionOp {
-  required uint64 epoch = 1;  
-}
-
-message GetProjectionRet {
-  required uint64 epoch = 1;
-  optional bytes out = 2;  
-}
-
-message MaxPositionRet {
-  required uint64 pos = 1;
-}
-
-message SetProjectionOp {
-  required uint64 epoch = 1;
-  required bytes data = 2;
-}
-
-message GetProjectionOp {
-  required uint64 epoch = 1;
-  required bool latest = 2; 
-}
-
-message GetLatestProjectionOp {
-  required uint64 epoch = 1;
-}
-
-message SetLatestProjectionOp {
-  required uint64 epoch = 1;
-}
-
-message GetEpochOp {
-  required uint64 epoch = 1;
-}
-
-message LogEntry {
-  enum Flags {
-    DEFAULT = 0;
-    INVALIDATED = 1;
-    TRIMMED = 2;
-  }
-  optional Flags flags = 1 [default = DEFAULT];
-  optional bytes data = 2;
+  required bool force = 3;
 }

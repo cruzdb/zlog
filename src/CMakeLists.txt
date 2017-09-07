@@ -1,6 +1,7 @@
 include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src/include)
+include_directories("${CMAKE_SOURCE_DIR}/src/spdlog/include")
 
 add_subdirectory(proto)
 add_subdirectory(libseq)

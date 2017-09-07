@@ -20,6 +20,26 @@ class LMDBBackend : public Backend {
 
   ~LMDBBackend();
 
+  int CreateLog(const std::string& name,
+      const std::string& initial_view) override {
+    assert(0);
+  }
+
+  virtual int OpenLog(const std::string& name,
+      std::string& prefix) {
+    assert(0);
+  }
+
+  int ReadViews(const std::string& hoid, uint64_t epoch,
+      std::map<uint64_t, std::string>& views) override {
+    assert(0);
+  }
+
+  int ProposeView(const std::string& hoid,
+      uint64_t epoch, const std::string& view) {
+    assert(0);
+  }
+
   void Init(const std::string& path, bool empty);
 
   void Close();
@@ -33,14 +53,8 @@ class LMDBBackend : public Backend {
   virtual int CreateHeadObject(const std::string& oid,
       const zlog_proto::MetaLog& data);
 
-  virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const zlog_proto::MetaLog& data);
-
-  virtual int LatestProjection(const std::string& oid,
-      uint64_t *epoch, zlog_proto::MetaLog& config);
-
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos);
+      uint64_t *pos, bool *empty);
 
   virtual int Seal(const std::string& oid, uint64_t epoch);
 

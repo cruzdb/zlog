@@ -7,6 +7,9 @@
 #include "zlog/slice.h"
 #include "proto/zlog.pb.h"
 
+// TODO
+//  - those return values!
+//
 class Backend {
  public:
   enum {
@@ -28,20 +31,25 @@ class Backend {
    */
   virtual std::string pool() = 0;
 
-  /*
-   *
-   */
+  //// purge
   virtual int Exists(const std::string& oid) = 0;
-
   virtual int CreateHeadObject(const std::string& oid,
       const zlog_proto::MetaLog& data) = 0;
+  ////
 
-  virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const zlog_proto::MetaLog& data) = 0;
+  //// new
+  virtual int CreateLog(const std::string& name,
+      const std::string& initial_view) = 0;
 
-  virtual int LatestProjection(const std::string& oid,
-      uint64_t *epoch, zlog_proto::MetaLog& data) = 0;
+  virtual int OpenLog(const std::string& name,
+      std::string& prefix) = 0;
 
+  virtual int ReadViews(const std::string& hoid,
+      uint64_t epoch, std::map<uint64_t, std::string>& views) = 0;
+
+  virtual int ProposeView(const std::string& hoid,
+      uint64_t epoch, const std::string& view) = 0;
+  ////
 
   // Write data into a log position.
   virtual int Write(const std::string& oid, const Slice& data,
@@ -70,7 +78,7 @@ class Backend {
   virtual int Seal(const std::string& oid, uint64_t epoch) = 0;
 
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos) = 0;
+      uint64_t *pos, bool *empty) = 0;
 };
 
 #endif

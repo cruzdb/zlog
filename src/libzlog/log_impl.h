@@ -2,31 +2,33 @@
 #define LIBZLOG_INTERNAL_HPP
 #include <condition_variable>
 #include <mutex>
+#include "spdlog/spdlog.h"
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
-#include "log_mapper.h"
 #include "include/zlog/backend.h"
+#include "stripe_history.h"
 
 namespace zlog {
 
 class LogImpl : public Log {
  public:
-  LogImpl() {}
+  LogImpl(Backend *backend, const std::string& hoid) :
+    be(backend), hoid(hoid), striper(hoid)
+  {
+    lg = spdlog::stdout_color_mt("log_impl");
+  }
 
   /*
    * Create cut.
    */
   int CreateCut(uint64_t *pepoch, uint64_t *maxpos);
 
+#if 0
   /*
    * Set log stripe width
    */
   int SetStripeWidth(int width);
-
-  /*
-   * (v2 only): adds a new empty stripe
-   */
-  int CreateNewStripe(uint64_t last_epoch);
+#endif
 
   /*
    * Find and optionally increment the current tail position.
@@ -86,9 +88,8 @@ class LogImpl : public Log {
   int StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position);
   int Fill(uint64_t epoch, uint64_t position);
 
-  // Seal an epoch across a set of objects and return the next position.
   int Seal(const std::vector<std::string>& objects,
-      uint64_t epoch, uint64_t *next_pos);
+      uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
 
   static std::string metalog_oid_from_name(const std::string& name);
 
@@ -117,17 +118,21 @@ class LogImpl : public Log {
 
   int StripeWidth() override;
 
+  int UpdateView();
+
   std::string pool2_;
   std::string name_;
   std::string metalog_oid_;
   SeqrClient *seqr;
 
   Backend *be;
-
-  LogMapper mapper_;
+  const std::string hoid; // prefix?
+  Striper striper;
 
   std::condition_variable new_stripe_cond_;
   std::mutex lock_;
+
+  std::shared_ptr<spdlog::logger> lg;
 };
 
 }

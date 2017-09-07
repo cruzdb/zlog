@@ -10,36 +10,34 @@ class CephBackend : public Backend {
  public:
   explicit CephBackend(librados::IoCtx *ioctx);
 
+  ////
+  int CreateLog(const std::string& name,
+      const std::string& initial_view) override;
+
+  virtual int OpenLog(const std::string& name,
+      std::string& prefix) override;
+
+  int ReadViews(const std::string& hoid, uint64_t epoch,
+      std::map<uint64_t, std::string>& views) override;
+
+  int CreateHeadObject(const std::string& oid,
+      const zlog_proto::MetaLog& data) override {
+    assert(0);
+  }
+
+  int ProposeView(const std::string& hoid,
+      uint64_t epoch, const std::string& view) override;
+
+  ////
+
   virtual std::string pool();
 
   virtual int Exists(const std::string& oid);
 
-  /*
-   * Create the log metadata/head object and create the first projection. The
-   * initial projection number is epoch = 0. Note that we don't initially seal
-   * the objects that the log will be striped across. The semantics of
-   * cls_zlog are such that unitialized objects behave exactly as if they had
-   * been sealed with epoch = -1.
-   *
-   * The projection will be initialized for this log object during
-   * RefreshProjection in the same way that it is done during Open().
-   */
-  virtual int CreateHeadObject(const std::string& oid,
-      const zlog_proto::MetaLog& data);
-
-  virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const zlog_proto::MetaLog& data);
-
-  /*
-   *
-   */
-  virtual int LatestProjection(const std::string& oid,
-      uint64_t *epoch, zlog_proto::MetaLog& config);
-
   virtual int Seal(const std::string& oid, uint64_t epoch);
 
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos);
+      uint64_t *pos, bool *empty);
 
   /*
    *
@@ -74,6 +72,10 @@ class CephBackend : public Backend {
       std::function<void(void*, int)> callback);
 
  private:
+  int CreateLinkObject(const std::string& name,
+      const std::string& hoid);
+  int InitHeadObject(const std::string& hoid);
+
   static void aio_safe_cb_append(librados::completion_t cb, void *arg);
   static void aio_safe_cb_read(librados::completion_t cb, void *arg);
 
