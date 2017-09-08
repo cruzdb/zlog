@@ -20,19 +20,12 @@ class CephBackend : public Backend {
   int ReadViews(const std::string& hoid, uint64_t epoch,
       std::map<uint64_t, std::string>& views) override;
 
-  int CreateHeadObject(const std::string& oid,
-      const zlog_proto::MetaLog& data) override {
-    assert(0);
-  }
-
   int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) override;
 
   ////
 
   virtual std::string pool();
-
-  virtual int Exists(const std::string& oid);
 
   virtual int Seal(const std::string& oid, uint64_t epoch);
 

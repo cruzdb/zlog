@@ -1,5 +1,6 @@
-#ifndef ZLOG_INCLUDE_ZLOG_BACKEND_H
-#define ZLOG_INCLUDE_ZLOG_BACKEND_H
+#pragma once
+// TODO
+//  - remove ceph-specific pool method
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -24,20 +25,6 @@ class Backend {
 
   virtual ~Backend() {}
 
-  /*
-   * TODO: this is used to provide the rados pool name when composing requests
-   * to the sequencer. this rados specific, and needs to be factored out
-   * somehow.
-   */
-  virtual std::string pool() = 0;
-
-  //// purge
-  virtual int Exists(const std::string& oid) = 0;
-  virtual int CreateHeadObject(const std::string& oid,
-      const zlog_proto::MetaLog& data) = 0;
-  ////
-
-  //// new
   virtual int CreateLog(const std::string& name,
       const std::string& initial_view) = 0;
 
@@ -49,7 +36,6 @@ class Backend {
 
   virtual int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) = 0;
-  ////
 
   // Write data into a log position.
   virtual int Write(const std::string& oid, const Slice& data,
@@ -79,6 +65,6 @@ class Backend {
 
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) = 0;
-};
 
-#endif
+  virtual std::string pool() = 0;
+};

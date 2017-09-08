@@ -303,62 +303,6 @@ std::string CephBackend::pool()
   return pool_;
 }
 
-int CephBackend::Exists(const std::string& oid)
-{
-  int ret = ioctx_->stat(oid, NULL, NULL);
-  return zlog_rv(ret);
-}
-
-#if 0
-int CephBackend::SetProjection(const std::string& oid, uint64_t epoch,
-                  const zlog_proto::MetaLog& data)
-{
-  // prepare blob
-  ceph::bufferlist bl;
-  pack_msg<zlog_proto::MetaLog>(bl, data);
-
-  // prepare operation
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_set_projection(op, epoch, bl);
-
-  // run operation
-  int ret = ioctx_->operate(oid, &op);
-  return zlog_rv(ret);
-}
-
-int CephBackend::LatestProjection(const std::string& oid,
-                     uint64_t *epoch, zlog_proto::MetaLog& config)
-{
-  assert(0);
-
-  // prepare operation
-  int rv;
-  ceph::bufferlist bl;
-  librados::ObjectReadOperation op;
-  zlog::cls_zlog_get_latest_projection(op, &rv, epoch, &bl);
-
-  // run operation
-  ceph::bufferlist unused;
-  int ret = ioctx_->operate(oid, &op, &unused);
-  if (ret || rv) {
-    std::cerr << "LatestProjection: rv " << rv
-              << " ret " << ret << std::endl;
-    if (ret)
-      return zlog_rv(ret);
-    if (rv)
-      return zlog_rv(rv);
-  }
-
-  // copy out data
-  if (!unpack_msg<zlog_proto::MetaLog>(config, bl)) {
-    std::cerr << "failed to parse configuration" << std::endl;
-    return -EIO;
-  }
-
-  return zlog_rv(0);
-}
-#endif
-
 int CephBackend::Seal(const std::string& oid, uint64_t epoch)
 {
   librados::ObjectWriteOperation op;
