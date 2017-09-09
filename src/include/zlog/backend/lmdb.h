@@ -50,9 +50,6 @@ class LMDBBackend : public Backend {
 
   virtual int Exists(const std::string& oid);
 
-  virtual int CreateHeadObject(const std::string& oid,
-      const zlog_proto::MetaLog& data);
-
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty);
 

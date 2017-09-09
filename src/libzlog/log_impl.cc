@@ -1,3 +1,8 @@
+// TODO
+//  - use async methods for seal/maxpos
+//  - use condvar with batching for update view
+//  - reoder methods in file
+//  - check update view for erange in stream checktail
 #include "log_impl.h"
 
 #include <cerrno>
@@ -229,28 +234,26 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos)
   return 0;
 }
 
-// TODO
-//  - use asynchronous methods
-//
 int LogImpl::Seal(const std::vector<std::string>& objects,
     uint64_t epoch, uint64_t *pmaxpos, bool *pempty)
 {
   // seal objects
   for (auto oid : objects) {
     int ret = be->Seal(oid, epoch);
-    if (ret != Backend::ZLOG_OK) {
+    if (ret) {
       std::cerr << "failed to seal object" << std::endl;
       return ret;
     }
   }
 
+  // query objects for max pos
   uint64_t max_position;
   bool initialized = false;
   for (auto oid : objects) {
     bool empty;
     uint64_t pos;
     int ret = be->MaxPos(oid, epoch, &pos, &empty);
-    if (ret != Backend::ZLOG_OK) {
+    if (ret) {
       std::cerr << "failed to find max pos ret " << ret << std::endl;
       return ret;
     }
@@ -271,11 +274,6 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
   return 0;
 }
 
-int LogImpl::RefreshProjection()
-{
-  assert(0);
-}
-
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
@@ -294,6 +292,7 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
     return ret;
   }
   assert(0);
+  return -EIO;
 }
 
 int LogImpl::CheckTail(uint64_t *pposition)
@@ -316,7 +315,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
       continue;
     } else if (ret == -ERANGE) {
       //std::cerr << "check tail ret -ERANGE" << std::endl;
-      ret = RefreshProjection();
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
@@ -326,6 +325,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
     return ret;
   }
   assert(0);
+  return -EIO;
 }
 
 int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
@@ -341,7 +341,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
       continue;
     } else if (ret == -ERANGE) {
       //std::cerr << "check tail ret -ERANGE" << std::endl;
-      ret = RefreshProjection();
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
@@ -349,25 +349,9 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     return ret;
   }
   assert(0);
+  return -EIO;
 }
 
-/*
- * TODO:
- *
- * 1. When a stale epoch is encountered the projection is refreshed and the
- * append is retried with a new tail position retrieved from the sequencer.
- * This means that a hole is created each time an append hits a stale epoch.
- * If there are a lot of clients, a large hole is created each time the
- * projection is refreshed. Is this necessary in all cases? When could a
- * client try again with the same position? We could also mitigate this affect
- * a bit by having the sequencer, upon startup, begin finding log tails
- * proactively instead of waiting for a client to perform a check tail.
- *
- * 2. When a stale epoch return code occurs we continuously look for a new
- * projection and retry the append. to avoid just spinning and creating holes
- * we pause for a second. other options include waiting to observe an _actual_
- * change to a new projection. that is probably better...
- */
 int LogImpl::Append(const Slice& data, uint64_t *pposition)
 {
   for (;;) {
@@ -379,28 +363,28 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
     auto mapping = striper.MapPosition(position);
 
     ret = be->Write(mapping.oid, data, mapping.epoch, position);
-    if (ret < 0 && ret != -EFBIG) {
-      std::cerr << "append: failed ret " << ret << std::endl;
-      return ret;
-    }
+    switch (ret) {
+      case 0:
+        if (pposition)
+          *pposition = position;
+        return 0;
 
-    if (ret == Backend::ZLOG_OK) {
-      if (pposition)
-        *pposition = position;
-      return 0;
-    }
+      case -EAGAIN:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      sleep(1); // avoid spinning in this loop
-      ret = RefreshProjection();
-      if (ret)
+      case -EROFS:
+        continue;
+
+      default:
         return ret;
-      continue;
     }
-
-    assert(ret == Backend::ZLOG_READ_ONLY);
   }
   assert(0);
+  return -EIO;
 }
 
 int LogImpl::Fill(uint64_t epoch, uint64_t position)
@@ -409,23 +393,21 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
     auto mapping = striper.MapPosition(position);
 
     int ret = be->Fill(mapping.oid, epoch, position);
-    if (ret < 0) {
-      std::cerr << "fill: failed ret " << ret << std::endl;
-      return ret;
-    }
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
+      case -EAGAIN:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      case -EROFS:
+      default:
         return ret;
-      continue;
     }
-
-    assert(ret == Backend::ZLOG_READ_ONLY);
-    return -EROFS;
   }
 }
 
@@ -435,23 +417,21 @@ int LogImpl::Fill(uint64_t position)
     auto mapping = striper.MapPosition(position);
 
     int ret = be->Fill(mapping.oid, mapping.epoch, position);
-    if (ret < 0) {
-      std::cerr << "fill: failed ret " << ret << std::endl;
-      return ret;
-    }
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
+      case -EAGAIN:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      case -EROFS:
+      default:
         return ret;
-      continue;
     }
-
-    assert(ret == Backend::ZLOG_READ_ONLY);
-    return -EROFS;
   }
 }
 
@@ -461,22 +441,20 @@ int LogImpl::Trim(uint64_t position)
     auto mapping = striper.MapPosition(position);
 
     int ret = be->Trim(mapping.oid, mapping.epoch, position);
-    if (ret < 0) {
-      std::cerr << "trim: failed ret " << ret << std::endl;
-      return ret;
-    }
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
+      case -EAGAIN:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      default:
         return ret;
-      continue;
     }
-
-    assert(0);
   }
 }
 
@@ -486,28 +464,25 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
     auto mapping = striper.MapPosition(position);
 
     int ret = be->Read(mapping.oid, epoch, position, data);
-    if (ret < 0) {
-      std::cerr << "read failed ret " << ret << std::endl;
-      return ret;
-    }
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
-    else if (ret == Backend::ZLOG_NOT_WRITTEN)
-      return -ENODEV;
-    else if (ret == Backend::ZLOG_INVALIDATED)
-      return -EFAULT;
-    else if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      case -EAGAIN:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -ENOENT:  // not-written
+      case -ENODATA: // invalidated
+      default:
         return ret;
-      continue;
-    } else {
-      std::cerr << "unknown reply";
-      assert(0);
     }
   }
   assert(0);
+  return -EIO;
 }
 
 int LogImpl::Read(uint64_t position, std::string *data)
@@ -516,28 +491,25 @@ int LogImpl::Read(uint64_t position, std::string *data)
     auto mapping = striper.MapPosition(position);
 
     int ret = be->Read(mapping.oid, mapping.epoch, position, data);
-    if (ret < 0) {
-      std::cerr << "read failed ret " << ret << std::endl;
-      return ret;
-    }
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
-    else if (ret == Backend::ZLOG_NOT_WRITTEN)
-      return -ENODEV;
-    else if (ret == Backend::ZLOG_INVALIDATED)
-      return -EFAULT;
-    else if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      case -EAGAIN:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -ENOENT:  // not-written
+      case -ENODATA: // invalidated
+      default:
         return ret;
-      continue;
-    } else {
-      std::cerr << "unknown reply";
-      assert(0);
     }
   }
   assert(0);
+  return -EIO;
 }
 
 }

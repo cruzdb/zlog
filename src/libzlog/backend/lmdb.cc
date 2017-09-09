@@ -45,9 +45,10 @@ int LMDBBackend::Exists(const std::string& oid)
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
+#if 0
 int LMDBBackend::CreateHeadObject(const std::string& oid,
     const zlog_proto::MetaLog& data)
 {
@@ -88,10 +89,9 @@ int LMDBBackend::CreateHeadObject(const std::string& oid,
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
-#if 0
 int LMDBBackend::LatestProjection(const std::string& oid,
     uint64_t *epoch, zlog_proto::MetaLog& config)
 {
@@ -122,7 +122,7 @@ int LMDBBackend::LatestProjection(const std::string& oid,
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
@@ -175,7 +175,7 @@ int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
   }
 
   txn.Commit();
-  return ZLOG_OK;
+  return 0;
 }
 #endif
 
@@ -217,7 +217,7 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
   ret = txn.Put(key, blob, true);
   if (ret == -EEXIST) {
     txn.Abort();
-    return Backend::ZLOG_READ_ONLY;
+    return -EROFS;
   }
 
   // update max pos
@@ -231,7 +231,7 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
@@ -250,13 +250,13 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
   ret = txn.Get(key, val);
   if (ret == -ENOENT) {
     txn.Abort();
-    return ZLOG_NOT_WRITTEN;
+    return ret;
   }
 
   LogEntry *entry = (LogEntry*)val.mv_data;
   if (entry->trimmed || entry->invalidated) {
     txn.Abort();
-    return ZLOG_INVALIDATED;
+    return -ENODATA;
   }
 
   if (data) {
@@ -268,7 +268,7 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
@@ -307,7 +307,7 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
@@ -331,10 +331,10 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
     entry = *((LogEntry*)val.mv_data);
     if (entry.trimmed || entry.invalidated) {
       txn.Abort();
-      return ZLOG_OK;
+      return 0;
     }
     txn.Abort();
-    return ZLOG_READ_ONLY;
+    return -EROFS;
   }
 
   entry.trimmed = true;
@@ -353,7 +353,7 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
@@ -362,7 +362,7 @@ int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
 {
   int ret = Write(oid, data, epoch, position);
   callback(arg, ret);
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
@@ -371,7 +371,7 @@ int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
 {
   int ret = Read(oid, epoch, position, data);
   callback(arg, ret);
-  return ZLOG_OK;
+  return 0;
 }
 
 int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
@@ -389,7 +389,7 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
       return -EINVAL;
     }
   } else if (epoch <= obj->epoch) {
-    return Backend::ZLOG_STALE_EPOCH;
+    return -EAGAIN;
   }
   return 0;
 }
@@ -443,7 +443,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
     obj = *((LogObject*)val.mv_data);
     if (epoch <= obj.epoch) {
       txn.Abort();
-      return Backend::ZLOG_INVALID_EPOCH;
+      return -EAGAIN;
     }
   }
 
@@ -457,7 +457,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
   if (ret)
     return ret;
 
-  return ZLOG_OK;
+  return 0;
 }
 
 void LMDBBackend::Init(const std::string& path, bool empty)

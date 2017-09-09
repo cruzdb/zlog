@@ -1,20 +1,21 @@
-#ifndef ZLOG_INCLUDE_ZLOG_CEPH_BACKEND_H
-#define ZLOG_INCLUDE_ZLOG_CEPH_BACKEND_H
+#pragma once
 #include <rados/librados.hpp>
 #include "zlog/backend.h"
 #include <iostream>
 #include "proto/protobuf_bufferlist_adapter.h"
 
-// v1
 class CephBackend : public Backend {
  public:
   explicit CephBackend(librados::IoCtx *ioctx);
 
-  ////
+  std::string pool() override {
+    return pool_;
+  }
+
   int CreateLog(const std::string& name,
       const std::string& initial_view) override;
 
-  virtual int OpenLog(const std::string& name,
+  int OpenLog(const std::string& name,
       std::string& prefix) override;
 
   int ReadViews(const std::string& hoid, uint64_t epoch,
@@ -23,59 +24,50 @@ class CephBackend : public Backend {
   int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) override;
 
-  ////
+  int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data) override;
 
-  virtual std::string pool();
+  int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) override;
 
-  virtual int Seal(const std::string& oid, uint64_t epoch);
+  int Fill(const std::string& oid, uint64_t epoch,
+      uint64_t position) override;
 
-  virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos, bool *empty);
+  int Trim(const std::string& oid, uint64_t epoch,
+      uint64_t position) override;
 
-  /*
-   *
-   */
-  virtual int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position);
+  int Seal(const std::string& oid,
+      uint64_t epoch) override;
 
-  /*
-   *
-   */
-  virtual int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data);
+  int MaxPos(const std::string& oid, uint64_t epoch,
+      uint64_t *pos, bool *empty) override;
 
-  /*
-   *
-   */
-  virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position);
-
-  /*
-   *
-   */
-  virtual int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position);
-
-  virtual int AioWrite(const std::string& oid, uint64_t epoch,
+  int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
-      std::function<void(void*, int)> callback);
+      std::function<void(void*, int)> callback) override;
 
-  virtual int AioRead(const std::string& oid, uint64_t epoch,
+  int AioRead(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data, void *arg,
-      std::function<void(void*, int)> callback);
+      std::function<void(void*, int)> callback) override;
 
  private:
-  int CreateLinkObject(const std::string& name,
-      const std::string& hoid);
-  int InitHeadObject(const std::string& hoid);
+  struct AioContext {
+    librados::AioCompletion *c;
+    void *arg;
+    std::function<void(void*, int)> cb;
+    ceph::bufferlist bl;
+    std::string *data;
+  };
+
+  librados::IoCtx *ioctx_;
+  std::string pool_;
 
   static void aio_safe_cb_append(librados::completion_t cb, void *arg);
   static void aio_safe_cb_read(librados::completion_t cb, void *arg);
 
-  static inline int zlog_rv(int ret);
+  static std::string LinkObjectName(const std::string& name);
 
-  librados::IoCtx *ioctx_;
-  std::string pool_;
+  int CreateLinkObject(const std::string& name,
+      const std::string& hoid);
+  int InitHeadObject(const std::string& hoid);
 };
-
-#endif

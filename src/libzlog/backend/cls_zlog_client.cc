@@ -87,16 +87,19 @@ class ClsZlogMaxPositionReply : public librados::ObjectOperationCompletion {
     pposition_(pposition), pempty_(pempty), pret_(pret)
   {}
 
-  void handle_completion(int ret, ceph::bufferlist& outbl) {
-    if (ret == CLS_ZLOG_OK) {
+  void handle_completion(int ret, ceph::bufferlist& bl) {
+    if (ret == 0) {
       zlog_ceph_proto::MaxPos reply;
-      if (decode(outbl, &reply)) {
+      if (decode(bl, &reply)) {
         *pempty_ = !reply.has_pos();
         if (reply.has_pos())
           *pposition_ = reply.pos();
       } else {
         ret = -EIO;
       }
+    } if (ret > 0) {
+      std::cerr << "unexpected positive rv" << std::endl;
+      ret = -EIO;
     }
     *pret_ = ret;
   }

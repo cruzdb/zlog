@@ -56,25 +56,24 @@ int LogImpl::MultiAppend(const Slice& data,
     auto mapping = striper.MapPosition(position);
 
     ret = be->Write(mapping.oid, Slice(out_data), mapping.epoch, position);
-    if (ret < 0 && ret != -EFBIG) {
-      std::cerr << "append: failed ret " << ret << std::endl;
-      return ret;
-    }
-
-    if (ret == Backend::ZLOG_OK) {
+    if (ret == 0) {
       if (pposition)
         *pposition = position;
       return 0;
     }
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
+    if (ret == -EAGAIN) {
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
     }
 
-    assert(ret == Backend::ZLOG_READ_ONLY);
+    if (ret == -EROFS)
+      continue;
+
+    std::cerr << "append: failed ret " << ret << std::endl;
+    return ret;
   }
   assert(0);
 }

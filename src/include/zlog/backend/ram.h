@@ -42,9 +42,10 @@ class RAMBackend : public Backend {
     auto it = db_.find(oid);
     if (it == db_.end())
       return -ENOENT;
-    return ZLOG_OK;
+    return 0;
   }
 
+#if 0
   virtual int CreateHeadObject(const std::string& oid,
       const zlog_proto::MetaLog& data) {
     std::lock_guard<std::mutex> l(lock_);
@@ -62,10 +63,9 @@ class RAMBackend : public Backend {
     obj.projections[0] = blob;
     db_[oid] = obj;
 
-    return ZLOG_OK;
+    return 0;
   }
 
-#if 0
   virtual int SetProjection(const std::string& oid, uint64_t epoch,
       const zlog_proto::MetaLog& data) {
     std::lock_guard<std::mutex> l(lock_);
@@ -91,7 +91,7 @@ class RAMBackend : public Backend {
 
     it->second.projections[epoch] = blob;
 
-    return ZLOG_OK;
+    return 0;
   }
 
   virtual int LatestProjection(const std::string& oid,
@@ -105,7 +105,7 @@ class RAMBackend : public Backend {
       return -ENOENT;
     assert(config.ParseFromString(it2->second));
     *epoch = it2->first;
-    return ZLOG_OK;
+    return 0;
   }
 #endif
 
@@ -126,7 +126,7 @@ class RAMBackend : public Backend {
     else
       *pos = it->second.entries.rbegin()->first + 1;
 
-    return Backend::ZLOG_OK;
+    return 0;
   }
 
   virtual int Seal(const std::string& oid, uint64_t epoch) {
@@ -135,7 +135,7 @@ class RAMBackend : public Backend {
     auto it = db_.find(oid);
     if (it != db_.end() && it->second.sealed) {
       if (epoch <= it->second.epoch)
-        return Backend::ZLOG_INVALID_EPOCH;
+        return -EAGAIN;
     }
 
     // object reference
@@ -148,7 +148,7 @@ class RAMBackend : public Backend {
     obj->epoch = epoch;
     obj->sealed = true;
 
-    return Backend::ZLOG_OK;
+    return 0;
   }
 
   virtual int Write(const std::string& oid, const Slice& data,
@@ -178,10 +178,10 @@ class RAMBackend : public Backend {
       e.invalidated = false;
       e.data.assign(data.data(), data.size());
       obj->entries[position] = e;
-      return Backend::ZLOG_OK;
+      return 0;
     }
 
-    return Backend::ZLOG_READ_ONLY;
+    return -EROFS;
   }
 
   virtual int Read(const std::string& oid, uint64_t epoch,
@@ -206,14 +206,14 @@ class RAMBackend : public Backend {
     // check entry
     auto entry_it = obj->entries.find(position);
     if (entry_it == obj->entries.end())
-      return Backend::ZLOG_NOT_WRITTEN;
+      return -ENOENT;
 
     if (entry_it->second.trimmed || entry_it->second.invalidated)
-      return Backend::ZLOG_INVALIDATED;
+      return -ENODATA;
 
     *data = entry_it->second.data;
 
-    return Backend::ZLOG_OK;
+    return 0;
   }
 
   virtual int Trim(const std::string& oid, uint64_t epoch,
@@ -241,13 +241,13 @@ class RAMBackend : public Backend {
       log_entry e;
       e.trimmed = true;
       obj->entries[position] = e;
-      return Backend::ZLOG_OK;
+      return 0;
     } else {
       if (entry_it->second.trimmed)
-        return Backend::ZLOG_OK;
+        return 0;
       entry_it->second.trimmed = true;
       entry_it->second.data.clear();
-      return Backend::ZLOG_OK;
+      return 0;
     }
   }
 
@@ -277,13 +277,13 @@ class RAMBackend : public Backend {
       e.trimmed = true;
       e.invalidated = true;
       obj->entries[position] = e;
-      return Backend::ZLOG_OK;
+      return 0;
     } else {
       if (entry_it->second.trimmed ||
           entry_it->second.invalidated) {
-        return Backend::ZLOG_OK;
+        return 0;
       }
-      return Backend::ZLOG_READ_ONLY;
+      return -EROFS;
     }
   }
 
@@ -299,7 +299,7 @@ class RAMBackend : public Backend {
     int ret = CheckEpoch(epoch, it);
     if (ret) {
       callback(arg, ret);
-      return ZLOG_OK;
+      return 0;
     }
 
     // object reference
@@ -317,12 +317,12 @@ class RAMBackend : public Backend {
       e.invalidated = false;
       e.data.assign(data.data(), data.size());
       obj->entries[position] = e;
-      callback(arg, Backend::ZLOG_OK);
-      return ZLOG_OK;
+      callback(arg, 0);
+      return 0;
     }
 
-    callback(arg, Backend::ZLOG_READ_ONLY);
-    return ZLOG_OK;
+    callback(arg, -EROFS);
+    return 0;
   }
 
   virtual int AioRead(const std::string& oid, uint64_t epoch,
@@ -337,7 +337,7 @@ class RAMBackend : public Backend {
     int ret = CheckEpoch(epoch, it);
     if (ret) {
       callback(arg, ret);
-      return ZLOG_OK;
+      return 0;
     }
 
     // object reference
@@ -350,19 +350,19 @@ class RAMBackend : public Backend {
     // check entry
     auto entry_it = obj->entries.find(position);
     if (entry_it == obj->entries.end()) {
-      callback(arg, Backend::ZLOG_NOT_WRITTEN);
-      return ZLOG_OK;
+      callback(arg, -ENOENT);
+      return 0;
     }
 
     if (entry_it->second.trimmed || entry_it->second.invalidated) {
-      callback(arg, Backend::ZLOG_INVALIDATED);
-      return ZLOG_OK;
+      callback(arg, -ENODATA);
+      return 0;
     }
 
     *data = entry_it->second.data;
 
-    callback(arg, ZLOG_OK);
-    return Backend::ZLOG_OK;
+    callback(arg, 0);
+    return 0;
   }
 
  private:
@@ -384,7 +384,7 @@ class RAMBackend : public Backend {
     if (it == db_.end())
       return 0;
     if (it->second.sealed && epoch <= it->second.epoch)
-      return Backend::ZLOG_STALE_EPOCH;
+      return -EAGAIN;
     return 0;
   }
 

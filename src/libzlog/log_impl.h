@@ -96,8 +96,6 @@ class LogImpl : public Log {
   LogImpl(const LogImpl& rhs);
   LogImpl& operator=(const LogImpl& rhs);
 
-  int RefreshProjection();
-
   int Read(uint64_t epoch, uint64_t position, std::string *data);
 
   int StreamHeader(const std::string& data, std::set<uint64_t>& stream_ids,
