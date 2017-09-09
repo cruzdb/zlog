@@ -12,8 +12,9 @@ namespace zlog {
 
 class LogImpl : public Log {
  public:
-  LogImpl(Backend *backend, const std::string& hoid) :
-    be(backend), hoid(hoid), striper(hoid)
+  LogImpl(Backend *backend, const std::string& hoid,
+      const std::string& prefix) :
+    be(backend), hoid(hoid), striper(prefix)
   {
     lg = spdlog::stdout_color_mt("log_impl");
   }
@@ -124,7 +125,7 @@ class LogImpl : public Log {
   SeqrClient *seqr;
 
   Backend *be;
-  const std::string hoid; // prefix?
+  const std::string hoid;
   Striper striper;
 
   std::condition_variable new_stripe_cond_;

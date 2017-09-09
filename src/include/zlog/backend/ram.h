@@ -19,7 +19,7 @@ class RAMBackend : public Backend {
   }
 
   virtual int OpenLog(const std::string& name,
-      std::string& prefix) {
+      std::string& hoid, std::string& prefix) {
     assert(0);
   }
 

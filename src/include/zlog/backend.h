@@ -36,12 +36,12 @@ class Backend {
   virtual int CreateLog(const std::string& name,
       const std::string& initial_view) = 0;
 
-  // Return a prefix for constructing object names.
+  // Return a context for constructing object names.
   //
   // -ENOENT
   //   - log doesn't exist (or has been deleted)
   virtual int OpenLog(const std::string& name,
-      std::string& prefix) = 0;
+      std::string& hoid, std::string& prefix) = 0;
 
   // view management
  public:

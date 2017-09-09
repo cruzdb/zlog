@@ -2,6 +2,9 @@
 //  - add hostname to head object name
 //  - share xattr key with cls_zlog
 #include <sstream>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "zlog/backend/ceph.h"
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
@@ -27,17 +30,20 @@ int CephBackend::CreateLog(const std::string& name,
     return ret;
 
   // create the head object. ensure a unique name, and that it is initialized to
-  // a state that could be used to later identify it as orphaned (e.g. age +
-  // uninitialized state). it's important that the head object be uniquely
-  // named, because if it is not unique then if we crash immediately after
-  // creating a link to the head (see below), then two names may point to the
-  // same log.
+  // a state that could be used to later identify it as orphaned (e.g. use rados
+  // mtime and/or unitialized state). it's important that the head object be
+  // uniquely named, because if it is not unique then if we crash immediately
+  // after creating a link to the head (see below), then two names may point to
+  // the same log.
   std::string hoid;
+  std::string prefix;
   while (true) {
-    std::stringstream head_ss;
-    head_ss << "zlog.head." << name << "."
-      << tv.tv_sec << "." << tv.tv_usec;
-    hoid = head_ss.str();
+    boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    prefix = boost::uuids::to_string(uuid);
+
+    std::stringstream hoid_ss;
+    hoid_ss << "zlog.head." << prefix;
+    hoid = hoid_ss.str();
 
     ret = ioctx_->create(hoid, true);
     if (ret) {
@@ -65,7 +71,7 @@ int CephBackend::CreateLog(const std::string& name,
   // with some metadata and a view for epoch 0. TODO: note the race that exists
   // between head initialization, and future feature that handles initialization
   // of the head object for the crash-during-creation case.
-  ret = InitHeadObject(hoid);
+  ret = InitHeadObject(hoid, prefix);
   if (ret) {
     std::cerr << "init head obj ret " << ret << std::endl;
     return ret;
@@ -82,7 +88,7 @@ int CephBackend::CreateLog(const std::string& name,
 }
 
 int CephBackend::OpenLog(const std::string& name,
-    std::string& prefix)
+    std::string& hoid, std::string& prefix)
 {
   zlog_ceph_proto::LinkObjectHeader link;
   {
@@ -97,7 +103,7 @@ int CephBackend::OpenLog(const std::string& name,
       return -EIO;
   }
 
-  auto hoid = link.hoid();
+  hoid = link.hoid();
 
   zlog_ceph_proto::HeadObjectHeader head;
   {
@@ -113,7 +119,9 @@ int CephBackend::OpenLog(const std::string& name,
   if (head.deleted())
     return -ENOENT;
 
-  prefix = hoid;
+  prefix = head.prefix();
+  if (prefix.empty())
+    return -EIO;
 
   return 0;
 }
@@ -294,10 +302,12 @@ int CephBackend::CreateLinkObject(const std::string& name,
   return ret;
 }
 
-int CephBackend::InitHeadObject(const std::string& hoid)
+int CephBackend::InitHeadObject(const std::string& hoid,
+    const std::string& prefix)
 {
   zlog_ceph_proto::HeadObjectHeader meta;
   meta.set_deleted(false);
+  meta.set_prefix(prefix);
   // don't set max_epoch...
   assert(!meta.has_max_epoch());
 

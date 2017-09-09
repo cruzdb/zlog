@@ -10,7 +10,8 @@ message LinkObjectHeader {
 // metadata for head objects
 message HeadObjectHeader {
   required bool deleted = 1;
-  optional uint64 max_epoch = 2;
+  required string prefix = 2;
+  optional uint64 max_epoch = 3;
 }
 
 // head object methods and replies

@@ -74,14 +74,14 @@ int Log::Open(Backend *backend, const std::string& name,
   if (name.empty())
     return -EINVAL;
 
-  // TODO: don't use hoid as prefix
   std::string hoid;
-  int ret = backend->OpenLog(name, hoid);
+  std::string prefix;
+  int ret = backend->OpenLog(name, hoid, prefix);
   if (ret) {
     return ret;
   }
 
-  LogImpl *impl = new LogImpl(backend, hoid);
+  LogImpl *impl = new LogImpl(backend, hoid, prefix);
 
   impl->name_ = name;
   impl->seqr = seqr;

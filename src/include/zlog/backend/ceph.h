@@ -16,7 +16,7 @@ class CephBackend : public Backend {
       const std::string& initial_view) override;
 
   int OpenLog(const std::string& name,
-      std::string& prefix) override;
+      std::string& hoid, std::string& prefix) override;
 
   int ReadViews(const std::string& hoid, uint64_t epoch,
       std::map<uint64_t, std::string>& views) override;
@@ -69,5 +69,5 @@ class CephBackend : public Backend {
 
   int CreateLinkObject(const std::string& name,
       const std::string& hoid);
-  int InitHeadObject(const std::string& hoid);
+  int InitHeadObject(const std::string& hoid, const std::string& prefix);
 };

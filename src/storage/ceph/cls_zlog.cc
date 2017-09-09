@@ -14,11 +14,11 @@
 #ifdef __CEPH__
 # include "include/rados/buffer.h"
 # include "include/rados/objclass.h"
-# include "ceph.pb.h"
+# include "cls_zlog.pb.h"
 #else
 # include <rados/buffer.h>
 # include <rados/objclass.h>
-# include "libzlog/backend/ceph.pb.h"
+# include "libzlog/backend/cls_zlog.pb.h"
 #endif
 
 CLS_VER(1,0)
