@@ -1,10 +1,10 @@
 // TODO
 //  - add hostname to head object name
 //  - share xattr key with cls_zlog
+#include <sstream>
 #include "zlog/backend/ceph.h"
 #include "cls_zlog_client.h"
-#include "libzlog/backend/ceph.pb.h"
-#include <sstream>
+#include "storage/ceph/cls_zlog.pb.h"
 
 // namespace for head object (sync with cls_zlog)
 #define HEAD_HEADER_KEY "zlog.head.header"

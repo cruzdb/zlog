@@ -5,6 +5,7 @@ include_directories("${CMAKE_SOURCE_DIR}/src/spdlog/include")
 
 add_subdirectory(proto)
 add_subdirectory(libseq)
+add_subdirectory(storage)
 add_subdirectory(libzlog)
 add_subdirectory(kvstore)
 add_subdirectory(include)
