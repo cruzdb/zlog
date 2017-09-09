@@ -1,6 +1,8 @@
 // TODO
 //  - add hostname to head object name
 //  - share xattr key with cls_zlog
+//  - don't store data in protobuf (zero copy?)
+//  - don't duplicate encode/decode (cls..)
 #include <sstream>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>

@@ -1,13 +1,3 @@
-// TODO
-//  - hoid prefix
-//  - positive retval normalization
-//  - log levels
-//  - shorten proto namespace
-//  - reenable test buidls
-//  - don't store data in protobuf (zero copy?)
-//  - reorder
-//  - normalize naming
-//
 #include <cerrno>
 #include <sstream>
 #include <boost/lexical_cast.hpp>
@@ -90,15 +80,7 @@ static bool epoch_guard(const zlog_ceph_proto::LogObjectHeader& header,
   }
 }
 
-static int write_header(cls_method_context_t hctx,
-    const zlog_ceph_proto::LogObjectHeader& hdr)
-{
-  ceph::bufferlist bl;
-  encode(bl, hdr);
-  return cls_cxx_setxattr(hctx, LOG_HEADER_KEY, &bl);
-}
-
-static int read_header(cls_method_context_t hctx,
+static int entry_read_header(cls_method_context_t hctx,
     zlog_ceph_proto::LogObjectHeader& hdr)
 {
   ceph::bufferlist bl;
@@ -122,7 +104,15 @@ static int read_header(cls_method_context_t hctx,
   return 0;
 }
 
-static int read_entry(cls_method_context_t hctx, const std::string& key,
+static int entry_write_header(cls_method_context_t hctx,
+    const zlog_ceph_proto::LogObjectHeader& hdr)
+{
+  ceph::bufferlist bl;
+  encode(bl, hdr);
+  return cls_cxx_setxattr(hctx, LOG_HEADER_KEY, &bl);
+}
+
+static int entry_read_entry(cls_method_context_t hctx, const std::string& key,
     zlog_ceph_proto::LogEntry *entry)
 {
   ceph::bufferlist bl;
@@ -134,7 +124,7 @@ static int read_entry(cls_method_context_t hctx, const std::string& key,
   return 0;
 }
 
-static int write_entry(cls_method_context_t hctx, const std::string& key,
+static int entry_write_entry(cls_method_context_t hctx, const std::string& key,
     const zlog_ceph_proto::LogEntry& entry)
 {
   ceph::bufferlist bl;
@@ -142,7 +132,52 @@ static int write_entry(cls_method_context_t hctx, const std::string& key,
   return cls_cxx_map_set_val(hctx, key, &bl);
 }
 
-static int read(cls_method_context_t hctx, ceph::bufferlist *in,
+static int view_read_header(cls_method_context_t hctx,
+    zlog_ceph_proto::HeadObjectHeader& hdr)
+{
+  ceph::bufferlist bl;
+  int ret = cls_cxx_getxattr(hctx, HEAD_HEADER_KEY, &bl);
+  if (ret < 0) {
+    if (ret == -ENODATA) {
+      CLS_ERR("ERROR: view_read_header(): empty header");
+      ret = -EIO;
+    }
+    return ret;
+  }
+
+  if (!decode(bl, &hdr)) {
+    CLS_ERR("ERROR: view_read_header(): failed to decode meta");
+    return -EIO;
+  }
+
+  return 0;
+}
+
+static int view_write_header(cls_method_context_t hctx,
+    const zlog_ceph_proto::HeadObjectHeader& hdr)
+{
+  ceph::bufferlist bl;
+  encode(bl, hdr);
+  return cls_cxx_setxattr(hctx, HEAD_HEADER_KEY, &bl);
+}
+
+static int view_write_view(cls_method_context_t hctx, uint64_t epoch,
+    const std::string& data)
+{
+  ceph::bufferlist bl;
+  bl.append(data.c_str(), data.size());
+  auto key = view_key(epoch);
+  return cls_cxx_map_set_val(hctx, key, &bl);
+}
+
+static int view_read_view(cls_method_context_t hctx, uint64_t epoch,
+    ceph::bufferlist& bl)
+{
+  auto key = view_key(epoch);
+  return cls_cxx_map_get_val(hctx, key, &bl);
+}
+
+static int entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
   zlog_ceph_proto::ReadEntry op;
@@ -152,7 +187,7 @@ static int read(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::LogObjectHeader header;
-  int ret = read_header(hctx, header);
+  int ret = entry_read_header(hctx, header);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: read(): failed to read header");
     return ret;
@@ -165,7 +200,7 @@ static int read(cls_method_context_t hctx, ceph::bufferlist *in,
 
   zlog_ceph_proto::LogEntry entry;
   auto key = entry_key(op.pos());
-  ret = read_entry(hctx, key, &entry);
+  ret = entry_read_entry(hctx, key, &entry);
   if (ret < 0) {
     if (ret == -ENOENT)
       CLS_LOG(10, "read(): entry not written");
@@ -187,7 +222,7 @@ static int read(cls_method_context_t hctx, ceph::bufferlist *in,
   return 0;
 }
 
-static int write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferlist *out)
+static int entry_write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferlist *out)
 {
   zlog_ceph_proto::WriteEntry op;
   if (!decode(*in, &op)) {
@@ -196,7 +231,7 @@ static int write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferli
   }
 
   zlog_ceph_proto::LogObjectHeader header;
-  int ret = read_header(hctx, header);
+  int ret = entry_read_header(hctx, header);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: write(): failed to read header");
     return ret;
@@ -208,7 +243,7 @@ static int write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferli
   }
 
   auto key = entry_key(op.pos());
-  ret = read_entry(hctx, key, NULL);
+  ret = entry_read_entry(hctx, key, NULL);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: write(): failed to read entry");
     return ret;
@@ -218,7 +253,7 @@ static int write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferli
     zlog_ceph_proto::LogEntry entry;
     entry.set_data(op.data());
 
-    ret = write_entry(hctx, key, entry);
+    ret = entry_write_entry(hctx, key, entry);
     if (ret < 0) {
       CLS_ERR("ERROR: write(): failed to write entry");
       return ret;
@@ -227,7 +262,7 @@ static int write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferli
     if (!header.has_max_pos() || (op.pos() > header.max_pos()))
       header.set_max_pos(op.pos());
 
-    ret = write_header(hctx, header);
+    ret = entry_write_header(hctx, header);
     if (ret < 0) {
       CLS_ERR("ERROR: write(): failed to write header");
       return ret;
@@ -245,7 +280,7 @@ static int write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bufferli
   }
 }
 
-static int invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
+static int entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
   zlog_ceph_proto::InvalidateEntry op;
@@ -255,7 +290,7 @@ static int invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::LogObjectHeader header;
-  int ret = read_header(hctx, header);
+  int ret = entry_read_header(hctx, header);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: invalidate(): failed to read header");
     return ret;
@@ -268,7 +303,7 @@ static int invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
 
   auto key = entry_key(op.pos());
   zlog_ceph_proto::LogEntry entry;
-  ret = read_entry(hctx, key, &entry);
+  ret = entry_read_entry(hctx, key, &entry);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: invalidate(): failed to read entry");
     return ret;
@@ -277,7 +312,7 @@ static int invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
   if (ret == -ENOENT) {
     // invalidate entry. not forced
     entry.set_flags(zlog_ceph_proto::LogEntry::INVALID);
-    ret = write_entry(hctx, key, entry);
+    ret = entry_write_entry(hctx, key, entry);
     if (ret < 0)
       CLS_ERR("ERROR: invalidate(): failed to write entry");
     return ret;
@@ -298,14 +333,14 @@ static int invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     // force invalidate entry. preserve data.
     entry.set_flags(zlog_ceph_proto::LogEntry::INVALID |
         zlog_ceph_proto::LogEntry::FORCED);
-    ret = write_entry(hctx, key, entry);
+    ret = entry_write_entry(hctx, key, entry);
     if (ret < 0)
       CLS_ERR("ERROR: invalidate(): failed to write entry");
     return ret;
   }
 }
 
-static int seal(cls_method_context_t hctx, ceph::bufferlist *in,
+static int entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
   zlog_ceph_proto::Seal op;
@@ -315,7 +350,7 @@ static int seal(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::LogObjectHeader header;
-  int ret = read_header(hctx, header);
+  int ret = entry_read_header(hctx, header);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: seal(): read header failed: %d", ret);
     return ret;
@@ -332,14 +367,14 @@ static int seal(cls_method_context_t hctx, ceph::bufferlist *in,
 
   header.set_epoch(op.epoch());
 
-  ret = write_header(hctx, header);
+  ret = entry_write_header(hctx, header);
   if (ret < 0)
     CLS_ERR("ERROR: seal(): write header failed: %d", ret);
 
   return 0;
 }
 
-static int max_position(cls_method_context_t hctx, ceph::bufferlist *in,
+static int entry_max_position(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
   zlog_ceph_proto::ReadMaxPos op;
@@ -349,7 +384,7 @@ static int max_position(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::LogObjectHeader header;
-  int ret = read_header(hctx, header);
+  int ret = entry_read_header(hctx, header);
   if (ret) {
     CLS_ERR("ERROR: max_position(): failed to read header: %d", ret);
     return ret;
@@ -375,51 +410,6 @@ static int max_position(cls_method_context_t hctx, ceph::bufferlist *in,
   return 0;
 }
 
-static int head_write_meta(cls_method_context_t hctx,
-    zlog_ceph_proto::HeadObjectHeader& meta)
-{
-  ceph::bufferlist bl;
-  encode(bl, meta);
-  return cls_cxx_setxattr(hctx, HEAD_HEADER_KEY, &bl);
-}
-
-static int head_read_meta(cls_method_context_t hctx,
-    zlog_ceph_proto::HeadObjectHeader& meta)
-{
-  ceph::bufferlist bl;
-  int ret = cls_cxx_getxattr(hctx, HEAD_HEADER_KEY, &bl);
-  if (ret < 0) {
-    if (ret == -ENODATA) {
-      CLS_ERR("ERROR: head_read_meta(): empty header");
-      ret = -EIO;
-    }
-    return ret;
-  }
-
-  if (!decode(bl, &meta)) {
-    CLS_ERR("ERROR: head_read_meta(): failed to decode meta");
-    return -EIO;
-  }
-
-  return 0;
-}
-
-static int head_add_view(cls_method_context_t hctx, uint64_t epoch,
-    const std::string& data)
-{
-  ceph::bufferlist bl;
-  bl.append(data.c_str(), data.size());
-  auto key = view_key(epoch);
-  return cls_cxx_map_set_val(hctx, key, &bl);
-}
-
-static int head_get_view(cls_method_context_t hctx, uint64_t epoch,
-    ceph::bufferlist& bl)
-{
-  auto key = view_key(epoch);
-  return cls_cxx_map_get_val(hctx, key, &bl);
-}
-
 static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
@@ -430,7 +420,7 @@ static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::HeadObjectHeader head;
-  int ret = head_read_meta(hctx, head);
+  int ret = view_read_header(hctx, head);
   if (ret < 0) {
     CLS_ERR("ERROR: view_create(): failed to read meta: %d", ret);
     return ret;
@@ -446,14 +436,14 @@ static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  ret = head_add_view(hctx, op.epoch(), op.data());
+  ret = view_write_view(hctx, op.epoch(), op.data());
   if (ret) {
     CLS_ERR("ERROR: view_create(): failed to write epoch view");
     return ret;
   }
 
   head.set_max_epoch(op.epoch());
-  ret = head_write_meta(hctx, head);
+  ret = view_write_header(hctx, head);
   if (ret) {
     CLS_ERR("ERROR: view_create(): failed to write meta");
     return ret;
@@ -472,7 +462,7 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::HeadObjectHeader head;
-  int ret = head_read_meta(hctx, head);
+  int ret = view_read_header(hctx, head);
   if (ret < 0) {
     CLS_ERR("ERROR: view_read(): failed to read meta: %d", ret);
     return ret;
@@ -490,7 +480,7 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
 
   while (epoch <= head.max_epoch() && count < op.max_views()) {
     ceph::bufferlist bl;
-    ret = head_get_view(hctx, epoch, bl);
+    ret = view_read_view(hctx, epoch, bl);
     if (ret < 0) {
       CLS_ERR("ERROR: view_read(): failed to read view: %d", ret);
       return ret;
@@ -513,40 +503,39 @@ void __cls_init()
 {
   CLS_LOG(0, "loading cls_zlog");
 
-  cls_handle_t h_class;
-
   // log data object methods
-  cls_method_handle_t h_read;
-  cls_method_handle_t h_write;
-  cls_method_handle_t h_invalidate;
-  cls_method_handle_t h_seal;
-  cls_method_handle_t h_max_position;
+  cls_method_handle_t h_entry_read;
+  cls_method_handle_t h_entry_write;
+  cls_method_handle_t h_entry_invalidate;
+  cls_method_handle_t h_entry_seal;
+  cls_method_handle_t h_entry_max_position;
 
   // head object methods
   cls_method_handle_t h_view_create;
   cls_method_handle_t h_view_read;
 
+  cls_handle_t h_class;
   cls_register("zlog", &h_class);
 
   cls_register_cxx_method(h_class, "read",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  read, &h_read);
+			  entry_read, &h_entry_read);
 
   cls_register_cxx_method(h_class, "write",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  write, &h_write);
+			  entry_write, &h_entry_write);
 
   cls_register_cxx_method(h_class, "invalidate",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
-        invalidate, &h_invalidate);
+        entry_invalidate, &h_entry_invalidate);
 
   cls_register_cxx_method(h_class, "seal",
       CLS_METHOD_RD | CLS_METHOD_WR,
-      seal, &h_seal);
+      entry_seal, &h_entry_seal);
 
   cls_register_cxx_method(h_class, "max_position",
 			  CLS_METHOD_RD,
-			  max_position, &h_max_position);
+			  entry_max_position, &h_entry_max_position);
 
   // view management
   cls_register_cxx_method(h_class, "view_create",
