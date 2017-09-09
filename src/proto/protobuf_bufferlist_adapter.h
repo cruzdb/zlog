@@ -1,10 +1,5 @@
-/*
- * TODO;
- *  - implement zero-copy adapter
- */
-#ifndef PROTOBUF_BUFFERLIST_ADAPTER
-#define PROTOBUF_BUFFERLIST_ADAPTER
-
+#pragma once
+#include <arpa/inet.h>
 #include <iostream>
 #include <rados/buffer.h>
 
@@ -48,5 +43,3 @@ bool unpack_msg(T& m, ceph::bufferlist& bl) {
   }
   return true;
 }
-
-#endif
