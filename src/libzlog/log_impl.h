@@ -1,7 +1,6 @@
 #pragma once
 #include <condition_variable>
 #include <mutex>
-#include "spdlog/spdlog.h"
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
@@ -23,7 +22,6 @@ class LogImpl : public Log {
       const std::string& name,
       const std::string& hoid,
       const std::string& prefix) :
-    lg(spdlog::stdout_color_mt("log_impl")),
     be(backend),
     seqr(seqr),
     name(name),
@@ -91,7 +89,6 @@ class LogImpl : public Log {
 
  public:
   std::mutex lock;
-  std::shared_ptr<spdlog::logger> lg;
 
   Backend *be;
   SeqrClient *seqr;

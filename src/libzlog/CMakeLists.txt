@@ -32,3 +32,7 @@ target_link_libraries(libzlog
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
 install(TARGETS libzlog LIBRARY DESTINATION lib)
+
+add_library(test_libzlog OBJECT test_libzlog.cc)
+target_include_directories(test_libzlog
+  PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)

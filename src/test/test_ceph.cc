@@ -116,9 +116,8 @@ class LibZlog : public ::testing::Test {
     pool_name = get_temp_pool_name();
     ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
     ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
-    be = new CephBackend(&ioctx);
-    client = new zlog::SeqrClient("localhost", "5678");
-    ASSERT_NO_THROW(client->Connect());
+  client = new zlog::SeqrClient("localhost", "5678");
+  ASSERT_NO_THROW(client->Connect());
   }
 
   void TearDown() {
