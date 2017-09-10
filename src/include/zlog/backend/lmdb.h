@@ -20,13 +20,21 @@ class LMDBBackend : public Backend {
 
   ~LMDBBackend();
 
+  void Init(const std::string& path, bool empty);
+
+  void Close();
+
+  virtual std::string pool() override {
+    return pool_;
+  }
+
   int CreateLog(const std::string& name,
       const std::string& initial_view) override {
     assert(0);
   }
 
-  virtual int OpenLog(const std::string& name,
-      std::string& hoid, std::string& prefix) {
+  int OpenLog(const std::string& name,
+      std::string& hoid, std::string& prefix) override {
     assert(0);
   }
 
@@ -36,44 +44,35 @@ class LMDBBackend : public Backend {
   }
 
   int ProposeView(const std::string& hoid,
-      uint64_t epoch, const std::string& view) {
+      uint64_t epoch, const std::string& view) override {
     assert(0);
   }
 
-  void Init(const std::string& path, bool empty);
+  int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data) override;
 
-  void Close();
+  int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) override;
 
-  virtual std::string pool() {
-    return pool_;
-  }
+  int Fill(const std::string& oid, uint64_t epoch,
+      uint64_t position) override;
 
-  virtual int Exists(const std::string& oid);
+  int Trim(const std::string& oid, uint64_t epoch,
+      uint64_t position) override;
 
-  virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos, bool *empty);
+  int Seal(const std::string& oid,
+      uint64_t epoch) override;
 
-  virtual int Seal(const std::string& oid, uint64_t epoch);
+  int MaxPos(const std::string& oid, uint64_t epoch,
+      uint64_t *pos, bool *empty) override;
 
-  virtual int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position);
-
-  virtual int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data);
-
-  virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position);
-
-  virtual int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position);
-
-  virtual int AioWrite(const std::string& oid, uint64_t epoch,
+  int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
-      std::function<void(void*, int)> callback);
+      std::function<void(void*, int)> callback) override;
 
-  virtual int AioRead(const std::string& oid, uint64_t epoch,
+  int AioRead(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data, void *arg,
-      std::function<void(void*, int)> callback);
+      std::function<void(void*, int)> callback) override;
 
  private:
   std::string pool_;

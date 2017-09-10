@@ -28,6 +28,7 @@ LMDBBackend::~LMDBBackend()
   mdb_env_sync(env, 1);
 }
 
+#if 0
 int LMDBBackend::Exists(const std::string& oid)
 {
   auto txn = NewTransaction(true);
@@ -48,7 +49,6 @@ int LMDBBackend::Exists(const std::string& oid)
   return 0;
 }
 
-#if 0
 int LMDBBackend::CreateHeadObject(const std::string& oid,
     const zlog_proto::MetaLog& data)
 {
