@@ -3,6 +3,9 @@
 set -e
 set -x
 
+sudo docker run -v $PWD:/home/nwatkins/src/zlog:z -w /home/nwatkins/src/zlog -it
+iwyu /usr/src/iwyu/iwyu_tool.py -p .
+
 # see github.com/noahdesu/docks/cppcheck
 docker run --rm -i -v $PWD:/usr/src/zlog:ro cppcheck \
   cppcheck --force --inconclusive --enable=all /usr/src/zlog \
