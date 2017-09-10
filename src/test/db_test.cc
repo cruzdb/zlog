@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include "zlog/db.h"
 #include "include/zlog/log.h"
-#include "include/zlog/backend/ram.h"
 #include "include/zlog/backend/lmdb.h"
 #include "zlog/backend/fakeseqr.h"
 
@@ -161,6 +160,8 @@ static void test_seek(const std::map<std::string, std::string>& truth,
  * same as the equivalent database stored in an STL container.
  */
 TEST(DB, EquivHistory) {
+  TempDir tdir;
+
   // initial history is an empty stl database
   std::vector<std::map<std::string, std::string>> truth_history;
   std::map<std::string, std::string> truth;
@@ -168,8 +169,9 @@ TEST(DB, EquivHistory) {
 
   // initial empty kvstore database
   zlog::Log *log;
-  auto be = new RAMBackend();
   auto client = new FakeSeqrClient();
+  auto be = new LMDBBackend("fakepool");
+  be->Init(tdir.path, true);
   int ret = zlog::Log::Create(be, "log", client, &log);
   ASSERT_EQ(ret, 0);
 
@@ -229,9 +231,12 @@ TEST(DB, EquivHistory) {
 }
 
 TEST(DB, Iterator) {
+  TempDir tdir;
+
   zlog::Log *log;
-  auto be = new RAMBackend();
   auto client = new FakeSeqrClient();
+  auto be = new LMDBBackend("fakepool");
+  be->Init(tdir.path, true);
   int ret = zlog::Log::Create(be, "log", client, &log);
   ASSERT_EQ(ret, 0);
 
@@ -287,9 +292,12 @@ TEST(DB, Iterator) {
 }
 
 TEST(DB, Get) {
+  TempDir tdir;
+
   zlog::Log *log;
-  auto be = new RAMBackend();
   auto client = new FakeSeqrClient();
+  auto be = new LMDBBackend("fakepool");
+  be->Init(tdir.path, true);
   int ret = zlog::Log::Create(be, "log", client, &log);
   ASSERT_EQ(ret, 0);
 
