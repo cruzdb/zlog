@@ -1,158 +1,31 @@
 #include "log_impl.h"
-
 #include <iostream>
-
 #include "proto/zlog.pb.h"
 
 namespace zlog {
 
 Stream::~Stream() {}
 
-int LogImpl::MultiAppend(const Slice& data,
-    const std::set<uint64_t>& stream_ids, uint64_t *pposition)
-{
-  for (;;) {
-    /*
-     * Get a new spot at the tail of the log and return a set of backpointers
-     * for the specified streams. The stream ids and backpointers are stored
-     * in the header of the entry being appeneded to the log.
-     */
-    uint64_t position;
-    std::map<uint64_t, std::vector<uint64_t>> stream_backpointers;
-    int ret = CheckTail(stream_ids, stream_backpointers, &position, true);
-    if (ret)
-      return ret;
-
-    assert(stream_ids.size() == stream_backpointers.size());
-
-    zlog_proto::EntryHeader hdr;
-    size_t index = 0;
-    for (std::set<uint64_t>::const_iterator it = stream_ids.begin();
-         it != stream_ids.end(); it++) {
-      uint64_t stream_id = *it;
-      const std::vector<uint64_t>& backpointers = stream_backpointers[index];
-      zlog_proto::StreamBackPointer *ptrs = hdr.add_stream_backpointers();
-      ptrs->set_id(stream_id);
-      for (std::vector<uint64_t>::const_iterator it2 = backpointers.begin();
-           it2 != backpointers.end(); it2++) {
-        uint64_t pos = *it2;
-        ptrs->add_backpointer(pos);
-      }
-      index++;
-    }
-
-    std::string out_data;
-    {
-      assert(hdr.IsInitialized());
-      uint32_t buf_size = hdr.ByteSize();
-      char buf[buf_size];
-      assert(hdr.SerializeToArray(buf, buf_size));
-      uint32_t be_buf_size = htonl(buf_size);
-      out_data.append((char*)&be_buf_size, sizeof(be_buf_size));
-      out_data.append(buf, sizeof(buf));
-      out_data.append(data.data(), data.size());
-    }
-
-    auto mapping = striper.MapPosition(position);
-
-    ret = be->Write(mapping.oid, Slice(out_data), mapping.epoch, position);
-    if (ret == 0) {
-      if (pposition)
-        *pposition = position;
-      return 0;
-    }
-
-    if (ret == -ESPIPE) {
-      ret = UpdateView();
-      if (ret)
-        return ret;
-      continue;
-    }
-
-    if (ret == -EROFS)
-      continue;
-
-    std::cerr << "append: failed ret " << ret << std::endl;
-    return ret;
-  }
-  assert(0);
-}
-
-int LogImpl::StreamHeader(const std::string& entry, std::set<uint64_t>& stream_ids,
-    size_t *header_size)
-{
-  if (entry.size() <= sizeof(uint32_t))
-    return -EINVAL;
-
-  const char *data = entry.data();
-
-  uint32_t hdr_len = ntohl(*((uint32_t*)data));
-  if (hdr_len > 512) // TODO something reasonable...?
-    return -EINVAL;
-
-  if ((sizeof(uint32_t) + hdr_len) > entry.size())
-    return -EINVAL;
-
-  zlog_proto::EntryHeader hdr;
-  if (!hdr.ParseFromArray(data + sizeof(uint32_t), hdr_len))
-    return -EINVAL;
-
-  if (!hdr.IsInitialized())
-    return -EINVAL;
-
-  std::set<uint64_t> ids;
-  for (int i = 0; i < hdr.stream_backpointers_size(); i++) {
-    const zlog_proto::StreamBackPointer& ptr = hdr.stream_backpointers(i);
-    ids.insert(ptr.id());
-  }
-
-  if (header_size)
-    *header_size = sizeof(uint32_t) + hdr_len;
-
-  stream_ids.swap(ids);
-
-  return 0;
-}
-
-int LogImpl::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
-{
-  std::string entry;
-  int ret = Read(position, &entry);
-  if (ret)
-    return ret;
-
-  ret = StreamHeader(entry, stream_ids);
-
-  return ret;
-}
-
-int LogImpl::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
-{
-  std::string entry;
-  int ret = Read(epoch, position, &entry);
-  if (ret)
-    return ret;
-
-  ret = StreamHeader(entry, stream_ids);
-
-  return ret;
-}
-
 class StreamImpl : public zlog::Stream {
  public:
   uint64_t stream_id;
   zlog::LogImpl *log;
 
+  ~StreamImpl() {}
+
   std::set<uint64_t> pos;
   std::set<uint64_t>::const_iterator prevpos;
   std::set<uint64_t>::const_iterator curpos;
 
-  int Append(const Slice& data, uint64_t *pposition = NULL) override;
+  std::vector<uint64_t> History() const override;
   int ReadNext(std::string *data, uint64_t *pposition = NULL) override;
+  int Append(const Slice& data, uint64_t *pposition = NULL) override;
   int Reset() override;
   int Sync() override;
-  uint64_t Id() const override;
-  std::vector<uint64_t> History() const override;
+
+  uint64_t Id() const override {
+    return stream_id;
+  }
 };
 
 std::vector<uint64_t> StreamImpl::History() const
@@ -161,13 +34,6 @@ std::vector<uint64_t> StreamImpl::History() const
   for (auto it = pos.cbegin(); it != pos.cend(); it++)
     ret.push_back(*it);
   return ret;
-}
-
-int StreamImpl::Append(const Slice& data, uint64_t *pposition)
-{
-  std::set<uint64_t> stream_ids;
-  stream_ids.insert(stream_id);
-  return log->MultiAppend(data, stream_ids, pposition);
 }
 
 int StreamImpl::ReadNext(std::string *data, uint64_t *pposition)
@@ -201,6 +67,13 @@ int StreamImpl::ReadNext(std::string *data, uint64_t *pposition)
   curpos++;
 
   return 0;
+}
+
+int StreamImpl::Append(const Slice& data, uint64_t *pposition)
+{
+  std::set<uint64_t> stream_ids;
+  stream_ids.insert(stream_id);
+  return log->MultiAppend(data, stream_ids, pposition);
 }
 
 int StreamImpl::Reset()
@@ -328,11 +201,6 @@ int StreamImpl::Sync()
   return 0;
 }
 
-uint64_t StreamImpl::Id() const
-{
-  return stream_id;
-}
-
 /*
  * FIXME:
  *  - Looks like a memory leak on the StreamImpl
@@ -361,6 +229,137 @@ int LogImpl::OpenStream(uint64_t stream_id, Stream **streamptr)
   *streamptr = impl;
 
   return 0;
+}
+
+int LogImpl::StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position)
+{
+  std::string entry;
+  int ret = Read(position, &entry);
+  if (ret)
+    return ret;
+
+  ret = StreamHeader(entry, stream_ids);
+
+  return ret;
+}
+
+int LogImpl::StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position)
+{
+  std::string entry;
+  int ret = Read(epoch, position, &entry);
+  if (ret)
+    return ret;
+
+  ret = StreamHeader(entry, stream_ids);
+
+  return ret;
+}
+
+
+int LogImpl::StreamHeader(const std::string& entry, std::set<uint64_t>& stream_ids,
+    size_t *header_size)
+{
+  if (entry.size() <= sizeof(uint32_t))
+    return -EINVAL;
+
+  const char *data = entry.data();
+
+  uint32_t hdr_len = ntohl(*((uint32_t*)data));
+  if (hdr_len > 512) // TODO something reasonable...?
+    return -EINVAL;
+
+  if ((sizeof(uint32_t) + hdr_len) > entry.size())
+    return -EINVAL;
+
+  zlog_proto::EntryHeader hdr;
+  if (!hdr.ParseFromArray(data + sizeof(uint32_t), hdr_len))
+    return -EINVAL;
+
+  if (!hdr.IsInitialized())
+    return -EINVAL;
+
+  std::set<uint64_t> ids;
+  for (int i = 0; i < hdr.stream_backpointers_size(); i++) {
+    const zlog_proto::StreamBackPointer& ptr = hdr.stream_backpointers(i);
+    ids.insert(ptr.id());
+  }
+
+  if (header_size)
+    *header_size = sizeof(uint32_t) + hdr_len;
+
+  stream_ids.swap(ids);
+
+  return 0;
+}
+
+int LogImpl::MultiAppend(const Slice& data,
+    const std::set<uint64_t>& stream_ids, uint64_t *pposition)
+{
+  for (;;) {
+    /*
+     * Get a new spot at the tail of the log and return a set of backpointers
+     * for the specified streams. The stream ids and backpointers are stored
+     * in the header of the entry being appeneded to the log.
+     */
+    uint64_t position;
+    std::map<uint64_t, std::vector<uint64_t>> stream_backpointers;
+    int ret = CheckTail(stream_ids, stream_backpointers, &position, true);
+    if (ret)
+      return ret;
+
+    assert(stream_ids.size() == stream_backpointers.size());
+
+    zlog_proto::EntryHeader hdr;
+    size_t index = 0;
+    for (std::set<uint64_t>::const_iterator it = stream_ids.begin();
+         it != stream_ids.end(); it++) {
+      uint64_t stream_id = *it;
+      const std::vector<uint64_t>& backpointers = stream_backpointers[index];
+      zlog_proto::StreamBackPointer *ptrs = hdr.add_stream_backpointers();
+      ptrs->set_id(stream_id);
+      for (std::vector<uint64_t>::const_iterator it2 = backpointers.begin();
+           it2 != backpointers.end(); it2++) {
+        uint64_t pos = *it2;
+        ptrs->add_backpointer(pos);
+      }
+      index++;
+    }
+
+    std::string out_data;
+    {
+      assert(hdr.IsInitialized());
+      uint32_t buf_size = hdr.ByteSize();
+      char buf[buf_size];
+      assert(hdr.SerializeToArray(buf, buf_size));
+      uint32_t be_buf_size = htonl(buf_size);
+      out_data.append((char*)&be_buf_size, sizeof(be_buf_size));
+      out_data.append(buf, sizeof(buf));
+      out_data.append(data.data(), data.size());
+    }
+
+    auto mapping = striper.MapPosition(position);
+
+    ret = be->Write(mapping.oid, Slice(out_data), mapping.epoch, position);
+    if (ret == 0) {
+      if (pposition)
+        *pposition = position;
+      return 0;
+    }
+
+    if (ret == -ESPIPE) {
+      ret = UpdateView();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    if (ret == -EROFS)
+      continue;
+
+    std::cerr << "append: failed ret " << ret << std::endl;
+    return ret;
+  }
+  assert(0);
 }
 
 }

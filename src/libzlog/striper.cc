@@ -1,4 +1,4 @@
-#include "stripe_history.h"
+#include "striper.h"
 #include <sstream>
 #include "proto/zlog.pb.h"
 

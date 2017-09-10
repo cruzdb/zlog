@@ -109,9 +109,6 @@ class AioCompletionImpl {
   static void aio_safe_cb_write(void *arg, int ret);
 };
 
-/*
- *
- */
 void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
@@ -181,9 +178,6 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
   impl->lock.unlock();
 }
 
-/*
- *
- */
 void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
@@ -276,8 +270,6 @@ AioCompletion::~AioCompletion() {}
  * This is a wrapper around AioCompletion that lets users of the public API
  * delete its AioCompletion without deleting the underlying AioCompletionImpl
  * which is referece counted.
- *
- * This could also be done by exposing a shared_ptr. Are there other ways?
  */
 class AioCompletionImplWrapper : public zlog::AioCompletion {
  public:

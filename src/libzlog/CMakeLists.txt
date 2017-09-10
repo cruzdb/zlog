@@ -1,7 +1,7 @@
 set(libzlog_sources
   log_impl.cc
   stream.cc
-  stripe_history.cc
+  striper.cc
   aio.cc
   ../storage/lmdb.cc)
 

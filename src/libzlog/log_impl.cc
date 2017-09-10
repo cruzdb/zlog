@@ -1,7 +1,6 @@
 // TODO
 //  - use async methods for seal/maxpos
 //  - use condvar with batching for update view
-//  - reoder methods in file
 //  - check update view for erange in stream checktail
 #include "log_impl.h"
 
@@ -17,26 +16,11 @@
 #include "include/zlog/log.h"
 #include "include/zlog/backend.h"
 
-#include "stripe_history.h"
-
-/*
- * We can use Ceph API to query and make some intelligent decisiosn about what
- * the stripe size should be at runtime. In any case logs are not created
- * programmatically where this is needed. They are created for instance with a
- * CLI tool, and in any case the width can be changed online.
- */
-#define DEFAULT_STRIPE_SIZE 100
+#include "striper.h"
 
 namespace zlog {
 
 Log::~Log() {}
-
-std::string LogImpl::metalog_oid_from_name(const std::string& name)
-{
-  std::stringstream ss;
-  ss << name << ".meta";
-  return ss.str();
-}
 
 int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
     SeqrClient *seqr, int stripe_size, Log **logptr)
@@ -81,10 +65,7 @@ int Log::Open(Backend *backend, const std::string& name,
     return ret;
   }
 
-  LogImpl *impl = new LogImpl(backend, hoid, prefix);
-
-  impl->name_ = name;
-  impl->seqr = seqr;
+  LogImpl *impl = new LogImpl(backend, seqr, name, hoid, prefix);
 
   ret = impl->UpdateView();
   if (ret) {
@@ -125,63 +106,6 @@ int LogImpl::UpdateView()
   }
 }
 
-int LogImpl::StripeWidth()
-{
-  return striper.GetCurrent().width;
-}
-
-#if 0
-int LogImpl::SetStripeWidth(int width)
-{
-  /*
-   * Get the current projection. We'll add the new striping width when we
-   * propose the next projection/epoch.
-   */
-  uint64_t epoch;
-  zlog_proto::MetaLog config;
-  int ret = be->LatestProjection(metalog_oid_, &epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to get projection ret " << ret << std::endl;
-    return ret;
-  }
-
-  StripeHistory hist;
-  ret = hist.Deserialize(config);
-  if (ret)
-    return ret;
-  assert(!hist.Empty());
-
-  std::vector<std::string> objects;
-  mapper_.LatestObjectSet(objects, hist);
-
-  uint64_t max_position;
-  ret = Seal(objects, epoch, &max_position);
-  if (ret) {
-    std::cerr << "failed to seal " << ret << std::endl;
-    return ret;
-  }
-
-  uint64_t next_epoch = epoch + 1;
-  hist.AddStripe(max_position, next_epoch, width);
-  const auto hist_data = hist.Serialize();
-
-  /*
-   * Propose the updated projection for the next epoch.
-   */
-  ret = be->SetProjection(metalog_oid_, next_epoch, hist_data);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to set new epoch " << next_epoch
-      << " ret " << ret << std::endl;
-    return ret;
-  }
-
-  return 0;
-}
-#endif
-
-// Construct a new epoch view with an identifical configuration to the current
-// view and return the maximum position.
-//
 // TODO
 //  - there are probably several scenarios in which we might want to retry cut
 //  creation (as opposed to just returning an error) if we encounter an error
@@ -274,11 +198,16 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
   return 0;
 }
 
+int LogImpl::CheckTail(uint64_t *pposition)
+{
+  return CheckTail(pposition, false);
+}
+
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
     int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
-        name_, pposition, increment);
+        name, pposition, increment);
     if (ret == -EAGAIN) {
       sleep(1);
       continue;
@@ -295,11 +224,6 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
   return -EIO;
 }
 
-int LogImpl::CheckTail(uint64_t *pposition)
-{
-  return CheckTail(pposition, false);
-}
-
 int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 {
   if (count <= 0 || count > 100)
@@ -308,7 +232,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
   for (;;) {
     std::vector<uint64_t> result;
     int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
-        name_, result, count);
+        name, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;
       sleep(1);
@@ -334,7 +258,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
 {
   for (;;) {
     int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
-        name_, stream_ids, stream_backpointers, pposition, increment);
+        name, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;
       sleep(1);
@@ -347,6 +271,60 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
       continue;
     }
     return ret;
+  }
+  assert(0);
+  return -EIO;
+}
+
+int LogImpl::Read(uint64_t position, std::string *data)
+{
+  for (;;) {
+    auto mapping = striper.MapPosition(position);
+
+    int ret = be->Read(mapping.oid, mapping.epoch, position, data);
+    switch (ret) {
+      case 0:
+        return 0;
+
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -ENOENT:  // not-written
+      case -ENODATA: // invalidated
+      default:
+        return ret;
+    }
+  }
+  assert(0);
+  return -EIO;
+}
+
+int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
+{
+  for (;;) {
+    auto mapping = striper.MapPosition(position);
+
+    int ret = be->Read(mapping.oid, epoch, position, data);
+    switch (ret) {
+      case 0:
+        return 0;
+
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -ENOENT:  // not-written
+      case -ENODATA: // invalidated
+      default:
+        return ret;
+    }
   }
   assert(0);
   return -EIO;
@@ -387,12 +365,12 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
   return -EIO;
 }
 
-int LogImpl::Fill(uint64_t epoch, uint64_t position)
+int LogImpl::Fill(uint64_t position)
 {
   for (;;) {
     auto mapping = striper.MapPosition(position);
 
-    int ret = be->Fill(mapping.oid, epoch, position);
+    int ret = be->Fill(mapping.oid, mapping.epoch, position);
     switch (ret) {
       case 0:
         return 0;
@@ -411,12 +389,12 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
   }
 }
 
-int LogImpl::Fill(uint64_t position)
+int LogImpl::Fill(uint64_t epoch, uint64_t position)
 {
   for (;;) {
     auto mapping = striper.MapPosition(position);
 
-    int ret = be->Fill(mapping.oid, mapping.epoch, position);
+    int ret = be->Fill(mapping.oid, epoch, position);
     switch (ret) {
       case 0:
         return 0;
@@ -456,60 +434,6 @@ int LogImpl::Trim(uint64_t position)
         return ret;
     }
   }
-}
-
-int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
-{
-  for (;;) {
-    auto mapping = striper.MapPosition(position);
-
-    int ret = be->Read(mapping.oid, epoch, position, data);
-    switch (ret) {
-      case 0:
-        return 0;
-
-      case -ESPIPE:
-        ret = UpdateView();
-        if (ret)
-          return ret;
-        sleep(1);
-        continue;
-
-      case -ENOENT:  // not-written
-      case -ENODATA: // invalidated
-      default:
-        return ret;
-    }
-  }
-  assert(0);
-  return -EIO;
-}
-
-int LogImpl::Read(uint64_t position, std::string *data)
-{
-  for (;;) {
-    auto mapping = striper.MapPosition(position);
-
-    int ret = be->Read(mapping.oid, mapping.epoch, position, data);
-    switch (ret) {
-      case 0:
-        return 0;
-
-      case -ESPIPE:
-        ret = UpdateView();
-        if (ret)
-          return ret;
-        sleep(1);
-        continue;
-
-      case -ENOENT:  // not-written
-      case -ENODATA: // invalidated
-      default:
-        return ret;
-    }
-  }
-  assert(0);
-  return -EIO;
 }
 
 }
