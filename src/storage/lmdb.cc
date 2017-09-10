@@ -389,7 +389,7 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
       return -EINVAL;
     }
   } else if (epoch <= obj->epoch) {
-    return -EAGAIN;
+    return -ESPIPE;
   }
   return 0;
 }
@@ -443,7 +443,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
     obj = *((LogObject*)val.mv_data);
     if (epoch <= obj.epoch) {
       txn.Abort();
-      return -EAGAIN;
+      return -ESPIPE;
     }
   }
 

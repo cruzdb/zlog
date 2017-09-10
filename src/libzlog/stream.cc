@@ -62,7 +62,7 @@ int LogImpl::MultiAppend(const Slice& data,
       return 0;
     }
 
-    if (ret == -EAGAIN) {
+    if (ret == -ESPIPE) {
       ret = UpdateView();
       if (ret)
         return ret;

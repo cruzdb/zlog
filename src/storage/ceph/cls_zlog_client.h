@@ -1,54 +1,33 @@
-#ifndef CLS_ZLOG_CLIENT_H
-#define CLS_ZLOG_CLIENT_H
-
+#pragma once
+// TODO
+//  - fixup namespace
 #include <rados/librados.hpp>
+
+// namespace for head object (sync with cls_zlog)
+#define HEAD_HEADER_KEY "zlog.head.header"
 
 namespace zlog {
 
-  enum {
-    CLS_ZLOG_OK            = 0x00,
-    CLS_ZLOG_STALE_EPOCH   = 0x01,
-    CLS_ZLOG_READ_ONLY     = 0x02,
-    CLS_ZLOG_NOT_WRITTEN   = 0x03,
-    CLS_ZLOG_INVALIDATED   = 0x04,
-    CLS_ZLOG_INVALID_EPOCH = 0x05,
-  };
-
-  // version 1
-
-  void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch);
-
-  void cls_zlog_fill(librados::ObjectWriteOperation& op, uint64_t epoch,
+  void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
       uint64_t position);
 
   void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
       uint64_t position, ceph::bufferlist& data);
 
-  void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
-      uint64_t position);
+  void cls_zlog_invalidate(librados::ObjectWriteOperation& op, uint64_t epoch,
+      uint64_t position, bool force);
 
-  void cls_zlog_trim(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position);
+  void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch);
 
   void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
       uint64_t *pposition, bool *pempty, int *pret);
 
-  // projection management
+  void cls_zlog_init_head(librados::ObjectWriteOperation& op,
+      const std::string& prefix);
 
-  void cls_zlog_set_projection(librados::ObjectWriteOperation& op,
-      uint64_t epoch, ceph::bufferlist& data);
-
-  void cls_zlog_get_latest_projection(librados::ObjectReadOperation& op,
-      int *pret, uint64_t *pepoch, ceph::bufferlist *out);
-
-  void cls_zlog_get_projection(librados::ObjectReadOperation& op,
-      int *pret, uint64_t epoch, ceph::bufferlist *out);
+  void cls_zlog_read_view(librados::ObjectReadOperation& op,
+      uint64_t epoch, uint32_t max_views = 100);
 
   void cls_zlog_create_view(librados::ObjectWriteOperation& op,
       uint64_t epoch, ceph::bufferlist& bl);
-
-  void cls_zlog_read_view(librados::ObjectReadOperation& op,
-      uint64_t epoch);
 }
-
-#endif

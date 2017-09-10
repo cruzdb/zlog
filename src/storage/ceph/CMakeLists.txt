@@ -27,6 +27,17 @@ target_include_directories(zlog_backend_ceph
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
 install(TARGETS zlog_backend_ceph DESTINATION lib)
+
+add_executable(zlog_test_cls_zlog test_cls_zlog.cc)
+target_link_libraries(zlog_test_cls_zlog
+    cls_zlog_client
+    ${LIBRADOS_LIBRARIES}
+    gtest_main)
+target_include_directories(zlog_test_cls_zlog
+    PUBLIC ${LIBRADOS_INCLUDE_DIRS}
+)
+install(TARGETS zlog_test_cls_zlog DESTINATION bin)
+
 endif(BUILD_CEPH_BACKEND)
 
 if(HAVE_RADOS_OBJECT_CLASS_H)

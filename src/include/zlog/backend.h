@@ -18,7 +18,7 @@
 //   - Invalid parameter
 // -EIO
 //   - Corrupted data or invalid states
-// -EAGAIN
+// -ESPIPE
 //   - Stale epoch
 // -ENOENT
 //   - object doesn't exist
@@ -98,7 +98,7 @@ class Backend {
   //
   // -ENOENT
   //   - object doesn't exist. seal first.
-  // -EAGAIN
+  // -ESPIPE
   //   - epoch equality failed
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) = 0;

@@ -195,7 +195,7 @@ static int entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
 
   if (epoch_guard(header, op.epoch(), false)) {
     CLS_LOG(10, "read(): stale epoch");
-    return -EAGAIN;
+    return -ESPIPE;
   }
 
   zlog_ceph_proto::LogEntry entry;
@@ -239,7 +239,7 @@ static int entry_write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bu
 
   if (epoch_guard(header, op.epoch(), false)) {
     CLS_LOG(10, "write(): stale epoch");
-    return -EAGAIN;
+    return -ESPIPE;
   }
 
   auto key = entry_key(op.pos());
@@ -298,7 +298,7 @@ static int entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
 
   if (epoch_guard(header, op.epoch(), false)) {
     CLS_LOG(10, "invalidate(): stale epoch");
-    return -EAGAIN;
+    return -ESPIPE;
   }
 
   auto key = entry_key(op.pos());
@@ -313,9 +313,21 @@ static int entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     // invalidate entry. not forced
     entry.set_flags(zlog_ceph_proto::LogEntry::INVALID);
     ret = entry_write_entry(hctx, key, entry);
-    if (ret < 0)
+    if (ret < 0) {
       CLS_ERR("ERROR: invalidate(): failed to write entry");
-    return ret;
+      return ret;
+    }
+
+    if (!header.has_max_pos() || (op.pos() > header.max_pos()))
+      header.set_max_pos(op.pos());
+
+    ret = entry_write_header(hctx, header);
+    if (ret < 0) {
+      CLS_ERR("ERROR: invalidate(): failed to write header");
+      return ret;
+    }
+
+    return 0;
 
   } else if (entry.flags() & zlog_ceph_proto::LogEntry::INVALID) {
     // already invalid. preserve data and forced flag
@@ -330,7 +342,9 @@ static int entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EROFS;
 
   } else {
-    // force invalidate entry. preserve data.
+    // force invalidate entry. preserve data. no need to update the max position
+    // in the header because this position would already be reflected in that
+    // value.
     entry.set_flags(zlog_ceph_proto::LogEntry::INVALID |
         zlog_ceph_proto::LogEntry::FORCED);
     ret = entry_write_entry(hctx, key, entry);
@@ -361,7 +375,7 @@ static int entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
       CLS_LOG(10, "seal(): stale op epoch %llu <= %llu (hdr)",
           (unsigned long long)op.epoch(),
           (unsigned long long)header.epoch());
-      return -EAGAIN;
+      return -ESPIPE;
     }
   }
 
@@ -395,9 +409,10 @@ static int entry_max_position(cls_method_context_t hctx, ceph::bufferlist *in,
       CLS_LOG(10, "max_position(): op epoch %llu != %llu (hdr)",
           (unsigned long long)op.epoch(),
           (unsigned long long)header.epoch());
-      return -EAGAIN;
+      return -ESPIPE;
     }
   } else {
+    CLS_ERR("ERROR: max_position(): expecting sealed object");
     return -EIO;
   }
 
@@ -517,23 +532,23 @@ void __cls_init()
   cls_handle_t h_class;
   cls_register("zlog", &h_class);
 
-  cls_register_cxx_method(h_class, "read",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
+  cls_register_cxx_method(h_class, "entry_read",
+			  CLS_METHOD_RD,
 			  entry_read, &h_entry_read);
 
-  cls_register_cxx_method(h_class, "write",
+  cls_register_cxx_method(h_class, "entry_write",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
 			  entry_write, &h_entry_write);
 
-  cls_register_cxx_method(h_class, "invalidate",
+  cls_register_cxx_method(h_class, "entry_invalidate",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
         entry_invalidate, &h_entry_invalidate);
 
-  cls_register_cxx_method(h_class, "seal",
+  cls_register_cxx_method(h_class, "entry_seal",
       CLS_METHOD_RD | CLS_METHOD_WR,
       entry_seal, &h_entry_seal);
 
-  cls_register_cxx_method(h_class, "max_position",
+  cls_register_cxx_method(h_class, "entry_max_position",
 			  CLS_METHOD_RD,
 			  entry_max_position, &h_entry_max_position);
 

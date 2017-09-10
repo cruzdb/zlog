@@ -135,7 +135,7 @@ class RAMBackend : public Backend {
     auto it = db_.find(oid);
     if (it != db_.end() && it->second.sealed) {
       if (epoch <= it->second.epoch)
-        return -EAGAIN;
+        return -ESPIPE;
     }
 
     // object reference
@@ -384,7 +384,7 @@ class RAMBackend : public Backend {
     if (it == db_.end())
       return 0;
     if (it->second.sealed && epoch <= it->second.epoch)
-      return -EAGAIN;
+      return -ESPIPE;
     return 0;
   }
 

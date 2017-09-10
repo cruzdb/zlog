@@ -130,7 +130,7 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
     }
     ret = 0;
     finish = true;
-  } else if (ret == -EAGAIN) {
+  } else if (ret == -ESPIPE) {
     /*
      * We'll need to try again with a new epoch.
      */
@@ -202,7 +202,7 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
     }
     ret = 0;
     finish = true;
-  } else if (ret == -EAGAIN) {
+  } else if (ret == -ESPIPE) {
     /*
      * We'll need to try again with a new epoch.
      */

@@ -11,9 +11,6 @@
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
 
-// namespace for head object (sync with cls_zlog)
-#define HEAD_HEADER_KEY "zlog.head.header"
-
 CephBackend::CephBackend(librados::IoCtx *ioctx) :
   ioctx_(ioctx)
 {
@@ -201,7 +198,7 @@ int CephBackend::Fill(const std::string& oid, uint64_t epoch,
     uint64_t position)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_fill(op, epoch, position);
+  zlog::cls_zlog_invalidate(op, epoch, position, false);
 
   return ioctx_->operate(oid, &op);
 }
@@ -210,7 +207,7 @@ int CephBackend::Trim(const std::string& oid, uint64_t epoch,
                       uint64_t position)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_trim(op, epoch, position);
+  zlog::cls_zlog_invalidate(op, epoch, position, true);
 
   return ioctx_->operate(oid, &op);
 }
@@ -307,21 +304,9 @@ int CephBackend::CreateLinkObject(const std::string& name,
 int CephBackend::InitHeadObject(const std::string& hoid,
     const std::string& prefix)
 {
-  zlog_ceph_proto::HeadObjectHeader meta;
-  meta.set_deleted(false);
-  meta.set_prefix(prefix);
-  // don't set max_epoch...
-  assert(!meta.has_max_epoch());
-
-  ceph::bufferlist bl;
-  pack_msg<zlog_ceph_proto::HeadObjectHeader>(bl, meta);
-
   librados::ObjectWriteOperation op;
-  op.assert_exists();
-  op.setxattr(HEAD_HEADER_KEY, bl);
-
-  int ret = ioctx_->operate(hoid, &op);
-  return ret;
+  zlog::cls_zlog_init_head(op, prefix);
+  return ioctx_->operate(hoid, &op);
 }
 
 void CephBackend::aio_safe_cb_append(librados::completion_t cb, void *arg)
@@ -340,7 +325,7 @@ void CephBackend::aio_safe_cb_read(librados::completion_t cb, void *arg)
   librados::AioCompletion *rc = c->c;
   int ret = rc->get_return_value();
   rc->release();
-  if (ret == zlog::CLS_ZLOG_OK && c->bl.length() > 0)
+  if (ret == 0 && c->bl.length() > 0)
     c->data->assign(c->bl.c_str(), c->bl.length());
   c->cb(c->arg, ret);
   delete c;

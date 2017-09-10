@@ -310,7 +310,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
     int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
         name_, result, count);
     if (ret == -EAGAIN) {
-      //std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -ESPIPE" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
@@ -336,7 +336,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
         name_, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
-      //std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -ESPIPE" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
@@ -369,7 +369,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
           *pposition = position;
         return 0;
 
-      case -EAGAIN:
+      case -ESPIPE:
         ret = UpdateView();
         if (ret)
           return ret;
@@ -397,7 +397,7 @@ int LogImpl::Fill(uint64_t epoch, uint64_t position)
       case 0:
         return 0;
 
-      case -EAGAIN:
+      case -ESPIPE:
         ret = UpdateView();
         if (ret)
           return ret;
@@ -421,7 +421,7 @@ int LogImpl::Fill(uint64_t position)
       case 0:
         return 0;
 
-      case -EAGAIN:
+      case -ESPIPE:
         ret = UpdateView();
         if (ret)
           return ret;
@@ -445,7 +445,7 @@ int LogImpl::Trim(uint64_t position)
       case 0:
         return 0;
 
-      case -EAGAIN:
+      case -ESPIPE:
         ret = UpdateView();
         if (ret)
           return ret;
@@ -468,7 +468,7 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
       case 0:
         return 0;
 
-      case -EAGAIN:
+      case -ESPIPE:
         ret = UpdateView();
         if (ret)
           return ret;
@@ -495,7 +495,7 @@ int LogImpl::Read(uint64_t position, std::string *data)
       case 0:
         return 0;
 
-      case -EAGAIN:
+      case -ESPIPE:
         ret = UpdateView();
         if (ret)
           return ret;
