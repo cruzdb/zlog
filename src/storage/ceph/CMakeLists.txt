@@ -38,10 +38,11 @@ target_include_directories(zlog_test_cls_zlog
 )
 install(TARGETS zlog_test_cls_zlog DESTINATION bin)
 
-add_executable(zlog_test_backend_ceph test_backend_ceph.cc)
-target_link_libraries(zlog_test_backend_ceph
+add_executable(zlog_test_backend_ceph
+  test_backend_ceph.cc
   $<TARGET_OBJECTS:test_backend>
-  $<TARGET_OBJECTS:test_libzlog>
+  $<TARGET_OBJECTS:test_libzlog>)
+target_link_libraries(zlog_test_backend_ceph
   ${Boost_SYSTEM_LIBRARY}
   rados
   libzlog

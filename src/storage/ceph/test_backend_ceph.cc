@@ -42,22 +42,25 @@ void BackendTest::SetUp() {
 }
 
 void BackendTest::TearDown() {
-  auto& cluster = ((Context*)be_ctx)->cluster;
-  auto& ioctx = ((Context*)be_ctx)->ioctx;
-  auto& pool_name = ((Context*)be_ctx)->pool_name;
-
-  ioctx.close();
-  cluster.pool_delete(pool_name.c_str());
-  cluster.shutdown();
-
-  delete (Context*)be_ctx;
-  if (be)
+  if (be) {
     delete be;
+  }
+
+  if (be_ctx) {
+    auto& cluster = ((Context*)be_ctx)->cluster;
+    auto& ioctx = ((Context*)be_ctx)->ioctx;
+    auto& pool_name = ((Context*)be_ctx)->pool_name;
+
+    ioctx.close();
+    cluster.pool_delete(pool_name.c_str());
+    cluster.shutdown();
+
+    delete (Context*)be_ctx;
+  }
 }
 
 void LibZLogTest::SetUp() {
   BackendTest::SetUp();
-
   auto& client = ((Context*)be_ctx)->client;
 
   client = new zlog::SeqrClient("localhost", "5678");
@@ -68,12 +71,14 @@ void LibZLogTest::SetUp() {
 }
 
 void LibZLogTest::TearDown() {
-  if (log)
+  if (log) {
     delete log;
+  }
 
   auto client = ((Context*)be_ctx)->client;
-  if (client)
+  if (client) {
     delete client;
+  }
 
   BackendTest::TearDown();
 }

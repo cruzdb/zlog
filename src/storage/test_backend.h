@@ -8,5 +8,5 @@ class BackendTest : public ::testing::Test {
   void TearDown() override;
 
   Backend *be = nullptr;
-  void *be_ctx;
+  void *be_ctx = nullptr;
 };

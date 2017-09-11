@@ -1,22 +1,41 @@
 #include "storage/test_backend.h"
 #include "libzlog/test_libzlog.h"
+#include "include/zlog/backend/lmdb.h"
+#include "zlog/backend/fakeseqr.h"
+
+struct Context {
+  char *dbpath;
+};
 
 void BackendTest::SetUp() {
-  // create storage backend instance
-  // assigned instance to `be`
+  auto c = std::unique_ptr<Context>(new Context);
+
+  c->dbpath = strdup("/tmp/zlog.db.XXXXXX");
+  c->dbpath = mkdtemp(c->dbpath);
+  assert(c->dbpath);
+
+  auto b = std::unique_ptr<LMDBBackend>(new LMDBBackend());
+  b->Init(c->dbpath, true);
+
+  be = b.release();
+  be_ctx = c.release();
 }
 
 void BackendTest::TearDown() {
-  // free backend instance in `be`
+  //be->Close();
+  //delete be;
 }
 
 void LibZLogTest::SetUp() {
-  BackendTest::SetUp();
-  // create log with backend in `be`
-  // assigned log instance to `log`
+  //BackendTest::SetUp();
+  //auto client = new FakeSeqrClient();
 }
 
 void LibZLogTest::TearDown() {
-  // free log instance in `log`
-  BackendTest::TearDown();
+  //BackendTest::TearDown();
+  //delete client;
+  //char cmd[64];
+  //sprintf(cmd, "rm -rf %s", dbpath);
+  //system(cmd);
+  //free(dbpath);
 }
