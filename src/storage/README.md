@@ -8,16 +8,16 @@ See `CMakeLists.txt` for linking requirements.
 
 void BackendTest::SetUp() {
   // create storage backend instance
-  // assigned instance to `be`
+  // assigned instance to `backend`
 }
 
 void BackendTest::TearDown() {
-  // free backend instance in `be`
+  // free backend instance in `backend`
 }
 
 void LibZLogTest::SetUp() {
-  BackendTest::SetUp();
-  // create log with backend in `be`
+  ASSERT_NO_FATAL_FAILURE(BackendTest::SetUp());
+  // create log with backend in `backend`
   // assigned log instance to `log`
 }
 
