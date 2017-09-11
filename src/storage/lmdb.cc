@@ -28,6 +28,91 @@ LMDBBackend::~LMDBBackend()
   mdb_env_sync(env, 1);
 }
 
+int LMDBBackend::CreateLog(const std::string& name,
+    const std::string& initial_view)
+{
+  auto txn = NewTransaction();
+
+  MDB_val val;
+  std::string oid_key = ObjectKey(name);
+  int ret = txn.Get(oid_key, val);
+  if (!ret) {
+    txn.Abort();
+    return -EEXIST;
+  }
+
+  ProjectionObject proj_obj;
+  val.mv_data = &proj_obj;
+  val.mv_size = sizeof(proj_obj);
+  ret = txn.Put(oid_key, val, true);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  std::string proj_key = ProjectionKey(name,
+      proj_obj.latest_epoch);
+  val.mv_data = (void*)initial_view.data();
+  val.mv_size = initial_view.size();
+  ret = txn.Put(proj_key, val, true);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  ret = txn.Commit();
+  if (ret)
+    return ret;
+
+  return 0;
+}
+
+int LMDBBackend::OpenLog(const std::string& name,
+    std::string& hoid, std::string& prefix)
+{
+  hoid = name;
+  prefix = name;
+  return 0;
+}
+
+int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
+    std::map<uint64_t, std::string>& views)
+{
+  auto txn = NewTransaction(true);
+
+  MDB_val val;
+  std::string oid_key = ObjectKey(hoid);
+  int ret = txn.Get(oid_key, val);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
+  assert(val.mv_size == sizeof(*proj_obj));
+
+  if (epoch > proj_obj->latest_epoch) {
+    txn.Abort();
+    return 0;
+  }
+
+  std::string proj_key = ProjectionKey(hoid, epoch);
+  ret = txn.Get(proj_key, val);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  views.emplace(epoch,
+      std::string((const char *)val.mv_data, val.mv_size));
+
+  ret = txn.Commit();
+  if (ret)
+    return ret;
+
+  return 0;
+}
+
 #if 0
 int LMDBBackend::Exists(const std::string& oid)
 {
@@ -52,77 +137,11 @@ int LMDBBackend::Exists(const std::string& oid)
 int LMDBBackend::CreateHeadObject(const std::string& oid,
     const zlog_proto::MetaLog& data)
 {
-  std::string blob;
-  assert(data.IsInitialized());
-  assert(data.SerializeToString(&blob));
-
-  auto txn = NewTransaction();
-
-  MDB_val val;
-  std::string oid_key = ObjectKey(oid);
-  int ret = txn.Get(oid_key, val);
-  if (!ret) {
-    txn.Abort();
-    return -EEXIST;
-  }
-
-  ProjectionObject proj_obj;
-  val.mv_data = &proj_obj;
-  val.mv_size = sizeof(proj_obj);
-  ret = txn.Put(oid_key, val, true);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
-
-  std::string proj_key = ProjectionKey(oid,
-      proj_obj.latest_epoch);
-  val.mv_data = (void*)blob.data();
-  val.mv_size = blob.size();
-  ret = txn.Put(proj_key, val, true);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
-
-  ret = txn.Commit();
-  if (ret)
-    return ret;
-
-  return 0;
 }
 
 int LMDBBackend::LatestProjection(const std::string& oid,
     uint64_t *epoch, zlog_proto::MetaLog& config)
 {
-  auto txn = NewTransaction(true);
-
-  MDB_val val;
-  std::string oid_key = ObjectKey(oid);
-  int ret = txn.Get(oid_key, val);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
-
-  ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
-  assert(val.mv_size == sizeof(*proj_obj));
-
-  std::string proj_key = ProjectionKey(oid, proj_obj->latest_epoch);
-  ret = txn.Get(proj_key, val);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
-
-  *epoch = proj_obj->latest_epoch;
-  assert(config.ParseFromArray(val.mv_data, val.mv_size));
-
-  ret = txn.Commit();
-  if (ret)
-    return ret;
-
-  return 0;
 }
 
 int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,

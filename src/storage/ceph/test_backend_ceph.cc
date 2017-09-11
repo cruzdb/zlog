@@ -7,78 +7,72 @@
 #include "libzlog/test_libzlog.h"
 #include "zlog/backend/ceph.h"
 
-struct Context {
+class BackendTest::Context {
+ public:
   librados::Rados cluster;
   librados::IoCtx ioctx;
   std::string pool_name;
-  zlog::SeqrClient *client = nullptr;
+};
+
+class LibZLogTest::Context {
+ public:
+  std::unique_ptr<zlog::SeqrClient> client;
 };
 
 void BackendTest::SetUp() {
-  be_ctx = new Context;
-  auto& cluster = ((Context*)be_ctx)->cluster;
-  auto& ioctx = ((Context*)be_ctx)->ioctx;
-  auto& pool_name = ((Context*)be_ctx)->pool_name;
+  context = new BackendTest::Context;
 
-  int ret = cluster.init(NULL);
+  int ret = context->cluster.init(NULL);
   ASSERT_EQ(ret, 0);
 
-  ret = cluster.conf_read_file(NULL);
+  ret = context->cluster.conf_read_file(NULL);
   ASSERT_EQ(ret, 0);
 
-  ret = cluster.connect();
+  ret = context->cluster.connect();
   ASSERT_EQ(ret, 0);
 
   boost::uuids::uuid uuid = boost::uuids::random_generator()();
-  pool_name = "cls_zlog_test." + boost::uuids::to_string(uuid);
+  context->pool_name = "cls_zlog_test." + boost::uuids::to_string(uuid);
 
-  ret = cluster.pool_create(pool_name.c_str());
+  ret = context->cluster.pool_create(context->pool_name.c_str());
   ASSERT_EQ(ret, 0);
 
-  ret = cluster.ioctx_create(pool_name.c_str(), ioctx);
+  ret = context->cluster.ioctx_create(context->pool_name.c_str(),
+      context->ioctx);
   ASSERT_EQ(ret, 0);
 
-  be = new CephBackend(&ioctx);
+  backend = std::unique_ptr<CephBackend>(new CephBackend(&context->ioctx));
 }
 
 void BackendTest::TearDown() {
-  if (be) {
-    delete be;
-  }
-
-  if (be_ctx) {
-    auto& cluster = ((Context*)be_ctx)->cluster;
-    auto& ioctx = ((Context*)be_ctx)->ioctx;
-    auto& pool_name = ((Context*)be_ctx)->pool_name;
-
-    ioctx.close();
-    cluster.pool_delete(pool_name.c_str());
-    cluster.shutdown();
-
-    delete (Context*)be_ctx;
+  if (context) {
+    context->ioctx.close();
+    context->cluster.pool_delete(context->pool_name.c_str());
+    context->cluster.shutdown();
+    delete context;
   }
 }
 
 void LibZLogTest::SetUp() {
-  BackendTest::SetUp();
-  auto& client = ((Context*)be_ctx)->client;
+  ASSERT_NO_FATAL_FAILURE(BackendTest::SetUp());
 
-  client = new zlog::SeqrClient("localhost", "5678");
-  ASSERT_NO_THROW(client->Connect());
+  context = new LibZLogTest::Context;
 
-  int ret = zlog::Log::Create(be, "mylog", client, &log);
+  context->client = std::unique_ptr<zlog::SeqrClient>(
+      new zlog::SeqrClient("localhost", "5678"));
+  ASSERT_NO_THROW(context->client->Connect());
+
+  zlog::Log *l;
+  int ret = zlog::Log::Create(backend.get(), "mylog",
+      context->client.get(), &l);
   ASSERT_EQ(ret, 0);
+
+  log.reset(l);
 }
 
 void LibZLogTest::TearDown() {
-  if (log) {
-    delete log;
+  if (context) {
+    delete context;
   }
-
-  auto client = ((Context*)be_ctx)->client;
-  if (client) {
-    delete client;
-  }
-
   BackendTest::TearDown();
 }

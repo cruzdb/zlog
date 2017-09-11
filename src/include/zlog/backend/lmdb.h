@@ -1,5 +1,4 @@
-#ifndef ZLOG_BACKEND_LMDB_H
-#define ZLOG_BACKEND_LMDB_H
+#pragma once
 #include <vector>
 #include <sstream>
 #include <iostream>
@@ -29,19 +28,13 @@ class LMDBBackend : public Backend {
   }
 
   int CreateLog(const std::string& name,
-      const std::string& initial_view) override {
-    assert(0);
-  }
+      const std::string& initial_view) override;
 
   int OpenLog(const std::string& name,
-      std::string& hoid, std::string& prefix) override {
-    assert(0);
-  }
+      std::string& hoid, std::string& prefix) override;
 
   int ReadViews(const std::string& hoid, uint64_t epoch,
-      std::map<uint64_t, std::string>& views) override {
-    assert(0);
-  }
+      std::map<uint64_t, std::string>& views) override;
 
   int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) override {
@@ -192,5 +185,3 @@ class LMDBBackend : public Backend {
   int CheckEpoch(Transaction& txn, uint64_t epoch, const std::string& oid,
       bool eq = false);
 };
-
-#endif

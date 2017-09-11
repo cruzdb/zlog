@@ -76,19 +76,19 @@ TEST_F(LibZLogTest, Aio) {
 TEST_F(LibZLogTest, Create) {
   zlog::Log *log = NULL;
 
-  int ret = zlog::Log::Create(be, "", NULL, &log);
+  int ret = zlog::Log::Create(backend.get(), "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
   // TODO: creating a log with NULL seqclient should be an error
-  ret = zlog::Log::Create(be, "mylog2", NULL, &log);
+  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
   delete log;
   log = NULL;
 
-  ret = zlog::Log::Create(be, "mylog2", NULL, &log);
+  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
   ASSERT_EQ(ret, -EEXIST);
   ASSERT_EQ(log, nullptr);
 }
@@ -96,22 +96,22 @@ TEST_F(LibZLogTest, Create) {
 TEST_F(LibZLogTest, Open) {
   zlog::Log *log = NULL;
 
-  int ret = zlog::Log::Open(be, "", NULL, &log);
+  int ret = zlog::Log::Open(backend.get(), "", NULL, &log);
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
-  ret = zlog::Log::Open(be, "dne", NULL, &log);
+  ret = zlog::Log::Open(backend.get(), "dne", NULL, &log);
   ASSERT_EQ(ret, -ENOENT);
   ASSERT_EQ(log, nullptr);
 
-  ret = zlog::Log::Create(be, "mylog2", NULL, &log);
+  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 
   delete log;
   log = NULL;
 
-  ret = zlog::Log::Open(be, "mylog2", NULL, &log);
+  ret = zlog::Log::Open(backend.get(), "mylog2", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);
 

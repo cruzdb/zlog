@@ -4,8 +4,11 @@
 
 class LibZLogTest : public BackendTest {
  protected:
+  class Context;
+
   void SetUp() override;
   void TearDown() override;
 
-  zlog::Log *log = nullptr;
+  std::unique_ptr<zlog::Log> log;
+  Context *context = nullptr;
 };

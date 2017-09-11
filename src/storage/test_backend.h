@@ -4,9 +4,11 @@
 
 class BackendTest : public ::testing::Test {
  protected:
+  class Context;
+
   void SetUp() override;
   void TearDown() override;
 
-  Backend *be = nullptr;
-  void *be_ctx = nullptr;
+  std::unique_ptr<Backend> backend;
+  Context *context = nullptr;
 };
