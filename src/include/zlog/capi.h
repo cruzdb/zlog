@@ -1,5 +1,4 @@
 #pragma once
-#include <rados/librados.h>
 #include "zlog/backend.h"
 
 #ifdef __cplusplus

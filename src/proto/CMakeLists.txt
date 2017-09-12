@@ -8,6 +8,7 @@ target_include_directories(zlog_proto
 )
 install(TARGETS zlog_proto DESTINATION lib)
 
+if(BUILD_CEPH_BACKEND)
 PROTOBUF_GENERATE_CPP(BENCH_PROTO_SRCS BENCH_PROTO_HDRS adapter_test.proto)
 add_executable(adapter_bench adapter_bench.cc ${BENCH_PROTO_SRCS}
   ${BENCH_PROTO_HDRS})
@@ -18,3 +19,4 @@ target_link_libraries(adapter_bench
 target_include_directories(adapter_bench
   PUBLIC ${PROTOBUF_INCLUDE_DIR}
 )
+endif(BUILD_CEPH_BACKEND)
