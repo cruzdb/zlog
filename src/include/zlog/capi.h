@@ -10,13 +10,13 @@ typedef void *zlog_log_t;
 typedef void *zlog_stream_t;
 
 int zlog_create(zlog_backend_t backend, const char *name,
-    const char *host, const char *port, zlog_log_t *log);
+    zlog_sequencer_t seqr, zlog_log_t *log);
 
 int zlog_open(zlog_backend_t backend, const char *name,
-    const char *host, const char *port, zlog_log_t *log);
+    zlog_sequencer_t seqr, zlog_log_t *log);
 
 int zlog_open_or_create(zlog_backend_t backend, const char *name,
-    const char *host, const char *port, zlog_log_t *log);
+    zlog_sequencer_t seqr, zlog_log_t *log);
 
 /*
  *

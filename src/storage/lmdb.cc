@@ -520,5 +520,31 @@ void LMDBBackend::Init(const std::string& path, bool empty)
 void LMDBBackend::Close()
 {
   mdb_env_sync(env, 1);
+  return;
   mdb_env_close(env);
+}
+
+// TODO: backend must be first member for proper casting by capi. this needs a
+// better / safer method.
+struct LMDBBackendWrapper {
+  LMDBBackend *backend;
+};
+
+extern "C" int zlog_create_lmdb_backend(const char *path,
+    zlog_backend_t *backend)
+{
+  auto b = new LMDBBackendWrapper;
+  b->backend = new LMDBBackend();
+  b->backend->Init(path, true);
+  *backend = (void*)b;
+  return 0;
+}
+
+extern "C" int zlog_destroy_lmdb_backend(zlog_backend_t backend)
+{
+  auto b = (LMDBBackendWrapper*)backend;
+  b->backend->Close();
+  delete b->backend;
+  delete b;
+  return 0;
 }

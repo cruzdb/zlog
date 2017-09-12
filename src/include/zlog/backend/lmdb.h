@@ -1,4 +1,7 @@
 #pragma once
+#include "zlog/backend.h"
+
+#ifdef __cplusplus
 #include <vector>
 #include <sstream>
 #include <iostream>
@@ -185,3 +188,13 @@ class LMDBBackend : public Backend {
   int CheckEpoch(Transaction& txn, uint64_t epoch, const std::string& oid,
       bool eq = false);
 };
+
+extern "C" {
+#endif
+
+int zlog_create_lmdb_backend(const char *path, zlog_backend_t *backend);
+int zlog_destroy_lmdb_backend(zlog_backend_t backend);
+
+#ifdef __cplusplus
+}
+#endif

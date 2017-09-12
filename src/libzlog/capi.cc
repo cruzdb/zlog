@@ -8,7 +8,6 @@
 #include "include/zlog/capi.h"
 
 struct zlog_log_ctx {
-  zlog::SeqrClient *seqr;
   zlog::Log *log;
 };
 
@@ -21,23 +20,18 @@ extern "C" int zlog_destroy(zlog_log_t log)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   delete ctx->log;
-  delete ctx->seqr;
   delete ctx;
   return 0;
 }
 
 extern "C" int zlog_create(zlog_backend_t backend, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
+    zlog_sequencer_t seqr, zlog_log_t *log)
 {
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
   int ret = zlog::Log::Create(*((Backend**)backend), name,
-      ctx->seqr, &ctx->log);
+      (zlog::SeqrClient*)seqr, &ctx->log);
   if (ret) {
-    delete ctx->seqr;
     delete ctx;
   } else {
     *log = ctx;
@@ -47,17 +41,13 @@ extern "C" int zlog_create(zlog_backend_t backend, const char *name,
 }
 
 extern "C" int zlog_open(zlog_backend_t backend, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
+    zlog_sequencer_t seqr, zlog_log_t *log)
 {
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
   int ret = zlog::Log::Open(*((Backend**)backend), name,
-      ctx->seqr, &ctx->log);
+      (zlog::SeqrClient*)seqr, &ctx->log);
   if (ret) {
-    delete ctx->seqr;
     delete ctx;
   } else {
     *log = ctx;
@@ -67,17 +57,13 @@ extern "C" int zlog_open(zlog_backend_t backend, const char *name,
 }
 
 extern "C" int zlog_open_or_create(zlog_backend_t backend, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
+    zlog_sequencer_t seqr, zlog_log_t *log)
 {
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
   int ret = zlog::Log::OpenOrCreate(*((Backend**)backend), name,
-      ctx->seqr, &ctx->log);
+      (zlog::SeqrClient*)seqr, &ctx->log);
   if (ret) {
-    delete ctx->seqr;
     delete ctx;
   } else {
     *log = ctx;

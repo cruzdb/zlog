@@ -21,6 +21,7 @@ class BackendTest::Context {
 class LibZLogTest::Context {
  public:
   std::unique_ptr<zlog::SeqrClient> client;
+  zlog_sequencer_t c_client;
 };
 
 void BackendTest::SetUp() {
@@ -94,7 +95,10 @@ void LibZLogTest::SetUp() {
   ASSERT_EQ(ret, 0);
 
   // C API
-  ret = zlog_create(c_backend, "c_mylog", "localhost", "5678", &c_log);
+  ret = zlog_create_sequencer("localhost", "5678", &context->c_client);
+  ASSERT_EQ(ret, 0);
+
+  ret = zlog_create(c_backend, "c_mylog", context->c_client, &c_log);
   ASSERT_EQ(ret, 0);
 
   log.reset(l);
@@ -102,6 +106,7 @@ void LibZLogTest::SetUp() {
 
 void LibZLogTest::TearDown() {
   if (context) {
+    zlog_destroy_sequencer(context->c_client);
     zlog_destroy(c_log);
     delete context;
   }

@@ -1,5 +1,9 @@
-#ifndef LIBSEQR_H
-#define LIBSEQR_H
+#pragma once
+
+// For the C API
+typedef void *zlog_sequencer_t;
+
+#ifdef __cplusplus
 #include <set>
 #include <vector>
 #include <mutex>
@@ -58,4 +62,16 @@ class SeqrClient {
 
 }
 
+extern "C" {
+#endif
+
+int zlog_create_sequencer(const char *host, const char *port,
+    zlog_sequencer_t *seqr);
+int zlog_destroy_sequencer(zlog_sequencer_t seqr);
+
+int zlog_create_fake_sequencer(zlog_sequencer_t *seqr);
+int zlog_destroy_fake_sequencer(zlog_sequencer_t seqr);
+
+#ifdef __cplusplus
+}
 #endif

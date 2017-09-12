@@ -1,6 +1,6 @@
-#ifndef ZLOG_INCLUDE_ZLOG_FAKESEQR_H
-#define ZLOG_INCLUDE_ZLOG_FAKESEQR_H
+#pragma once
 #include <deque>
+#include <iostream>
 #include "libzlog/log_impl.h"
 
 class FakeSeqrClient : public zlog::SeqrClient {
@@ -162,5 +162,3 @@ class FakeSeqrClient : public zlog::SeqrClient {
 
   std::map<std::pair<std::string, std::string>, entry> entries_;
 };
-
-#endif

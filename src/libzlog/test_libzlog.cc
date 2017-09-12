@@ -585,34 +585,34 @@ TEST_F(LibZLogTest, CAPI_Trim) {
 TEST_F(LibZLogTest, CAPI_Create) {
   zlog_log_t log2;
 
-  int ret = zlog_create(c_backend, "", "localhost", "5678", &log2);
+  int ret = zlog_create(c_backend, "", NULL, &log2);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog_create(c_backend, "mylog3", "localhost", "5678", &log2);
+  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
   ASSERT_EQ(ret, 0);
 
   ret = zlog_destroy(log2);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_create(c_backend, "mylog3", "localhost", "5678", &log2);
+  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
   ASSERT_EQ(ret, -EEXIST);
 }
 
 TEST_F(LibZLogTest, CAPI_Open) {
   zlog_log_t log2;
 
-  int ret = zlog_open(c_backend, "", "localhost", "5678", &log2);
+  int ret = zlog_open(c_backend, "", NULL, &log2);
   ASSERT_EQ(ret, -EINVAL);
 
-  ret = zlog_open(c_backend, "dne", "localhost", "5678", &log2);
+  ret = zlog_open(c_backend, "dne", NULL, &log2);
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = zlog_create(c_backend, "mylog3", "localhost", "5678", &log2);
+  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
   ASSERT_EQ(ret, 0);
   ret = zlog_destroy(log2);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_open(c_backend, "mylog3", "localhost", "5678", &log2);
+  ret = zlog_open(c_backend, "mylog3", NULL, &log2);
   ASSERT_EQ(ret, 0);
   ret = zlog_destroy(log2);
   ASSERT_EQ(ret, 0);

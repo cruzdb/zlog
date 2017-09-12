@@ -4,6 +4,7 @@
 #include <boost/asio.hpp>
 #include "libseqr.h"
 #include "proto/zlog.pb.h"
+#include "zlog/backend/fakeseqr.h"
 
 namespace zlog {
 
@@ -204,6 +205,36 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
       *pposition = reply.position(0);
   }
 
+  return 0;
+}
+
+extern "C" int zlog_create_sequencer(const char *host, const char *port,
+    zlog_sequencer_t *seqr)
+{
+  auto s = new zlog::SeqrClient(host, port);
+  s->Connect();
+  *seqr = (void*)s;
+  return 0;
+}
+
+extern "C" int zlog_destroy_sequencer(zlog_sequencer_t seqr)
+{
+  auto s = (zlog::SeqrClient*)seqr;
+  delete s;
+  return 0;
+}
+
+extern "C" int zlog_create_fake_sequencer(zlog_sequencer_t *seqr)
+{
+  auto s = new FakeSeqrClient();
+  *seqr = (void*)s;
+  return 0;
+}
+
+extern "C" int zlog_destroy_fake_sequencer(zlog_sequencer_t seqr)
+{
+  auto s = (FakeSeqrClient*)seqr;
+  delete s;
   return 0;
 }
 
