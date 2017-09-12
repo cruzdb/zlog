@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "zlog/backend.h"
 #include "gtest/gtest.h"
 
