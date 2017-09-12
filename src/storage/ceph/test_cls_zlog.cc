@@ -220,7 +220,8 @@ TEST_F(ClsZlogTest, ReadEntry_InvalidEntryForced) {
   ceph::bufferlist bl2;
   ret = entry_read(0, 160, bl2);
   ASSERT_EQ(ret, 0);
-  ASSERT_EQ(bl, bl2);
+  ASSERT_EQ(bl.length(), bl2.length());
+  ASSERT_TRUE(memcmp(bl.c_str(), bl2.c_str(), bl.length()) == 0);
 
   ret = entry_inval(0, 160, false);
   ASSERT_EQ(ret, -EROFS);
@@ -243,7 +244,8 @@ TEST_F(ClsZlogTest, ReadEntry_SuccessUnsealed) {
   ret = entry_read(0, 160, bl2);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(bl, bl2);
+  ASSERT_EQ(bl.length(), bl2.length());
+  ASSERT_TRUE(memcmp(bl.c_str(), bl2.c_str(), bl.length()) == 0);
 }
 
 TEST_F(ClsZlogTest, ReadEntry_SuccessSealed) {
@@ -262,7 +264,8 @@ TEST_F(ClsZlogTest, ReadEntry_SuccessSealed) {
   ret = entry_read(11, 160, bl2);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_EQ(bl, bl2);
+  ASSERT_EQ(bl.length(), bl2.length());
+  ASSERT_TRUE(memcmp(bl.c_str(), bl2.c_str(), bl.length()) == 0);
 }
 
 TEST_F(ClsZlogTest, WriteEntry_BadInput) {
