@@ -2,9 +2,16 @@
 
 set -e
 
+COVERAGE_ENV=""
+if [ "${RUN_COVERAGE}" == 1 ]; then
+  COVERAGE_ENV=`bash <(curl -s https://codecov.io/env)`
+fi
+echo $COVERAGE_ENV
+
 if [ ! -z ${DOCKER_IMAGE+x} ]; then
   docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog:ro -w /zlog \
-    ${DOCKER_IMAGE} /bin/bash -c "./install-deps.sh && ./ci/install-ceph.sh && ./ci/run.sh"
+    ${COVERAGE_ENV} ${DOCKER_IMAGE} \
+    /bin/bash -c "./install-deps.sh && ./ci/install-ceph.sh && ./ci/run.sh"
 else
   ${TRAVIS_BUILD_DIR}/install-deps.sh
   ${TRAVIS_BUILD_DIR}/ci/install-ceph.sh

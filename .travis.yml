@@ -44,8 +44,8 @@ matrix:
       env: DOCKER_IMAGE=ubuntu:yakkety
     - os: linux
       env: DOCKER_IMAGE=ubuntu:zesty
-    #- os: linux
-    #  env: DOCKER_IMAGE=ubuntu:xenial RUN_COVERAGE=1
+    - os: linux
+      env: DOCKER_IMAGE=ubuntu:zesty RUN_COVERAGE=1
     - os: osx
 
 
