@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 2.8.12)
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
-
 project(zlog)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -10,10 +9,17 @@ if(APPLE)
   cmake_policy(SET CMP0042 NEW)
 endif()
 
+# put all the libs and binaries in one place
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -g")
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     include(CodeCoverage)
-    SET(CMAKE_CXX_FLAGS "-g -O0 -fprofile-arcs -ftest-coverage")
-    SET(CMAKE_C_FLAGS "-g -O0 -fprofile-arcs -ftest-coverage")
+    APPEND_COVERAGE_COMPILER_FLAGS()
 endif()
 
 # require c++11 (Stolen from Ceph)
@@ -25,17 +31,22 @@ else()
   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support.")
 endif()
 
-# put all the libs and binaries in one place
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -g")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -g")
+SET(CMAKE_SKIP_BUILD_RPATH FALSE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES
+  "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+IF("${isSystemDir}" STREQUAL "-1")
+  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+ENDIF("${isSystemDir}" STREQUAL "-1")
 
 find_package(Boost COMPONENTS system program_options REQUIRED)
-find_package(Protobuf REQUIRED)
+find_package(LMDB REQUIRED)
 
+include(CheckIncludeFile)
+CHECK_INCLUDE_FILE(rados/objclass.h HAVE_RADOS_OBJECT_CLASS_H)
+
+find_package(Protobuf REQUIRED)
 if(NOT PROTOBUF_PROTOC_EXECUTABLE)
   message(FATAL_ERROR "cannot find protobuf compiler")
 endif()
@@ -48,18 +59,5 @@ if(${LIBRADOS_FOUND})
 elseif(WITH_CEPH)
   message(FATAL_ERROR "Cannot find librados")
 endif()
-
-SET(CMAKE_SKIP_BUILD_RPATH FALSE)
-SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
-IF("${isSystemDir}" STREQUAL "-1")
-  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-ENDIF("${isSystemDir}" STREQUAL "-1")
-
-include(CheckIncludeFile)
-CHECK_INCLUDE_FILE(rados/objclass.h HAVE_RADOS_OBJECT_CLASS_H)
-
-find_package(LMDB REQUIRED)
 
 add_subdirectory(src)
