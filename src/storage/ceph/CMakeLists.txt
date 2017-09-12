@@ -47,6 +47,8 @@ target_link_libraries(zlog_test_backend_ceph
   rados
   libzlog
   gtest_main)
+install(TARGETS zlog_test_backend_ceph DESTINATION bin)
+
 endif(BUILD_CEPH_BACKEND)
 
 if(HAVE_RADOS_OBJECT_CLASS_H)

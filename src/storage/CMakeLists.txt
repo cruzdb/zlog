@@ -12,3 +12,4 @@ target_link_libraries(zlog_test_backend_lmdb
   ${Boost_SYSTEM_LIBRARY}
   libzlog
   gtest_main)
+install(TARGETS zlog_test_backend_lmdb DESTINATION bin)
