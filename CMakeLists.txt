@@ -19,7 +19,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wall -g")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     include(CodeCoverage)
-    APPEND_COVERAGE_COMPILER_FLAGS()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -fprofile-arcs -ftest-coverage")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -fprofile-arcs -ftest-coverage")
 endif()
 
 # require c++11 (Stolen from Ceph)
