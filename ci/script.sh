@@ -3,7 +3,7 @@
 set -e
 
 if [ ! -z ${DOCKER_IMAGE+x} ]; then
-  docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog -w /zlog \
+  docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog:ro -w /zlog \
     ${DOCKER_IMAGE} /bin/bash -c "./install-deps.sh && ./ci/install-ceph.sh && ./ci/run.sh"
 else
   ${TRAVIS_BUILD_DIR}/install-deps.sh
