@@ -18,8 +18,10 @@ add_library(libkvstore SHARED
 target_link_libraries(libkvstore libzlog kvstore_proto)
 install(TARGETS libkvstore LIBRARY DESTINATION lib)
 
+if(BUILD_CEPH_BACKEND)
 add_executable(thrash thrash.cc)
 target_link_libraries(thrash libzlog zlog_seqr libkvstore zlog_seqr)
+endif(BUILD_CEPH_BACKEND)
 
 add_executable(rbt rbt.cc)
 target_link_libraries(rbt libkvstore zlog_seqr)
