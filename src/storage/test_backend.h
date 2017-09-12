@@ -10,5 +10,6 @@ class BackendTest : public ::testing::Test {
   void TearDown() override;
 
   std::unique_ptr<Backend> backend;
+  zlog_backend_t c_backend;
   Context *context = nullptr;
 };

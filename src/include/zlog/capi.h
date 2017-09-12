@@ -1,7 +1,6 @@
-#ifndef LIBZLOG_ZLOG_H
-#define LIBZLOG_ZLOG_H
-
+#pragma once
 #include <rados/librados.h>
+#include "zlog/backend.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,23 +9,13 @@ extern "C" {
 typedef void *zlog_log_t;
 typedef void *zlog_stream_t;
 
-/*
- *
- */
-int zlog_create(rados_ioctx_t ioctx, const char *name,
+int zlog_create(zlog_backend_t backend, const char *name,
     const char *host, const char *port, zlog_log_t *log);
 
-/*
- *
- */
-int zlog_open(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port,
-    zlog_log_t *log);
+int zlog_open(zlog_backend_t backend, const char *name,
+    const char *host, const char *port, zlog_log_t *log);
 
-/*
- *
- */
-int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
+int zlog_open_or_create(zlog_backend_t backend, const char *name,
     const char *host, const char *port, zlog_log_t *log);
 
 /*
@@ -112,6 +101,4 @@ int zlog_stream_membership(zlog_log_t log, uint64_t *stream_ids,
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

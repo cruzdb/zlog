@@ -8,6 +8,11 @@
 #include "zlog/slice.h"
 #include "proto/zlog.pb.h"
 
+// For the C API
+typedef void *zlog_backend_t;
+
+#ifdef __cplusplus
+
 // All methods return 0 on success, or a negative error code on failure. The
 // following error codes are common for all methods, unless otherwise specified
 // in a method comment. Each method comment also lists any return codes with
@@ -120,3 +125,5 @@ class Backend {
  public:
   virtual std::string pool() = 0;
 };
+
+#endif

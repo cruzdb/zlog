@@ -1,8 +1,9 @@
 #pragma once
-#include <rados/librados.hpp>
 #include "zlog/backend.h"
+
+#ifdef __cplusplus
+#include <rados/librados.hpp>
 #include <iostream>
-#include "proto/protobuf_bufferlist_adapter.h"
 
 class CephBackend : public Backend {
  public:
@@ -71,3 +72,13 @@ class CephBackend : public Backend {
       const std::string& hoid);
   int InitHeadObject(const std::string& hoid, const std::string& prefix);
 };
+
+extern "C" {
+#endif
+
+int zlog_create_ceph_backend(rados_ioctx_t ioctx, zlog_backend_t *backend);
+int zlog_destroy_ceph_backend(zlog_backend_t backend);
+
+#ifdef __cplusplus
+}
+#endif

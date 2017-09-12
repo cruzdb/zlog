@@ -7,6 +7,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include "proto/protobuf_bufferlist_adapter.h"
 #include "zlog/backend/ceph.h"
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
@@ -329,4 +330,29 @@ void CephBackend::aio_safe_cb_read(librados::completion_t cb, void *arg)
     c->data->assign(c->bl.c_str(), c->bl.length());
   c->cb(c->arg, ret);
   delete c;
+}
+
+// TODO: backend must be first member for proper casting by capi. this needs a
+// better / safer method.
+struct CephBackendWrapper {
+  CephBackend *backend;
+  librados::IoCtx ioctx;
+};
+
+extern "C" int zlog_create_ceph_backend(rados_ioctx_t ioctx,
+    zlog_backend_t *backend)
+{
+  auto b = std::unique_ptr<CephBackendWrapper>(new CephBackendWrapper);
+  librados::IoCtx::from_rados_ioctx_t(ioctx, b->ioctx);
+  b->backend = new CephBackend(&b->ioctx);
+  *backend = (void*)b.release();
+  return 0;
+}
+
+extern "C" int zlog_destroy_ceph_backend(zlog_backend_t backend)
+{
+  auto b = (CephBackendWrapper*)backend;
+  delete b->backend;
+  delete b;
+  return 0;
 }

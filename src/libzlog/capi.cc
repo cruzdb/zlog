@@ -8,8 +8,6 @@
 #include "include/zlog/capi.h"
 
 struct zlog_log_ctx {
-  librados::IoCtx ioctx;
-  Backend *be;
   zlog::SeqrClient *seqr;
   zlog::Log *log;
 };
@@ -24,11 +22,71 @@ extern "C" int zlog_destroy(zlog_log_t log)
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   delete ctx->log;
   delete ctx->seqr;
-  delete ctx->be;
   delete ctx;
   return 0;
 }
 
+extern "C" int zlog_create(zlog_backend_t backend, const char *name,
+    const char *host, const char *port, zlog_log_t *log)
+{
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  ctx->seqr = new zlog::SeqrClient(host, port);
+  ctx->seqr->Connect();
+
+  int ret = zlog::Log::Create(*((Backend**)backend), name,
+      ctx->seqr, &ctx->log);
+  if (ret) {
+    delete ctx->seqr;
+    delete ctx;
+  } else {
+    *log = ctx;
+  }
+
+  return ret;
+}
+
+extern "C" int zlog_open(zlog_backend_t backend, const char *name,
+    const char *host, const char *port, zlog_log_t *log)
+{
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  ctx->seqr = new zlog::SeqrClient(host, port);
+  ctx->seqr->Connect();
+
+  int ret = zlog::Log::Open(*((Backend**)backend), name,
+      ctx->seqr, &ctx->log);
+  if (ret) {
+    delete ctx->seqr;
+    delete ctx;
+  } else {
+    *log = ctx;
+  }
+
+  return ret;
+}
+
+extern "C" int zlog_open_or_create(zlog_backend_t backend, const char *name,
+    const char *host, const char *port, zlog_log_t *log)
+{
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  ctx->seqr = new zlog::SeqrClient(host, port);
+  ctx->seqr->Connect();
+
+  int ret = zlog::Log::OpenOrCreate(*((Backend**)backend), name,
+      ctx->seqr, &ctx->log);
+  if (ret) {
+    delete ctx->seqr;
+    delete ctx;
+  } else {
+    *log = ctx;
+  }
+
+  return ret;
+}
+
+#if 0
 extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
     const char *host, const char *port,
     zlog_log_t *log)
@@ -58,26 +116,6 @@ extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
 extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
     const char *host, const char *port, zlog_log_t *log)
 {
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
-  ctx->be = new CephBackend(&ctx->ioctx);
-
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
-  int ret = zlog::Log::Create(ctx->be, name,
-      ctx->seqr, &ctx->log);
-  if (ret) {
-    delete ctx->be;
-    delete ctx->seqr;
-    delete ctx;
-    return ret;
-  }
-
-  *log = ctx;
-
-  return 0;
 }
 
 extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
@@ -104,6 +142,7 @@ extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
 
   return 0;
 }
+#endif
 
 extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition)
 {
