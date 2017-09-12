@@ -13,3 +13,8 @@ target_link_libraries(zlog_test_backend_lmdb
   libzlog
   gtest_main)
 install(TARGETS zlog_test_backend_lmdb DESTINATION bin)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+  setup_target_for_coverage(zlog_test_backend_lmdb_coverage
+    zlog_test_backend_lmdb coverage)
+endif()

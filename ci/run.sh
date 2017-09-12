@@ -38,7 +38,25 @@ popd
 
 PATH=${INSTALL_DIR}/bin:$PATH
 
+# run tests
 zlog_test_backend_lmdb
+
+# run coverage tests
+if [ "${RUN_COVERAGE}" == 1 ]; then
+  #rm -rf /tmp/zlog-db
+  #mkdir /tmp/zlog-db # for bench-cov (see src/kvstore/CMakeLists.txt)
+
+  pushd ${BUILD_DIR}
+  for coverage_test in zlog_test_backend_lmdb_coverage; do
+    make ${coverage_test}
+    rm -rf coverage*
+    lcov --directory . --capture --output-file coverage.info
+    lcov --remove coverage.info '/usr/*' '*/googletest/*' '*.pb.cc' '*.pb.h' --output-file coverage2.info
+    bash <(curl -s https://codecov.io/bash) -R ${ZLOG_DIR} -f coverage2.info || \
+      echo "Codecov did not collect coverage reports"
+  done
+  popd
+fi
 
 #
 ## ram backend tests
