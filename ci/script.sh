@@ -4,11 +4,8 @@ set -e
 
 COVERAGE_ENV=""
 if [ "${RUN_COVERAGE}" == 1 ]; then
-  COVERAGE_ENV="-e `bash <(curl -s https://codecov.io/env)`"
+  COVERAGE_ENV=`bash <(curl -s https://codecov.io/env)`
 fi
-
-echo $COVERAGE_ENV
-env
 
 if [ ! -z ${DOCKER_IMAGE+x} ]; then
   docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog:ro -w /zlog \
