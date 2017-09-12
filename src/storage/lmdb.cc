@@ -520,7 +520,6 @@ void LMDBBackend::Init(const std::string& path, bool empty)
 void LMDBBackend::Close()
 {
   mdb_env_sync(env, 1);
-  return;
   mdb_env_close(env);
 }
 
