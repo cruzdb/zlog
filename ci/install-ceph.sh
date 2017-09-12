@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-set -x
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   exit 0
@@ -20,7 +19,7 @@ case $ID in
       apt-get install -y wget curl lsb-release \
       software-properties-common apt-transport-https
 
-    ceph_ver=kraken
+    ceph_ver=luminous
     ceph_deb_release=$(lsb_release -sc)
     ceph_http_code=$(curl -o /dev/null --silent --head --write-out '%{http_code}' \
       http://download.ceph.com/debian-${ceph_ver}/dists/${ceph_deb_release}/)
@@ -40,7 +39,7 @@ case $ID in
 $SUDO cat <<EOF > /etc/yum.repos.d/ceph.conf
 [ceph]
 name=Ceph packages for $basearch
-baseurl=https://download.ceph.com/rpm-kraken/el7/$basearch
+baseurl=https://download.ceph.com/rpm-luminous/el7/$basearch
 enabled=1
 priority=2
 gpgcheck=1
@@ -48,7 +47,7 @@ gpgkey=https://download.ceph.com/keys/release.asc
 
 [ceph-noarch]
 name=Ceph noarch packages
-baseurl=https://download.ceph.com/rpm-kraken/el7/noarch
+baseurl=https://download.ceph.com/rpm-luminous/el7/noarch
 enabled=1
 priority=2
 gpgcheck=1
@@ -56,7 +55,7 @@ gpgkey=https://download.ceph.com/keys/release.asc
 
 [ceph-source]
 name=Ceph source packages
-baseurl=https://download.ceph.com/rpm-kraken/el7/SRPMS
+baseurl=https://download.ceph.com/rpm-luminous/el7/SRPMS
 enabled=0
 priority=2
 gpgcheck=1
