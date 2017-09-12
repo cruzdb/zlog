@@ -3,11 +3,8 @@ set(libzlog_sources
   stream.cc
   striper.cc
   aio.cc
+  capi.cc
   ../storage/lmdb.cc)
-
-if(BUILD_CEPH_BACKEND)
-  list(APPEND libzlog_sources capi.cc)
-endif(BUILD_CEPH_BACKEND)
 
 add_library(libzlog SHARED ${libzlog_sources})
 
