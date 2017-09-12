@@ -18,9 +18,9 @@ ${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
 test -r ${DOCS_DIR}/output/html/index.html
 
 CMAKE_BUILD_TYPE=Debug
-#if [ "${RUN_COVERAGE}" == 1 ]; then
-#  CMAKE_BUILD_TYPE=Coverage
-#fi
+if [ "${RUN_COVERAGE}" == 1 ]; then
+  CMAKE_BUILD_TYPE=Coverage
+fi
 
 # build and install zlog
 CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \

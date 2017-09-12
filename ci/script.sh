@@ -9,7 +9,7 @@ fi
 
 if [ ! -z ${DOCKER_IMAGE+x} ]; then
   docker run --rm -v ${TRAVIS_BUILD_DIR}:/zlog:ro -w /zlog \
-    ${COVERAGE_ENV} ${DOCKER_IMAGE} \
+    ${COVERAGE_ENV} -e RUN_COVERAGE ${DOCKER_IMAGE} \
     /bin/bash -c "env && ./install-deps.sh && ./ci/install-ceph.sh && ./ci/run.sh"
 else
   ${TRAVIS_BUILD_DIR}/install-deps.sh
