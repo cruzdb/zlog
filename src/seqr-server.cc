@@ -316,10 +316,9 @@ class LogManager {
      * interface.
      */
     if (stream_support && !empty) {
-      //assert(position > 0);
       uint64_t tail = position;
       std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
-      while (tail) {
+      for (;;) {
         for (;;) {
           std::set<uint64_t> stream_ids;
           ret = log->StreamMembership(epoch, stream_ids, tail);
@@ -333,10 +332,10 @@ class LogManager {
           } else if (ret == -EINVAL) {
             // skip non-stream entries
             break;
-          } else if (ret == -EFAULT) {
+          } else if (ret == -ENODATA) {
             // skip invalidated entries
             break;
-          } else if (ret == -ENODEV) {
+          } else if (ret == -ENOENT) {
             // fill entries unwritten entries
             ret = log->Fill(epoch, tail);
             if (ret == 0) {
@@ -346,15 +345,18 @@ class LogManager {
               // retry
               continue;
             } else {
-              std::cerr << "error initialing log stream: fill" << std::endl;
+              std::cerr << "error initialing log stream: fill: " << ret << std::endl;
               return ret;
             }
           } else {
-            std::cerr << "error initialing log stream: stream membership" << std::endl;
+            std::cerr << "error initialing log stream: stream membership: " << ret << std::endl;
             return ret;
           }
         }
-        tail--;
+        if (tail)
+          tail--;
+        else
+          break;
       }
       ptrs.swap(ptrs_out);
     }
