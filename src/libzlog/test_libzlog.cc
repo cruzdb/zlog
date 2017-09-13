@@ -80,7 +80,6 @@ TEST_F(LibZLogTest, Create) {
   ASSERT_EQ(ret, -EINVAL);
   ASSERT_EQ(log, nullptr);
 
-  // TODO: creating a log with NULL seqclient should be an error
   ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(log, nullptr);

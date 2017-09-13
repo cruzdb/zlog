@@ -523,8 +523,8 @@ void LMDBBackend::Close()
   mdb_env_close(env);
 }
 
-// TODO: backend must be first member for proper casting by capi. this needs a
-// better / safer method.
+// backend must be first member for proper casting by capi. this needs a better
+// safer method.
 struct LMDBBackendWrapper {
   LMDBBackend *backend;
 };

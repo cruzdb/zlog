@@ -1,7 +1,3 @@
-// TODO
-//  - use async methods for seal/maxpos
-//  - use condvar with batching for update view
-//  - check update view for erange in stream checktail
 #include "log_impl.h"
 
 #include <cerrno>
@@ -106,12 +102,6 @@ int LogImpl::UpdateView()
   }
 }
 
-// TODO
-//  - there are probably several scenarios in which we might want to retry cut
-//  creation (as opposed to just returning an error) if we encounter an error
-//  that is resulting from races with other clients.
-//  - the epoch return value seems weird.
-//
 int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos)
 {
   // make sure we are up-to-date

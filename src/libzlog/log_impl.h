@@ -29,7 +29,6 @@ class LogImpl : public Log {
     striper(prefix)
   {}
 
-  // TODO: should be cleaning house...
   ~LogImpl() {}
 
  public:

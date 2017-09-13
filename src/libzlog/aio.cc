@@ -237,8 +237,6 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
       // don't need impl->get(): reuse reference
 
       // submit new aio op
-      // TODO: can we avoid all the data copying between impl->data and the
-      // backend? the backend may even make another copy...
       ret = impl->backend->AioWrite(mapping.oid, mapping.epoch, impl->position,
           Slice(impl->data.data(), impl->data.size()),
           impl, AioCompletionImpl::aio_safe_cb_write);

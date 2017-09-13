@@ -1,8 +1,3 @@
-// TODO
-//  - add hostname to head object name
-//  - share xattr key with cls_zlog
-//  - don't store data in protobuf (zero copy?)
-//  - don't duplicate encode/decode (cls..)
 #include <sstream>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -65,12 +60,7 @@ int CephBackend::CreateLog(const std::string& name,
   }
 
   // now the named log exists and points to a head object. a crash at this point
-  // is ok because a client could complete the initialization. TODO: crash
-  // recovery here is not yet implemented. if a crash occurs, then a client will
-  // encounter an error when opening the log.  the head object is initialized
-  // with some metadata and a view for epoch 0. TODO: note the race that exists
-  // between head initialization, and future feature that handles initialization
-  // of the head object for the crash-during-creation case.
+  // is ok because a client could complete the initialization.
   ret = InitHeadObject(hoid, prefix);
   if (ret) {
     std::cerr << "init head obj ret " << ret << std::endl;
@@ -332,8 +322,8 @@ void CephBackend::aio_safe_cb_read(librados::completion_t cb, void *arg)
   delete c;
 }
 
-// TODO: backend must be first member for proper casting by capi. this needs a
-// better / safer method.
+// backend must be first member for proper casting by capi. this needs a better
+// safer method.
 struct CephBackendWrapper {
   CephBackend *backend;
   librados::IoCtx ioctx;
