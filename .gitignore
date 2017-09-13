@@ -61,6 +61,7 @@ coverage
 build-doc
 
 db
+tags
 
 # static analysis
 cppcheck.txt
