@@ -113,44 +113,13 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   return 0;
 }
 
-#if 0
-int LMDBBackend::Exists(const std::string& oid)
-{
-  auto txn = NewTransaction(true);
-
-  auto key = ObjectKey(oid);
-
-  MDB_val val;
-  int ret = txn.Get(key, val);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
-
-  ret = txn.Commit();
-  if (ret)
-    return ret;
-
-  return 0;
-}
-
-int LMDBBackend::CreateHeadObject(const std::string& oid,
-    const zlog_proto::MetaLog& data)
-{
-}
-
-int LMDBBackend::LatestProjection(const std::string& oid,
-    uint64_t *epoch, zlog_proto::MetaLog& config)
-{
-}
-
-int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
-      const zlog_proto::MetaLog& data)
+int LMDBBackend::ProposeView(const std::string& hoid,
+    uint64_t epoch, const std::string& view)
 {
   auto txn = NewTransaction();
 
   MDB_val val;
-  std::string oid_key = ObjectKey(oid);
+  std::string oid_key = ObjectKey(hoid);
   int ret = txn.Get(oid_key, val);
   if (ret) {
     if (ret == -ENOENT) {
@@ -169,15 +138,11 @@ int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
   assert(val.mv_size == sizeof(*proj_obj));
   assert(epoch == (proj_obj->latest_epoch + 1));
 
-  std::string blob;
-  assert(data.IsInitialized());
-  assert(data.SerializeToString(&blob));
-
   // write new projection
   MDB_val proj_val;
-  std::string proj_key = ProjectionKey(oid, epoch);
-  proj_val.mv_data = (void*)blob.data();
-  proj_val.mv_size = blob.size();
+  std::string proj_key = ProjectionKey(hoid, epoch);
+  proj_val.mv_data = (void*)view.data();
+  proj_val.mv_size = view.size();
   ret = txn.Put(proj_key, proj_val, true);
   if (ret) {
     txn.Abort();
@@ -196,7 +161,6 @@ int LMDBBackend::SetProjection(const std::string& oid, uint64_t epoch,
   txn.Commit();
   return 0;
 }
-#endif
 
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
     uint64_t epoch, uint64_t position)
@@ -407,7 +371,7 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
     if (epoch != obj->epoch) {
       return -EINVAL;
     }
-  } else if (epoch <= obj->epoch) {
+  } else if (epoch < obj->epoch) {
     return -ESPIPE;
   }
   return 0;
@@ -416,7 +380,6 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
 int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
     uint64_t *pos, bool *empty)
 {
-  assert(0);
   auto txn = NewTransaction(true);
 
   int ret = CheckEpoch(txn, epoch, oid, true);
@@ -430,7 +393,7 @@ int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
   ret = txn.Get(key, val);
   if (ret < 0) {
     if (ret == -ENOENT) {
-      *pos = 0;
+      *empty = true;
       txn.Commit();
       return 0;
     }
@@ -441,7 +404,9 @@ int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
   LogMaxPos *maxpos = (LogMaxPos*)val.mv_data;
   assert(val.mv_size == sizeof(*maxpos));
   txn.Commit();
-  *pos = maxpos->maxpos + 1;
+  *pos = maxpos->maxpos;
+  *empty = false;
+
   return 0;
 }
 
@@ -523,8 +488,8 @@ void LMDBBackend::Close()
   mdb_env_close(env);
 }
 
-// TODO: backend must be first member for proper casting by capi. this needs a
-// better / safer method.
+// backend must be first member for proper casting by capi. this needs a better
+// safer method.
 struct LMDBBackendWrapper {
   LMDBBackend *backend;
 };

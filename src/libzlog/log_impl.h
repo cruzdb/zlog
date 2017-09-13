@@ -29,12 +29,11 @@ class LogImpl : public Log {
     striper(prefix)
   {}
 
-  // TODO: should be cleaning house...
   ~LogImpl() {}
 
  public:
   int UpdateView();
-  int CreateCut(uint64_t *pepoch, uint64_t *maxpos);
+  int CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty);
   int Seal(const std::vector<std::string>& objects,
       uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
 

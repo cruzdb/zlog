@@ -301,7 +301,8 @@ class LogManager {
 
     uint64_t epoch;
     uint64_t position;
-    ret = log->CreateCut(&epoch, &position);
+    bool empty;
+    ret = log->CreateCut(&epoch, &position, &empty);
     if (ret) {
       std::cerr << "failed to create cut ret " << ret << std::endl;
       return ret;
@@ -314,11 +315,10 @@ class LogManager {
      * more dynamic and efficient during a later rewrite of the streaming
      * interface.
      */
-    if (stream_support && position > 0) {
-      assert(position > 0);
+    if (stream_support && !empty) {
       uint64_t tail = position;
       std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
-      while (tail) {
+      for (;;) {
         for (;;) {
           std::set<uint64_t> stream_ids;
           ret = log->StreamMembership(epoch, stream_ids, tail);
@@ -332,10 +332,10 @@ class LogManager {
           } else if (ret == -EINVAL) {
             // skip non-stream entries
             break;
-          } else if (ret == -EFAULT) {
+          } else if (ret == -ENODATA) {
             // skip invalidated entries
             break;
-          } else if (ret == -ENODEV) {
+          } else if (ret == -ENOENT) {
             // fill entries unwritten entries
             ret = log->Fill(epoch, tail);
             if (ret == 0) {
@@ -345,21 +345,27 @@ class LogManager {
               // retry
               continue;
             } else {
-              std::cerr << "error initialing log stream: fill" << std::endl;
+              std::cerr << "error initialing log stream: fill: " << ret << std::endl;
               return ret;
             }
           } else {
-            std::cerr << "error initialing log stream: stream membership" << std::endl;
+            std::cerr << "error initialing log stream: stream membership: " << ret << std::endl;
             return ret;
           }
         }
-        tail--;
+        if (tail)
+          tail--;
+        else
+          break;
       }
       ptrs.swap(ptrs_out);
     }
 
     *pepoch = epoch;
-    *pposition = position;
+    if (empty)
+      *pposition = 0;
+    else
+      *pposition = position + 1;
 
     ioctx.close();
     rados.shutdown();

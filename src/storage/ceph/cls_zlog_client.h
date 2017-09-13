@@ -1,6 +1,4 @@
 #pragma once
-// TODO
-//  - fixup namespace
 #include <rados/librados.hpp>
 
 // namespace for head object (sync with cls_zlog)

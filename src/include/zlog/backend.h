@@ -1,6 +1,4 @@
 #pragma once
-// TODO
-//  - remove ceph-specific pool method
 #include <cstdint>
 #include <functional>
 #include <string>

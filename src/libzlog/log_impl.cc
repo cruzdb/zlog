@@ -1,7 +1,3 @@
-// TODO
-//  - use async methods for seal/maxpos
-//  - use condvar with batching for update view
-//  - check update view for erange in stream checktail
 #include "log_impl.h"
 
 #include <cerrno>
@@ -106,37 +102,43 @@ int LogImpl::UpdateView()
   }
 }
 
-// TODO
-//  - there are probably several scenarios in which we might want to retry cut
-//  creation (as opposed to just returning an error) if we encounter an error
-//  that is resulting from races with other clients.
-//  - the epoch return value seems weird.
-//
-int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos)
+int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
 {
   // make sure we are up-to-date
   int ret = UpdateView();
   if (ret)
     return ret;
 
-  // get current configuration
-  auto conf = striper.StripeObjects();
-  auto epoch = conf.first;
-  auto oids = conf.second;
+  auto conf = striper.GetCurrent();
 
   bool empty;
   uint64_t max_position;
-  auto next_epoch = epoch + 1;
-  ret = Seal(oids, next_epoch, &max_position, &empty);
+  auto next_epoch = conf.epoch + 1;
+  ret = Seal(conf.oids, next_epoch, &max_position, &empty);
   if (ret) {
     std::cerr << "failed to seal " << ret << std::endl;
     return ret;
   }
 
+  // if the latest stripe is empty, it may also mean that the entire log is
+  // empty. the output parameters correspond to max/empty of the log, not the
+  // current stripe.
+  uint64_t out_maxpos;
+  bool out_empty;
   std::string data;
   if (empty) {
+    if (conf.minpos == 0) {
+      // the log is empty, so out_maxpos is undefined.
+      out_empty = true;
+    } else {
+      out_empty = false;
+      out_maxpos = conf.minpos - 1;
+    }
     data = striper.NewResumeViewData();
   } else {
+    out_maxpos = max_position;
+    out_empty = false;
+    // next stripe starts with _next_ position: current max + 1
     data = striper.NewViewData(max_position + 1);
   }
 
@@ -148,12 +150,18 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos)
   if (ret)
     return ret;
 
-  auto info = striper.GetCurrent();
-  if (info.epoch < next_epoch)
+  /*
+   * TODO: this check may be overly strict, and it may be the case that we want
+   * to retry in different scenarios (e.g. re-populate sequencer state vs
+   * changing the stripe configuration).
+   */
+  if (striper.GetCurrent().epoch != next_epoch)
     return -EINVAL;
 
-  *pepoch = info.epoch;
-  *pmaxpos = info.maxpos;
+  *pepoch = next_epoch;
+  *pempty = out_empty;
+  if (!out_empty)
+    *pmaxpos = out_maxpos;
 
   return 0;
 }

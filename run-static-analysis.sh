@@ -30,6 +30,7 @@ rm -rf scan-build-results
 mkdir scan-build-results
 docker run --rm -it -v $PWD:/zlog:z,ro \
   -v $PWD/scan-build-results:/results:z scan-build \
+  --user=$(id -u):$(id -g) \
   /bin/bash -c "\
     cd /zlog && \
     ./install-deps.sh && ci/install-ceph.sh && \

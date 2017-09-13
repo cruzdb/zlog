@@ -397,7 +397,7 @@ TEST(DB, ReOpen) {
 
   DB *db;
   ret = DB::Open(log, false, &db);
-  ASSERT_EQ(0, ret);
+  ASSERT_EQ(ret, 0);
 
   std::map<std::string, std::string> curr_db;
   auto *it = db->NewIterator();

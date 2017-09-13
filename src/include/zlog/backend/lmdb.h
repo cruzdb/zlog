@@ -40,9 +40,7 @@ class LMDBBackend : public Backend {
       std::map<uint64_t, std::string>& views) override;
 
   int ProposeView(const std::string& hoid,
-      uint64_t epoch, const std::string& view) override {
-    assert(0);
-  }
+      uint64_t epoch, const std::string& view) override;
 
   int Read(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data) override;
