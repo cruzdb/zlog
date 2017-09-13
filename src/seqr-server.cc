@@ -301,7 +301,8 @@ class LogManager {
 
     uint64_t epoch;
     uint64_t position;
-    ret = log->CreateCut(&epoch, &position);
+    bool empty;
+    ret = log->CreateCut(&epoch, &position, &empty);
     if (ret) {
       std::cerr << "failed to create cut ret " << ret << std::endl;
       return ret;
@@ -314,8 +315,8 @@ class LogManager {
      * more dynamic and efficient during a later rewrite of the streaming
      * interface.
      */
-    if (stream_support && position > 0) {
-      assert(position > 0);
+    if (stream_support && !empty) {
+      //assert(position > 0);
       uint64_t tail = position;
       std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
       while (tail) {
@@ -359,7 +360,10 @@ class LogManager {
     }
 
     *pepoch = epoch;
-    *pposition = position;
+    if (empty)
+      *pposition = 0;
+    else
+      *pposition = position + 1;
 
     ioctx.close();
     rados.shutdown();

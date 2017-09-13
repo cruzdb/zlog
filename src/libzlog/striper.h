@@ -7,8 +7,9 @@ class Striper {
  public:
   struct StripeInfo {
     uint64_t epoch;
-    uint64_t maxpos;
+    uint64_t minpos;
     uint32_t width;
+    std::vector<std::string> oids;
   };
 
   struct Mapping {
@@ -35,22 +36,17 @@ class Striper {
 
   StripeInfo GetCurrent() const {
     std::lock_guard<std::mutex> l(lock_);
+    assert(!views_.empty());
     return StripeInfo{epoch_,
       views_.rbegin()->first,
-      views_.rbegin()->second};
+      views_.rbegin()->second,
+      oids_};
   }
 
   uint64_t Epoch() const {
     std::lock_guard<std::mutex> l(lock_);
     assert(!views_.empty());
     return epoch_;
-  }
-
-  std::pair<uint64_t, std::vector<std::string>>
-  StripeObjects() {
-    std::lock_guard<std::mutex> l(lock_);
-    assert(!views_.empty());
-    return std::make_pair(epoch_, oids_);
   }
 
   Mapping MapPosition(uint64_t position) const;

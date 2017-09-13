@@ -63,7 +63,8 @@ int main(int argc, char **argv)
       std::cerr << "set-width: invalid stripe width " << width << std::endl;
   } else if (vm["create-cut"].as<bool>()) {
     uint64_t epoch, maxpos;
-    ret = log->CreateCut(&epoch, &maxpos);
+    bool empty;
+    ret = log->CreateCut(&epoch, &maxpos, &empty);
     if (ret)
       std::cerr << "create-cut: failed ret " << ret << std::endl;
     else

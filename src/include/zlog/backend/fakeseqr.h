@@ -20,14 +20,18 @@ class FakeSeqrClient : public zlog::SeqrClient {
   void Init(zlog::Log *baselog, std::string pool, std::string name) {
     uint64_t epoch;
     uint64_t position;
+    bool empty;
     zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
-    int ret = log->CreateCut(&epoch, &position);
+    int ret = log->CreateCut(&epoch, &position, &empty);
     if (ret) {
       std::cerr << "failed to create cut ret " << ret << std::endl;
       assert(0);
     }
     entry *e = &entries_[std::make_pair(pool, name)];
-    e->seq = position;
+    if (empty)
+      e->seq = 0;
+    else
+      e->seq = position + 1;
   }
 
   virtual int CheckTail(uint64_t epoch, const std::string& pool,
