@@ -61,3 +61,8 @@ coverage
 build-doc
 
 db
+
+# static analysis
+cppcheck.txt
+iwyu.txt
+scan-build-results

@@ -1,18 +1,38 @@
 #!/bin/bash
-
 set -e
-set -x
 
-sudo docker run -v $PWD:/home/nwatkins/src/zlog:z -w /home/nwatkins/src/zlog -it
-iwyu /usr/src/iwyu/iwyu_tool.py -p .
+## cppcheck
+## add "--check-config" to check for missing includes
+#docker run --rm -it -v $PWD:/zlog:z,ro -w /zlog cppcheck cppcheck \
+#  --force \
+#  --inconclusive \
+#  --enable=all \
+#  --std=c++11 \
+#  --quiet \
+#  -I/zlog/build/src \
+#  -I/zlog/src \
+#  -I/zlog/src/include \
+#  -I/zlog/src/spdlog/include \
+#  -I/zlog/src/rapidjson/include \
+#  -i/zlog/build \
+#  -i/zlog/src/spdlog \
+#  -i/zlog/src/rapidjson \
+#  -i/zlog/src/googletest \
+#  -i/zlog/src/kvstore/persistent-rbtree.cc \
+#  /zlog | tee cppcheck.txt
+#
+## include-what-you-use
+#docker run --rm -it -v $PWD:$PWD:z,ro -w $PWD iwyu \
+#  /usr/src/iwyu/iwyu_tool.py -p build | tee iwyu.txt
 
-# see github.com/noahdesu/docks/cppcheck
-docker run --rm -i -v $PWD:/usr/src/zlog:ro cppcheck \
-  cppcheck --force --inconclusive --enable=all /usr/src/zlog \
-  -i/usr/src/zlog/src/spdlog -i/usr/src/zlog/src/rapidjson \
-  -i/usr/src/zlog/src/googletest
-
-#docker run --rm -v $PWD:/usr/src/zlog:ro iwyu \
-#  /bin/bash -c "/usr/src/zlog/install-deps.sh && mkdir /build && cd /build && \
-#    echo $CC $CXX && cmake -DCMAKE_CXX_INCLUDE_WHAT_YOU_USE=/usr/src/iwyu /usr/src/zlog && \
-#    make"
+# scan-build
+rm -rf scan-build-results
+mkdir scan-build-results
+docker run --rm -it -v $PWD:/zlog:z,ro \
+  -v $PWD/scan-build-results:/results:z scan-build \
+  /bin/bash -c "\
+    cd /zlog && \
+    ./install-deps.sh && ci/install-ceph.sh && \
+    mkdir /build && cd /build && \
+    scan-build-4.0 cmake /zlog &&
+    scan-build-4.0 -o /results make -j4"
