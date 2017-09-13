@@ -40,6 +40,7 @@ PATH=${INSTALL_DIR}/bin:$PATH
 
 # run tests
 zlog_test_backend_lmdb
+zlog_test_kvstore
 
 # run coverage tests
 if [ "${RUN_COVERAGE}" == 1 ]; then
@@ -47,7 +48,7 @@ if [ "${RUN_COVERAGE}" == 1 ]; then
   #mkdir /tmp/zlog-db # for bench-cov (see src/kvstore/CMakeLists.txt)
 
   pushd ${BUILD_DIR}
-  for coverage_test in zlog_test_backend_lmdb_coverage; do
+  for coverage_test in zlog_test_backend_lmdb_coverage zlog_test_kvstore_coverage; do
     make ${coverage_test}
     rm -rf coverage*
     lcov --directory . --capture --output-file coverage.info

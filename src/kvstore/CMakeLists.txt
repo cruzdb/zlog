@@ -33,8 +33,14 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
 endif()
 
 add_executable(zlog_test_kvstore test_kvstore.cc)
-target_link_libraries(zlog_test_kvstore libzlog zlog_seqr gtest_main libkvstore)
-if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    setup_target_for_coverage(zlog_test_kvstore_cov zlog_test_kvstore coverage)
-endif()
+target_link_libraries(zlog_test_kvstore
+  libzlog
+  zlog_seqr
+  libkvstore
+  gtest_main)
 install(TARGETS zlog_test_kvstore DESTINATION bin)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+  setup_target_for_coverage(zlog_test_kvstore_coverage
+    zlog_test_kvstore coverage)
+endif()
