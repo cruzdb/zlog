@@ -3,18 +3,4 @@ target_include_directories(test_backend
   PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)
 
 add_subdirectory(ceph)
-
-add_executable(zlog_test_backend_lmdb
-  test_backend_lmdb.cc
-  $<TARGET_OBJECTS:test_backend>
-  $<TARGET_OBJECTS:test_libzlog>)
-target_link_libraries(zlog_test_backend_lmdb
-  ${Boost_SYSTEM_LIBRARY}
-  libzlog
-  gtest_main)
-install(TARGETS zlog_test_backend_lmdb DESTINATION bin)
-
-if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-  setup_target_for_coverage(zlog_test_backend_lmdb_coverage
-    zlog_test_backend_lmdb coverage)
-endif()
+add_subdirectory(lmdb)
