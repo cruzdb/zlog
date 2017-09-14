@@ -33,7 +33,7 @@ fi
 
 pushd ${BUILD_DIR}
 cmake ${CMAKE_FLAGS} ${ZLOG_DIR}
-make -j$(nproc)
+make -j$(nproc) VERBOSE=1
 make install
 popd
 
@@ -46,6 +46,9 @@ tests="${tests} zlog_test_kvstore"
 # run ceph backend tests
 export CEPH_CONF=/tmp/micro-osd/ceph.conf
 if [ -e ${CEPH_CONF} ]; then
+  ceph --version || true
+  ceph status || true
+
   # start the sequencer
   zlog-seqr --port 5678 --streams --daemon
 

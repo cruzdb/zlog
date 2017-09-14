@@ -15,6 +15,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 set -e
+set -x
 set -u
 
 DIR=$1
@@ -71,6 +72,8 @@ ceph-osd --id ${OSD_ID} --mkjournal --mkfs
 ceph-osd --id ${OSD_ID}
 
 # test the setup
+ceph --version
+ceph status
 test_pool=$(uuidgen)
 temp_file=$(mktemp)
 rados mkpool ${test_pool}

@@ -30,6 +30,7 @@ if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then
 
   sleep 10
 
+  docker logs micro-osd
   ls -l /tmp/micro-osd
 fi
 fi
