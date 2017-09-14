@@ -12,7 +12,7 @@ install(TARGETS zlog_ceph_proto DESTINATION lib)
 add_library(cls_zlog_client SHARED cls_zlog_client.cc)
 target_link_libraries(cls_zlog_client
     zlog_ceph_proto
-    ${LIBRADOS_LIBRARIES})
+    rados)
 target_include_directories(cls_zlog_client
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
@@ -22,7 +22,7 @@ add_library(zlog_backend_ceph SHARED ceph.cc)
 target_link_libraries(zlog_backend_ceph
     zlog_proto
     cls_zlog_client
-    ${LIBRADOS_LIBRARIES})
+    rados)
 target_include_directories(zlog_backend_ceph
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
@@ -31,7 +31,7 @@ install(TARGETS zlog_backend_ceph DESTINATION lib)
 add_executable(zlog_test_cls_zlog test_cls_zlog.cc)
 target_link_libraries(zlog_test_cls_zlog
     cls_zlog_client
-    ${LIBRADOS_LIBRARIES}
+    rados
     gtest_main)
 target_include_directories(zlog_test_cls_zlog
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}

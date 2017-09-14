@@ -35,6 +35,7 @@ target_link_libraries(zlog-seqr
     zlog_proto
     zlog_seqr
     zlog_backend_ceph
+    rados
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
