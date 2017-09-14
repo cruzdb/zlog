@@ -5,8 +5,8 @@
 #include <string>
 #include <time.h>
 #include <rados/buffer.h>
-#include "proto/adapter_test.pb.h"
-#include "proto/protobuf_bufferlist_adapter.h"
+#include "storage/ceph/adapter_test.pb.h"
+#include "storage/ceph/protobuf_bufferlist_adapter.h"
 
 #define MAX_SHIFT 22
 #define NUM_RUNS 100
@@ -54,7 +54,7 @@ int main(int argc, char **argv)
       }
 
       ceph::bufferlist bl;
-      pack_msg<adapter_test::TestMessage>(bl, m);
+      encode(bl, m);
     }
     auto totalns = getns() - startns;
     auto avgus = totalns / 1000;

@@ -1,26 +1,8 @@
 #include <errno.h>
 #include <iostream>
 #include "cls_zlog_client.h"
+#include "storage/ceph/protobuf_bufferlist_adapter.h"
 #include "storage/ceph/cls_zlog.pb.h"
-
-void encode(ceph::buffer::list& bl, google::protobuf::Message& msg) {
-  assert(msg.IsInitialized());
-  char buf[msg.ByteSize()];
-  assert(msg.SerializeToArray(buf, sizeof(buf)));
-  bl.append(buf, sizeof(buf));
-}
-
-bool decode(ceph::bufferlist& bl, google::protobuf::Message* msg) {
-  if (!msg->ParseFromArray(bl.c_str(), bl.length())) {
-    std::cerr << "decode: unable to decode message" << std::endl;
-    return false;
-  }
-  if (!msg->IsInitialized()) {
-    std::cerr << "decode: message is uninitialized" << std::endl;
-    return false;
-  }
-  return true;
-}
 
 namespace zlog {
 

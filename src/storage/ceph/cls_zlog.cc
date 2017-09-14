@@ -5,10 +5,12 @@
 # include "include/rados/buffer.h"
 # include "include/rados/objclass.h"
 # include "cls_zlog.pb.h"
+# include "protobuf_bufferlist_adapter.h"
 #else
 # include <rados/buffer.h>
 # include <rados/objclass.h>
 # include "storage/ceph/cls_zlog.pb.h"
+# include "storage/ceph/protobuf_bufferlist_adapter.h"
 #endif
 
 CLS_VER(1,0)
@@ -21,32 +23,6 @@ CLS_NAME(zlog)
 // namespace for log data objects
 #define LOG_ENTRY_PREFIX "zlog.data.entry."
 #define LOG_HEADER_KEY  "zlog.data.header"
-
-static void encode(ceph::buffer::list& bl,
-    const google::protobuf::Message& msg)
-{
-  assert(msg.IsInitialized());
-  char buf[msg.ByteSize()];
-  assert(msg.SerializeToArray(buf, sizeof(buf)));
-  bl.append(buf, sizeof(buf));
-}
-
-static bool decode(ceph::bufferlist& bl,
-    google::protobuf::Message* msg)
-{
-  if (bl.length() == 0) {
-    return false;
-  }
-  if (!msg->ParseFromString(bl.to_str())) {
-    CLS_ERR("ERROR: decode: unable to decode message");
-    return false;
-  }
-  if (!msg->IsInitialized()) {
-    CLS_ERR("ERROR: decode: message is uninitialized");
-    return false;
-  }
-  return true;
-}
 
 static inline std::string u64tostr(uint64_t value,
     const std::string& prefix)

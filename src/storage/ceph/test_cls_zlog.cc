@@ -4,7 +4,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <rados/librados.hpp>
-#include "proto/protobuf_bufferlist_adapter.h"
+#include "storage/ceph/protobuf_bufferlist_adapter.h"
 #include "storage/ceph/cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
 #include "gtest/gtest.h"
@@ -98,7 +98,7 @@ class ClsZlogTest : public ::testing::Test {
     std::map<uint64_t, std::string> tmp;
 
     zlog_ceph_proto::Views views;
-    ASSERT_TRUE(unpack_msg<zlog_ceph_proto::Views>(views, bl));
+    ASSERT_TRUE(decode(bl, &views));
 
     // unpack into return map
     for (int i = 0; i < views.views_size(); i++) {

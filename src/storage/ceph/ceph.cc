@@ -2,7 +2,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "proto/protobuf_bufferlist_adapter.h"
+#include "storage/ceph/protobuf_bufferlist_adapter.h"
 #include "zlog/backend/ceph.h"
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
@@ -89,7 +89,7 @@ int CephBackend::OpenLog(const std::string& name,
       return ret;
     }
 
-    if (!unpack_msg<zlog_ceph_proto::LinkObjectHeader>(link, bl))
+    if (!decode(bl, &link))
       return -EIO;
   }
 
@@ -102,7 +102,7 @@ int CephBackend::OpenLog(const std::string& name,
     if (ret < 0) {
       return ret;
     }
-    if (!unpack_msg<zlog_ceph_proto::HeadObjectHeader>(head, bl))
+    if (!decode(bl, &head))
       return -EIO;
   }
 
@@ -130,7 +130,7 @@ int CephBackend::ReadViews(const std::string& hoid,
     return ret;
 
   zlog_ceph_proto::Views views;
-  if (!unpack_msg<zlog_ceph_proto::Views>(views, bl))
+  if (!decode(bl, &views))
     return -EIO;
 
   // unpack into return map
@@ -280,7 +280,7 @@ int CephBackend::CreateLinkObject(const std::string& name,
   meta.set_hoid(hoid);
 
   ceph::bufferlist bl;
-  pack_msg<zlog_ceph_proto::LinkObjectHeader>(bl, meta);
+  encode(bl, meta);
 
   librados::ObjectWriteOperation op;
   op.create(true);

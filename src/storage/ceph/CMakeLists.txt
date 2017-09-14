@@ -55,6 +55,11 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
   setup_target_for_coverage(zlog_test_backend_ceph_coverage zlog_test_backend_ceph coverage)
 endif()
 
+PROTOBUF_GENERATE_CPP(BENCH_PROTO_SRCS BENCH_PROTO_HDRS adapter_test.proto)
+add_executable(adapter_bench adapter_bench.cc ${BENCH_PROTO_SRCS} ${BENCH_PROTO_HDRS})
+target_link_libraries(adapter_bench rados ${PROTOBUF_LIBRARIES})
+target_include_directories(adapter_bench PUBLIC ${PROTOBUF_INCLUDE_DIR})
+
 endif(BUILD_CEPH_BACKEND)
 
 if(HAVE_RADOS_OBJECT_CLASS_H)
