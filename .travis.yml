@@ -48,18 +48,16 @@ matrix:
       env: DOCKER_IMAGE=ubuntu:zesty RUN_COVERAGE=1
     - os: osx
 
-
-
 # the coverity build runs in the standard travis environment (job config #1
 # from the build matrix) and needs to have the proper dependencies installed.
 # all other job configurations only run ci/script.sh below which will handle
 # dependency installation.
-#before_install:
-#  - ci/before_install.sh
-#  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh; fi
-#  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} != 1 ]; then exit 0; fi
-#
-## build and testing is skipped for coverity builds
+before_install:
+  - ci/before_install.sh
+  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh && ci/install-ceph.sh; fi
+  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} != 1 ]; then exit 0; fi
+
+# build and testing is skipped for coverity builds
 script:
-  #- test $TRAVIS_BRANCH != coverity_scan || exit 0
+  - test $TRAVIS_BRANCH != coverity_scan || exit 0
   - ci/script.sh
