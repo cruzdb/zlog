@@ -17,12 +17,12 @@ trap "rm -rf ${DB_DIR} ${BUILD_DIR} \
 ${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
 test -r ${DOCS_DIR}/output/html/index.html
 
+# build and install zlog
 CMAKE_BUILD_TYPE=Debug
 if [ "${RUN_COVERAGE}" == 1 ]; then
   CMAKE_BUILD_TYPE=Coverage
 fi
 
-# build and install zlog
 CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
              -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 
@@ -38,34 +38,35 @@ popd
 
 PATH=${INSTALL_DIR}/bin:$PATH
 
-# run tests
-zlog_test_backend_lmdb
-zlog_test_kvstore
+# list of tests to run
+tests="zlog_test_backend_lmdb"
+tests="${tests} zlog_test_kvstore"
 
-# run coverage tests
-if [ "${RUN_COVERAGE}" == 1 ]; then
-  #rm -rf /tmp/zlog-db
-  #mkdir /tmp/zlog-db # for bench-cov (see src/kvstore/CMakeLists.txt)
+# run ceph backend tests
+export CEPH_CONF=/tmp/micro-osd/ceph.conf
+if [ -e ${CEPH_CONF} ]; then
+  # start the sequencer
+  zlog-seqr --port 5678 --streams --daemon
 
-  pushd ${BUILD_DIR}
-  for coverage_test in zlog_test_backend_lmdb_coverage zlog_test_kvstore_coverage; do
-    make ${coverage_test}
+  # ceph tests
+  tests="${tests} zlog_test_cls_zlog"
+  tests="${tests} zlog_test_backend_ceph"
+fi
+
+for test_runner in $tests; do
+  ${test_runner}
+  if [ "${RUN_COVERAGE}" == 1 ]; then
+    pushd ${BUILD_DIR}
+    make ${test_runner}_coverage || popd && continue
     rm -rf coverage*
     lcov --directory . --capture --output-file coverage.info
     lcov --remove coverage.info '/usr/*' '*/googletest/*' '*.pb.cc' '*.pb.h' --output-file coverage2.info
     bash <(curl -s https://codecov.io/bash) -R ${ZLOG_DIR} -f coverage2.info || \
       echo "Codecov did not collect coverage reports"
-  done
-  popd
-fi
+    popd
+  fi
+done
 
-#
-## ram backend tests
-#zlog-test-ram
-#zlog-db-test
-#zlog-test-lmdb
-#${BUILD_DIR}/src/kvstore/bench ${DB_DIR} 10000
-#
 #if [[ "$OSTYPE" != "darwin"* ]]; then
 #  pushd ${BUILD_DIR}/src/java
 #
@@ -87,27 +88,5 @@ fi
 #  mkdir db
 #  java -cp $CP org.junit.runner.JUnitCore com.cruzdb.AllTests
 #
-#  popd
-#fi
-#
-## ceph backend tests
-#if [ ! -z ${CEPH_CONF} ]; then
-#  zlog-seqr --port 5678 --streams --daemon
-#  zlog-test-cls-zlog
-#  zlog-test-ceph
-#fi
-#
-#if [ "${RUN_COVERAGE}" == 1 ]; then
-#  rm -rf /tmp/zlog-db
-#  mkdir /tmp/zlog-db # for bench-cov (see src/kvstore/CMakeLists.txt)
-#  pushd ${BUILD_DIR}
-#  for test in zlog-test-ram-cov zlog-db-test-cov zlog-test-lmdb-cov bench-cov; do
-#    make $test
-#    rm -rf coverage*
-#    lcov --directory . --capture --output-file coverage.info
-#    lcov --remove coverage.info '/usr/*' '*/googletest/*' '*.pb.cc' '*.pb.h' --output-file coverage2.info
-#    bash <(curl -s https://codecov.io/bash) -R ${ZLOG_DIR} -f coverage2.info || \
-#      echo "Codecov did not collect coverage reports" 
-#  done
 #  popd
 #fi
