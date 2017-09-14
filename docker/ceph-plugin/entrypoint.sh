@@ -12,7 +12,7 @@ pushd $dir
 cmake /src/zlog
 make -j$(nproc) cls_zlog
 
-pushd src/libzlog/backend
+pushd src/storage/ceph
 make install
 popd
 popd

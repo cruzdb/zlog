@@ -8,7 +8,7 @@
 #else
 # include <rados/buffer.h>
 # include <rados/objclass.h>
-# include "libzlog/backend/cls_zlog.pb.h"
+# include "storage/ceph/cls_zlog.pb.h"
 #endif
 
 CLS_VER(1,0)
