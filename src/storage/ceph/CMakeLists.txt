@@ -37,6 +37,9 @@ target_include_directories(zlog_test_cls_zlog
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
 install(TARGETS zlog_test_cls_zlog DESTINATION bin)
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+  setup_target_for_coverage(zlog_test_cls_zlog_coverage zlog_test_cls_zlog coverage)
+endif()
 
 add_executable(zlog_test_backend_ceph
   test_backend_ceph.cc
@@ -48,6 +51,9 @@ target_link_libraries(zlog_test_backend_ceph
   libzlog
   gtest_main)
 install(TARGETS zlog_test_backend_ceph DESTINATION bin)
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+  setup_target_for_coverage(zlog_test_backend_ceph_coverage zlog_test_backend_ceph coverage)
+endif()
 
 endif(BUILD_CEPH_BACKEND)
 
