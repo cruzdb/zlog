@@ -19,21 +19,16 @@ set -u
 
 DIR=$1
 
-#if ! dpkg -l ceph ; then
-# wget -q -O- 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc' | sudo apt-key add -
-# echo deb http://ceph.com/debian-dumpling/ $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/ceph.list
-# sudo apt-get update
-# sudo apt-get --yes install ceph ceph-common
-#fi
-
-# get rid of process and directories leftovers
-pkill ceph-mon || true
-pkill ceph-osd || true
-rm -fr $DIR/*
+# reset
+pkill ceph || true
+rm -rf ${DIR}/*
+LOG_DIR=${DIR}/log
+MON_DATA=${DIR}/mon
+OSD_DATA=${DIR}/osd
+mkdir ${LOG_DIR} ${MON_DATA} ${OSD_DATA}
 
 # cluster wide parameters
-mkdir -p ${DIR}/log
-cat >> $DIR/ceph.conf <<EOF
+cat >> ${DIR}/ceph.conf <<EOF
 [global]
 fsid = $(uuidgen)
 osd crush chooseleaf type = 0
@@ -42,34 +37,17 @@ auth cluster required = none
 auth service required = none
 auth client required = none
 osd pool default size = 1
-EOF
-export CEPH_ARGS="--conf ${DIR}/ceph.conf"
 
-# single monitor
-MON_DATA=${DIR}/mon
-mkdir -p $MON_DATA
-
-cat >> $DIR/ceph.conf <<EOF
 [mon.0]
-log file = ${DIR}/log/mon.log
+log file = ${LOG_DIR}/mon.log
 chdir = ""
-mon cluster log file = ${DIR}/log/mon-cluster.log
+mon cluster log file = ${LOG_DIR}/mon-cluster.log
 mon data = ${MON_DATA}
 mon addr = 127.0.0.1
 mon allow pool delete = true
-EOF
 
-ceph-mon --id 0 --mkfs --keyring /dev/null
-touch ${MON_DATA}/keyring
-ceph-mon --id 0 
-
-# single osd
-OSD_DATA=${DIR}/osd
-mkdir ${OSD_DATA}
-
-cat >> $DIR/ceph.conf <<EOF
 [osd.0]
-log file = ${DIR}/log/osd.log
+log file = ${LOG_DIR}/osd.log
 chdir = ""
 osd data = ${OSD_DATA}
 osd journal = ${OSD_DATA}.journal
@@ -79,17 +57,28 @@ osd class load list = *
 osd class default list = *
 EOF
 
+export CEPH_CONF=${DIR}/ceph.conf
+
+# start an osd
+ceph-mon --id 0 --mkfs --keyring /dev/null
+touch ${MON_DATA}/keyring
+ceph-mon --id 0
+
+# start an osd
 OSD_ID=$(ceph osd create)
 ceph osd crush add osd.${OSD_ID} 1 root=default host=localhost
 ceph-osd --id ${OSD_ID} --mkjournal --mkfs
 ceph-osd --id ${OSD_ID}
 
-# check that it works
-rados --pool rbd put group /etc/group
-rados --pool rbd get group ${DIR}/group
-diff /etc/group ${DIR}/group
-ceph osd tree
+# test the setup
+test_pool=$(uuidgen)
+temp_file=$(mktemp)
+rados mkpool ${test_pool}
+rados --pool ${test_pool} put group /etc/group
+rados --pool ${test_pool} get group ${temp_file}
+diff /etc/group ${temp_file}
+rados rmpool ${test_pool} ${test_pool} --yes-i-really-really-mean-it
+rm ${temp_file}
 
-export CEPH_CONF="${DIR}/ceph.conf"
-
+# block
 ceph -w
