@@ -58,7 +58,7 @@ for test_runner in $tests; do
   ${test_runner}
   if [ "${RUN_COVERAGE}" == 1 ]; then
     pushd ${BUILD_DIR}
-    make ${test_runner}_coverage || popd && continue
+    make ${test_runner}_coverage || (popd && continue)
     rm -rf coverage*
     lcov --directory . --capture --output-file coverage.info
     lcov --remove coverage.info '/usr/*' '*/googletest/*' '*.pb.cc' '*.pb.h' --output-file coverage2.info
