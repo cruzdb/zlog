@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 COVERAGE_ENV=""
 if [ "${RUN_COVERAGE}" == 1 ]; then
