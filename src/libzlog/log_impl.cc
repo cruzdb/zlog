@@ -61,20 +61,19 @@ int Log::Open(Backend *backend, const std::string& name,
     return ret;
   }
 
-  LogImpl *impl = new LogImpl(backend, seqr, name, hoid, prefix);
+  auto impl = std::unique_ptr<LogImpl>(
+      new LogImpl(backend, seqr, name, hoid, prefix));
 
   ret = impl->UpdateView();
   if (ret) {
-    delete impl;
     return ret;
   }
 
   if (impl->striper.Empty()) {
-    delete impl;
     return -EINVAL;
   }
 
-  *logptr = impl;
+  *logptr = impl.release();
 
   return 0;
 }
