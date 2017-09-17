@@ -192,7 +192,6 @@ void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
 {
   // backend
   const char *db_path = env->GetStringUTFChars(jdb_path, 0);
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init(db_path, false);
   env->ReleaseStringUTFChars(jdb_path, db_path);
@@ -200,7 +199,7 @@ void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
   // hold log state for java
   auto log = new LogWrapper;
   log->be = be;
-  log->seqr_client = client;
+  log->seqr_client = nullptr;
 
   // create or open the log
   const char *log_name = env->GetStringUTFChars(jlog_name, 0);
@@ -208,8 +207,6 @@ void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
       log->seqr_client, &log->log);
   if (ret)
     goto out;
-
-  client->Init(log->log, "fakepool", log_name);
 
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)

@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include "zlog/db.h"
 #include "zlog/backend/ceph.h"
-#include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
 
@@ -195,8 +194,7 @@ int main(int argc, char **argv)
 
     zlog::Log *log;
     CephBackend *be = new CephBackend(&ioctx);
-    auto client = new FakeSeqrClient();
-    ret = zlog::Log::Create(be, "log", client, &log);
+    ret = zlog::Log::Create(be, "log", NULL, &log);
     assert(ret == 0);
 
     DB *db;
@@ -272,7 +270,6 @@ int main(int argc, char **argv)
 
     delete db;
     delete log;
-    delete client;
     delete be;
   }
 

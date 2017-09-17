@@ -185,6 +185,9 @@ class LMDBBackend : public Backend {
 
   int CheckEpoch(Transaction& txn, uint64_t epoch, const std::string& oid,
       bool eq = false);
+
+ private:
+  bool closed = false;
 };
 
 extern "C" {

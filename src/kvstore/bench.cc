@@ -7,7 +7,6 @@
 #include <sys/time.h>
 #include "zlog/db.h"
 #include "zlog/backend/lmdb.h"
-#include "zlog/backend/fakeseqr.h"
 
 #if __APPLE__
 static inline uint64_t getns()
@@ -54,15 +53,12 @@ int main(int argc, char **argv)
     stop_after = atoi(argv[2]);
   }
 
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init(db_path, false);
 
   zlog::Log *log;
-  int ret = zlog::Log::OpenOrCreate(be, "log", client, &log);
+  int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
   assert(ret == 0);
-
-  client->Init(log, "fakepool", "log");
 
   DB *db;
   ret = DB::Open(log, true, &db);
@@ -101,7 +97,6 @@ int main(int argc, char **argv)
 
   delete db;
   delete log;
-  delete client;
   be->Close();
   delete be;
 }

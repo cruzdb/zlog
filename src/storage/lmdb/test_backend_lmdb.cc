@@ -1,18 +1,11 @@
 #include "storage/test_backend.h"
 #include "libzlog/test_libzlog.h"
 #include "include/zlog/backend/lmdb.h"
-#include "zlog/backend/fakeseqr.h"
 
 class BackendTest::Context {
  public:
   std::unique_ptr<char> dbpath;
   std::unique_ptr<char> c_dbpath;
-};
-
-class LibZLogTest::Context {
- public:
-  std::unique_ptr<FakeSeqrClient> client;
-  zlog_sequencer_t c_client;
 };
 
 void BackendTest::SetUp() {
@@ -61,30 +54,19 @@ void LibZLogTest::SetUp() {
   ASSERT_NO_FATAL_FAILURE(BackendTest::SetUp());
 
   // C++ API
-  auto c = std::unique_ptr<LibZLogTest::Context>(new LibZLogTest::Context);
-  c->client = std::unique_ptr<FakeSeqrClient>(new FakeSeqrClient());
-
   zlog::Log *l;
-  int ret = zlog::Log::Create(backend.get(), "mylog",
-      c->client.get(), &l);
+  int ret = zlog::Log::Create(backend.get(), "mylog", NULL, &l);
   ASSERT_EQ(ret, 0);
 
   // C API
-  ret = zlog_create_fake_sequencer(&c->c_client);
-  ASSERT_EQ(ret, 0);
-
-  ret = zlog_create(c_backend, "c_mylog", c->c_client, &c_log);
+  ret = zlog_create(c_backend, "c_mylog", NULL, &c_log);
   ASSERT_EQ(ret, 0);
 
   log.reset(l);
-  context = c.release();
 }
 
 void LibZLogTest::TearDown() {
-  if (context) {
-    zlog_destroy_fake_sequencer(context->c_client);
-    zlog_destroy(c_log);
-    delete context;
-  }
+  zlog_destroy(c_log);
+  log.reset();
   BackendTest::TearDown();
 }

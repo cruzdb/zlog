@@ -8,7 +8,6 @@
 #include "zlog/db.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend/lmdb.h"
-#include "zlog/backend/fakeseqr.h"
 
 #define MAX_KEY 1000
 
@@ -169,10 +168,9 @@ TEST(DB, EquivHistory) {
 
   // initial empty kvstore database
   zlog::Log *log;
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init(tdir.path, true);
-  int ret = zlog::Log::Create(be, "log", client, &log);
+  int ret = zlog::Log::Create(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
 
   DB *db;
@@ -234,10 +232,9 @@ TEST(DB, Iterator) {
   TempDir tdir;
 
   zlog::Log *log;
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init(tdir.path, true);
-  int ret = zlog::Log::Create(be, "log", client, &log);
+  int ret = zlog::Log::Create(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
 
   DB *db;
@@ -295,10 +292,9 @@ TEST(DB, Get) {
   TempDir tdir;
 
   zlog::Log *log;
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init(tdir.path, true);
-  int ret = zlog::Log::Create(be, "log", client, &log);
+  int ret = zlog::Log::Create(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
 
   DB *db;
@@ -343,15 +339,12 @@ TEST(DB, ReOpen) {
   // populate a database and close it
   std::map<std::string, std::string> prev_db;
   {
-    auto *client = new FakeSeqrClient();
     auto *be = new LMDBBackend("fakepool");
     be->Init(tdir.path, true);
 
     zlog::Log *log;
-    int ret = zlog::Log::Create(be, "log", client, &log);
+    int ret = zlog::Log::Create(be, "log", NULL, &log);
     ASSERT_EQ(ret, 0);
-
-    client->Init(log, "fakepool", "log");
 
     DB *db;
     ret = DB::Open(log, true, &db);
@@ -379,21 +372,17 @@ TEST(DB, ReOpen) {
 
     delete db;
     delete log;
-    delete client;
     be->Close();
     delete be;
   }
 
   // re-open the database and verify the previous inserts
-  auto *client = new FakeSeqrClient();
   auto *be = new LMDBBackend("fakepool");
   be->Init(tdir.path, false);
 
   zlog::Log *log;
-  int ret = zlog::Log::Open(be, "log", client, &log);
+  int ret = zlog::Log::Open(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
-
-  client->Init(log, "fakepool", "log");
 
   DB *db;
   ret = DB::Open(log, false, &db);
@@ -411,7 +400,6 @@ TEST(DB, ReOpen) {
 
   delete db;
   delete log;
-  delete client;
   be->Close();
   delete be;
 }

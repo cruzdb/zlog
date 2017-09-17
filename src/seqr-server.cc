@@ -289,15 +289,27 @@ class LogManager {
       return ret;
     }
 
-    CephBackend *be = new CephBackend(&ioctx);
+    CephBackend *backend = new CephBackend(&ioctx);
 
-    zlog::Log *baselog;
-    ret = zlog::Log::Open(be, name, NULL, &baselog);
+    std::string hoid;
+    std::string prefix;
+    ret = backend->OpenLog(name, hoid, prefix);
     if (ret) {
-      std::cerr << "failed to open log " << name << std::endl;
+      std::cerr << "failed to open log backend " << ret << std::endl;
       return ret;
     }
-    zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
+
+    auto log = std::unique_ptr<zlog::LogImpl>(
+        new zlog::LogImpl(backend, nullptr, name, hoid, prefix));
+
+    ret = log->UpdateView();
+    if (ret) {
+      return ret;
+    }
+
+    if (log->striper.Empty()) {
+      return -EINVAL;
+    }
 
     uint64_t epoch;
     uint64_t position;

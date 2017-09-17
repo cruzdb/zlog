@@ -3,7 +3,6 @@
 #include <iostream>
 #include "zlog/db.h"
 #include "zlog/backend/lmdb.h"
-#include "zlog/backend/fakeseqr.h"
 
 static inline std::string tostr(int value)
 {
@@ -15,12 +14,10 @@ static inline std::string tostr(int value)
 int main(int argc, char **argv)
 {
   zlog::Log *log;
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init("/tmp/zlog.bench.db", false);
-  int ret = zlog::Log::OpenOrCreate(be, "log", client, &log);
+  int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
   assert(ret == 0);
-  client->Init(log, "fakepool", "log");
 
   DB *db;
   ret = DB::Open(log, true, &db);

@@ -15,38 +15,23 @@ Striper::Mapping Striper::MapPosition(uint64_t position) const
   return Mapping{epoch_, oid};
 }
 
-std::string Striper::BuildViewData(uint64_t pos,
-    uint32_t width)
+zlog_proto::View Striper::InitViewData(uint32_t width)
 {
+  assert(width > 0);
   zlog_proto::View view;
-  view.set_position(pos);
+  view.set_position(0);
   view.set_width(width);
-
-  std::string result;
-  assert(view.SerializeToString(&result));
-  return result;
+  return view;
 }
 
-std::string Striper::NewViewData(uint64_t pos) const
+// the views_ data structure tries to collapse compatible views. as a result we
+// can't reliably reproduce the latest view from this data structure, so we
+// actually keep around a copy of the latest.
+zlog_proto::View Striper::LatestView() const
 {
   std::lock_guard<std::mutex> l(lock_);
   assert(!views_.empty());
-  auto width = views_.rbegin()->second;
-  return BuildViewData(pos, width);
-}
-
-std::string Striper::NewResumeViewData() const
-{
-  std::lock_guard<std::mutex> l(lock_);
-  assert(!views_.empty());
-  auto pos = views_.rbegin()->first;
-  auto width = views_.rbegin()->second;
-  return BuildViewData(pos, width);
-}
-
-std::string Striper::InitViewData(uint32_t width)
-{
-  return BuildViewData(0, width);
+  return latest_view_;
 }
 
 int Striper::Add(uint64_t epoch, const std::string& data)
@@ -76,6 +61,8 @@ int Striper::Add(uint64_t epoch, const std::string& data)
     }
     epoch_ = epoch;
   }
+
+  latest_view_ = view;
 
   return 0;
 }

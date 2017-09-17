@@ -7,7 +7,6 @@
 #include <sys/time.h>
 #include "zlog/db.h"
 #include "zlog/backend/lmdb.h"
-#include "zlog/backend/fakeseqr.h"
 #include "kvstore/kvstore.pb.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
@@ -16,15 +15,12 @@ using namespace rapidjson;
 
 int main(int argc, char **argv)
 {
-  auto client = new FakeSeqrClient();
   auto be = new LMDBBackend("fakepool");
   be->Init("/tmp/zlog-db", false);
 
   zlog::Log *log;
-  int ret = zlog::Log::OpenOrCreate(be, "log", client, &log);
+  int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
   assert(ret == 0);
-
-  client->Init(log, "fakepool", "log");
 
   uint64_t tail;
   ret = log->CheckTail(&tail);

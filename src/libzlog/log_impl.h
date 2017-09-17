@@ -18,24 +18,34 @@ class LogImpl : public Log {
   LogImpl& operator=(const LogImpl&&) = delete;
 
   LogImpl(Backend *backend,
-      SeqrClient *seqr,
+      SeqrClient *shared_seqr,
       const std::string& name,
       const std::string& hoid,
       const std::string& prefix) :
     be(backend),
-    seqr(seqr),
+    active_seqr(nullptr),
+    shared_seqr(shared_seqr),
     name(name),
     hoid(hoid),
     striper(prefix)
   {}
 
-  ~LogImpl() {}
+  ~LogImpl() {
+    if (active_seqr && active_seqr != shared_seqr)
+      delete active_seqr;
+  }
 
  public:
   int UpdateView();
+
+  int CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
+      zlog_proto::View& view);
+  int ProposeNextView(uint64_t next_epoch, const zlog_proto::View& view);
   int CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty);
   int Seal(const std::vector<std::string>& objects,
       uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
+  int ProposeSharedMode();
+  int ProposeExclusiveMode();
 
  public:
   int CheckTail(uint64_t *pposition) override;
@@ -90,11 +100,17 @@ class LogImpl : public Log {
   std::mutex lock;
 
   Backend *be;
-  SeqrClient *seqr;
+
+  SeqrClient *active_seqr;
+  SeqrClient *shared_seqr;
   const std::string name;
   const std::string hoid;
 
   Striper striper;
+
+  std::string exclusive_cookie;
+  uint64_t exclusive_position;
+  bool exclusive_empty;
 };
 
 }

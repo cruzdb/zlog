@@ -25,7 +25,9 @@ LMDBBackend::Transaction LMDBBackend::NewTransaction(bool read_only)
 
 LMDBBackend::~LMDBBackend()
 {
-  mdb_env_sync(env, 1);
+  if (!closed) {
+    Close();
+  }
 }
 
 int LMDBBackend::CreateLog(const std::string& name,
@@ -484,6 +486,7 @@ void LMDBBackend::Init(const std::string& path, bool empty)
 
 void LMDBBackend::Close()
 {
+  closed = true;
   mdb_env_sync(env, 1);
   mdb_env_close(env);
 }

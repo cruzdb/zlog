@@ -12,6 +12,11 @@ typedef void *zlog_sequencer_t;
 
 namespace zlog {
 
+// it's important to delete any seqr clients that are created because when the
+// channels are created in the constructor there are file descriptors created
+// at that point (at least on OSX). When the derived class is the fake
+// sequencer, we were just letting memory leak in tests... but it turns out that
+// OSX will quickly reach an open file descriptor limit..
 class SeqrClient {
  public:
   SeqrClient(const char *host, const char *port) :
@@ -68,9 +73,6 @@ extern "C" {
 int zlog_create_sequencer(const char *host, const char *port,
     zlog_sequencer_t *seqr);
 int zlog_destroy_sequencer(zlog_sequencer_t seqr);
-
-int zlog_create_fake_sequencer(zlog_sequencer_t *seqr);
-int zlog_destroy_fake_sequencer(zlog_sequencer_t seqr);
 
 #ifdef __cplusplus
 }

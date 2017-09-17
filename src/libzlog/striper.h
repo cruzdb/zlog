@@ -21,10 +21,8 @@ class Striper {
     prefix_(prefix)
   {}
 
-  static std::string InitViewData(uint32_t width);
-  static std::string BuildViewData(uint64_t pos, uint32_t width);
-  std::string NewResumeViewData() const;
-  std::string NewViewData(uint64_t pos) const;
+  static zlog_proto::View InitViewData(uint32_t width);
+  zlog_proto::View LatestView() const;
 
   // Add the serialized view data for an epoch
   int Add(uint64_t epoch, const std::string& data);
@@ -59,6 +57,7 @@ class Striper {
   // position(incl):width
   std::map<uint64_t, uint32_t> views_;
   std::vector<std::string> oids_;
+  zlog_proto::View latest_view_;
   uint64_t epoch_;
 
   void GenerateObjects();

@@ -7,11 +7,16 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <boost/asio/ip/host_name.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend.h"
 
+#include "fakeseqr.h"
 #include "striper.h"
 
 namespace zlog {
@@ -31,8 +36,12 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
     return -EINVAL;
   }
 
-  auto views = Striper::InitViewData(stripe_size);
-  int ret = backend->CreateLog(name, views);
+  // build initialization view blob
+  auto init_view = Striper::InitViewData(stripe_size);
+  std::string init_view_data;
+  assert(init_view.SerializeToString(&init_view_data));
+
+  int ret = backend->CreateLog(name, init_view_data);
   if (ret) {
     std::cerr << "Failed to create log " << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
@@ -64,6 +73,9 @@ int Log::Open(Backend *backend, const std::string& name,
   auto impl = std::unique_ptr<LogImpl>(
       new LogImpl(backend, seqr, name, hoid, prefix));
 
+  // shared/exclusive mode not yet set, so this may result in an invalid
+  // sequencer configuration. that's ok, just make sure its all correct before
+  // we go live.
   ret = impl->UpdateView();
   if (ret) {
     return ret;
@@ -71,6 +83,19 @@ int Log::Open(Backend *backend, const std::string& name,
 
   if (impl->striper.Empty()) {
     return -EINVAL;
+  }
+
+  // exclusive/shared mode is chosen on start-up. as a result a client may exit
+  // if the log mode is changed by a different client. TODO: dynamically
+  // adjusting to these scenarios is future work.
+  if (seqr) {
+    ret = impl->ProposeSharedMode();
+    if (ret)
+      return ret;
+  } else {
+    ret = impl->ProposeExclusiveMode();
+    if (ret)
+      return ret;
   }
 
   *logptr = impl.release();
@@ -97,13 +122,42 @@ int LogImpl::UpdateView()
       }
       striper.Add(it->first, it->second);
       epoch++;
+
+      auto view = striper.LatestView();
+      if (exclusive_cookie.empty()) {                        // log wants shared mode
+        if (view.has_exclusive_cookie()) {                   // view is exclusive mode (BAD)
+          assert(!view.exclusive_cookie().empty());
+          active_seqr = nullptr;
+        } else {                                             // view is shared mode (GOOD)
+          active_seqr = shared_seqr;
+        }
+      } else {                                               // log wants exclusive mode
+        if (view.has_exclusive_cookie()) {                   // view is exclusive mode (GOOD)
+          assert(!view.exclusive_cookie().empty());
+          if (view.exclusive_cookie() == exclusive_cookie) { // cookie match (GOOD)
+            auto client = std::unique_ptr<FakeSeqrClient>(
+                new FakeSeqrClient(be->pool(), name,
+                  exclusive_empty, exclusive_position));
+            active_seqr = client.release();
+            // TODO: we don't do anything to clean-up the sequencers so this is
+            // a memory leak. Currently the sequencer state needs to remain
+            // unchanged since instantiation. We'll take care of the leak when
+            // we add more robust sequencer switching.
+          } else {                                           // cookie no match (BAD)
+            active_seqr = nullptr;
+          }
+        } else {                                             // view is shared mode (BAD)
+          active_seqr = nullptr;
+        }
+      }
     }
   }
 }
 
-int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
+// generate a new view, but do not propose it.
+int LogImpl::CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
+    zlog_proto::View& view)
 {
-  // make sure we are up-to-date
   int ret = UpdateView();
   if (ret)
     return ret;
@@ -124,7 +178,7 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
   // current stripe.
   uint64_t out_maxpos;
   bool out_empty;
-  std::string data;
+  view = striper.LatestView();
   if (empty) {
     if (conf.minpos == 0) {
       // the log is empty, so out_maxpos is undefined.
@@ -133,15 +187,30 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
       out_empty = false;
       out_maxpos = conf.minpos - 1;
     }
-    data = striper.NewResumeViewData();
   } else {
     out_maxpos = max_position;
     out_empty = false;
     // next stripe starts with _next_ position: current max + 1
-    data = striper.NewViewData(max_position + 1);
+    view.set_position(max_position + 1);
   }
 
-  ret = be->ProposeView(hoid, next_epoch, data);
+  if (pepoch)
+    *pepoch = next_epoch;
+  if (pempty)
+    *pempty = out_empty;
+  if (!out_empty && pmaxpos)
+    *pmaxpos = out_maxpos;
+
+  return 0;
+}
+
+int LogImpl::ProposeNextView(uint64_t next_epoch,
+    const zlog_proto::View& view)
+{
+  std::string view_data;
+  assert(view.SerializeToString(&view_data));
+
+  int ret = be->ProposeView(hoid, next_epoch, view_data);
   if (ret)
     return ret;
 
@@ -157,10 +226,23 @@ int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
   if (striper.GetCurrent().epoch != next_epoch)
     return -EINVAL;
 
-  *pepoch = next_epoch;
-  *pempty = out_empty;
-  if (!out_empty)
-    *pmaxpos = out_maxpos;
+  return 0;
+}
+
+int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
+{
+  uint64_t next_epoch;
+  zlog_proto::View view;
+  int ret = CreateNextView(&next_epoch, pmaxpos, pempty, view);
+  if (ret)
+    return ret;
+
+  ret = ProposeNextView(next_epoch, view);
+  if (ret)
+    return ret;
+
+  if (pepoch)
+    *pepoch = next_epoch;
 
   return 0;
 }
@@ -205,6 +287,51 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
   return 0;
 }
 
+int LogImpl::ProposeSharedMode()
+{
+  uint64_t next_epoch;
+  zlog_proto::View view;
+  int ret = CreateNextView(&next_epoch, NULL, NULL, view);
+  if (ret)
+    return ret;
+
+  assert(!view.has_exclusive_cookie());
+  assert(exclusive_cookie.empty());
+
+  return ProposeNextView(next_epoch, view);
+}
+
+int LogImpl::ProposeExclusiveMode()
+{
+  bool empty;
+  uint64_t position;
+  uint64_t next_epoch;
+  zlog_proto::View view;
+  int ret = CreateNextView(&next_epoch, &position, &empty, view);
+  if (ret)
+    return ret;
+
+  // generate the exclusive cookie. a unique value is guaranteed by encoding
+  // next_epoch which will be unique if the new view is accepted.
+  auto uuid = boost::uuids::random_generator()();
+  auto hostname = boost::asio::ip::host_name();
+  std::stringstream exclusive_cookie_ss;
+  exclusive_cookie_ss << uuid << "." << hostname
+    << "." << next_epoch;
+  const auto cookie = exclusive_cookie_ss.str();
+
+  // make sure that exclusive_cookie is set before calling ProposeNextView so
+  // that when UpdateView is called it will pick up the new mode.
+  exclusive_cookie = cookie;
+  view.set_exclusive_cookie(cookie);
+
+  // used in UpdateView to construct the fake sequencer instance.
+  exclusive_empty = empty;
+  exclusive_position = position;
+
+  return ProposeNextView(next_epoch, view);
+}
+
 int LogImpl::CheckTail(uint64_t *pposition)
 {
   return CheckTail(pposition, false);
@@ -213,7 +340,11 @@ int LogImpl::CheckTail(uint64_t *pposition)
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
+    if (!active_seqr) {
+      std::cerr << "no active sequencer" << std::endl;
+      return -EINVAL;
+    }
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
         name, pposition, increment);
     if (ret == -EAGAIN) {
       sleep(1);
@@ -238,7 +369,11 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 
   for (;;) {
     std::vector<uint64_t> result;
-    int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
+    if (!active_seqr) {
+      std::cerr << "no active sequencer" << std::endl;
+      return -EINVAL;
+    }
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
         name, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;
@@ -264,7 +399,11 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(striper.Epoch(), be->pool(),
+    if (!active_seqr) {
+      std::cerr << "no active sequencer" << std::endl;
+      return -EINVAL;
+    }
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
         name, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;
