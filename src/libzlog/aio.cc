@@ -106,12 +106,9 @@ class AioCompletionImpl {
   }
 
   static void aio_safe_cb_read(void *arg, int ret);
-  static void aio_safe_cb_append(void *arg, int ret);
+  static void aio_safe_cb_write(void *arg, int ret);
 };
 
-/*
- *
- */
 void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
@@ -121,7 +118,7 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 
   assert(impl->type == ZLOG_AIO_READ);
 
-  if (ret == Backend::ZLOG_OK) {
+  if (ret == 0) {
     /*
      * Read was successful. We're done.
      */
@@ -130,26 +127,22 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
     }
     ret = 0;
     finish = true;
-  } else if (ret == Backend::ZLOG_STALE_EPOCH) {
+  } else if (ret == -ESPIPE) {
     /*
      * We'll need to try again with a new epoch.
      */
-    ret = impl->log->RefreshProjection();
+    ret = impl->log->UpdateView();
     if (ret)
       finish = true;
   } else if (ret < 0) {
-    /*
-     * Encountered a RADOS error.
-     */
-    finish = true;
-  } else if (ret == Backend::ZLOG_NOT_WRITTEN) {
-    ret = -ENODEV;
-    finish = true;
-  } else if (ret == Backend::ZLOG_INVALIDATED) {
-    ret = -EFAULT;
+    // -ENOENT  // not-written
+    // -ENODATA // invalidated
+    // other: rados error
     finish = true;
   } else {
     assert(0);
+    ret = -EIO;
+    finish = true;
   }
 
   /*
@@ -157,14 +150,12 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
    * stale epoch that we refresh, or if the position was marked read-only.
    */
   if (!finish) {
-    uint64_t epoch;
-    std::string oid;
-    impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+    auto mapping = impl->log->striper.MapPosition(impl->position);
 
     // don't need impl->get(): reuse reference
 
     // submit new aio op
-    ret = impl->backend->AioRead(oid, epoch, impl->position, &impl->data,
+    ret = impl->backend->AioRead(mapping.oid, mapping.epoch, impl->position, &impl->data,
         impl, AioCompletionImpl::aio_safe_cb_read);
     if (ret)
       finish = true;
@@ -187,10 +178,7 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
   impl->lock.unlock();
 }
 
-/*
- *
- */
-void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
+void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
   bool finish = false;
@@ -199,7 +187,7 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
 
   assert(impl->type == ZLOG_AIO_APPEND);
 
-  if (ret == Backend::ZLOG_OK) {
+  if (ret == 0) {
     /*
      * Append was successful. We're done.
      */
@@ -208,28 +196,22 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
     }
     ret = 0;
     finish = true;
-  } else if (ret == Backend::ZLOG_STALE_EPOCH) {
+  } else if (ret == -ESPIPE) {
     /*
      * We'll need to try again with a new epoch.
      */
-    ret = impl->log->RefreshProjection();
+    ret = impl->log->UpdateView();
     if (ret)
       finish = true;
-#if BACKEND_SUPPORT_DISABLE
-  } else if (ret == -EFBIG) {
-    assert(impl->log->backend_ver == 2);
-    impl->log->CreateNewStripe(impl->epoch);
-    ret = impl->log->RefreshProjection();
-    if (ret)
-      finish = true;
-#endif
-  } else if (ret < 0) {
+  } else if (ret < 0 && ret != -EROFS) {
     /*
      * Encountered a RADOS error.
      */
     finish = true;
   } else {
-    assert(ret == Backend::ZLOG_READ_ONLY);
+    assert(0);
+    ret = -EIO;
+    finish = true;
   }
 
   /*
@@ -247,21 +229,17 @@ void AioCompletionImpl::aio_safe_cb_append(void *arg, int ret)
 
     // we are still good. build a new aio
     if (!finish) {
-      uint64_t epoch;
-      std::string oid;
-      impl->log->mapper_.FindObject(impl->position, &oid, &epoch);
+      auto mapping = impl->log->striper.MapPosition(impl->position);
 
       // refresh
-      impl->epoch = epoch;
+      impl->epoch = mapping.epoch;
 
       // don't need impl->get(): reuse reference
 
       // submit new aio op
-      // TODO: can we avoid all the data copying between impl->data and the
-      // backend? the backend may even make another copy...
-      ret = impl->backend->AioAppend(oid, epoch, impl->position,
+      ret = impl->backend->AioWrite(mapping.oid, mapping.epoch, impl->position,
           Slice(impl->data.data(), impl->data.size()),
-          impl, AioCompletionImpl::aio_safe_cb_append);
+          impl, AioCompletionImpl::aio_safe_cb_write);
       if (ret)
         finish = true;
     }
@@ -290,8 +268,6 @@ AioCompletion::~AioCompletion() {}
  * This is a wrapper around AioCompletion that lets users of the public API
  * delete its AioCompletion without deleting the underlying AioCompletionImpl
  * which is referece counted.
- *
- * This could also be done by exposing a shared_ptr. Are there other ways?
  */
 class AioCompletionImplWrapper : public zlog::AioCompletion {
  public:
@@ -357,22 +333,20 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->data.assign(data.data(), data.size());
   impl->position = position;
   impl->pposition = pposition;
-  impl->backend = new_backend;
+  impl->backend = be;
   impl->type = ZLOG_AIO_APPEND;
 
-  uint64_t epoch;
-  std::string oid;
-  mapper_.FindObject(position, &oid, &epoch);
+  auto mapping = striper.MapPosition(position);
 
   // used to identify if state changes have occurred since dispatching the
   // request in order to avoid reconfiguration later (important when lots of
   // threads or contexts try to do the same thing).
-  impl->epoch = epoch;
+  impl->epoch = mapping.epoch;
 
   impl->get(); // backend now has a reference
 
-  ret = new_backend->AioAppend(oid, epoch, position, data,
-      impl, AioCompletionImpl::aio_safe_cb_append);
+  ret = be->AioWrite(mapping.oid, mapping.epoch, position, data,
+      impl, AioCompletionImpl::aio_safe_cb_write);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
    * need to make sure that references to impl and the rados completion are
@@ -393,23 +367,21 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   impl->log = this;
   impl->datap = datap;
   impl->position = position;
-  impl->backend = new_backend;
+  impl->backend = be;
   impl->type = ZLOG_AIO_READ;
 
   impl->get(); // backend now has a reference
 
-  uint64_t epoch;
-  std::string oid;
-  mapper_.FindObject(position, &oid, &epoch);
+  auto mapping = striper.MapPosition(position);
 
-  int ret = new_backend->AioRead(oid, epoch, position, &impl->data,
+  int ret = be->AioRead(mapping.oid, mapping.epoch, position, &impl->data,
       impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
    * need to make sure that references to impl and the rados completion are
    * cleaned up correctly.
    */
-  assert(ret == Backend::ZLOG_OK);
+  assert(ret == 0);
 
   return ret;
 }

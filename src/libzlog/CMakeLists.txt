@@ -1,16 +1,9 @@
-add_subdirectory(backend)
-
 set(libzlog_sources
   log_impl.cc
   stream.cc
-  stripe_history.cc
-  log_mapper.cc
+  striper.cc
   aio.cc
-  backend/lmdb.cc)
-
-if(BUILD_CEPH_BACKEND)
-  list(APPEND libzlog_sources capi.cc)
-endif(BUILD_CEPH_BACKEND)
+  capi.cc)
 
 add_library(libzlog SHARED ${libzlog_sources})
 
@@ -35,3 +28,7 @@ target_link_libraries(libzlog
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
 
 install(TARGETS libzlog LIBRARY DESTINATION lib)
+
+add_library(test_libzlog OBJECT test_libzlog.cc)
+target_include_directories(test_libzlog
+  PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)

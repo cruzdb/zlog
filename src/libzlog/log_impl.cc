@@ -7,31 +7,21 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <boost/asio/ip/host_name.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend.h"
 
-#include "stripe_history.h"
-
-/*
- * We can use Ceph API to query and make some intelligent decisiosn about what
- * the stripe size should be at runtime. In any case logs are not created
- * programmatically where this is needed. They are created for instance with a
- * CLI tool, and in any case the width can be changed online.
- */
-#define DEFAULT_STRIPE_SIZE 100
+#include "fakeseqr.h"
+#include "striper.h"
 
 namespace zlog {
 
 Log::~Log() {}
-
-std::string LogImpl::metalog_oid_from_name(const std::string& name)
-{
-  std::stringstream ss;
-  ss << name << ".meta";
-  return ss.str();
-}
 
 int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
     SeqrClient *seqr, int stripe_size, Log **logptr)
@@ -46,37 +36,19 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
     return -EINVAL;
   }
 
-  // Setup the first projection
-  StripeHistory hist;
-  hist.AddStripe(0, 0, stripe_size);
-  const auto hist_data = hist.Serialize();
+  // build initialization view blob
+  auto init_view = Striper::InitViewData(stripe_size);
+  std::string init_view_data;
+  assert(init_view.SerializeToString(&init_view_data));
 
-  // create the log metadata/head object
-  std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = backend->CreateHeadObject(metalog_oid, hist_data);
-  if (ret != Backend::ZLOG_OK) {
+  int ret = backend->CreateLog(name, init_view_data);
+  if (ret) {
     std::cerr << "Failed to create log " << name << " ret "
       << ret << " (" << strerror(-ret) << ")" << std::endl;
     return ret;
   }
 
-  LogImpl *impl = new LogImpl;
-
-  impl->new_backend = backend;
-  impl->name_ = name;
-  impl->metalog_oid_ = metalog_oid;
-  impl->seqr = seqr;
-  impl->mapper_.SetName(name);
-
-  ret = impl->RefreshProjection();
-  if (ret) {
-    delete impl;
-    return ret;
-  }
-
-  *logptr = impl;
-
-  return 0;
+  return Open(backend, name, seqr, logptr);
 }
 
 int Log::Create(Backend *backend, const std::string& name,
@@ -88,358 +60,298 @@ int Log::Create(Backend *backend, const std::string& name,
 int Log::Open(Backend *backend, const std::string& name,
     SeqrClient *seqr, Log **logptr)
 {
-  if (name.length() == 0) {
-    std::cerr << "Invalid log name (empty string)" << std::endl;
+  if (name.empty())
+    return -EINVAL;
+
+  std::string hoid;
+  std::string prefix;
+  int ret = backend->OpenLog(name, hoid, prefix);
+  if (ret) {
+    return ret;
+  }
+
+  auto impl = std::unique_ptr<LogImpl>(
+      new LogImpl(backend, seqr, name, hoid, prefix));
+
+  // shared/exclusive mode not yet set, so this may result in an invalid
+  // sequencer configuration. that's ok, just make sure its all correct before
+  // we go live.
+  ret = impl->UpdateView();
+  if (ret) {
+    return ret;
+  }
+
+  if (impl->striper.Empty()) {
     return -EINVAL;
   }
 
-  /*
-   * Check that the log metadata/head object exists. The projection and other
-   * state is read during RefreshProjection.
-   */
-  std::string metalog_oid = LogImpl::metalog_oid_from_name(name);
-  int ret = backend->Exists(metalog_oid);
-  if (ret) {
-    std::cerr << "Failed to open log meta object " << metalog_oid << " ret " <<
-      ret << std::endl;
-    return ret;
+  // exclusive/shared mode is chosen on start-up. as a result a client may exit
+  // if the log mode is changed by a different client. TODO: dynamically
+  // adjusting to these scenarios is future work.
+  if (seqr) {
+    ret = impl->ProposeSharedMode();
+    if (ret)
+      return ret;
+  } else {
+    ret = impl->ProposeExclusiveMode();
+    if (ret)
+      return ret;
   }
 
-  LogImpl *impl = new LogImpl;
-
-  impl->new_backend = backend;
-  impl->name_ = name;
-  impl->metalog_oid_ = metalog_oid;
-  impl->seqr = seqr;
-  impl->mapper_.SetName(name);
-
-  ret = impl->RefreshProjection();
-  if (ret) {
-    delete impl;
-    return ret;
-  }
-
-  *logptr = impl;
+  *logptr = impl.release();
 
   return 0;
 }
 
-int LogImpl::StripeWidth()
+int LogImpl::UpdateView()
 {
-  return mapper_.CurrentStripeWidth();
+  // striper initialized from epoch 0
+  uint64_t epoch = striper.Empty() ? 0 : striper.Epoch() + 1;
+
+  while (true) {
+    std::map<uint64_t, std::string> views;
+    int ret = be->ReadViews(hoid, epoch, views);
+    if (ret)
+      return ret;
+    if (views.empty())
+      return 0;
+    for (auto it = views.begin(); it != views.end(); it++) {
+      if (it->first != epoch) {
+        // gap: bad...
+        return -EIO;
+      }
+      striper.Add(it->first, it->second);
+      epoch++;
+
+      auto view = striper.LatestView();
+      if (exclusive_cookie.empty()) {                        // log wants shared mode
+        if (view.has_exclusive_cookie()) {                   // view is exclusive mode (BAD)
+          assert(!view.exclusive_cookie().empty());
+          active_seqr = nullptr;
+        } else {                                             // view is shared mode (GOOD)
+          active_seqr = shared_seqr;
+        }
+      } else {                                               // log wants exclusive mode
+        if (view.has_exclusive_cookie()) {                   // view is exclusive mode (GOOD)
+          assert(!view.exclusive_cookie().empty());
+          if (view.exclusive_cookie() == exclusive_cookie) { // cookie match (GOOD)
+            auto client = std::unique_ptr<FakeSeqrClient>(
+                new FakeSeqrClient(be->pool(), name,
+                  exclusive_empty, exclusive_position));
+            active_seqr = client.release();
+            // TODO: we don't do anything to clean-up the sequencers so this is
+            // a memory leak. Currently the sequencer state needs to remain
+            // unchanged since instantiation. We'll take care of the leak when
+            // we add more robust sequencer switching.
+          } else {                                           // cookie no match (BAD)
+            active_seqr = nullptr;
+          }
+        } else {                                             // view is shared mode (BAD)
+          active_seqr = nullptr;
+        }
+      }
+    }
+  }
 }
 
-class new_stripe_notifier {
- public:
-  new_stripe_notifier(std::mutex *lock, std::condition_variable *cond, bool *pred) :
-    lock_(lock), cond_(cond), pred_(pred)
-  {}
-
-  ~new_stripe_notifier() {
-    std::unique_lock<std::mutex> l(*lock_);
-    *pred_ = false;
-    cond_->notify_all();
-  }
-
- private:
-  std::mutex *lock_;
-  std::condition_variable *cond_;
-  bool *pred_;
-};
-
-#ifdef BACKEND_SUPPORT_DISABLED
-/*
- * Create a new stripe empty stripe.
- *
- * TODO:
- *   CreateNewStripe, CreateCut, SetStripeWidth are all nearly identical
- *   methods that could be unified.
- */
-int LogImpl::CreateNewStripe(uint64_t last_epoch)
+// generate a new view, but do not propose it.
+int LogImpl::CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
+    zlog_proto::View& view)
 {
-  assert(backend_ver == 2);
-
-  /*
-   * If creation of a new stripe is pending then we will block on the
-   * condition variable until the creating thread has completed or there was
-   * an error.
-   *
-   * There are two ways that we rate limit new stripe creation. The first is
-   * blocking if a new stripe is pending, and the second is that we retry if
-   * once we start we notice that a new stripe was created since we began. The
-   * second case is important for cases in which a bunch of contexts are
-   * trying to create a new stripe but they never actually interact through
-   * the pending flag.
-   */
-#if 1
-  std::unique_lock<std::mutex> l(lock_);
-
-  if (new_stripe_pending_) {
-    //std::cout << "new stripe pending. waiting..." << std::endl;
-    bool done = new_stripe_cond_.wait_for(l, std::chrono::seconds(1),
-        [this](){ return !new_stripe_pending_; });
-    if (!done)
-      std::cerr << "waiting on new stripe: timeout!" << std::endl;
-    return 0;
-  }
-
-  new_stripe_pending_ = true;
-  l.unlock();
-
-  new_stripe_notifier completed(&lock_,
-      &new_stripe_cond_, &new_stripe_pending_);
-
-  if (mapper_.Epoch() > last_epoch) {
-    //std::cout << "    update occurred... trying again" << std::endl;
-    return 0;
-  }
-#endif
-
-  /*
-   * Get the current projection. We'll add the new striping width when we
-   * propose the next projection/epoch.
-   */
-  uint64_t epoch;
-  zlog_proto::MetaLog config;
-  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to get projection ret " << ret << std::endl;
-    return ret;
-  }
-
-  /*
-   * Each call to CreateNewStripe is followed by a projection refresh. If this
-   * case holds then the projection will get an update relative to the last
-   * update that triggered the stripe creation so we can return in this case
-   * too!
-   */
-  if (epoch > last_epoch) {
-    //std::cout << "    update occurred... trying again" << std::endl;
-    return 0;
-  }
-
-  //std::cout << "creating new stripe!" << std::endl;
-
-  StripeHistory hist;
-  ret = hist.Deserialize(config);
+  int ret = UpdateView();
   if (ret)
     return ret;
-  assert(!hist.Empty());
 
-  std::vector<std::string> objects;
-  mapper_.LatestObjectSet(objects, hist);
+  auto conf = striper.GetCurrent();
 
+  bool empty;
   uint64_t max_position;
-  ret = Seal(objects, epoch, &max_position);
+  auto next_epoch = conf.epoch + 1;
+  ret = Seal(conf.oids, next_epoch, &max_position, &empty);
   if (ret) {
     std::cerr << "failed to seal " << ret << std::endl;
     return ret;
   }
 
-  /*
-   * When we create a new empty stripe we have sealed the previous stripe and
-   * gotten the max_position for that stripe. However, if no writes occurred
-   * to the new stripe then max_position will be zero.
-   */
-  uint64_t next_epoch = epoch + 1;
-  hist.CloneLatestStripe(max_position, next_epoch);
-  const auto hist_data = hist.Serialize();
-
-  /*
-   * Propose the updated projection for the next epoch.
-   */
-  ret = new_backend->SetProjection(metalog_oid_, next_epoch, hist_data);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to set new epoch " << next_epoch
-      << " ret " << ret << std::endl;
-    return ret;
+  // if the latest stripe is empty, it may also mean that the entire log is
+  // empty. the output parameters correspond to max/empty of the log, not the
+  // current stripe.
+  uint64_t out_maxpos;
+  bool out_empty;
+  view = striper.LatestView();
+  if (empty) {
+    if (conf.minpos == 0) {
+      // the log is empty, so out_maxpos is undefined.
+      out_empty = true;
+    } else {
+      out_empty = false;
+      out_maxpos = conf.minpos - 1;
+    }
+  } else {
+    out_maxpos = max_position;
+    out_empty = false;
+    // next stripe starts with _next_ position: current max + 1
+    view.set_position(max_position + 1);
   }
 
-  return 0;
-}
-#endif
-
-int LogImpl::SetStripeWidth(int width)
-{
-  /*
-   * Get the current projection. We'll add the new striping width when we
-   * propose the next projection/epoch.
-   */
-  uint64_t epoch;
-  zlog_proto::MetaLog config;
-  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to get projection ret " << ret << std::endl;
-    return ret;
-  }
-
-  StripeHistory hist;
-  ret = hist.Deserialize(config);
-  if (ret)
-    return ret;
-  assert(!hist.Empty());
-
-  std::vector<std::string> objects;
-  mapper_.LatestObjectSet(objects, hist);
-
-  uint64_t max_position;
-  ret = Seal(objects, epoch, &max_position);
-  if (ret) {
-    std::cerr << "failed to seal " << ret << std::endl;
-    return ret;
-  }
-
-  uint64_t next_epoch = epoch + 1;
-  hist.AddStripe(max_position, next_epoch, width);
-  const auto hist_data = hist.Serialize();
-
-  /*
-   * Propose the updated projection for the next epoch.
-   */
-  ret = new_backend->SetProjection(metalog_oid_, next_epoch, hist_data);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to set new epoch " << next_epoch
-      << " ret " << ret << std::endl;
-    return ret;
-  }
+  if (pepoch)
+    *pepoch = next_epoch;
+  if (pempty)
+    *pempty = out_empty;
+  if (!out_empty && pmaxpos)
+    *pmaxpos = out_maxpos;
 
   return 0;
 }
 
-int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *maxpos)
+int LogImpl::ProposeNextView(uint64_t next_epoch,
+    const zlog_proto::View& view)
 {
-  /*
-   * Get the current projection. We'll make a copy of this as the next
-   * projection.
-   */
-  uint64_t epoch;
-  zlog_proto::MetaLog config;
-  int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to get projection ret " << ret << std::endl;
-    return ret;
-  }
+  std::string view_data;
+  assert(view.SerializeToString(&view_data));
 
-  StripeHistory hist;
-  ret = hist.Deserialize(config);
+  int ret = be->ProposeView(hoid, next_epoch, view_data);
   if (ret)
     return ret;
-  assert(!hist.Empty());
 
-  std::vector<std::string> objects;
-  mapper_.LatestObjectSet(objects, hist);
-
-  uint64_t max_position;
-  ret = Seal(objects, epoch, &max_position);
-  if (ret) {
-    std::cerr << "failed to seal " << ret << std::endl;
+  ret = UpdateView();
+  if (ret)
     return ret;
-  }
 
   /*
-   * Propose the next epoch / projection.
+   * TODO: this check may be overly strict, and it may be the case that we want
+   * to retry in different scenarios (e.g. re-populate sequencer state vs
+   * changing the stripe configuration).
    */
-  uint64_t next_epoch = epoch + 1;
-  ret = new_backend->SetProjection(metalog_oid_, next_epoch, config);
-  if (ret != Backend::ZLOG_OK) {
-    std::cerr << "failed to set new epoch " << next_epoch
-      << " ret " << ret << std::endl;
-    return ret;
-  }
+  if (striper.GetCurrent().epoch != next_epoch)
+    return -EINVAL;
 
-  *pepoch = next_epoch;
-  *maxpos = max_position;
+  return 0;
+}
+
+int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
+{
+  uint64_t next_epoch;
+  zlog_proto::View view;
+  int ret = CreateNextView(&next_epoch, pmaxpos, pempty, view);
+  if (ret)
+    return ret;
+
+  ret = ProposeNextView(next_epoch, view);
+  if (ret)
+    return ret;
+
+  if (pepoch)
+    *pepoch = next_epoch;
 
   return 0;
 }
 
 int LogImpl::Seal(const std::vector<std::string>& objects,
-    uint64_t epoch, uint64_t *next_pos)
+    uint64_t epoch, uint64_t *pmaxpos, bool *pempty)
 {
-  /*
-   * Seal each object
-   */
-  for (const auto& oid : objects) {
-    int ret = new_backend->Seal(oid, epoch);
-    if (ret != Backend::ZLOG_OK) {
+  // seal objects
+  for (auto oid : objects) {
+    int ret = be->Seal(oid, epoch);
+    if (ret) {
       std::cerr << "failed to seal object" << std::endl;
       return ret;
     }
   }
 
-  /*
-   * Get next position from each object
-   */
+  // query objects for max pos
   uint64_t max_position;
-  bool first = true;
-  for (const auto& oid : objects) {
-    /*
-     * The max_position function should only be called on objects that have
-     * been sealed, thus here we return from any error includes -ENOENT. The
-     * epoch tag must also match the sealed epoch in the object otherwise
-     * we'll receive -EINVAL.
-     */
-    uint64_t this_pos;
-    int ret = new_backend->MaxPos(oid, epoch, &this_pos);
-    if (ret != Backend::ZLOG_OK) {
+  bool initialized = false;
+  for (auto oid : objects) {
+    bool empty;
+    uint64_t pos;
+    int ret = be->MaxPos(oid, epoch, &pos, &empty);
+    if (ret) {
       std::cerr << "failed to find max pos ret " << ret << std::endl;
       return ret;
     }
 
-    if (first) {
-      max_position = this_pos;
-      first = false;
+    if (!empty && !initialized) {
+      max_position = pos;
+      initialized = true;
       continue;
     }
 
-    max_position = std::max(max_position, this_pos);
+    max_position = std::max(max_position, pos);
   }
 
-  *next_pos = max_position;
+  *pempty = !initialized;
+  if (initialized)
+    *pmaxpos = max_position;
 
   return 0;
 }
 
-int LogImpl::RefreshProjection()
+int LogImpl::ProposeSharedMode()
 {
-  for (;;) {
-    uint64_t epoch;
-    zlog_proto::MetaLog config;
-    int ret = new_backend->LatestProjection(metalog_oid_, &epoch, config);
-    if (ret != Backend::ZLOG_OK) {
-      std::cerr << "failed to get projection ret " << ret << std::endl;
-      sleep(1);
-      continue;
-    }
+  uint64_t next_epoch;
+  zlog_proto::View view;
+  int ret = CreateNextView(&next_epoch, NULL, NULL, view);
+  if (ret)
+    return ret;
 
-    StripeHistory hist;
-    ret = hist.Deserialize(config);
-    if (ret) {
-      std::cerr << "RefreshProjection: failed to decode..." << std::endl << std::flush;
-      return ret;
-    }
-    assert(!hist.Empty());
+  assert(!view.has_exclusive_cookie());
+  assert(exclusive_cookie.empty());
 
-    mapper_.SetHistory(hist, epoch);
+  return ProposeNextView(next_epoch, view);
+}
 
-    break;
-  }
+int LogImpl::ProposeExclusiveMode()
+{
+  bool empty;
+  uint64_t position;
+  uint64_t next_epoch;
+  zlog_proto::View view;
+  int ret = CreateNextView(&next_epoch, &position, &empty, view);
+  if (ret)
+    return ret;
 
-  return 0;
+  // generate the exclusive cookie. a unique value is guaranteed by encoding
+  // next_epoch which will be unique if the new view is accepted.
+  auto uuid = boost::uuids::random_generator()();
+  auto hostname = boost::asio::ip::host_name();
+  std::stringstream exclusive_cookie_ss;
+  exclusive_cookie_ss << uuid << "." << hostname
+    << "." << next_epoch;
+  const auto cookie = exclusive_cookie_ss.str();
+
+  // make sure that exclusive_cookie is set before calling ProposeNextView so
+  // that when UpdateView is called it will pick up the new mode.
+  exclusive_cookie = cookie;
+  view.set_exclusive_cookie(cookie);
+
+  // used in UpdateView to construct the fake sequencer instance.
+  exclusive_empty = empty;
+  exclusive_position = position;
+
+  return ProposeNextView(next_epoch, view);
+}
+
+int LogImpl::CheckTail(uint64_t *pposition)
+{
+  return CheckTail(pposition, false);
 }
 
 int LogImpl::CheckTail(uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(mapper_.Epoch(), new_backend->pool(),
-        name_, pposition, increment);
+    if (!active_seqr) {
+      std::cerr << "no active sequencer" << std::endl;
+      return -EINVAL;
+    }
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+        name, pposition, increment);
     if (ret == -EAGAIN) {
-      //std::cerr << "check tail ret -EAGAIN" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
-      //std::cerr << "check tail ret -ERANGE" << std::endl;
-      ret = RefreshProjection();
+      std::cerr << "check tail ret -ERANGE" << std::endl;
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
@@ -447,11 +359,7 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
     return ret;
   }
   assert(0);
-}
-
-int LogImpl::CheckTail(uint64_t *pposition)
-{
-  return CheckTail(pposition, false);
+  return -EIO;
 }
 
 int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
@@ -461,15 +369,19 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
 
   for (;;) {
     std::vector<uint64_t> result;
-    int ret = seqr->CheckTail(mapper_.Epoch(), new_backend->pool(),
-        name_, result, count);
+    if (!active_seqr) {
+      std::cerr << "no active sequencer" << std::endl;
+      return -EINVAL;
+    }
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+        name, result, count);
     if (ret == -EAGAIN) {
-      //std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -ESPIPE" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
       //std::cerr << "check tail ret -ERANGE" << std::endl;
-      ret = RefreshProjection();
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
@@ -479,6 +391,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
     return ret;
   }
   assert(0);
+  return -EIO;
 }
 
 int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
@@ -486,15 +399,19 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     uint64_t *pposition, bool increment)
 {
   for (;;) {
-    int ret = seqr->CheckTail(mapper_.Epoch(), new_backend->pool(),
-        name_, stream_ids, stream_backpointers, pposition, increment);
+    if (!active_seqr) {
+      std::cerr << "no active sequencer" << std::endl;
+      return -EINVAL;
+    }
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+        name, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
-      //std::cerr << "check tail ret -EAGAIN" << std::endl;
+      //std::cerr << "check tail ret -ESPIPE" << std::endl;
       sleep(1);
       continue;
     } else if (ret == -ERANGE) {
       //std::cerr << "check tail ret -ERANGE" << std::endl;
-      ret = RefreshProjection();
+      ret = UpdateView();
       if (ret)
         return ret;
       continue;
@@ -502,25 +419,63 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
     return ret;
   }
   assert(0);
+  return -EIO;
 }
 
-/*
- * TODO:
- *
- * 1. When a stale epoch is encountered the projection is refreshed and the
- * append is retried with a new tail position retrieved from the sequencer.
- * This means that a hole is created each time an append hits a stale epoch.
- * If there are a lot of clients, a large hole is created each time the
- * projection is refreshed. Is this necessary in all cases? When could a
- * client try again with the same position? We could also mitigate this affect
- * a bit by having the sequencer, upon startup, begin finding log tails
- * proactively instead of waiting for a client to perform a check tail.
- *
- * 2. When a stale epoch return code occurs we continuously look for a new
- * projection and retry the append. to avoid just spinning and creating holes
- * we pause for a second. other options include waiting to observe an _actual_
- * change to a new projection. that is probably better...
- */
+int LogImpl::Read(uint64_t position, std::string *data)
+{
+  for (;;) {
+    auto mapping = striper.MapPosition(position);
+
+    int ret = be->Read(mapping.oid, mapping.epoch, position, data);
+    switch (ret) {
+      case 0:
+        return 0;
+
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -ENOENT:  // not-written
+      case -ENODATA: // invalidated
+      default:
+        return ret;
+    }
+  }
+  assert(0);
+  return -EIO;
+}
+
+int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
+{
+  for (;;) {
+    auto mapping = striper.MapPosition(position);
+
+    int ret = be->Read(mapping.oid, epoch, position, data);
+    switch (ret) {
+      case 0:
+        return 0;
+
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -ENOENT:  // not-written
+      case -ENODATA: // invalidated
+      default:
+        return ret;
+    }
+  }
+  assert(0);
+  return -EIO;
+}
+
 int LogImpl::Append(const Slice& data, uint64_t *pposition)
 {
   for (;;) {
@@ -529,195 +484,102 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
     if (ret)
       return ret;
 
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    ret = new_backend->Write(oid, data, epoch, position);
-    if (ret < 0 && ret != -EFBIG) {
-      std::cerr << "append: failed ret " << ret << std::endl;
-      return ret;
-    }
+    ret = be->Write(mapping.oid, data, mapping.epoch, position);
+    switch (ret) {
+      case 0:
+        if (pposition)
+          *pposition = position;
+        return 0;
 
-    if (ret == Backend::ZLOG_OK) {
-      if (pposition)
-        *pposition = position;
-      return 0;
-    }
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      sleep(1); // avoid spinning in this loop
-      ret = RefreshProjection();
-      if (ret)
+      case -EROFS:
+        continue;
+
+      default:
         return ret;
-      continue;
     }
-
-#ifdef BACKEND_SUPPORT_DISABLED
-    /*
-     * When an object becomes too large we seal the entire stripe and create a
-     * new stripe of empty objects. First we refresh the projection and try
-     * the append again if the projection changed. Otherwise we will attempt
-     * to create the new stripe.
-     */
-    if (ret == -EFBIG) {
-      assert(backend_ver == 2);
-      CreateNewStripe(epoch);
-      ret = RefreshProjection();
-      if (ret)
-        return ret;
-      continue;
-    }
-#endif
-
-    assert(ret == Backend::ZLOG_READ_ONLY);
   }
   assert(0);
-}
-
-int LogImpl::Fill(uint64_t epoch, uint64_t position)
-{
-  for (;;) {
-    std::string oid;
-    mapper_.FindObject(position, &oid, NULL);
-
-    int ret = new_backend->Fill(oid, epoch, position);
-    if (ret < 0) {
-      std::cerr << "fill: failed ret " << ret << std::endl;
-      return ret;
-    }
-
-    if (ret == Backend::ZLOG_OK)
-      return 0;
-
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
-        return ret;
-      continue;
-    }
-
-    assert(ret == Backend::ZLOG_READ_ONLY);
-    return -EROFS;
-  }
+  return -EIO;
 }
 
 int LogImpl::Fill(uint64_t position)
 {
   for (;;) {
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = new_backend->Fill(oid, epoch, position);
-    if (ret < 0) {
-      std::cerr << "fill: failed ret " << ret << std::endl;
-      return ret;
-    }
+    int ret = be->Fill(mapping.oid, mapping.epoch, position);
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      case -EROFS:
+      default:
         return ret;
-      continue;
     }
+  }
+}
 
-    assert(ret == Backend::ZLOG_READ_ONLY);
-    return -EROFS;
+int LogImpl::Fill(uint64_t epoch, uint64_t position)
+{
+  for (;;) {
+    auto mapping = striper.MapPosition(position);
+
+    int ret = be->Fill(mapping.oid, epoch, position);
+    switch (ret) {
+      case 0:
+        return 0;
+
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
+
+      case -EROFS:
+      default:
+        return ret;
+    }
   }
 }
 
 int LogImpl::Trim(uint64_t position)
 {
   for (;;) {
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
+    auto mapping = striper.MapPosition(position);
 
-    int ret = new_backend->Trim(oid, epoch, position);
-    if (ret < 0) {
-      std::cerr << "trim: failed ret " << ret << std::endl;
-      return ret;
-    }
+    int ret = be->Trim(mapping.oid, mapping.epoch, position);
+    switch (ret) {
+      case 0:
+        return 0;
 
-    if (ret == Backend::ZLOG_OK)
-      return 0;
+      case -ESPIPE:
+        ret = UpdateView();
+        if (ret)
+          return ret;
+        sleep(1);
+        continue;
 
-    if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
+      default:
         return ret;
-      continue;
-    }
-
-    assert(0);
-  }
-}
-
-int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
-{
-  for (;;) {
-    std::string oid;
-    mapper_.FindObject(position, &oid, NULL);
-
-    int ret = new_backend->Read(oid, epoch, position, data);
-    if (ret < 0) {
-      std::cerr << "read failed ret " << ret << std::endl;
-      return ret;
-    }
-
-    if (ret == Backend::ZLOG_OK)
-      return 0;
-    else if (ret == Backend::ZLOG_NOT_WRITTEN)
-      return -ENODEV;
-    else if (ret == Backend::ZLOG_INVALIDATED)
-      return -EFAULT;
-    else if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
-        return ret;
-      continue;
-    } else {
-      std::cerr << "unknown reply";
-      assert(0);
     }
   }
-  assert(0);
-}
-
-int LogImpl::Read(uint64_t position, std::string *data)
-{
-  for (;;) {
-    uint64_t epoch;
-    std::string oid;
-    mapper_.FindObject(position, &oid, &epoch);
-
-    int ret = new_backend->Read(oid, epoch, position, data);
-    if (ret < 0) {
-      std::cerr << "read failed ret " << ret << std::endl;
-      return ret;
-    }
-
-    if (ret == Backend::ZLOG_OK)
-      return 0;
-    else if (ret == Backend::ZLOG_NOT_WRITTEN)
-      return -ENODEV;
-    else if (ret == Backend::ZLOG_INVALIDATED)
-      return -EFAULT;
-    else if (ret == Backend::ZLOG_STALE_EPOCH) {
-      ret = RefreshProjection();
-      if (ret)
-        return ret;
-      continue;
-    } else {
-      std::cerr << "unknown reply";
-      assert(0);
-    }
-  }
-  assert(0);
 }
 
 }

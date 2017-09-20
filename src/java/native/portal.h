@@ -9,7 +9,6 @@
 #include "zlog/slice.h"
 
 #include "zlog/backend/lmdb.h"
-#include "zlog/backend/fakeseqr.h"
 
 #ifdef WITH_RADOS
 # include <rados/librados.hpp>

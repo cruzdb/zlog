@@ -1,5 +1,7 @@
-#ifndef ZLOG_BACKEND_LMDB_H
-#define ZLOG_BACKEND_LMDB_H
+#pragma once
+#include "zlog/backend.h"
+
+#ifdef __cplusplus
 #include <vector>
 #include <sstream>
 #include <iostream>
@@ -24,45 +26,47 @@ class LMDBBackend : public Backend {
 
   void Close();
 
-  virtual std::string pool() {
+  virtual std::string pool() override {
     return pool_;
   }
 
-  virtual int Exists(const std::string& oid);
+  int CreateLog(const std::string& name,
+      const std::string& initial_view) override;
 
-  virtual int CreateHeadObject(const std::string& oid,
-      const zlog_proto::MetaLog& data);
+  int OpenLog(const std::string& name,
+      std::string& hoid, std::string& prefix) override;
 
-  virtual int SetProjection(const std::string& oid, uint64_t epoch,
-      const zlog_proto::MetaLog& data);
+  int ReadViews(const std::string& hoid, uint64_t epoch,
+      std::map<uint64_t, std::string>& views) override;
 
-  virtual int LatestProjection(const std::string& oid,
-      uint64_t *epoch, zlog_proto::MetaLog& config);
+  int ProposeView(const std::string& hoid,
+      uint64_t epoch, const std::string& view) override;
 
-  virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos);
+  int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data) override;
 
-  virtual int Seal(const std::string& oid, uint64_t epoch);
+  int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) override;
 
-  virtual int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position);
+  int Fill(const std::string& oid, uint64_t epoch,
+      uint64_t position) override;
 
-  virtual int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data);
+  int Trim(const std::string& oid, uint64_t epoch,
+      uint64_t position) override;
 
-  virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position);
+  int Seal(const std::string& oid,
+      uint64_t epoch) override;
 
-  virtual int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position);
+  int MaxPos(const std::string& oid, uint64_t epoch,
+      uint64_t *pos, bool *empty) override;
 
-  virtual int AioAppend(const std::string& oid, uint64_t epoch,
+  int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
-      std::function<void(void*, int)> callback);
+      std::function<void(void*, int)> callback) override;
 
-  virtual int AioRead(const std::string& oid, uint64_t epoch,
+  int AioRead(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data, void *arg,
-      std::function<void(void*, int)> callback);
+      std::function<void(void*, int)> callback) override;
 
  private:
   std::string pool_;
@@ -181,6 +185,17 @@ class LMDBBackend : public Backend {
 
   int CheckEpoch(Transaction& txn, uint64_t epoch, const std::string& oid,
       bool eq = false);
+
+ private:
+  bool closed = false;
 };
 
+extern "C" {
+#endif
+
+int zlog_create_lmdb_backend(const char *path, zlog_backend_t *backend);
+int zlog_destroy_lmdb_backend(zlog_backend_t backend);
+
+#ifdef __cplusplus
+}
 #endif

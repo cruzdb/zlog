@@ -4,13 +4,23 @@ package zlog_proto;
 
 option optimize_for = SPEED;
 
-message MetaLog {
-    message StripeHistoryEntry {
-        required uint64 pos = 1;
-        required uint32 width = 2;
-        required uint64 epoch = 3;
-    }
-    repeated StripeHistoryEntry stripe_history = 1;
+message View {
+  // the minimum (inclusive) log position that maps to this view. the upper
+  // limit is bound by the next view in the view set, and is +inf for the most
+  // recent view.
+  required uint64 position = 1;
+
+  // the number of objects that the log is striped across.
+  required uint32 width = 2;
+
+  // single-writer mode. when the exclusive_cookie field is not specified, then
+  // clients rely on a external sequencer service. when a value for the
+  // exclusive_cookie field is specified, the client whose proposed change was
+  // accepted is allowed to enter into a single-writer mode in which it becomes
+  // its own sequencer. it is critical that this value be unique. one way to do
+  // this is to encode the next_epoch in the string which is guaranteed to be
+  // unique if it is accepted.
+  optional string exclusive_cookie = 3;
 }
 
 message MSeqRequest {

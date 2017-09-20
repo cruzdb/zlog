@@ -23,10 +23,17 @@ case $ID in
     $SUDO env DEBIAN_FRONTEND=noninteractive \
       apt-get install -y devscripts equivs
 
+    # run mk-build-deps in tmp dir to avoid creation of artifact files that
+    # cause errors for read-only docker mounts
+    tmp=$(mktemp -d)
+    pushd $tmp
     $SUDO env DEBIAN_FRONTEND=noninteractive \
       mk-build-deps --install --remove \
       --tool="apt-get -y --no-install-recommends" \
       ${ZLOG_DIR}/debian/control || exit 1
+    popd
+    rm -rf $tmp
+
     $SUDO env DEBIAN_FRONTEND=noninteractive \
       apt-get -y remove cruzdb-build-deps
 

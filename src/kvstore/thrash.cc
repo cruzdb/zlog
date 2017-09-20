@@ -1,11 +1,11 @@
+// TODO: support non-ceph backend
 #include <sstream>
 #include <iostream>
 #include <iomanip>
 #include <map>
 #include <cstdlib>
 #include "zlog/db.h"
-#include "zlog/backend/ram.h"
-#include "zlog/backend/fakeseqr.h"
+#include "zlog/backend/ceph.h"
 
 #define MAX_KEY 1000
 
@@ -180,42 +180,26 @@ int main(int argc, char **argv)
     std::map<std::string, std::string> truth;
     truth_history.push_back(truth);
 
-#if 1
+    // connect to rados
+    librados::Rados cluster;
+    cluster.init(NULL);
+    cluster.conf_read_file(NULL);
+    int ret = cluster.connect();
+    assert(ret == 0);
+
+    // open pool i/o context
+    librados::IoCtx ioctx;
+    ret = cluster.ioctx_create("zlog", ioctx);
+    assert(ret == 0);
+
     zlog::Log *log;
-    auto be = new RAMBackend();
-    auto client = new FakeSeqrClient();
-    int ret = zlog::Log::Create(be, "log", client, &log);
+    CephBackend *be = new CephBackend(&ioctx);
+    ret = zlog::Log::Create(be, "log", NULL, &log);
     assert(ret == 0);
 
     DB *db;
     ret = DB::Open(log, true, &db);
     assert(ret == 0);
-#else
-    zlog::SeqrClient client("localhost", "5678");
-    client.Connect();
-
-    librados::Rados rados;
-    rados.init(NULL);
-    rados.conf_read_file(NULL);
-    rados.connect();
-
-    librados::IoCtx ioctx;
-    rados.ioctx_create("rbd", ioctx);
-
-    std::stringstream ss;
-    ss << "log." << time(NULL) << "." << std::rand();
-    std::cout << "log name: " << ss.str() << std::endl;
-
-    zlog::Log *log;
-    int ret = zlog::Log::Create(ioctx, ss.str(), &client, &log);
-    assert(ret == 0);
-
-    ZLogBackend be(log);
-
-    DBImpl db;
-    ret = db.Open(&be, true);
-    assert(ret == 0);
-#endif
 
     std::vector<Snapshot*> db_history;
     db_history.push_back(db->GetSnapshot());
@@ -286,7 +270,6 @@ int main(int argc, char **argv)
 
     delete db;
     delete log;
-    delete client;
     delete be;
   }
 
