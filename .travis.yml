@@ -5,20 +5,20 @@ language: cpp
 services:
   - docker
 
-#addons:
-#  coverity_scan:
-#    project:
-#      name: "noahdesu/zlog"
-#      description: "Build submitted via Travis CI"
-#    notification_email: noahwatkins@gmail.com
-#    build_command_prepend: "cmake ."
-#    build_command:   "make"
-#    branch_pattern: coverity_scan
-#
-#env:
-#  global:
-#   # COVERITY_SCAN_TOKEN
-#   - secure: "EhSojL5dZ7LY9S59Iixzw8KUtMqVdE8dZTZqZ0gnA1VfG4XcQr8u8Vi9jJzGaGxcXIL10p3nE4whrmhlEhUpxKkrcOgKo9vKmn9xByUHd0CBhBudZAdlQsq4DMEp20qAwg+5iuCUHS6cn3UjduQqdo9YMhfqFuRiH+U3oZxS0W4="
+addons:
+  coverity_scan:
+    project:
+      name: "noahdesu/zlog"
+      description: "Build submitted via Travis CI"
+    notification_email: noahwatkins@gmail.com
+    build_command_prepend: "cmake -DWITH_JNI=ON -DWITH_CEPH=ON ."
+    build_command:   "make"
+    branch_pattern: coverity_scan
+
+env:
+  global:
+   # COVERITY_SCAN_TOKEN
+   - secure: "EhSojL5dZ7LY9S59Iixzw8KUtMqVdE8dZTZqZ0gnA1VfG4XcQr8u8Vi9jJzGaGxcXIL10p3nE4whrmhlEhUpxKkrcOgKo9vKmn9xByUHd0CBhBudZAdlQsq4DMEp20qAwg+5iuCUHS6cn3UjduQqdo9YMhfqFuRiH+U3oZxS0W4="
 
 matrix:
   include:
@@ -56,7 +56,7 @@ matrix:
 # dependency installation.
 before_install:
   - ci/before_install.sh
-  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh && ci/install-ceph.sh; fi
+  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh && ci/install-ceph.sh && sudo apt-get install -y rados-objclass-dev; fi
   - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} != 1 ]; then exit 0; fi
 
 # build and testing is skipped for coverity builds
