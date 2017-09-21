@@ -56,7 +56,7 @@ matrix:
 # dependency installation.
 before_install:
   - ci/before_install.sh
-  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh && ci/install-ceph.sh; fi
+  - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} == 1 ]; then ./install-deps.sh && ci/install-ceph.sh && sudo apt-get install -y rados-objclass-dev; fi
   - if [ $TRAVIS_BRANCH == coverity_scan ] && [ ${TRAVIS_JOB_NUMBER##*.} != 1 ]; then exit 0; fi
 
 # build and testing is skipped for coverity builds
