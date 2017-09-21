@@ -121,3 +121,12 @@ set(java_test_srcs
 add_jar(zlog-test ${java_test_srcs})
 add_dependencies(zlog-test zlog_jar)
 install_jar(zlog-test share/java)
+
+create_javadoc(zlog
+  PACKAGES com.cruzdb
+  SOURCEPATH ${CMAKE_CURRENT_SOURCE_DIR}/src/main/java
+  WINDOWTITLE "ZLogJava"
+  DOCTITLE "<h1>ZLog</h1>"
+  AUTHOR FALSE
+  USE TRUE
+  VERSION FALSE)
