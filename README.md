@@ -43,7 +43,7 @@ We welcome and encourage people to learn and contribute to the ZLog project. If 
 | Ubuntu 14.04 LTS | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:trusty&label=ubuntu:trusty)](https://travis-ci.org/noahdesu/zlog) |
 | Ubuntu 16.04 LTS | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:xenial&label=ubuntu:xenial)](https://travis-ci.org/noahdesu/zlog) |
 | Ubuntu 16.10     | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:yakkety&label=ubuntu:yakkety)](https://travis-ci.org/noahdesu/zlog) |
-| Ubuntu 17.04     | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:zesty&label=ubuntu:zesty)](https://travis-ci.org/noahdesu/zlog) |
-| Fedora 23        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:23&label=fedora:23)](https://travis-ci.org/noahdesu/zlog) |
+| Ubuntu 17.04     | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=ubuntu:zesty+RUN_COVERAGE=0&label=ubuntu:zesty)](https://travis-ci.org/noahdesu/zlog) |
 | Fedora 24        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:24&label=fedora:24)](https://travis-ci.org/noahdesu/zlog) |
 | Fedora 25        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:25&label=fedora:25)](https://travis-ci.org/noahdesu/zlog) |
+| Fedora 26        | [![status](https://badges.herokuapp.com/travis/noahdesu/zlog?env=DOCKER_IMAGE=fedora:26&label=fedora:26)](https://travis-ci.org/noahdesu/zlog) |
