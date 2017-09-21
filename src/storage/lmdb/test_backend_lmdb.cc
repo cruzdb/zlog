@@ -1,6 +1,7 @@
 #include "storage/test_backend.h"
 #include "libzlog/test_libzlog.h"
 #include "include/zlog/backend/lmdb.h"
+#include "port/stack_trace.h"
 
 class BackendTest::Context {
  public:
@@ -69,4 +70,11 @@ void LibZLogTest::TearDown() {
   zlog_destroy(c_log);
   log.reset();
   BackendTest::TearDown();
+}
+
+int main(int argc, char **argv)
+{
+  rocksdb::port::InstallStackTraceHandler();
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

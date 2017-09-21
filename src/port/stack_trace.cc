@@ -5,8 +5,7 @@
 //
 #include "port/stack_trace.h"
 
-#if defined(ROCKSDB_LITE) || !(defined(ROCKSDB_BACKTRACE) || defined(OS_MACOSX)) || \
-    defined(CYGWIN) || defined(OS_FREEBSD) || defined(OS_SOLARIS)
+#if 0
 
 // noop
 
@@ -32,7 +31,7 @@ namespace port {
 
 namespace {
 
-#ifdef OS_LINUX
+#ifdef __linux__
 const char* GetExecutableName() {
   static char name[1024];
 
@@ -72,7 +71,7 @@ void PrintStackTraceLine(const char* symbol, void* frame) {
 
   fprintf(stderr, "\n");
 }
-#elif defined(OS_MACOSX)
+#elif defined(__APPLE__)
 
 void PrintStackTraceLine(const char* symbol, void* frame) {
   static int pid = getpid();

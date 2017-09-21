@@ -8,6 +8,7 @@
 #include "storage/ceph/cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
 #include "gtest/gtest.h"
+#include "port/stack_trace.h"
 
 class ClsZlogTest : public ::testing::Test {
  protected:
@@ -948,4 +949,11 @@ TEST_F(ClsZlogTest, ReadView_Success) {
   ASSERT_EQ(ret, 0);
   decode_views(bl, views);
   ASSERT_TRUE(views.empty());
+}
+
+int main(int argc, char **argv)
+{
+  rocksdb::port::InstallStackTraceHandler();
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

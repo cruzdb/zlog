@@ -38,7 +38,7 @@ target_link_libraries(zlog_test_kvstore
   zlog_seqr
   libkvstore
   zlog_backend_lmdb
-  gtest_main)
+  gtest)
 install(TARGETS zlog_test_kvstore DESTINATION bin)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")

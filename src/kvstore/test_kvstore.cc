@@ -8,6 +8,7 @@
 #include "zlog/db.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend/lmdb.h"
+#include "port/stack_trace.h"
 
 #define MAX_KEY 1000
 
@@ -402,4 +403,11 @@ TEST(DB, ReOpen) {
   delete log;
   be->Close();
   delete be;
+}
+
+int main(int argc, char **argv)
+{
+  rocksdb::port::InstallStackTraceHandler();
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

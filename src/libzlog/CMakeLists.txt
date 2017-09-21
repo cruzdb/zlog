@@ -3,7 +3,8 @@ set(libzlog_sources
   stream.cc
   striper.cc
   aio.cc
-  capi.cc)
+  capi.cc
+  ../port/stack_trace.cc)
 
 add_library(libzlog SHARED ${libzlog_sources})
 
