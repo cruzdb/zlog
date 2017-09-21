@@ -202,6 +202,12 @@ Stream Abstraction
 
 .. note:: work-in-progress. see src/include/zlog/stream.h
 
+#############
+Java Bindings
+#############
+
+View the auto-generated `JavaDoc pages for the ZLog Java bindings <java/>`_.
+
 ==========================
 Key-Value Storage Engine
 ==========================

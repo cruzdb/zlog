@@ -32,3 +32,16 @@ ${OUTPUT_DIR}/virtualenv/bin/pip install --quiet \
 mkdir -p ${OUTPUT_DIR}/output/html
 ${OUTPUT_DIR}/virtualenv/bin/sphinx-build -W -a -n -b dirhtml \
   -d ${OUTPUT_DIR}/doctrees ${ZLOG_DIR}/doc ${OUTPUT_DIR}/output/html
+
+BUILD_DIR=$(mktemp -d)
+trap "rm -rf ${BUILD_DIR}" EXIT
+
+pushd ${BUILD_DIR}
+cmake -DWITH_JNI=ON ${ZLOG_DIR}
+make zlog_javadoc
+popd
+
+JAVADOC_OUTDIR=${OUTPUT_DIR}/output/html/api/java
+mkdir -p ${JAVADOC_OUTDIR}
+cp -a ${BUILD_DIR}/src/java/javadoc/zlog/* ${JAVADOC_OUTDIR}
+rm -rf ${BUILD_DIR}
