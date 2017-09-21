@@ -33,8 +33,12 @@ sudo docker run --rm -it -v $PWD:/zlog:z,ro -w /zlog cppcheck cppcheck \
   /zlog | tee cppcheck.txt
 
 # include-what-you-use
-sudo docker run --rm -it -v $PWD:$PWD:z,ro -w $PWD iwyu \
-  /usr/src/iwyu/iwyu_tool.py -p build | tee iwyu.txt
+docker run --rm -it -v ${PWD}:/src/zlog:z,ro -w /src/zlog iwyu \
+  /bin/bash -c "\
+    ./install-deps.sh && \
+    ci/install-ceph.sh && \
+    apt-get install -y rados-objclass-dev && \
+    docker/iwyu.sh" | tee iwyu.txt
 
 # scan-build
 rm -rf scan-build-results
