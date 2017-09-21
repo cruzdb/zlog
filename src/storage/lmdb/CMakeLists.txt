@@ -8,7 +8,7 @@ target_link_libraries(zlog_test_backend_lmdb
   ${Boost_SYSTEM_LIBRARY}
   libzlog
   zlog_backend_lmdb
-  gtest_main)
+  gtest)
 install(TARGETS zlog_test_backend_lmdb DESTINATION bin)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")

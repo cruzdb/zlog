@@ -28,11 +28,13 @@ target_include_directories(zlog_backend_ceph
 )
 install(TARGETS zlog_backend_ceph DESTINATION lib)
 
-add_executable(zlog_test_cls_zlog test_cls_zlog.cc)
+add_executable(zlog_test_cls_zlog
+  test_cls_zlog.cc
+  ../../port/stack_trace.cc)
 target_link_libraries(zlog_test_cls_zlog
     cls_zlog_client
     rados
-    gtest_main)
+    gtest)
 target_include_directories(zlog_test_cls_zlog
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
@@ -49,7 +51,7 @@ target_link_libraries(zlog_test_backend_ceph
   ${Boost_SYSTEM_LIBRARY}
   rados
   libzlog
-  gtest_main)
+  gtest)
 install(TARGETS zlog_test_backend_ceph DESTINATION bin)
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
   setup_target_for_coverage(zlog_test_backend_ceph_coverage zlog_test_backend_ceph coverage)
