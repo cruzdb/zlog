@@ -68,6 +68,9 @@ cppcheck.txt
 iwyu.txt
 scan-build-results
 
+alpine/APKBUILD
+.abuild/
+alpine/
 src/.git_version
 *.tar
 *.tar.bz2

@@ -34,8 +34,28 @@ bin/git-archive-all.sh --prefix ${outfile}/ --verbose ${outfile}.tar
 # populate files with version strings
 (git rev-parse HEAD ; git describe) 2> /dev/null > src/.git_version
 
+# if the version has '-' in it, it has a 'release' part,
+# like vX.Y.Z-N-g<shortsha1>.  If it doesn't, it's just
+# vX.Y.Z.  Handle both, and translate - to . for rpm
+# naming rules (the - separates version and release).
+
+if expr index ${version} '-' > /dev/null; then
+	rpm_version=`echo ${version} | cut -d - -f 1-1`
+	rpm_release=`echo ${version} | cut -d - -f 2- | sed 's/-/./'`
+else
+	rpm_version=${version}
+	rpm_release=0
+fi
+
+for tmpl in alpine/APKBUILD.in; do
+  cat ${tmpl} |
+    sed "s/@VERSION@/${rpm_version}/g" |
+    sed "s/@RELEASE@/${rpm_release}/g" |
+    sed "s/@TARBALL_BASENAME@/${outfile}/g" > `echo ${tmpl} | sed 's/.in$//'`
+done
+
 ln -s . ${outfile}
-tar cvf ${outfile}.version.tar ${outfile}/src/.git_version
+tar cvf ${outfile}.version.tar ${outfile}/src/.git_version ${outfile}/alpine/APKBUILD
 tar --concatenate -f ${outfile}.both.tar ${outfile}.version.tar
 tar --concatenate -f ${outfile}.both.tar ${outfile}.tar
 mv ${outfile}.both.tar ${outfile}.tar
