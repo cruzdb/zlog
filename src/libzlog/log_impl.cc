@@ -176,7 +176,7 @@ int LogImpl::CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
   // if the latest stripe is empty, it may also mean that the entire log is
   // empty. the output parameters correspond to max/empty of the log, not the
   // current stripe.
-  uint64_t out_maxpos;
+  uint64_t out_maxpos = 0; // initialization is ONLY for -Werror=maybe-uninitialized
   bool out_empty;
   view = striper.LatestView();
   if (empty) {
@@ -260,7 +260,7 @@ int LogImpl::Seal(const std::vector<std::string>& objects,
   }
 
   // query objects for max pos
-  uint64_t max_position;
+  uint64_t max_position = 0; // initialization is ONLY for -Werror=maybe-uninitialized
   bool initialized = false;
   for (auto oid : objects) {
     bool empty;

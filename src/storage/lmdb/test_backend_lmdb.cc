@@ -14,7 +14,7 @@ void BackendTest::SetUp() {
 
   // C++ API
   c->dbpath = std::unique_ptr<char>(strdup("/tmp/zlog.db.XXXXXX"));
-  mkdtemp(c->dbpath.get());
+  ASSERT_NE(mkdtemp(c->dbpath.get()), nullptr);
   ASSERT_GT(strlen(c->dbpath.get()), (unsigned)0);
 
   auto b = std::unique_ptr<LMDBBackend>(new LMDBBackend());
@@ -22,7 +22,7 @@ void BackendTest::SetUp() {
 
   // C API
   c->c_dbpath = std::unique_ptr<char>(strdup("/tmp/zlog.db.XXXXXX"));
-  mkdtemp(c->c_dbpath.get());
+  ASSERT_NE(mkdtemp(c->c_dbpath.get()), nullptr);
   ASSERT_GT(strlen(c->c_dbpath.get()), (unsigned)0);
 
   int ret = zlog_create_lmdb_backend(c->c_dbpath.get(), &c_backend);
@@ -42,10 +42,10 @@ void BackendTest::TearDown() {
   if (context) {
     char cmd[64];
     sprintf(cmd, "rm -rf %s", context->dbpath.get());
-    system(cmd);
+    ASSERT_EQ(system(cmd), 0);
 
     sprintf(cmd, "rm -rf %s", context->c_dbpath.get());
-    system(cmd);
+    ASSERT_EQ(system(cmd), 0);
 
     delete context;
   }
