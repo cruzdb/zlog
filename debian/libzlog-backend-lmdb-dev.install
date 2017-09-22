@@ -1,0 +1,2 @@
+usr/include/zlog/backend/lmdb.h
+usr/lib/libzlog_backend_lmdb.so

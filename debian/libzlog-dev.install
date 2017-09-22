@@ -1,0 +1,6 @@
+usr/include/zlog/backend.h
+usr/include/zlog/capi.h
+usr/include/zlog/log.h
+usr/include/zlog/slice.h
+usr/include/zlog/stream.h
+usr/lib/libzlog.so

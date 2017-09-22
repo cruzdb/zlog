@@ -35,7 +35,7 @@ case $ID in
     rm -rf $tmp
 
     $SUDO env DEBIAN_FRONTEND=noninteractive \
-      apt-get -y remove cruzdb-build-deps
+      apt-get -y remove zlog-build-deps
 
     # for doc/build.sh
     $SUDO env DEBIAN_FRONTEND=noninteractive \

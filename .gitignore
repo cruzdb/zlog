@@ -74,3 +74,8 @@ alpine/
 src/.git_version
 *.tar
 *.tar.bz2
+
+debian/files
+debian/libzlog.debhelper.log
+debian/libzlog.substvars
+debian/libzlog/
