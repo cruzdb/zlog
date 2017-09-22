@@ -63,4 +63,6 @@ elseif(WITH_CEPH)
   message(FATAL_ERROR "Cannot find librados")
 endif()
 
+find_package(Backtrace)
+
 add_subdirectory(src)

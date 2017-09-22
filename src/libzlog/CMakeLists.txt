@@ -24,6 +24,7 @@ target_link_libraries(libzlog
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
     ${LMDB_LIBRARIES}
+    ${Backtrace_LIBRARIES}
 )
 
 set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
