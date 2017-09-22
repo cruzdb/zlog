@@ -12,9 +12,9 @@ the distributed object storage system that powers Ceph.
 
 More information:
 
-* System Design: http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html
-* Asynchronous API Design: http://noahdesu.github.io/2015/09/04/zlog-async-api.html
-* Key-Value Store: http://noahdesu.github.io/2016/08/02/zlog-kvstore-intro.html
+* System Design: https://nwat.io/blog/2014/10/26/zlog-a-distributed-shared-log-on-ceph/
+* Asynchronous API Design: https://nwat.io/blog/2015/09/04/zlog-asynchronous-i/o-support/
+* Key-Value Store: https://nwat.io/blog/2016/08/02/introduction-to-the-zlog-transaction-key-value-store/
 
 ## Getting Started
 

@@ -6,7 +6,6 @@ import java.io.IOException;
  * A Log is a high-performance linearizable shared-log.
  *
  * @see <a target="_blank" href="http://github.com/noahdesu/zlog">http://github.com/noahdesu/zlog</a>
- * @see <a target="_blank" href="http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html">http://noahdesu.github.io/2014/10/26/corfu-on-ceph.html</a>
  */
 public class Log extends ZObject {
 
