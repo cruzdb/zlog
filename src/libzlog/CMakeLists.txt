@@ -24,7 +24,6 @@ target_link_libraries(libzlog
     zlog_proto
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
-    ${LMDB_LIBRARIES}
     ${Backtrace_LIBRARIES}
 )
 

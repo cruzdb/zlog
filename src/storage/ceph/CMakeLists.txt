@@ -20,7 +20,6 @@ install(TARGETS cls_zlog_client DESTINATION lib)
 
 add_library(zlog_backend_ceph SHARED ceph.cc)
 target_link_libraries(zlog_backend_ceph
-    zlog_proto
     cls_zlog_client
     rados)
 target_include_directories(zlog_backend_ceph

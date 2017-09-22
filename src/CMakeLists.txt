@@ -32,8 +32,6 @@ if(BUILD_CEPH_BACKEND)
 add_executable(zlog-seqr seqr-server.cc)
 target_link_libraries(zlog-seqr
     libzlog
-    zlog_proto
-    zlog_seqr
     zlog_backend_ceph
     rados
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
@@ -45,7 +43,6 @@ add_executable(zlog_tool zlog_tool.cc)
 set_target_properties(zlog_tool PROPERTIES OUTPUT_NAME "zlog")
 target_link_libraries(zlog_tool
     libzlog
-    zlog_seqr
     zlog_backend_ceph
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
