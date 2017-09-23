@@ -16,7 +16,7 @@ set_target_properties(libkvstore PROPERTIES
   OUTPUT_NAME cruzdb
   VERSION 1.0.0
   SOVERSION 1)
-install(TARGETS libkvstore LIBRARY DESTINATION lib)
+install(TARGETS libkvstore LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(BUILD_CEPH_BACKEND)
 add_executable(thrash thrash.cc)

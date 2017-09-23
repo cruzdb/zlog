@@ -75,7 +75,7 @@ case $ID in
         ;;
     esac
 
-    cp ${ZLOG_DIR}/zlog.spec ${BUILD_DIR}/zlog.spec
+    sed -e 's/@//g' < zlog.spec.in > ${BUILD_DIR}/zlog.spec
     $SUDO $builddepcmd ${BUILD_DIR}/zlog.spec 2>&1 | tee ${BUILD_DIR}/yum-builddep.out
     ! grep -q -i error: ${BUILD_DIR}/yum-builddep.out || exit 1
 

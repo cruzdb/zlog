@@ -47,7 +47,7 @@ else
 	rpm_release=0
 fi
 
-for tmpl in alpine/APKBUILD.in; do
+for tmpl in zlog.spec.in alpine/APKBUILD.in; do
   cat ${tmpl} |
     sed "s/@VERSION@/${rpm_version}/g" |
     sed "s/@RELEASE@/${rpm_release}/g" |

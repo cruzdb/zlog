@@ -4,7 +4,7 @@ set_target_properties(zlog_backend_lmdb PROPERTIES
   OUTPUT_NAME zlog_backend_lmdb
   VERSION 1.0.0
   SOVERSION 1)
-install(TARGETS zlog_backend_lmdb LIBRARY DESTINATION lib)
+install(TARGETS zlog_backend_lmdb LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 add_executable(zlog_test_backend_lmdb
   test_backend_lmdb.cc

@@ -1,0 +1,71 @@
+Name:		zlog
+Version:	@VERSION@
+Release:	@RELEASE@%{?dist}
+Summary:	distributed shared log
+License:	LGPL-2.1
+Source0:	@TARBALL_BASENAME@.tar.bz2
+
+BuildRequires:	cmake
+BuildRequires:	gcc-c++
+BuildRequires:	boost-devel
+BuildRequires:	protobuf-devel
+BuildRequires:	protobuf-compiler
+BuildRequires:	java-devel
+BuildRequires:	lcov
+BuildRequires:  libatomic
+BuildRequires:  lmdb-devel
+
+%description
+distributed shared log
+
+%prep
+%autosetup -p1 -n @TARBALL_BASENAME@
+
+%build
+
+# unlimit _smp_mflags in system macro if not set above
+%define _smp_ncpus_max 0
+# extract the number of processors for use with cmake
+%define _smp_ncpus %(echo %{_smp_mflags} | sed 's/-j//')
+
+mkdir build
+cd build
+cmake \
+  -DCMAKE_INSTALL_PREFIX=%{_prefix} \
+  -DCMAKE_INSTALL_LIBDIR=%{_libdir} \
+  -DCMAKE_INSTALL_INCLUDEDIR=%{_includedir} \
+  -DWITH_JNI=OFF \
+  ..
+make %{?_smp_mflags}
+
+%install
+cd build
+make DESTDIR=%{buildroot} install
+
+%clean
+rm -rf %{buildroot}
+
+%files
+
+%{_bindir}/zlog_test_backend_lmdb
+%{_bindir}/zlog_test_kvstore
+%{_includedir}/zlog/backend.h
+%{_includedir}/zlog/backend/lmdb.h
+%{_includedir}/zlog/capi.h
+%{_includedir}/zlog/db.h
+%{_includedir}/zlog/iterator.h
+%{_includedir}/zlog/log.h
+%{_includedir}/zlog/slice.h
+%{_includedir}/zlog/stream.h
+%{_includedir}/zlog/transaction.h
+%{_libdir}/libcruzdb.so
+%{_libdir}/libcruzdb.so.1
+%{_libdir}/libcruzdb.so.1.0.0
+%{_libdir}/libzlog.so
+%{_libdir}/libzlog.so.1
+%{_libdir}/libzlog.so.1.0.0
+%{_libdir}/libzlog_backend_lmdb.so
+%{_libdir}/libzlog_backend_lmdb.so.1
+%{_libdir}/libzlog_backend_lmdb.so.1.0.0
+%{_libdir}/libzlog_proto.so
+%{_libdir}/libzlog_seqr.so

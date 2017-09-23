@@ -79,3 +79,5 @@ debian/files
 debian/libzlog.debhelper.log
 debian/libzlog.substvars
 debian/libzlog/
+
+zlog.spec
