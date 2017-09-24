@@ -81,3 +81,5 @@ debian/libzlog.substvars
 debian/libzlog/
 
 zlog.spec
+
+sa_results
