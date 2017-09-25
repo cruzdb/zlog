@@ -3,74 +3,106 @@
 #include "include/zlog/backend/lmdb.h"
 #include "port/stack_trace.h"
 
-class BackendTest::Context {
- public:
-  std::unique_ptr<char> dbpath;
-  std::unique_ptr<char> c_dbpath;
+void BackendTest::SetUp() {}
+void BackendTest::TearDown() {}
+
+struct DBPathContext {
+  char *dbpath = nullptr;
+  virtual ~DBPathContext() {
+    if (dbpath) {
+      struct stat st;
+      if (stat(dbpath, &st) == 0) {
+        char cmd[PATH_MAX];
+        sprintf(cmd, "rm -rf %s", dbpath);
+        EXPECT_EQ(system(cmd), 0);
+      }
+      free(dbpath);
+    }
+  }
 };
 
-void BackendTest::SetUp() {
-  auto c = std::unique_ptr<BackendTest::Context>(new BackendTest::Context);
-
-  // C++ API
-  c->dbpath = std::unique_ptr<char>(strdup("/tmp/zlog.db.XXXXXX"));
-  ASSERT_NE(mkdtemp(c->dbpath.get()), nullptr);
-  ASSERT_GT(strlen(c->dbpath.get()), (unsigned)0);
-
-  auto b = std::unique_ptr<LMDBBackend>(new LMDBBackend());
-  b->Init(c->dbpath.get(), true);
-
-  // C API
-  c->c_dbpath = std::unique_ptr<char>(strdup("/tmp/zlog.db.XXXXXX"));
-  ASSERT_NE(mkdtemp(c->c_dbpath.get()), nullptr);
-  ASSERT_GT(strlen(c->c_dbpath.get()), (unsigned)0);
-
-  int ret = zlog_create_lmdb_backend(c->c_dbpath.get(), &c_backend);
-  ASSERT_EQ(ret, 0);
-
-  context = c.release();
-  backend = std::move(b);
-}
-
-void BackendTest::TearDown() {
-  if (backend) {
-    LMDBBackend *b = (LMDBBackend*)backend.get();
-    b->Close();
-
-    zlog_destroy_lmdb_backend(c_backend);
+struct LibZLogTest::Context : public DBPathContext {
+  LMDBBackend *backend = nullptr;
+  ~Context() {
+    if (backend) {
+      backend->Close();
+      delete backend;
+    }
   }
-  if (context) {
-    char cmd[64];
-    sprintf(cmd, "rm -rf %s", context->dbpath.get());
-    ASSERT_EQ(system(cmd), 0);
-
-    sprintf(cmd, "rm -rf %s", context->c_dbpath.get());
-    ASSERT_EQ(system(cmd), 0);
-
-    delete context;
-  }
-}
+};
 
 void LibZLogTest::SetUp() {
-  ASSERT_NO_FATAL_FAILURE(BackendTest::SetUp());
+  context = new Context;
 
-  // C++ API
-  zlog::Log *l;
-  int ret = zlog::Log::Create(backend.get(), "mylog", NULL, &l);
-  ASSERT_EQ(ret, 0);
+  context->dbpath = strdup("/tmp/zlog.db.XXXXXX");
+  ASSERT_NE(mkdtemp(context->dbpath), nullptr);
+  ASSERT_GT(strlen(context->dbpath), (unsigned)0);
 
-  // C API
-  ret = zlog_create(c_backend, "c_mylog", NULL, &c_log);
-  ASSERT_EQ(ret, 0);
-
-  log.reset(l);
+  if (lowlevel()) {
+    context->backend = new LMDBBackend();
+    context->backend->Init(context->dbpath, true);
+    int ret = zlog::Log::Create(context->backend,
+        "mylog", NULL, &log);
+    ASSERT_EQ(ret, 0);
+  } else {
+    int ret = zlog::Log::Create("lmdb", "mylog",
+        {{"path", context->dbpath}}, &log);
+    ASSERT_EQ(ret, 0);
+  }
 }
 
 void LibZLogTest::TearDown() {
-  zlog_destroy(c_log);
-  log.reset();
-  BackendTest::TearDown();
+  if (log)
+    delete log;
+  if (context)
+    delete context;
 }
+
+struct LibZLogCAPITest::Context : public DBPathContext {
+  zlog_backend_t backend = nullptr;
+  ~Context() {
+    if (backend) {
+      zlog_destroy_lmdb_backend(backend);
+    }
+  }
+};
+
+void LibZLogCAPITest::SetUp() {
+  context = new Context;
+
+  context->dbpath = strdup("/tmp/zlog.db.XXXXXX");
+  ASSERT_NE(mkdtemp(context->dbpath), nullptr);
+  ASSERT_GT(strlen(context->dbpath), (unsigned)0);
+
+  if (lowlevel()) {
+    int ret = zlog_create_lmdb_backend(context->dbpath,
+        &context->backend);
+    ASSERT_EQ(ret, 0);
+    ret = zlog_create(context->backend, "c_mylog",
+        NULL, &log);
+    ASSERT_EQ(ret, 0);
+  } else {
+    const char *keys[] = {"path"};
+    const char *vals[] = {context->dbpath};
+    int ret = zlog_create_nobe("lmdb", "c_mylog",
+        keys, vals, 1, &log);
+    ASSERT_EQ(ret, 0);
+  }
+}
+
+void LibZLogCAPITest::TearDown() {
+  if (log)
+    zlog_destroy(log);
+
+  if (context)
+    delete context;
+}
+
+INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
+    ::testing::Values(true, false));
+
+INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
+    ::testing::Values(true, false));
 
 int main(int argc, char **argv)
 {

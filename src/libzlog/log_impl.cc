@@ -11,6 +11,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <dlfcn.h>
 
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
@@ -49,6 +50,86 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   }
 
   return Open(backend, name, seqr, logptr);
+}
+
+/*
+ * TODO: instead of passing these in as macros, we can put some of this shared
+ * library code in a module and then use configure_file to do the substitution.
+ */
+#define BE_PREFIX CMAKE_SHARED_LIBRARY_PREFIX "zlog_backend_"
+#define BE_SUFFIX CMAKE_SHARED_LIBRARY_SUFFIX
+
+typedef Backend *(*backend_allocate_t)(void);
+typedef void (*backend_release_t)(Backend*);
+
+#define BE_ALLOCATE "__backend_allocate"
+#define BE_RELEASE "__backend_release"
+
+int Log::Create(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts, Log **logpp)
+{
+  // try system lib dir
+  char path[PATH_MAX];
+  int ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
+      ZLOG_LIBDIR, scheme.c_str());
+  if (ret >= (int)sizeof(path)) {
+    return -ENAMETOOLONG;
+  }
+
+  auto handle = dlopen(path, RTLD_NOW);
+  if (handle == nullptr) {
+    // try $PWD/lib
+    ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
+        "lib", scheme.c_str());
+    if (ret >= (int)sizeof(path)) {
+      return -ENAMETOOLONG;
+    }
+
+    handle = dlopen(path, RTLD_NOW);
+    if (handle == nullptr) {
+      std::cerr << "could not load backend " << dlerror() << std::endl;
+      return -EINVAL;
+    }
+  }
+
+  // technically the symbol value could be null in the module, rather than
+  // indicating an error. this might be useful later. check the man page.
+  auto allocate = (backend_allocate_t)dlsym(handle, BE_ALLOCATE);
+  if (allocate == nullptr) {
+    dlclose(handle);
+    std::cerr << "could not find symbol " << dlerror() << std::endl;
+    return -EINVAL;
+  }
+
+  auto release = (backend_release_t)dlsym(handle, BE_RELEASE);
+  if (release == nullptr) {
+    dlclose(handle);
+    std::cerr << "could not find symbol " << dlerror() << std::endl;
+    return -EINVAL;
+  }
+
+  auto backend = allocate();
+  assert(backend);
+
+  ret = backend->Initialize(opts);
+  if (ret) {
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  ret = Create(backend, name, nullptr, logpp);
+  if (ret) {
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  // backend is now managed by the log instance
+  ((LogImpl*)(*logpp))->be_handle = handle;
+  ((LogImpl*)(*logpp))->be_release = release;
+
+  return 0;
 }
 
 int Log::Create(Backend *backend, const std::string& name,
@@ -101,6 +182,21 @@ int Log::Open(Backend *backend, const std::string& name,
   *logptr = impl.release();
 
   return 0;
+}
+
+LogImpl::~LogImpl()
+{
+  if (active_seqr && active_seqr != shared_seqr)
+    delete active_seqr;
+
+  // backend owned by log instance?
+  if (be_handle || be_release) {
+    assert(be_handle && be_release);
+    // release instance in backend module
+    be_release(be);
+    // release our reference on the module
+    dlclose(const_cast<void*>(be_handle));
+  }
 }
 
 int LogImpl::UpdateView()
@@ -344,6 +440,12 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
       std::cerr << "no active sequencer" << std::endl;
       return -EINVAL;
     }
+    // TODO: the sequencer at this level of abstraction should not be exposing
+    // pools and log names. It should just be a simple CheckTail interface. The
+    // constructor can take care of the rest. For instance, it might be that a
+    // connection implies certain metadata and we odn't need to send it. Or
+    // maybe the sequener transparently adds this metadata from the configured
+    // backend.
     int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
         name, pposition, increment);
     if (ret == -EAGAIN) {

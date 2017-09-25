@@ -8,111 +8,164 @@
 #include "zlog/backend/ceph.h"
 #include "port/stack_trace.h"
 
-class BackendTest::Context {
- public:
-  librados::Rados cluster;
-  librados::IoCtx ioctx;
+void BackendTest::SetUp() {}
+void BackendTest::TearDown() {}
 
-  rados_t c_cluster;
-  rados_ioctx_t c_ioctx;
+// 4.1 use scheme in seqr
+// 4. make sure linking is all awesome
+// 5. figure out what to do with create/open tests
+//   - non fixture based test?
+// CreateWithBackend
+// (3): shared, exclusive
+// remove pool
+// apple dynlib
 
-  std::string pool_name;
-};
+struct UniquePoolContext {
+  rados_t cluster = nullptr;
+  rados_ioctx_t ioctx = nullptr;
+  std::string pool_name = "";
 
-class LibZLogTest::Context {
- public:
-  std::unique_ptr<zlog::SeqrClient> client;
-  zlog_sequencer_t c_client;
-};
+  void Init() {
+    boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    std::string pool = "cls_zlog_test." + boost::uuids::to_string(uuid);
 
-void BackendTest::SetUp() {
-  context = new BackendTest::Context;
+    int ret = rados_create(&cluster, NULL);
+    ASSERT_EQ(ret, 0);
 
-  boost::uuids::uuid uuid = boost::uuids::random_generator()();
-  context->pool_name = "cls_zlog_test." + boost::uuids::to_string(uuid);
+    ret = rados_conf_read_file(cluster, NULL);
+    ASSERT_EQ(ret, 0);
 
-  // C++ API
-  int ret = context->cluster.init(NULL);
-  ASSERT_EQ(ret, 0);
+    ret = rados_connect(cluster);
+    ASSERT_EQ(ret, 0);
 
-  ret = context->cluster.conf_read_file(NULL);
-  ASSERT_EQ(ret, 0);
+    ret = rados_pool_create(cluster, pool.c_str());
+    ASSERT_EQ(ret, 0);
 
-  ret = context->cluster.connect();
-  ASSERT_EQ(ret, 0);
+    pool_name = pool;
 
-  ret = context->cluster.pool_create(context->pool_name.c_str());
-  ASSERT_EQ(ret, 0);
-
-  ret = context->cluster.ioctx_create(context->pool_name.c_str(),
-      context->ioctx);
-  ASSERT_EQ(ret, 0);
-
-  backend = std::unique_ptr<CephBackend>(new CephBackend(&context->ioctx));
-
-  // C API
-  ret = rados_create(&context->c_cluster, NULL);
-  ASSERT_EQ(ret, 0);
-
-  ret = rados_conf_read_file(context->c_cluster, NULL);
-  ASSERT_EQ(ret, 0);
-
-  ret = rados_connect(context->c_cluster);
-  ASSERT_EQ(ret, 0);
-
-  ret = rados_ioctx_create(context->c_cluster, context->pool_name.c_str(),
-      &context->c_ioctx);
-  ASSERT_EQ(ret, 0);
-
-  ret = zlog_create_ceph_backend(context->c_ioctx, &c_backend);
-  ASSERT_EQ(ret, 0);
-}
-
-void BackendTest::TearDown() {
-  if (context) {
-    context->ioctx.close();
-    context->cluster.pool_delete(context->pool_name.c_str());
-    context->cluster.shutdown();
-
-    rados_ioctx_destroy(context->c_ioctx);
-    rados_shutdown(context->c_cluster);
-    zlog_destroy_ceph_backend(c_backend);
-
-    delete context;
+    ret = rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
+    ASSERT_EQ(ret, 0);
   }
-}
+
+  virtual ~UniquePoolContext() {
+    if (ioctx) {
+      rados_ioctx_destroy(ioctx);
+    }
+    if (pool_name.size()) {
+      rados_pool_delete(cluster, pool_name.c_str());
+    }
+    if (cluster) {
+      rados_shutdown(cluster);
+    }
+  }
+};
+
+struct LibZLogTest::Context : public UniquePoolContext {
+  librados::IoCtx ioctxpp;
+  bool close_ioctxpp = false;
+  CephBackend *backend = nullptr;
+  zlog::SeqrClient *client = nullptr;
+
+  void Init(bool lowlevel) {
+    ASSERT_NO_FATAL_FAILURE(UniquePoolContext::Init());
+    if (lowlevel) {
+      librados::IoCtx::from_rados_ioctx_t(ioctx, ioctxpp);
+      close_ioctxpp = true;
+    }
+  }
+
+  ~Context() {
+    if (client) {
+      delete client;
+    }
+    if (backend) {
+      delete backend;
+    }
+    if (close_ioctxpp) {
+      ioctxpp.close();
+    }
+  }
+};
 
 void LibZLogTest::SetUp() {
-  ASSERT_NO_FATAL_FAILURE(BackendTest::SetUp());
+  context = new Context;
+  ASSERT_NO_FATAL_FAILURE(context->Init(lowlevel()));
 
-  context = new LibZLogTest::Context;
-
-  // C++ API
-  context->client = std::unique_ptr<zlog::SeqrClient>(new zlog::SeqrClient("localhost", "5678"));
+  // 1. test with shared and exclusive setups
+  // 2. final version: shared will have auto client creation
+  context->client = new zlog::SeqrClient("localhost", "5678");
   ASSERT_NO_THROW(context->client->Connect());
 
-  zlog::Log *l;
-  int ret = zlog::Log::Create(backend.get(), "mylog", context->client.get(), &l);
-  ASSERT_EQ(ret, 0);
-
-  // C API
-  ret = zlog_create_sequencer("localhost", "5678", &context->c_client);
-  ASSERT_EQ(ret, 0);
-
-  ret = zlog_create(c_backend, "c_mylog", context->c_client, &c_log);
-  ASSERT_EQ(ret, 0);
-
-  log.reset(l);
+  if (lowlevel()) {
+    context->backend = new CephBackend(&context->ioctxpp);
+    int ret = zlog::Log::Create(context->backend, "mylog",
+        context->client, &log);
+    ASSERT_EQ(ret, 0);
+  } else {
+    int ret = zlog::Log::Create("ceph", "mylog",
+        {{"conf_file", ""}, {"pool", context->pool_name}},
+        &log);
+    ASSERT_EQ(ret, 0);
+  }
 }
 
 void LibZLogTest::TearDown() {
-  if (context) {
-    zlog_destroy_sequencer(context->c_client);
-    zlog_destroy(c_log);
+  if (log)
+    delete log;
+  if (context)
     delete context;
-  }
-  BackendTest::TearDown();
 }
+
+struct LibZLogCAPITest::Context : public UniquePoolContext {
+  zlog_backend_t backend = nullptr;
+  zlog_sequencer_t client = nullptr;
+
+  ~Context() {
+    if (backend)
+      zlog_destroy_ceph_backend(backend);
+    if (client)
+      zlog_destroy_sequencer(client);
+  }
+};
+
+void LibZLogCAPITest::SetUp() {
+  context = new Context;
+  ASSERT_NO_FATAL_FAILURE(context->Init());
+
+  if (lowlevel()) {
+    int ret = zlog_create_ceph_backend(context->ioctx,
+        &context->backend);
+    ASSERT_EQ(ret, 0);
+
+    ret = zlog_create_sequencer("localhost", "5678",
+        &context->client);
+    ASSERT_EQ(ret, 0);
+
+    ret = zlog_create(context->backend, "c_mylog",
+        context->client, &log);
+    ASSERT_EQ(ret, 0);
+  } else {
+    const char *keys[] = {"conf_file", "pool"};
+    const char *vals[] = {"", context->pool_name.c_str()};
+    int ret = zlog_create_nobe("ceph", "c_mylog",
+        keys, vals, 2, &log);
+    ASSERT_EQ(ret, 0);
+  }
+}
+
+void LibZLogCAPITest::TearDown() {
+  if (log)
+    zlog_destroy(log);
+
+  if (context)
+    delete context;
+}
+
+INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
+    ::testing::Values(true, false));
+
+INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
+    ::testing::Values(true, false));
 
 int main(int argc, char **argv)
 {

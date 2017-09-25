@@ -11,6 +11,14 @@ typedef void *zlog_stream_t;
 int zlog_create(zlog_backend_t backend, const char *name,
     zlog_sequencer_t seqr, zlog_log_t *log);
 
+// TODO: better name
+int zlog_create_nobe(const char *scheme,
+    const char *name,
+    char const* const* keys,
+    char const* const* vals,
+    size_t num,
+    zlog_log_t *log);
+
 int zlog_open(zlog_backend_t backend, const char *name,
     zlog_sequencer_t seqr, zlog_log_t *log);
 

@@ -23,11 +23,24 @@ LMDBBackend::Transaction LMDBBackend::NewTransaction(bool read_only)
   return Transaction(txn, this);
 }
 
+// TODO: backend needs to be OK with being deleted before having been
+// initialized...
 LMDBBackend::~LMDBBackend()
 {
   if (!closed) {
     Close();
   }
+}
+
+int LMDBBackend::Initialize(
+    const std::map<std::string, std::string>& opts)
+{
+  auto it = opts.find("path");
+  if (it == opts.end())
+    return -EINVAL;
+
+  Init(it->second, true);
+  return 0;
 }
 
 int LMDBBackend::CreateLog(const std::string& name,
@@ -514,4 +527,17 @@ extern "C" int zlog_destroy_lmdb_backend(zlog_backend_t backend)
   delete b->backend;
   delete b;
   return 0;
+}
+
+extern "C" Backend *__backend_allocate(void)
+{
+  auto b = new LMDBBackend();
+  return b;
+}
+
+extern "C" void __backend_release(Backend *p)
+{
+  // TODO: whats the correct type of cast here
+  LMDBBackend *backend = (LMDBBackend*)p;
+  delete backend;
 }

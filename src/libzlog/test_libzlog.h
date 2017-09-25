@@ -1,17 +1,36 @@
 #pragma once
-#include <memory>
-#include "storage/test_backend.h"
+#include "gtest/gtest.h"
 #include "zlog/log.h"
 #include "zlog/capi.h"
 
-class LibZLogTest : public BackendTest {
+// C++ API
+class LibZLogTest : public ::testing::TestWithParam<bool> {
  protected:
-  class Context;
+  struct Context;
 
   void SetUp() override;
   void TearDown() override;
 
-  std::unique_ptr<zlog::Log> log;
+  zlog::Log *log = nullptr;
   Context *context = nullptr;
-  zlog_log_t c_log;
+
+  bool lowlevel() {
+    return GetParam();
+  }
+};
+
+// C API
+class LibZLogCAPITest : public ::testing::TestWithParam<bool> {
+ protected:
+  struct Context;
+
+  void SetUp() override;
+  void TearDown() override;
+
+  zlog_log_t log = nullptr;
+  Context *context = nullptr;
+
+  bool lowlevel() {
+    return GetParam();
+  }
 };

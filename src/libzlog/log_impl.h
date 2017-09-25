@@ -23,6 +23,8 @@ class LogImpl : public Log {
       const std::string& hoid,
       const std::string& prefix) :
     be(backend),
+    be_handle(nullptr),
+    be_release(nullptr),
     active_seqr(nullptr),
     shared_seqr(shared_seqr),
     name(name),
@@ -30,10 +32,7 @@ class LogImpl : public Log {
     striper(prefix)
   {}
 
-  ~LogImpl() {
-    if (active_seqr && active_seqr != shared_seqr)
-      delete active_seqr;
-  }
+  ~LogImpl();
 
  public:
   int UpdateView();
@@ -100,6 +99,8 @@ class LogImpl : public Log {
   std::mutex lock;
 
   Backend *be;
+  void *be_handle;
+  void (*be_release)(Backend*);
 
   SeqrClient *active_seqr;
   SeqrClient *shared_seqr;

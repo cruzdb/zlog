@@ -7,10 +7,82 @@
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
 
-CephBackend::CephBackend(librados::IoCtx *ioctx) :
-  ioctx_(ioctx)
+// TODO: make this constructor private and used by the plugin-based allocator
+// interface. Same for the destructor.
+CephBackend::CephBackend() :
+  cluster_(nullptr),
+  ioctx_(nullptr)
 {
+}
+
+CephBackend::CephBackend(librados::IoCtx *ioctx) :
+  cluster_(nullptr),
+  ioctx_(ioctx),
+  pool_(ioctx_->get_pool_name())
+{
+}
+
+CephBackend::~CephBackend()
+{
+  // cluster_ is only non-null when it was created via Initialize() in which
+  // case the backend owns both the cluster and ioctx and needs to release them.
+  if (cluster_) {
+    ioctx_->close();
+    delete ioctx_;
+    cluster_->shutdown();
+    delete cluster_;
+  }
+}
+
+int CephBackend::Initialize(
+    const std::map<std::string, std::string>& opts)
+{
+  auto cluster = new librados::Rados;
+
+  // initialize cluster
+  auto it = opts.find("id");
+  auto id = it == opts.end() ? nullptr : it->second.c_str();
+  int ret = cluster->init(id);
+  if (ret) {
+    delete cluster;
+    return ret;
+  }
+
+  // read conf file?
+  it = opts.find("conf_file");
+  if (it != opts.end()) {
+    auto conf_file = it->second.empty() ? nullptr : it->second.c_str();
+    ret = cluster->conf_read_file(conf_file);
+    if (ret) {
+      delete cluster;
+      return ret;
+    }
+  }
+
+  ret = cluster->connect();
+  if (ret) {
+    delete cluster;
+    return ret;
+  }
+
+  // pool
+  it = opts.find("pool");
+  auto pool = it == opts.end() ? "zlog" : it->second;
+
+  auto ioctx = new librados::IoCtx;
+  ret = cluster->ioctx_create(pool.c_str(), *ioctx);
+  if (ret) {
+    delete ioctx;
+    cluster->shutdown();
+    delete cluster;
+    return ret;
+  }
+
+  cluster_ = cluster;
+  ioctx_ = ioctx;
   pool_ = ioctx_->get_pool_name();
+
+  return 0;
 }
 
 int CephBackend::CreateLog(const std::string& name,
@@ -345,4 +417,17 @@ extern "C" int zlog_destroy_ceph_backend(zlog_backend_t backend)
   delete b->backend;
   delete b;
   return 0;
+}
+
+extern "C" Backend *__backend_allocate(void)
+{
+  auto b = new CephBackend();
+  return b;
+}
+
+extern "C" void __backend_release(Backend *p)
+{
+  // TODO: whats the correct type of cast here
+  CephBackend *backend = (CephBackend*)p;
+  delete backend;
 }
