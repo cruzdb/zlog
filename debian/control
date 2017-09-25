@@ -1,6 +1,10 @@
-Source: cruzdb
+Source: zlog
 Section: admin
 Priority: optional
+Homepage: https://github.com/noahdesu/zlog
+Vcs-Git: git://github.com/noahdesu/zlog.git
+Vcs-Browser: https://github.com/noahdesu/zlog
+Maintainer: Noah Watkins <noahwatkins@gmail.com>
 Build-Depends: cmake,
   libprotobuf-dev,
   protobuf-compiler,
@@ -8,4 +12,78 @@ Build-Depends: cmake,
   libboost-program-options-dev,
   lcov,
   default-jdk,
+  javahelper,
   liblmdb-dev
+Standards-Version: 3.9.3
+
+Package: libzlog1
+Architecture: linux-any
+Section: libs
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: zlog is log.
+
+Package: libzlog1-dbg
+Architecture: linux-any
+Section: debug
+Priority: extra
+Depends: libzlog1 (= ${binary:Version}),
+         ${misc:Depends}
+Description: zlog debug is log debug.
+
+Package: libzlog-dev
+Architecture: linux-any
+Section: libdevel
+Depends: libzlog1 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: zlog dev is log dev.
+
+Package: libzlog-backend-lmdb1
+Architecture: linux-any
+Section: libs
+Depends: lmdb,
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: zlog is log.
+
+Package: libzlog-backend-lmdb1-dbg
+Architecture: linux-any
+Section: debug
+Priority: extra
+Depends: libzlog-backend-lmdb1 (= ${binary:Version}),
+         ${misc:Depends}
+Description: zlog debug is log debug.
+
+Package: libzlog-backend-lmdb-dev
+Architecture: linux-any
+Section: libdevel
+Depends: libzlog-backend-lmdb1 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: zlog dev is log dev.
+
+Package: libcruzdb1
+Architecture: linux-any
+Section: libs
+Depends: libzlog1 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: zlog is log.
+
+Package: libcruzdb1-dbg
+Architecture: linux-any
+Section: debug
+Priority: extra
+Depends: libcruzdb1 (= ${binary:Version}),
+         ${misc:Depends}
+Description: zlog debug is log debug.
+
+Package: libcruzdb-dev
+Architecture: linux-any
+Section: libdevel
+Depends: libzlog-dev (= ${binary:Version}),
+         libcruzdb1 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: zlog dev is log dev.

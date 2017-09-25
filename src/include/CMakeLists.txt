@@ -9,3 +9,8 @@ install(FILES
     zlog/transaction.h
     DESTINATION include/zlog
 )
+
+install(FILES
+    zlog/backend/lmdb.h
+    DESTINATION include/zlog/backend
+)

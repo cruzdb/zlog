@@ -24,7 +24,7 @@ class TempDir {
     char cmd[64];
     memset(cmd, 0, sizeof(cmd));
     sprintf(cmd, "rm -rf %s", path);
-    system(cmd);
+    assert(system(cmd) == 0);
   }
 
   char path[32];

@@ -38,7 +38,12 @@ public class Log extends ZObject {
   }
 
   /**
-   *
+   * @param pool the RADOS pool.
+   * @param seqr_server sequencer host name.
+   * @param seqr_port sequencer port number.
+   * @param log_name name of the log.
+   * @return the log instance.
+   * @throws com.cruzdb.LogException if an error occurs in the native library.
    */
   public static Log openCeph(final String pool, final String seqr_server,
       int seqr_port, String log_name) throws LogException {
@@ -48,7 +53,9 @@ public class Log extends ZObject {
   }
 
   /**
-   *
+   * @param logName name of the log.
+   * @return the log instance.
+   * @throws com.cruzdb.LogException if an error occurs in the native library.
    */
   public static Log openLMDB(String logName) throws LogException {
     return openLMDB("db", logName);
@@ -56,6 +63,10 @@ public class Log extends ZObject {
 
   /**
    *
+   * @param dbPath path to LMDB database.
+   * @param logName name of the log.
+   * @return the log instance.
+   * @throws com.cruzdb.LogException if an error occurs in the native library.
    */
   public static Log openLMDB(String dbPath, String logName) throws LogException {
     Log log = new Log();

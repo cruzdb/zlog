@@ -1,10 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
-
 #include "zlog/slice.h"
-#include "proto/zlog.pb.h"
 
 // For the C API
 typedef void *zlog_backend_t;

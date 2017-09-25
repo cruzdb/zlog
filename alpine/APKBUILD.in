@@ -1,0 +1,67 @@
+# Maintainer: Noah Watkins <noahwatkins@gmail.com>
+pkgname=zlog
+pkgver=@VERSION@
+pkgrel=@RELEASE@
+pkgdesc="ZLog is a distributed shared log"
+#pkgusers="ceph"
+#pkggroups="ceph"
+url="https://github.com/noahdesu/zlog"
+arch="x86_64"
+license="LGPL-2.1"
+
+makedepends="
+	boost-dev
+  protobuf-dev
+  lmdb-dev
+  libexecinfo-dev
+  cmake
+"
+
+source="no-warning-error.patch @TARBALL_BASENAME@.tar.bz2"
+
+# the sequencer currently only builds when ceph is enabled. we'd ideally like to
+# make this configurable. currently i'm having trouble getting ceph installed in
+# alpine from the testing repository. once that's working, then we should be
+# good to move forward.
+
+#subpackages="
+#  $pkgname-sequencer
+#"
+
+_prefix=/usr
+_bindir=$_prefix/bin
+
+builddir=$srcdir/@TARBALL_BASENAME@
+
+build() {
+	mkdir -p $builddir/build
+	cd $builddir/build
+
+  cmake \
+    -DCMAKE_INSTALL_PREFIX=$_prefix \
+    .. || return 1
+
+  make -j${JOBS:-2} || return 1
+}
+
+package() {
+  cd $builddir/build
+  make DESTDIR=$pkgdir install
+  cd ..
+}
+
+#sequencer() {
+#  pkgdesc="zlog sequencer."
+#
+#  _pkg $_bindir zlog-seqr
+#}
+#
+#_pkg() {
+#	local path=$1
+#	shift
+#	local files=$@
+#	mkdir -p $subpkgdir$path || exit 1
+#	for _file in $files; do
+#		mv $pkgdir$path/$_file $subpkgdir$path || exit 1
+#	done
+#}

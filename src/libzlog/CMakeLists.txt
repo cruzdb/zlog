@@ -8,6 +8,7 @@ set(libzlog_sources
 
 add_library(libzlog SHARED ${libzlog_sources})
 
+# TODO: no link rados
 if(BUILD_CEPH_BACKEND)
   target_include_directories(libzlog
       PUBLIC ${LIBRADOS_INCLUDE_DIRS}
@@ -23,12 +24,15 @@ target_link_libraries(libzlog
     zlog_proto
     zlog_seqr
     ${Boost_SYSTEM_LIBRARY}
-    ${LMDB_LIBRARIES}
+    ${Backtrace_LIBRARIES}
 )
 
-set_target_properties(libzlog PROPERTIES OUTPUT_NAME "zlog")
+set_target_properties(libzlog PROPERTIES
+  OUTPUT_NAME zlog
+  VERSION 1.0.0
+  SOVERSION 1)
 
-install(TARGETS libzlog LIBRARY DESTINATION lib)
+install(TARGETS libzlog LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 add_library(test_libzlog OBJECT test_libzlog.cc)
 target_include_directories(test_libzlog

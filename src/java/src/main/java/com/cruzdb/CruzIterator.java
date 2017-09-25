@@ -17,21 +17,21 @@ public class CruzIterator extends ZObject {
   }
 
   /**
-   *
+   * @return key for the current entry.
    */
   public byte[] key() {
     return key0(nativeHandle_);
   }
 
   /**
-   *
+   * @return value for the current entry.
    */
   public byte[] value() {
     return value0(nativeHandle_);
   }
 
   /**
-   *
+   * @return true if iterator is valid.
    */
   public boolean isValid() {
     return isValid0(nativeHandle_);
@@ -52,7 +52,7 @@ public class CruzIterator extends ZObject {
   }
 
   /**
-   *
+   * @param target byte array describing a key or a key prefix to seek for.
    */
   public void seek(byte[] target) {
     seek0(nativeHandle_, target, target.length);
