@@ -48,6 +48,7 @@ add_executable(zlog_test_backend_ceph
   $<TARGET_OBJECTS:test_libzlog>)
 target_link_libraries(zlog_test_backend_ceph
   ${Boost_SYSTEM_LIBRARY}
+  zlog_backend_ceph
   rados
   libzlog
   gtest)

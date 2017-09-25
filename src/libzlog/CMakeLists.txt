@@ -8,18 +8,6 @@ set(libzlog_sources
 
 add_library(libzlog SHARED ${libzlog_sources})
 
-# TODO: no link rados
-if(BUILD_CEPH_BACKEND)
-  target_include_directories(libzlog
-      PUBLIC ${LIBRADOS_INCLUDE_DIRS}
-   )
-   target_link_libraries(libzlog
-      zlog_backend_ceph
-      ${LIBRADOS_LIBRARIES}
-      ${Boost_SYSTEM_LIBRARY}
-   )
-endif(BUILD_CEPH_BACKEND)
-
 target_link_libraries(libzlog
     zlog_proto
     zlog_seqr
