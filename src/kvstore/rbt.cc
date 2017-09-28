@@ -14,7 +14,7 @@ static inline std::string tostr(int value)
 int main(int argc, char **argv)
 {
   zlog::Log *log;
-  auto be = new LMDBBackend("fakepool");
+  auto be = new LMDBBackend();
   be->Init("/tmp/zlog.bench.db", false);
   int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
   assert(ret == 0);

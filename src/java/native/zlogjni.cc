@@ -192,7 +192,7 @@ void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
 {
   // backend
   const char *db_path = env->GetStringUTFChars(jdb_path, 0);
-  auto be = new LMDBBackend("fakepool");
+  auto be = new LMDBBackend();
   be->Init(db_path, false);
   env->ReleaseStringUTFChars(jdb_path, db_path);
 

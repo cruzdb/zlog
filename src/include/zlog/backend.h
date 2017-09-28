@@ -45,6 +45,8 @@ class Backend {
   virtual int Initialize(
       const std::map<std::string, std::string>& options) = 0;
 
+  virtual std::map<std::string, std::string> meta() = 0;
+
   // log management
  public:
 
@@ -134,8 +136,6 @@ class Backend {
   virtual int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback) = 0;
-
-  virtual std::string pool() = 0;
 };
 
 #endif

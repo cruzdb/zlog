@@ -12,19 +12,15 @@ class LMDBBackend : public Backend {
  public:
   LMDBBackend() {}
 
-  explicit LMDBBackend(const std::string& pool) :
-    pool_(pool)
-  {}
-
   ~LMDBBackend();
-
-  std::string pool() override { return pool_; }
 
   void Init(const std::string& path, bool empty);
 
   int Initialize(const std::map<std::string, std::string>& opts) override;
 
   void Close();
+
+  std::map<std::string, std::string> meta() override;
 
   int CreateLog(const std::string& name,
       const std::string& initial_view) override;
@@ -65,8 +61,7 @@ class LMDBBackend : public Backend {
       std::function<void(void*, int)> callback) override;
 
  private:
-  std::string pool_;
-
+  std::map<std::string, std::string> options;
   MDB_env *env;
   MDB_dbi db_obj;
 

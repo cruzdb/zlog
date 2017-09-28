@@ -12,10 +12,7 @@ class CephBackend : public Backend {
 
   ~CephBackend();
 
-  // TODO: get rid of me
-  std::string pool() override {
-    return pool_;
-  }
+  std::map<std::string, std::string> meta() override;
 
   int Initialize(const std::map<std::string, std::string>& opts) override;
 
@@ -65,6 +62,8 @@ class CephBackend : public Backend {
     ceph::bufferlist bl;
     std::string *data;
   };
+
+  std::map<std::string, std::string> options;
 
   librados::Rados *cluster_;
   librados::IoCtx *ioctx_;

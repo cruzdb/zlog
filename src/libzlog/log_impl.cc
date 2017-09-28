@@ -59,14 +59,14 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
 #define BE_PREFIX CMAKE_SHARED_LIBRARY_PREFIX "zlog_backend_"
 #define BE_SUFFIX CMAKE_SHARED_LIBRARY_SUFFIX
 
-typedef Backend *(*backend_allocate_t)(void);
-typedef void (*backend_release_t)(Backend*);
-
 #define BE_ALLOCATE "__backend_allocate"
 #define BE_RELEASE "__backend_release"
 
-int Log::Create(const std::string& scheme, const std::string& name,
-    const std::map<std::string, std::string>& opts, Log **logpp)
+// TODO: wrap up this backend business in a resource all the callers have to
+// carefully manage a bunch of return values right now.
+int LogImpl::OpenBackend(const std::string& scheme,
+    const std::map<std::string, std::string>& opts,
+    void **hp, Backend **bpp, backend_release_t *rp)
 {
   // try system lib dir
   char path[PATH_MAX];
@@ -117,6 +117,68 @@ int Log::Create(const std::string& scheme, const std::string& name,
     dlclose(handle);
     return ret;
   }
+
+  *hp = handle;
+  *bpp = backend;
+  *rp = release;
+
+  return 0;
+}
+
+int LogImpl::Open(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts, LogImpl **logpp)
+{
+  void *handle;
+  Backend *backend;
+  backend_release_t release;
+
+  int ret = LogImpl::OpenBackend(scheme, opts,
+      &handle, &backend, &release);
+  if (ret)
+    return ret;
+
+  std::string hoid;
+  std::string prefix;
+  ret = backend->OpenLog(name, hoid, prefix);
+  if (ret) {
+    std::cerr << "failed to open log backend " << ret << std::endl;
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  auto log = std::unique_ptr<zlog::LogImpl>(
+      new zlog::LogImpl(backend, nullptr, name, hoid, prefix));
+
+  // handle/release now owned by log
+  log->be_handle = handle;
+  log->be_release = release;
+
+  ret = log->UpdateView();
+  if (ret) {
+    return ret;
+  }
+
+  if (log->striper.Empty()) {
+    return -EINVAL;
+  }
+
+  *logpp = log.release();
+
+  return 0;
+}
+
+int Log::Create(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts, Log **logpp)
+{
+  void *handle;
+  Backend *backend;
+  backend_release_t release;
+
+  int ret = LogImpl::OpenBackend(scheme, opts,
+      &handle, &backend, &release);
+  if (ret)
+    return ret;
 
   ret = Create(backend, name, nullptr, logpp);
   if (ret) {
@@ -232,7 +294,7 @@ int LogImpl::UpdateView()
           assert(!view.exclusive_cookie().empty());
           if (view.exclusive_cookie() == exclusive_cookie) { // cookie match (GOOD)
             auto client = std::unique_ptr<FakeSeqrClient>(
-                new FakeSeqrClient(be->pool(), name,
+                new FakeSeqrClient(be->meta(), name,
                   exclusive_empty, exclusive_position));
             active_seqr = client.release();
             // TODO: we don't do anything to clean-up the sequencers so this is
@@ -446,7 +508,7 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
     // connection implies certain metadata and we odn't need to send it. Or
     // maybe the sequener transparently adds this metadata from the configured
     // backend.
-    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->meta(),
         name, pposition, increment);
     if (ret == -EAGAIN) {
       sleep(1);
@@ -475,7 +537,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
       std::cerr << "no active sequencer" << std::endl;
       return -EINVAL;
     }
-    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->meta(),
         name, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;
@@ -505,7 +567,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
       std::cerr << "no active sequencer" << std::endl;
       return -EINVAL;
     }
-    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->meta(),
         name, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;

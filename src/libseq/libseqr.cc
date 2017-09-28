@@ -1,4 +1,5 @@
 #include <set>
+#include <iostream>
 #include <map>
 #include <mutex>
 #include <boost/asio.hpp>
@@ -17,14 +18,19 @@ void SeqrClient::Connect() {
   }
 }
 
-int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
+int SeqrClient::CheckTail(uint64_t epoch,
+    const std::map<std::string, std::string>& meta,
     const std::string& name, uint64_t *position, bool next) {
   // fill in msg
   zlog_proto::MSeqRequest req;
   req.set_epoch(epoch);
   req.set_name(name);
   req.set_next(next);
-  req.set_pool(pool);
+  for (auto e : meta) {
+    auto sp = req.add_meta();
+    sp->set_key(e.first);
+    sp->set_val(e.second);
+  }
   req.set_count(1);
 
   channel *chan = channels_[next_channel_++ % num_channels_];
@@ -70,7 +76,8 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   return 0;
 }
 
-int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
+int SeqrClient::CheckTail(uint64_t epoch,
+    const std::map<std::string, std::string>& meta,
     const std::string& name, std::vector<uint64_t>& positions, size_t count)
 {
   if (count <= 0 || count > 100)
@@ -80,7 +87,11 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   zlog_proto::MSeqRequest req;
   req.set_epoch(epoch);
   req.set_name(name);
-  req.set_pool(pool);
+  for (auto e : meta) {
+    auto sp = req.add_meta();
+    sp->set_key(e.first);
+    sp->set_val(e.second);
+  }
   req.set_next(true);
   req.set_count(count);
 
@@ -128,7 +139,8 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   return 0;
 }
 
-int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
+int SeqrClient::CheckTail(uint64_t epoch,
+    const std::map<std::string, std::string>& meta,
     const std::string& name, const std::set<uint64_t>& stream_ids,
     std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
     uint64_t *pposition, bool next)
@@ -140,7 +152,11 @@ int SeqrClient::CheckTail(uint64_t epoch, const std::string& pool,
   zlog_proto::MSeqRequest req;
   req.set_epoch(epoch);
   req.set_name(name);
-  req.set_pool(pool);
+  for (auto e : meta) {
+    auto sp = req.add_meta();
+    sp->set_key(e.first);
+    sp->set_val(e.second);
+  }
   req.set_next(next);
   req.set_count(1);
   for (std::set<uint64_t>::const_iterator it = stream_ids.begin();

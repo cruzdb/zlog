@@ -32,6 +32,11 @@ LMDBBackend::~LMDBBackend()
   }
 }
 
+std::map<std::string, std::string> LMDBBackend::meta()
+{
+  return options;
+}
+
 int LMDBBackend::Initialize(
     const std::map<std::string, std::string>& opts)
 {
@@ -40,6 +45,10 @@ int LMDBBackend::Initialize(
     return -EINVAL;
 
   Init(it->second, true);
+
+  options = opts;
+  options["scheme"] = "lmdb";
+
   return 0;
 }
 
@@ -461,6 +470,10 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
 
 void LMDBBackend::Init(const std::string& path, bool empty)
 {
+  // TODO: even when a backend is created explicitly, it needs to fill in enough
+  // options so that a sequencer can open an instance. Or not. In our case def.
+  options["path"] = path;
+
   int ret = mdb_env_create(&env);
   assert(ret == 0);
 

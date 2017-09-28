@@ -10,6 +10,9 @@
 
 namespace zlog {
 
+typedef Backend *(*backend_allocate_t)(void);
+typedef void (*backend_release_t)(Backend*);
+
 class LogImpl : public Log {
  public:
   LogImpl(const LogImpl&) = delete;
@@ -45,6 +48,12 @@ class LogImpl : public Log {
       uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
   int ProposeSharedMode();
   int ProposeExclusiveMode();
+
+  static int OpenBackend(const std::string& scheme,
+      const std::map<std::string, std::string>& opts,
+      void **hp, Backend **bpp, backend_release_t *rp);
+  static int Open(const std::string& scheme, const std::string& name,
+      const std::map<std::string, std::string>& opts, LogImpl **logpp);
 
  public:
   int CheckTail(uint64_t *pposition) override;

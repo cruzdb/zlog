@@ -39,19 +39,15 @@ else()
   message(STATUS "JNI library is disabled")
 endif(WITH_JNI)
 
-################################################################################
-
-if(BUILD_CEPH_BACKEND)
-
 add_executable(zlog-seqr seqr-server.cc)
 target_link_libraries(zlog-seqr
     libzlog
-    zlog_backend_ceph
-    rados
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
 install(TARGETS zlog-seqr DESTINATION bin)
+
+if(BUILD_CEPH_BACKEND)
 
 add_executable(zlog_tool zlog_tool.cc)
 set_target_properties(zlog_tool PROPERTIES OUTPUT_NAME "zlog")

@@ -20,6 +20,11 @@ CephBackend::CephBackend(librados::IoCtx *ioctx) :
   ioctx_(ioctx),
   pool_(ioctx_->get_pool_name())
 {
+  // TODO: even when a backend is created explicitly, it needs to fill in enough
+  // options so that a sequencer can open an instance. Or not. In our case def.
+  options["scheme"] = "ceph";
+  options["conf_file"] = "";
+  options["pool"] = pool_;
 }
 
 CephBackend::~CephBackend()
@@ -32,6 +37,13 @@ CephBackend::~CephBackend()
     cluster_->shutdown();
     delete cluster_;
   }
+}
+
+// TODO: even when a backend is created explicitly, it needs to fill in enough
+// options so that a sequencer can open an instance. Or not. In our case def.
+std::map<std::string, std::string> CephBackend::meta()
+{
+  return options;
 }
 
 int CephBackend::Initialize(
@@ -77,6 +89,9 @@ int CephBackend::Initialize(
     delete cluster;
     return ret;
   }
+
+  options = opts;
+  options["scheme"] = "ceph";
 
   cluster_ = cluster;
   ioctx_ = ioctx;

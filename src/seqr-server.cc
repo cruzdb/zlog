@@ -4,14 +4,13 @@
 #include <deque>
 #include <iostream>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/program_options.hpp>
-#include <rados/librados.hpp>
 #include "proto/zlog.pb.h"
 #include "libzlog/log_impl.h"
-#include "include/zlog/backend/ceph.h"
 
 namespace po = boost::program_options;
 
@@ -31,6 +30,51 @@ static uint64_t get_time(void)
   return nsec;
 }
 
+template <class T>
+inline void hash_combine(std::size_t& seed, const T& v)
+{
+  std::hash<T> hasher;
+  seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+}
+
+/*
+ * TODO: currently the sequencer uses "pool" as a way to identify log state. But
+ * now with pluggable storage backends, the "pool" concept is not generic. Until
+ * we redesign the sequencer/client protocol, we'll just do equality on the meta
+ * object which contains info about hwo to connect to a backend. This will be
+ * slow, with potentially lots of correctness issues, but will get us to the
+ * next step.
+ */
+typedef std::map<std::string, std::string> meta_t;
+
+namespace std
+{
+  template<> struct hash<std::pair<meta_t, std::string>>
+  {
+    typedef std::pair<meta_t, std::string> argument_type;
+    typedef std::size_t result_type;
+    result_type operator()(argument_type const& s) const
+    {
+      result_type seed(std::hash<std::string>{}(s.second));
+      for (auto e : s.first) {
+        hash_combine(seed, e.first);
+        hash_combine(seed, e.second);
+      }
+      return seed;
+    }
+  };
+}
+
+static meta_t get_meta(zlog_proto::MSeqRequest& req)
+{
+  meta_t meta;
+  for (int i = 0; i < req.meta_size(); i++) {
+    auto kv = req.meta(i);
+    meta[kv.key()] = kv.val();
+  }
+  return meta;
+}
+
 /*
  * The sequence tracks the current sequence number. A read() returns the next
  * tail value, that is, the value returned from the next call to next(). So,
@@ -39,9 +83,9 @@ static uint64_t get_time(void)
  */
 class Sequence {
  public:
-  Sequence(uint64_t seq, std::string pool,
+  Sequence(uint64_t seq, meta_t meta,
       std::string name, uint64_t epoch) :
-    seq_(seq), pool_(pool), name_(name),
+    seq_(seq), meta_(meta), name_(name),
     epoch_(epoch)
   {}
 
@@ -156,10 +200,10 @@ class Sequence {
     return 0;
   }
 
-  inline int match(const std::string& pool,
+  inline int match(const meta_t& meta,
       const std::string& name,
       const uint64_t epoch) const {
-    if (pool != pool_ || name != name_)
+    if (meta != meta_ || name != name_)
       return -EINVAL;
     if (epoch < epoch_)
       return -ERANGE;
@@ -176,7 +220,7 @@ class Sequence {
 
   std::mutex lock_;
   std::atomic<uint64_t> seq_;
-  std::string pool_;
+  meta_t meta_;
   std::string name_;
   uint64_t epoch_;
 
@@ -194,7 +238,7 @@ class LogManager {
   /*
    * Read and optionally increment the log sequence number.
    */
-  int ReadSequence(const std::string& pool, const std::string& name,
+  int ReadSequence(const meta_t& meta, const std::string& name,
       uint64_t epoch, bool increment, std::vector<uint64_t>& positions,
       int count, const std::vector<uint64_t>& stream_ids,
       std::vector<std::vector<uint64_t>>& stream_backpointers,
@@ -202,11 +246,10 @@ class LogManager {
   {
     std::unique_lock<std::mutex> g(lock_);
 
-    std::map<std::pair<std::string, std::string>, Log>::iterator it =
-      logs_.find(std::make_pair(pool, name));
+    auto it = logs_.find(std::make_pair(meta, name));
 
     if (it == logs_.end()) {
-      QueueLogInit(pool, name);
+      QueueLogInit(meta, name);
       return -EAGAIN;
     }
 
@@ -243,9 +286,9 @@ class LogManager {
   struct Log {
     Log() {}
     Log(uint64_t pos, uint64_t epoch,
-        std::string pool, std::string name,
+        meta_t meta, std::string name,
         std::map<uint64_t, std::deque<uint64_t>>& ptrs) :
-      seq(new Sequence(pos, pool, name, epoch)), epoch(epoch)
+      seq(new Sequence(pos, meta, name, epoch)), epoch(epoch)
     {
       seq->set_streams(ptrs);
     }
@@ -261,54 +304,22 @@ class LogManager {
    * found. The sequencer must not be allowed to hand out new positions until
    * these steps are completed successfully.
    */
-  int InitLog(const std::string& pool, const std::string& name,
+  int InitLog(const meta_t& meta, const std::string& name,
       uint64_t *pepoch, uint64_t *pposition,
       std::map<uint64_t, std::deque<uint64_t>>& ptrs) {
 
-    librados::Rados rados;
-    int ret = rados.init(NULL);
-    if (ret) {
-      std::cerr << "could not initialize rados client" << std::endl;
-      return ret;
-    }
-
-    rados.conf_read_file(NULL);
-    rados.conf_parse_env(NULL);
-
-    ret = rados.connect();
-    if (ret) {
-      std::cerr << "rados client could not connect" << std::endl;
-      return ret;
-    }
-
-    librados::IoCtx ioctx;
-    ret = rados.ioctx_create(pool.c_str(), ioctx);
-    if (ret) {
-      std::cerr << "failed to connect to pool " << pool
-        << " ret " << ret << std::endl;
-      return ret;
-    }
-
-    CephBackend *backend = new CephBackend(&ioctx);
-
-    std::string hoid;
-    std::string prefix;
-    ret = backend->OpenLog(name, hoid, prefix);
-    if (ret) {
-      std::cerr << "failed to open log backend " << ret << std::endl;
-      return ret;
-    }
-
-    auto log = std::unique_ptr<zlog::LogImpl>(
-        new zlog::LogImpl(backend, nullptr, name, hoid, prefix));
-
-    ret = log->UpdateView();
-    if (ret) {
-      return ret;
-    }
-
-    if (log->striper.Empty()) {
+    // which backend?
+    if (meta.count("scheme") == 0) {
+      std::cerr << "no scheme found" << std::endl;
       return -EINVAL;
+    }
+    auto scheme = meta.at("scheme");
+
+    zlog::LogImpl *log;
+    int ret = zlog::LogImpl::Open(scheme, name, meta, &log);
+    if (ret) {
+      std::cerr << "failed to open log " << ret << std::endl;
+      return ret;
     }
 
     uint64_t epoch;
@@ -316,6 +327,7 @@ class LogManager {
     bool empty;
     ret = log->CreateCut(&epoch, &position, &empty);
     if (ret) {
+      delete log;
       std::cerr << "failed to create cut ret " << ret << std::endl;
       return ret;
     }
@@ -358,10 +370,12 @@ class LogManager {
               continue;
             } else {
               std::cerr << "error initialing log stream: fill: " << ret << std::endl;
+              delete log;
               return ret;
             }
           } else {
             std::cerr << "error initialing log stream: stream membership: " << ret << std::endl;
+            delete log;
             return ret;
           }
         }
@@ -379,8 +393,7 @@ class LogManager {
     else
       *pposition = position + 1;
 
-    ioctx.close();
-    rados.shutdown();
+    delete log;
 
     return 0;
   }
@@ -388,8 +401,8 @@ class LogManager {
   /*
    * Queue a log to be initialized.
    */
-  void QueueLogInit(const std::string& pool, const std::string& name) {
-    pending_logs_.insert(std::make_pair(pool, name));
+  void QueueLogInit(const meta_t& meta, const std::string& name) {
+    pending_logs_.insert(std::make_pair(meta, name));
     cond_.notify_one();
   }
 
@@ -422,8 +435,7 @@ class LogManager {
         start_ns = get_time();
         start_seq = 0;
 
-        std::map<std::pair<std::string, std::string>, LogManager::Log >::iterator it;
-        for (it = logs_.begin(); it != logs_.end(); it++) {
+        for (auto it = logs_.begin(); it != logs_.end(); it++) {
           start_seq += it->second.seq->read();
         }
 
@@ -444,8 +456,7 @@ class LogManager {
         end_seq = 0;
         num_logs = logs_.size();
 
-        std::map<std::pair<std::string, std::string>, LogManager::Log >::iterator it;
-        for (it = logs_.begin(); it != logs_.end(); it++) {
+        for (auto it = logs_.begin(); it != logs_.end(); it++) {
           end_seq += it->second.seq->read();
         }
 
@@ -479,36 +490,36 @@ class LogManager {
 
   void Run() {
     for (;;) {
-      std::string pool, name;
+      meta_t meta;
+      std::string name;
 
       {
         std::unique_lock<std::mutex> g(lock_);
         while (pending_logs_.empty())
           cond_.wait(g);
-        std::set<std::pair<std::string, std::string> >::iterator it =
-          pending_logs_.begin();
+        auto it = pending_logs_.begin();
         assert(it != pending_logs_.end());
-        pool = it->first;
+        meta = it->first;
         name = it->second;
       }
 
       uint64_t position, epoch;
       std::map<uint64_t, std::deque<uint64_t>> ptrs;
-      int ret = InitLog(pool, name, &epoch, &position, ptrs);
+      int ret = InitLog(meta, name, &epoch, &position, ptrs);
       if (ret) {
         std::unique_lock<std::mutex> g(lock_);
-        pending_logs_.erase(std::make_pair(pool, name));
+        pending_logs_.erase(std::make_pair(meta, name));
         std::cerr << "failed to init log" << std::endl;
         continue;
       }
 
       {
         std::unique_lock<std::mutex> g(lock_);
-        std::pair<std::string, std::string> key = std::make_pair(pool, name);
+        std::pair<meta_t, std::string> key = std::make_pair(meta, name);
         assert(pending_logs_.count(key) == 1);
         pending_logs_.erase(key);
         assert(logs_.count(key) == 0);
-        Log log(position, epoch, pool, name, ptrs);
+        Log log(position, epoch, meta, name, ptrs);
         logs_[key] = log;
       }
     }
@@ -518,8 +529,8 @@ class LogManager {
   std::thread bench_thread_;
   std::mutex lock_;
   std::condition_variable cond_;
-  std::map<std::pair<std::string, std::string>, LogManager::Log > logs_;
-  std::set<std::pair<std::string, std::string> > pending_logs_;
+  std::unordered_map<std::pair<meta_t, std::string>, LogManager::Log > logs_;
+  std::set<std::pair<meta_t, std::string> > pending_logs_;
 };
 
 static LogManager *log_mgr;
@@ -618,7 +629,8 @@ class Session {
         req_.stream_ids().end());
 
     if (cached_seq) {
-      ret = cached_seq->match(req_.pool(), req_.name(), req_.epoch());
+      auto meta = get_meta(req_);
+      ret = cached_seq->match(meta, req_.name(), req_.epoch());
       if (!ret) {
         /*
          * If this request doesn't contain any stream ids then we are only
@@ -677,14 +689,16 @@ class Session {
       } else {
         if (req_.count() > 1)
           assert(req_.next());
-        ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
+        auto meta = get_meta(req_);
+        ret = log_mgr->ReadSequence(meta, req_.name(),
             req_.epoch(), req_.next(), positions, req_.count(),
             stream_ids, stream_backpointers, &cached_seq);
       }
     } else {
       if (req_.count() > 1)
         assert(req_.next());
-      ret = log_mgr->ReadSequence(req_.pool(), req_.name(),
+      auto meta = get_meta(req_);
+      ret = log_mgr->ReadSequence(meta, req_.name(),
           req_.epoch(), req_.next(), positions, req_.count(),
           stream_ids, stream_backpointers, &cached_seq);
     }
