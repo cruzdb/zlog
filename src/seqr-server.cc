@@ -20,6 +20,15 @@ static std::string iops_logfile;
 
 static int report_sec;
 
+#if __APPLE__
+static uint64_t get_time()
+{
+  struct timeval tv;
+  assert(gettimeofday(&tv, NULL) == 0);
+  uint64_t res = tv.tv_sec * 1000000000ULL;
+  return res + tv.tv_usec * 1000ULL;
+}
+#else
 static uint64_t get_time(void)
 {
   struct timespec ts;
@@ -29,6 +38,7 @@ static uint64_t get_time(void)
   nsec += ts.tv_nsec;
   return nsec;
 }
+#endif
 
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v)
