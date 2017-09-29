@@ -70,5 +70,5 @@ if(HAVE_RADOS_OBJECT_CLASS_H)
   set_target_properties(cls_zlog PROPERTIES
     VERSION "1.0.0"
     SOVERSION "1")
-  install(TARGETS cls_zlog DESTINATION "/usr/lib/rados-classes")
+  install(TARGETS cls_zlog DESTINATION ${CMAKE_INSTALL_LIBDIR}/rados-classes)
 endif(HAVE_RADOS_OBJECT_CLASS_H)
