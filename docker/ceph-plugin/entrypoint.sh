@@ -9,7 +9,11 @@ fi
 
 dir=$(mktemp -d)
 pushd $dir
-cmake /src/zlog
+# need the libdir here because otherwise the libraries are put in location based
+# on a combination of the distribution and whatever the cmake gnu dirs plugin
+# think is best. otherwise, we can't have the hard coded bath below when we copy
+# out the plugin to the mounted volume.
+cmake -DCMAKE_INSTALL_LIBDIR=/usr/lib /src/zlog
 make -j$(nproc) cls_zlog
 
 pushd src/storage/ceph
