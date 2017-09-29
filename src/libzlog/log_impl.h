@@ -51,9 +51,11 @@ class LogImpl : public Log {
 
   static int OpenBackend(const std::string& scheme,
       const std::map<std::string, std::string>& opts,
-      void **hp, Backend **bpp, backend_release_t *rp);
+      void **hp, Backend **bpp, backend_release_t *rp,
+      bool *extra_ref);
   static int Open(const std::string& scheme, const std::string& name,
-      const std::map<std::string, std::string>& opts, LogImpl **logpp);
+      const std::map<std::string, std::string>& opts, LogImpl **logpp,
+      bool *extra_ref);
 
  public:
   int CheckTail(uint64_t *pposition) override;

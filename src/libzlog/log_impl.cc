@@ -66,8 +66,15 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
 // carefully manage a bunch of return values right now.
 int LogImpl::OpenBackend(const std::string& scheme,
     const std::map<std::string, std::string>& opts,
-    void **hp, Backend **bpp, backend_release_t *rp)
+    void **hp, Backend **bpp, backend_release_t *rp,
+    bool *extra_ref)
 {
+  bool do_extra_ref = false;
+  if (extra_ref) {
+    do_extra_ref = *extra_ref;
+    *extra_ref = false;
+  }
+
   // try system lib dir
   char path[PATH_MAX];
   int ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
@@ -90,6 +97,11 @@ int LogImpl::OpenBackend(const std::string& scheme,
       std::cerr << "could not load backend " << dlerror() << std::endl;
       return -EINVAL;
     }
+  }
+
+  if (do_extra_ref) {
+    dlopen(path, RTLD_NOW);
+    *extra_ref = true;
   }
 
   // technically the symbol value could be null in the module, rather than
@@ -126,14 +138,15 @@ int LogImpl::OpenBackend(const std::string& scheme,
 }
 
 int LogImpl::Open(const std::string& scheme, const std::string& name,
-    const std::map<std::string, std::string>& opts, LogImpl **logpp)
+    const std::map<std::string, std::string>& opts, LogImpl **logpp,
+    bool *extra_ref)
 {
   void *handle;
   Backend *backend;
   backend_release_t release;
 
   int ret = LogImpl::OpenBackend(scheme, opts,
-      &handle, &backend, &release);
+      &handle, &backend, &release, extra_ref);
   if (ret)
     return ret;
 
@@ -176,7 +189,7 @@ int Log::Create(const std::string& scheme, const std::string& name,
   backend_release_t release;
 
   int ret = LogImpl::OpenBackend(scheme, opts,
-      &handle, &backend, &release);
+      &handle, &backend, &release, nullptr);
   if (ret)
     return ret;
 

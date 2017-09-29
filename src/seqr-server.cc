@@ -307,6 +307,8 @@ class LogManager {
     uint64_t epoch;
   };
 
+  std::set<std::string> loaded_backends_;
+
   /*
    * Prepare the log for this sequencer. After this function runs a new
    * epoch has been allocated, each storage device is sealed with the new
@@ -325,12 +327,26 @@ class LogManager {
     }
     auto scheme = meta.at("scheme");
 
+    // TODO: on some distributions loading the same protobuf multiple times
+    // leads to an error (see https://github.com/noahdesu/zlog/issues/187). the
+    // true parameter in LogImpl::Open causes an extra reference to be taken on
+    // the backend which prevents it from being unloaded. This means that we
+    // never actually unload a loaded backend. This is silly, but figuring out
+    // the proper linking etc... is becoming a time suck. This will 'work' for
+    // now.
+    bool extra_ref = loaded_backends_.find(scheme) == loaded_backends_.end();
+
     zlog::LogImpl *log;
-    int ret = zlog::LogImpl::Open(scheme, name, meta, &log);
+    int ret = zlog::LogImpl::Open(scheme, name, meta, &log, &extra_ref);
     if (ret) {
+      if (extra_ref)
+        loaded_backends_.insert(scheme);
       std::cerr << "failed to open log " << ret << std::endl;
       return ret;
     }
+
+    if (extra_ref)
+      loaded_backends_.insert(scheme);
 
     uint64_t epoch;
     uint64_t position;
