@@ -182,7 +182,8 @@ int LogImpl::Open(const std::string& scheme, const std::string& name,
 }
 
 int Log::Create(const std::string& scheme, const std::string& name,
-    const std::map<std::string, std::string>& opts, Log **logpp)
+    const std::map<std::string, std::string>& opts,
+    SeqrClient *seqr, Log **logpp)
 {
   void *handle;
   Backend *backend;
@@ -193,7 +194,7 @@ int Log::Create(const std::string& scheme, const std::string& name,
   if (ret)
     return ret;
 
-  ret = Create(backend, name, nullptr, logpp);
+  ret = Create(backend, name, seqr, logpp);
   if (ret) {
     release(backend);
     dlclose(handle);

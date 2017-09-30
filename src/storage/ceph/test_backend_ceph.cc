@@ -91,10 +91,12 @@ void LibZLogTest::SetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init(lowlevel()));
 
-  // 1. test with shared and exclusive setups
-  // 2. final version: shared will have auto client creation
-  context->client = new zlog::SeqrClient("localhost", "5678");
-  ASSERT_NO_THROW(context->client->Connect());
+  if (exclusive()) {
+    // default is ok
+  } else {
+    context->client = new zlog::SeqrClient("localhost", "5678");
+    ASSERT_NO_THROW(context->client->Connect());
+  }
 
   if (lowlevel()) {
     context->backend = new CephBackend(&context->ioctxpp);
@@ -104,7 +106,7 @@ void LibZLogTest::SetUp() {
   } else {
     int ret = zlog::Log::Create("ceph", "mylog",
         {{"conf_file", ""}, {"pool", context->pool_name}},
-        &log);
+        context->client, &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -132,13 +134,17 @@ void LibZLogCAPITest::SetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init());
 
+  if (exclusive()) {
+    // default is ok
+  } else {
+    int ret = zlog_create_sequencer("localhost", "5678",
+        &context->client);
+    ASSERT_EQ(ret, 0);
+  }
+
   if (lowlevel()) {
     int ret = zlog_create_ceph_backend(context->ioctx,
         &context->backend);
-    ASSERT_EQ(ret, 0);
-
-    ret = zlog_create_sequencer("localhost", "5678",
-        &context->client);
     ASSERT_EQ(ret, 0);
 
     ret = zlog_create(context->backend, "c_mylog",
@@ -148,7 +154,7 @@ void LibZLogCAPITest::SetUp() {
     const char *keys[] = {"conf_file", "pool"};
     const char *vals[] = {"", context->pool_name.c_str()};
     int ret = zlog_create_nobe("ceph", "c_mylog",
-        keys, vals, 2, &log);
+        keys, vals, 2, context->client, &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -160,12 +166,15 @@ void LibZLogCAPITest::TearDown() {
   if (context)
     delete context;
 }
-
 INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
-    ::testing::Values(true, false));
+    ::testing::Combine(
+      ::testing::Values(true, false),
+      ::testing::Values(true, false)));
 
 INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-    ::testing::Values(true, false));
+    ::testing::Combine(
+      ::testing::Values(true, false),
+      ::testing::Values(true, false)));
 
 int main(int argc, char **argv)
 {

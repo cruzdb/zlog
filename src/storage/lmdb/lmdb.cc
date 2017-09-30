@@ -44,10 +44,7 @@ int LMDBBackend::Initialize(
   if (it == opts.end())
     return -EINVAL;
 
-  Init(it->second, true);
-
-  options = opts;
-  options["scheme"] = "lmdb";
+  Init(it->second);
 
   return 0;
 }
@@ -468,7 +465,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
   return 0;
 }
 
-void LMDBBackend::Init(const std::string& path, bool empty)
+void LMDBBackend::Init(const std::string& path)
 {
   // TODO: even when a backend is created explicitly, it needs to fill in enough
   // options so that a sequencer can open an instance. Or not. In our case def.
@@ -501,11 +498,6 @@ void LMDBBackend::Init(const std::string& path, bool empty)
   ret = mdb_dbi_open(txn, "objs", MDB_CREATE, &db_obj);
   assert(ret == 0);
 
-  if (empty) {
-    ret = mdb_drop(txn, db_obj, 0);
-    assert(ret == 0);
-  }
-
   ret = mdb_txn_commit(txn);
   assert(ret == 0);
 }
@@ -528,7 +520,7 @@ extern "C" int zlog_create_lmdb_backend(const char *path,
 {
   auto b = new LMDBBackendWrapper;
   b->backend = new LMDBBackend();
-  b->backend->Init(path, true);
+  b->backend->Init(path);
   *backend = (void*)b;
   return 0;
 }

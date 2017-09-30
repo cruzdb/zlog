@@ -23,11 +23,14 @@ struct DBPathContext {
 
 struct LibZLogTest::Context : public DBPathContext {
   LMDBBackend *backend = nullptr;
+  zlog::SeqrClient *client = nullptr;
   ~Context() {
     if (backend) {
       backend->Close();
       delete backend;
     }
+    if (client)
+      delete client;
   }
 };
 
@@ -38,15 +41,22 @@ void LibZLogTest::SetUp() {
   ASSERT_NE(mkdtemp(context->dbpath), nullptr);
   ASSERT_GT(strlen(context->dbpath), (unsigned)0);
 
+  if (exclusive()) {
+    // default is ok
+  } else {
+    context->client = new zlog::SeqrClient("localhost", "5678");
+    ASSERT_NO_THROW(context->client->Connect());
+  }
+
   if (lowlevel()) {
     context->backend = new LMDBBackend();
-    context->backend->Init(context->dbpath, true);
+    context->backend->Init(context->dbpath);
     int ret = zlog::Log::Create(context->backend,
-        "mylog", NULL, &log);
+        "mylog", context->client, &log);
     ASSERT_EQ(ret, 0);
   } else {
     int ret = zlog::Log::Create("lmdb", "mylog",
-        {{"path", context->dbpath}}, &log);
+        {{"path", context->dbpath}}, context->client, &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -60,10 +70,13 @@ void LibZLogTest::TearDown() {
 
 struct LibZLogCAPITest::Context : public DBPathContext {
   zlog_backend_t backend = nullptr;
+  zlog_sequencer_t client = nullptr;
   ~Context() {
     if (backend) {
       zlog_destroy_lmdb_backend(backend);
     }
+    if (client)
+      zlog_destroy_sequencer(client);
   }
 };
 
@@ -74,18 +87,26 @@ void LibZLogCAPITest::SetUp() {
   ASSERT_NE(mkdtemp(context->dbpath), nullptr);
   ASSERT_GT(strlen(context->dbpath), (unsigned)0);
 
+  if (exclusive()) {
+    // default is ok
+  } else {
+    int ret = zlog_create_sequencer("localhost", "5678",
+        &context->client);
+    ASSERT_EQ(ret, 0);
+  }
+
   if (lowlevel()) {
     int ret = zlog_create_lmdb_backend(context->dbpath,
         &context->backend);
     ASSERT_EQ(ret, 0);
     ret = zlog_create(context->backend, "c_mylog",
-        NULL, &log);
+        context->client, &log);
     ASSERT_EQ(ret, 0);
   } else {
     const char *keys[] = {"path"};
     const char *vals[] = {context->dbpath};
     int ret = zlog_create_nobe("lmdb", "c_mylog",
-        keys, vals, 1, &log);
+        keys, vals, 1, context->client, &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -99,10 +120,14 @@ void LibZLogCAPITest::TearDown() {
 }
 
 INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
-    ::testing::Values(true, false));
+    ::testing::Combine(
+      ::testing::Values(true, false),
+      ::testing::Values(true, false)));
 
 INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-    ::testing::Values(true, false));
+    ::testing::Combine(
+      ::testing::Values(true, false),
+      ::testing::Values(true, false)));
 
 int main(int argc, char **argv)
 {

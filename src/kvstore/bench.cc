@@ -54,7 +54,7 @@ int main(int argc, char **argv)
   }
 
   auto be = new LMDBBackend();
-  be->Init(db_path, false);
+  be->Init(db_path);
 
   zlog::Log *log;
   int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);

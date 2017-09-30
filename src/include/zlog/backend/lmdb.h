@@ -10,11 +10,13 @@
 
 class LMDBBackend : public Backend {
  public:
-  LMDBBackend() {}
+  LMDBBackend() {
+    options["scheme"] = "lmdb";
+  }
 
   ~LMDBBackend();
 
-  void Init(const std::string& path, bool empty);
+  void Init(const std::string& path);
 
   int Initialize(const std::map<std::string, std::string>& opts) override;
 

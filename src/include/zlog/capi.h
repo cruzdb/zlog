@@ -17,6 +17,7 @@ int zlog_create_nobe(const char *scheme,
     char const* const* keys,
     char const* const* vals,
     size_t num,
+    zlog_sequencer_t seqr,
     zlog_log_t *log);
 
 int zlog_open(zlog_backend_t backend, const char *name,

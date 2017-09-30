@@ -42,6 +42,7 @@ extern "C" int zlog_create_nobe(const char *scheme,
     char const* const* keys,
     char const* const* vals,
     size_t num,
+    zlog_sequencer_t seqr,
     zlog_log_t *log)
 {
   std::map<std::string, std::string> opts;
@@ -52,7 +53,7 @@ extern "C" int zlog_create_nobe(const char *scheme,
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
   int ret = zlog::Log::Create(scheme, name,
-      opts, &ctx->log);
+      opts, (zlog::SeqrClient*)seqr, &ctx->log);
   if (ret) {
     delete ctx;
   } else {
