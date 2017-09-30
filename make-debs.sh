@@ -17,13 +17,16 @@
 set -e
 set -x
 
-base=${1:-/tmp/release}
-codename=$(lsb_release -sc)
-releasedir=$base/$(lsb_release -si)/WORKDIR
-rm -fr $releasedir
-mkdir -p $releasedir
+./install-deps.sh
 
 git clean -dxf
+
+base=${1:-/tmp/release}
+codename=$(lsb_release -sc)
+releasedir=${base}/$(lsb_release -si)/WORKDIR
+
+rm -fr $releasedir
+mkdir -p $releasedir
 
 vers=$(git describe --match "v*" | sed s/^v//)
 ./make-dist.sh $vers
@@ -32,7 +35,9 @@ vers=$(git describe --match "v*" | sed s/^v//)
 mv zlog-$vers.tar.bz2 $releasedir/zlog_$vers.orig.tar.bz2
 tar -C $releasedir -jxf $releasedir/zlog_$vers.orig.tar.bz2
 
-cp -a debian/* $releasedir/zlog-$vers/debian/
+# this is useful when hacking on debian scripts. otherwise the build will only
+# consider what is committed in git.
+#cp -a debian/* $releasedir/zlog-$vers/debian/
 
-cd $releasedir/zlog-$vers
+cd ${releasedir}/zlog-${vers}
 dpkg-buildpackage -j$(nproc) -uc -us
