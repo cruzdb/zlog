@@ -588,7 +588,9 @@ class Session {
       return;
     }
 
-    uint32_t msg_size = ntohl(*((uint32_t*)buffer_));
+    uint32_t tmp;
+    memcpy(&tmp, (void*)buffer_, sizeof(tmp));
+    uint32_t msg_size = ntohl(tmp);
 
     if (msg_size > sizeof(buffer_)) {
       std::cerr << "message is too large" << std::endl;
