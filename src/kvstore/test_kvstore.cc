@@ -169,8 +169,8 @@ TEST(DB, EquivHistory) {
 
   // initial empty kvstore database
   zlog::Log *log;
-  auto be = new LMDBBackend("fakepool");
-  be->Init(tdir.path, true);
+  auto be = new LMDBBackend();
+  be->Init(tdir.path);
   int ret = zlog::Log::Create(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
 
@@ -233,8 +233,8 @@ TEST(DB, Iterator) {
   TempDir tdir;
 
   zlog::Log *log;
-  auto be = new LMDBBackend("fakepool");
-  be->Init(tdir.path, true);
+  auto be = new LMDBBackend();
+  be->Init(tdir.path);
   int ret = zlog::Log::Create(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
 
@@ -293,8 +293,8 @@ TEST(DB, Get) {
   TempDir tdir;
 
   zlog::Log *log;
-  auto be = new LMDBBackend("fakepool");
-  be->Init(tdir.path, true);
+  auto be = new LMDBBackend();
+  be->Init(tdir.path);
   int ret = zlog::Log::Create(be, "log", NULL, &log);
   ASSERT_EQ(ret, 0);
 
@@ -340,8 +340,8 @@ TEST(DB, ReOpen) {
   // populate a database and close it
   std::map<std::string, std::string> prev_db;
   {
-    auto *be = new LMDBBackend("fakepool");
-    be->Init(tdir.path, true);
+    auto *be = new LMDBBackend();
+    be->Init(tdir.path);
 
     zlog::Log *log;
     int ret = zlog::Log::Create(be, "log", NULL, &log);
@@ -378,8 +378,8 @@ TEST(DB, ReOpen) {
   }
 
   // re-open the database and verify the previous inserts
-  auto *be = new LMDBBackend("fakepool");
-  be->Init(tdir.path, false);
+  auto *be = new LMDBBackend();
+  be->Init(tdir.path);
 
   zlog::Log *log;
   int ret = zlog::Log::Open(be, "log", NULL, &log);

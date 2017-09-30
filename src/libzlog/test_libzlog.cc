@@ -21,7 +21,7 @@ static void handle_aio_cb_read(aio_state *ctx)
   ctx->retval = ctx->c->ReturnValue();
 }
 
-TEST_F(LibZLogTest, Aio) {
+TEST_P(LibZLogTest, Aio) {
   // issue some appends
   std::vector<aio_state*> aios;
   for (int i = 0; i < 1; i++) {
@@ -73,51 +73,51 @@ TEST_F(LibZLogTest, Aio) {
  * option would be to expose an interface for creating a log that is called
  * explicitly by a test. That might be a good option!
  */
-TEST_F(LibZLogTest, Create) {
-  zlog::Log *log = NULL;
+//TEST_P(LibZLogTest, Create) {
+//  zlog::Log *log = NULL;
+//
+//  int ret = zlog::Log::Create(backend.get(), "", NULL, &log);
+//  ASSERT_EQ(ret, -EINVAL);
+//  ASSERT_EQ(log, nullptr);
+//
+//  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
+//  ASSERT_EQ(ret, 0);
+//  ASSERT_NE(log, nullptr);
+//
+//  delete log;
+//  log = NULL;
+//
+//  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
+//  ASSERT_EQ(ret, -EEXIST);
+//  ASSERT_EQ(log, nullptr);
+//}
+//
+//TEST_P(LibZLogTest, Open) {
+//  zlog::Log *log = NULL;
+//
+//  int ret = zlog::Log::Open(backend.get(), "", NULL, &log);
+//  ASSERT_EQ(ret, -EINVAL);
+//  ASSERT_EQ(log, nullptr);
+//
+//  ret = zlog::Log::Open(backend.get(), "dne", NULL, &log);
+//  ASSERT_EQ(ret, -ENOENT);
+//  ASSERT_EQ(log, nullptr);
+//
+//  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
+//  ASSERT_EQ(ret, 0);
+//  ASSERT_NE(log, nullptr);
+//
+//  delete log;
+//  log = NULL;
+//
+//  ret = zlog::Log::Open(backend.get(), "mylog2", NULL, &log);
+//  ASSERT_EQ(ret, 0);
+//  ASSERT_NE(log, nullptr);
+//
+//  delete log;
+//}
 
-  int ret = zlog::Log::Create(backend.get(), "", NULL, &log);
-  ASSERT_EQ(ret, -EINVAL);
-  ASSERT_EQ(log, nullptr);
-
-  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
-  ASSERT_EQ(ret, 0);
-  ASSERT_NE(log, nullptr);
-
-  delete log;
-  log = NULL;
-
-  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
-  ASSERT_EQ(ret, -EEXIST);
-  ASSERT_EQ(log, nullptr);
-}
-
-TEST_F(LibZLogTest, Open) {
-  zlog::Log *log = NULL;
-
-  int ret = zlog::Log::Open(backend.get(), "", NULL, &log);
-  ASSERT_EQ(ret, -EINVAL);
-  ASSERT_EQ(log, nullptr);
-
-  ret = zlog::Log::Open(backend.get(), "dne", NULL, &log);
-  ASSERT_EQ(ret, -ENOENT);
-  ASSERT_EQ(log, nullptr);
-
-  ret = zlog::Log::Create(backend.get(), "mylog2", NULL, &log);
-  ASSERT_EQ(ret, 0);
-  ASSERT_NE(log, nullptr);
-
-  delete log;
-  log = NULL;
-
-  ret = zlog::Log::Open(backend.get(), "mylog2", NULL, &log);
-  ASSERT_EQ(ret, 0);
-  ASSERT_NE(log, nullptr);
-
-  delete log;
-}
-
-TEST_F(LibZLogTest, CheckTail) {
+TEST_P(LibZLogTest, CheckTail) {
   uint64_t pos;
   int ret = log->CheckTail(&pos);
   ASSERT_EQ(ret, 0);
@@ -128,7 +128,7 @@ TEST_F(LibZLogTest, CheckTail) {
   ASSERT_EQ(pos, (unsigned)0);
 }
 
-TEST_F(LibZLogTest, Append) {
+TEST_P(LibZLogTest, Append) {
   uint64_t tail;
   int ret = log->CheckTail(&tail);
   ASSERT_EQ(ret, 0);
@@ -156,7 +156,7 @@ TEST_F(LibZLogTest, Append) {
   ASSERT_GT(pos2, pos);
 }
 
-TEST_F(LibZLogTest, Fill) {
+TEST_P(LibZLogTest, Fill) {
   int ret = log->Fill(0);
   ASSERT_EQ(ret, 0);
 
@@ -181,7 +181,7 @@ TEST_F(LibZLogTest, Fill) {
   ASSERT_EQ(ret, 0);
 }
 
-TEST_F(LibZLogTest, Read) {
+TEST_P(LibZLogTest, Read) {
   std::string entry;
   int ret = log->Read(0, &entry);
   ASSERT_EQ(ret, -ENOENT);
@@ -225,7 +225,7 @@ TEST_F(LibZLogTest, Read) {
   ASSERT_EQ(ret, -ENODATA);
 }
 
-TEST_F(LibZLogTest, Trim) {
+TEST_P(LibZLogTest, Trim) {
   // can trim empty spot
   int ret = log->Trim(55);
   ASSERT_EQ(ret, 0);
@@ -250,7 +250,7 @@ TEST_F(LibZLogTest, Trim) {
   ASSERT_EQ(ret, 0);
 }
 
-TEST_F(LibZLogTest, Stream_MultiAppend) {
+TEST_P(LibZLogTest, Stream_MultiAppend) {
   {
     // empty set of streams
     std::set<uint64_t> stream_ids;
@@ -294,7 +294,7 @@ TEST_F(LibZLogTest, Stream_MultiAppend) {
   }
 }
 
-TEST_F(LibZLogTest, Stream_StreamId) {
+TEST_P(LibZLogTest, Stream_StreamId) {
   zlog::Stream *stream0;
   int ret = log->OpenStream(0, &stream0);
   ASSERT_EQ(ret, 0);
@@ -312,7 +312,7 @@ TEST_F(LibZLogTest, Stream_StreamId) {
   delete stream33;
 }
 
-TEST_F(LibZLogTest, Stream_Append) {
+TEST_P(LibZLogTest, Stream_Append) {
   zlog::Stream *stream;
   int ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
@@ -346,7 +346,7 @@ TEST_F(LibZLogTest, Stream_Append) {
   delete stream;
 }
 
-TEST_F(LibZLogTest, Stream_ReadNext) {
+TEST_P(LibZLogTest, Stream_ReadNext) {
   zlog::Stream *stream;
   int ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
@@ -411,7 +411,7 @@ TEST_F(LibZLogTest, Stream_ReadNext) {
   delete stream;
 }
 
-TEST_F(LibZLogTest, Stream_Reset) {
+TEST_P(LibZLogTest, Stream_Reset) {
   zlog::Stream *stream;
   int ret = log->OpenStream(0, &stream);
   ASSERT_EQ(ret, 0);
@@ -466,7 +466,7 @@ TEST_F(LibZLogTest, Stream_Reset) {
   delete stream;
 }
 
-TEST_F(LibZLogTest, Stream_Sync) {
+TEST_P(LibZLogTest, Stream_Sync) {
   // initialize some streams (note stream id = position)
   std::vector<zlog::Stream*> streams(10);
   for (unsigned i = 0; i < 10; i++) {
@@ -555,154 +555,154 @@ TEST_F(LibZLogTest, Stream_Sync) {
   }
 }
 
-TEST_F(LibZLogTest, CAPI_Trim) {
+TEST_P(LibZLogCAPITest, Trim) {
   // can trim empty spot
-  int ret = zlog_trim(c_log, 55);
+  int ret = zlog_trim(log, 55);
   ASSERT_EQ(ret, 0);
 
   // can trim filled spot
-  ret = zlog_fill(c_log, 60);
+  ret = zlog_fill(log, 60);
   ASSERT_EQ(ret, 0);
-  ret = zlog_trim(c_log, 60);
+  ret = zlog_trim(log, 60);
   ASSERT_EQ(ret, 0);
 
   // can trim written spot
   uint64_t pos;
   char data[5];
-  ret = zlog_append(c_log, data, sizeof(data), &pos);
+  ret = zlog_append(log, data, sizeof(data), &pos);
   ASSERT_EQ(ret, 0);
-  ret = zlog_trim(c_log, pos);
+  ret = zlog_trim(log, pos);
   ASSERT_EQ(ret, 0);
 
   // can trim trimmed spot
-  ret = zlog_trim(c_log, 70);
+  ret = zlog_trim(log, 70);
   ASSERT_EQ(ret, 0);
-  ret = zlog_trim(c_log, 70);
-  ASSERT_EQ(ret, 0);
-}
-
-TEST_F(LibZLogTest, CAPI_Create) {
-  zlog_log_t log2;
-
-  int ret = zlog_create(c_backend, "", NULL, &log2);
-  ASSERT_EQ(ret, -EINVAL);
-
-  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
-  ASSERT_EQ(ret, 0);
-
-  ret = zlog_destroy(log2);
-  ASSERT_EQ(ret, 0);
-
-  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
-  ASSERT_EQ(ret, -EEXIST);
-}
-
-TEST_F(LibZLogTest, CAPI_Open) {
-  zlog_log_t log2;
-
-  int ret = zlog_open(c_backend, "", NULL, &log2);
-  ASSERT_EQ(ret, -EINVAL);
-
-  ret = zlog_open(c_backend, "dne", NULL, &log2);
-  ASSERT_EQ(ret, -ENOENT);
-
-  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
-  ASSERT_EQ(ret, 0);
-  ret = zlog_destroy(log2);
-  ASSERT_EQ(ret, 0);
-
-  ret = zlog_open(c_backend, "mylog3", NULL, &log2);
-  ASSERT_EQ(ret, 0);
-  ret = zlog_destroy(log2);
+  ret = zlog_trim(log, 70);
   ASSERT_EQ(ret, 0);
 }
 
-TEST_F(LibZLogTest, CAPI_CheckTail) {
+//TEST_P(LibZLogCAPITest, Create) {
+//  zlog_log_t log2;
+//
+//  int ret = zlog_create(c_backend, "", NULL, &log2);
+//  ASSERT_EQ(ret, -EINVAL);
+//
+//  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
+//  ASSERT_EQ(ret, 0);
+//
+//  ret = zlog_destroy(log2);
+//  ASSERT_EQ(ret, 0);
+//
+//  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
+//  ASSERT_EQ(ret, -EEXIST);
+//}
+//
+//TEST_P(LibZLogCAPITest, Open) {
+//  zlog_log_t log2;
+//
+//  int ret = zlog_open(c_backend, "", NULL, &log2);
+//  ASSERT_EQ(ret, -EINVAL);
+//
+//  ret = zlog_open(c_backend, "dne", NULL, &log2);
+//  ASSERT_EQ(ret, -ENOENT);
+//
+//  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
+//  ASSERT_EQ(ret, 0);
+//  ret = zlog_destroy(log2);
+//  ASSERT_EQ(ret, 0);
+//
+//  ret = zlog_open(c_backend, "mylog3", NULL, &log2);
+//  ASSERT_EQ(ret, 0);
+//  ret = zlog_destroy(log2);
+//  ASSERT_EQ(ret, 0);
+//}
+
+TEST_P(LibZLogCAPITest, CheckTail) {
   uint64_t pos;
-  int ret = zlog_checktail(c_log, &pos);
+  int ret = zlog_checktail(log, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = zlog_checktail(c_log, &pos);
+  ret = zlog_checktail(log, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 }
 
-TEST_F(LibZLogTest, CAPI_Append) {
+TEST_P(LibZLogCAPITest, Append) {
   uint64_t tail;
-  int ret = zlog_checktail(c_log, &tail);
+  int ret = zlog_checktail(log, &tail);
   ASSERT_EQ(ret, 0);
 
   for (int i = 0; i < 100; i++) {
     char data[1];
     uint64_t pos;
-    ret = zlog_append(c_log, data, sizeof(data), &pos);
+    ret = zlog_append(log, data, sizeof(data), &pos);
     ASSERT_EQ(ret, 0);
 
     ASSERT_EQ(pos, tail);
 
-    ret = zlog_checktail(c_log, &tail);
+    ret = zlog_checktail(log, &tail);
     ASSERT_EQ(ret, 0);
   }
 
   uint64_t pos, pos2;
-  ret = zlog_checktail(c_log, &pos);
+  ret = zlog_checktail(log, &pos);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_trim(c_log, pos);
+  ret = zlog_trim(log, pos);
   ASSERT_EQ(ret, 0);
 
   char data[1];
-  ret = zlog_append(c_log, data, sizeof(data), &pos2);
+  ret = zlog_append(log, data, sizeof(data), &pos2);
   ASSERT_EQ(ret, 0);
   ASSERT_GT(pos2, pos);
 }
 
-TEST_F(LibZLogTest, CAPI_Fill) {
-  int ret = zlog_fill(c_log, 0);
+TEST_P(LibZLogCAPITest, Fill) {
+  int ret = zlog_fill(log, 0);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_fill(c_log, 232);
+  ret = zlog_fill(log, 232);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_fill(c_log, 232);
+  ret = zlog_fill(log, 232);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
   char data[1];
-  ret = zlog_append(c_log, data, sizeof(data), &pos);
+  ret = zlog_append(log, data, sizeof(data), &pos);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_fill(c_log, pos);
+  ret = zlog_fill(log, pos);
   ASSERT_EQ(ret, -EROFS);
 
   // ok to fill a trimmed position
-  ret = zlog_trim(c_log, pos);
+  ret = zlog_trim(log, pos);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_fill(c_log, pos);
+  ret = zlog_fill(log, pos);
   ASSERT_EQ(ret, 0);
 }
 
-TEST_F(LibZLogTest, CAPI_Read) {
+TEST_P(LibZLogCAPITest, Read) {
   char data[4096];
 
-  int ret = zlog_read(c_log, 0, data, sizeof(data));
+  int ret = zlog_read(log, 0, data, sizeof(data));
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = zlog_fill(c_log, 0);
+  ret = zlog_fill(log, 0);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_read(c_log, 0, data, sizeof(data));
+  ret = zlog_read(log, 0, data, sizeof(data));
   ASSERT_EQ(ret, -ENODATA);
 
-  ret = zlog_read(c_log, 232, data, sizeof(data));
+  ret = zlog_read(log, 232, data, sizeof(data));
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = zlog_fill(c_log, 232);
+  ret = zlog_fill(log, 232);
   ASSERT_EQ(ret, 0);
 
-  ret = zlog_read(c_log, 232, data, sizeof(data));
+  ret = zlog_read(log, 232, data, sizeof(data));
   ASSERT_EQ(ret, -ENODATA);
 
   const char *s = "asdfasdfasdfasdfasdfasdf";
@@ -710,33 +710,33 @@ TEST_F(LibZLogTest, CAPI_Read) {
   uint64_t pos;
   memset(data, 0, sizeof(data));
   sprintf(data, "%s", s);
-  ret = zlog_append(c_log, data, sizeof(data), &pos);
+  ret = zlog_append(log, data, sizeof(data), &pos);
   ASSERT_EQ(ret, 0);
 
   char data2[4096];
   memset(data2, 0, sizeof(data2));
-  ret = zlog_read(c_log, pos, data2, sizeof(data2));
+  ret = zlog_read(log, pos, data2, sizeof(data2));
   ASSERT_EQ((unsigned)ret, sizeof(data2));
 
   ASSERT_TRUE(strcmp(data2, s) == 0);
 
   // trim a written position
-  ret = zlog_trim(c_log, pos);
+  ret = zlog_trim(log, pos);
   ASSERT_EQ(ret, 0);
-  ret = zlog_read(c_log, pos, data2, sizeof(data2));
+  ret = zlog_read(log, pos, data2, sizeof(data2));
   ASSERT_EQ(ret, -ENODATA);
 
   // same for unwritten position
   pos = 456;
-  ret = zlog_trim(c_log, pos);
+  ret = zlog_trim(log, pos);
   ASSERT_EQ(ret, 0);
-  ret = zlog_read(c_log, pos, data2, sizeof(data2));
+  ret = zlog_read(log, pos, data2, sizeof(data2));
   ASSERT_EQ(ret, -ENODATA);
 }
 
-TEST_F(LibZLogTest, CAPI_Stream_MultiAppend) {
+TEST_P(LibZLogCAPITest, Stream_MultiAppend) {
   // empty set of streams
-  int ret = zlog_multiappend(c_log, NULL, 1, NULL, 0, NULL);
+  int ret = zlog_multiappend(log, NULL, 1, NULL, 0, NULL);
   ASSERT_EQ(ret, -EINVAL);
 
   std::deque<std::set<uint64_t>> stream_ids_list;
@@ -762,7 +762,7 @@ TEST_F(LibZLogTest, CAPI_Stream_MultiAppend) {
       stream_ids_vec.push_back(*it);
 
     uint64_t pos;
-    ret = zlog_multiappend(c_log, data, sizeof(data),
+    ret = zlog_multiappend(log, data, sizeof(data),
         &stream_ids_vec[0], stream_ids_vec.size(), &pos);
     ASSERT_EQ(ret, 0);
 
@@ -777,7 +777,7 @@ TEST_F(LibZLogTest, CAPI_Stream_MultiAppend) {
     std::vector<uint64_t> stream_ids_out_vec;
     stream_ids_out_vec.resize(100);
 
-    ret = zlog_stream_membership(c_log,
+    ret = zlog_stream_membership(log,
         &stream_ids_out_vec[0], 100, pos);
     ASSERT_GE(ret, 0);
 
@@ -789,9 +789,9 @@ TEST_F(LibZLogTest, CAPI_Stream_MultiAppend) {
   }
 }
 
-TEST_F(LibZLogTest, CAPI_Stream_ReadNext) {
+TEST_P(LibZLogCAPITest, Stream_ReadNext) {
   zlog_stream_t stream;
-  int ret = zlog_stream_open(c_log, 0, &stream);
+  int ret = zlog_stream_open(log, 0, &stream);
   ASSERT_EQ(ret, 0);
 
   char data[2048];
@@ -852,9 +852,9 @@ TEST_F(LibZLogTest, CAPI_Stream_ReadNext) {
   ASSERT_EQ(pos, pos2);
 }
 
-TEST_F(LibZLogTest, CAPI_Stream_Reset) {
+TEST_P(LibZLogCAPITest, Stream_Reset) {
   zlog_stream_t stream;
-  int ret = zlog_stream_open(c_log, 0, &stream);
+  int ret = zlog_stream_open(log, 0, &stream);
   ASSERT_EQ(ret, 0);
 
   char data[1];
@@ -905,11 +905,11 @@ TEST_F(LibZLogTest, CAPI_Stream_Reset) {
   ASSERT_EQ(pos, pos2);
 }
 
-TEST_F(LibZLogTest, CAPI_Stream_Sync) {
+TEST_P(LibZLogCAPITest, Stream_Sync) {
   // initialize some streams (note stream id = position)
   std::vector<zlog_stream_t> streams(10);
   for (unsigned i = 0; i < 10; i++) {
-    int ret = zlog_stream_open(c_log, i, &streams[i]);
+    int ret = zlog_stream_open(log, i, &streams[i]);
     ASSERT_EQ(ret, 0);
   }
 
@@ -941,7 +941,7 @@ TEST_F(LibZLogTest, CAPI_Stream_Sync) {
       stream_ids_vec.push_back(*it);
 
     uint64_t pos;
-    ret = zlog_multiappend(c_log, data, sizeof(data), &stream_ids_vec[0], stream_ids_vec.size(), &pos);
+    ret = zlog_multiappend(log, data, sizeof(data), &stream_ids_vec[0], stream_ids_vec.size(), &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();
@@ -986,7 +986,7 @@ TEST_F(LibZLogTest, CAPI_Stream_Sync) {
       stream_ids_vec.push_back(*it);
 
     uint64_t pos;
-    ret = zlog_multiappend(c_log, data, sizeof(data), &stream_ids_vec[0], stream_ids_vec.size(), &pos);
+    ret = zlog_multiappend(log, data, sizeof(data), &stream_ids_vec[0], stream_ids_vec.size(), &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();
@@ -1008,23 +1008,23 @@ TEST_F(LibZLogTest, CAPI_Stream_Sync) {
   }
 }
 
-TEST_F(LibZLogTest, CAPI_Stream_StreamId) {
+TEST_P(LibZLogCAPITest, Stream_StreamId) {
   zlog_stream_t stream0;
-  int ret = zlog_stream_open(c_log, 0, &stream0);
+  int ret = zlog_stream_open(log, 0, &stream0);
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(zlog_stream_id(stream0), (unsigned)0);
 
   zlog_stream_t stream33;
-  ret = zlog_stream_open(c_log, 33, &stream33);
+  ret = zlog_stream_open(log, 33, &stream33);
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(zlog_stream_id(stream33), (unsigned)33);
 }
 
-TEST_F(LibZLogTest, CAPI_Stream_Append) {
+TEST_P(LibZLogCAPITest, Stream_Append) {
   zlog_stream_t stream;
-  int ret = zlog_stream_open(c_log, 0, &stream);
+  int ret = zlog_stream_open(log, 0, &stream);
   ASSERT_EQ(ret, 0);
 
   // nothing in stream

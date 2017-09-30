@@ -20,7 +20,12 @@ install(TARGETS libkvstore LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(BUILD_CEPH_BACKEND)
 add_executable(thrash thrash.cc)
-target_link_libraries(thrash libzlog zlog_seqr libkvstore zlog_seqr)
+target_link_libraries(thrash libzlog
+  zlog_seqr
+  libkvstore
+  zlog_seqr
+  zlog_backend_ceph
+  rados)
 endif(BUILD_CEPH_BACKEND)
 
 add_executable(rbt rbt.cc)

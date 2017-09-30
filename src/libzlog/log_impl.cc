@@ -11,6 +11,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <dlfcn.h>
 
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
@@ -49,6 +50,162 @@ int Log::CreateWithStripeWidth(Backend *backend, const std::string& name,
   }
 
   return Open(backend, name, seqr, logptr);
+}
+
+/*
+ * TODO: instead of passing these in as macros, we can put some of this shared
+ * library code in a module and then use configure_file to do the substitution.
+ */
+#define BE_PREFIX CMAKE_SHARED_LIBRARY_PREFIX "zlog_backend_"
+#define BE_SUFFIX CMAKE_SHARED_LIBRARY_SUFFIX
+
+#define BE_ALLOCATE "__backend_allocate"
+#define BE_RELEASE "__backend_release"
+
+// TODO: wrap up this backend business in a resource all the callers have to
+// carefully manage a bunch of return values right now.
+int LogImpl::OpenBackend(const std::string& scheme,
+    const std::map<std::string, std::string>& opts,
+    void **hp, Backend **bpp, backend_release_t *rp,
+    bool *extra_ref)
+{
+  bool do_extra_ref = false;
+  if (extra_ref) {
+    do_extra_ref = *extra_ref;
+    *extra_ref = false;
+  }
+
+  // try system lib dir
+  char path[PATH_MAX];
+  int ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
+      ZLOG_LIBDIR, scheme.c_str());
+  if (ret >= (int)sizeof(path)) {
+    return -ENAMETOOLONG;
+  }
+
+  auto handle = dlopen(path, RTLD_NOW);
+  if (handle == nullptr) {
+    // try $PWD/lib
+    ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
+        "lib", scheme.c_str());
+    if (ret >= (int)sizeof(path)) {
+      return -ENAMETOOLONG;
+    }
+
+    handle = dlopen(path, RTLD_NOW);
+    if (handle == nullptr) {
+      std::cerr << "could not load backend " << dlerror() << std::endl;
+      return -EINVAL;
+    }
+  }
+
+  if (do_extra_ref) {
+    dlopen(path, RTLD_NOW);
+    *extra_ref = true;
+  }
+
+  // technically the symbol value could be null in the module, rather than
+  // indicating an error. this might be useful later. check the man page.
+  auto allocate = (backend_allocate_t)dlsym(handle, BE_ALLOCATE);
+  if (allocate == nullptr) {
+    dlclose(handle);
+    std::cerr << "could not find symbol " << dlerror() << std::endl;
+    return -EINVAL;
+  }
+
+  auto release = (backend_release_t)dlsym(handle, BE_RELEASE);
+  if (release == nullptr) {
+    dlclose(handle);
+    std::cerr << "could not find symbol " << dlerror() << std::endl;
+    return -EINVAL;
+  }
+
+  auto backend = allocate();
+  assert(backend);
+
+  ret = backend->Initialize(opts);
+  if (ret) {
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  *hp = handle;
+  *bpp = backend;
+  *rp = release;
+
+  return 0;
+}
+
+int LogImpl::Open(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts, LogImpl **logpp,
+    bool *extra_ref)
+{
+  void *handle;
+  Backend *backend;
+  backend_release_t release;
+
+  int ret = LogImpl::OpenBackend(scheme, opts,
+      &handle, &backend, &release, extra_ref);
+  if (ret)
+    return ret;
+
+  std::string hoid;
+  std::string prefix;
+  ret = backend->OpenLog(name, hoid, prefix);
+  if (ret) {
+    std::cerr << "failed to open log backend " << ret << std::endl;
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  auto log = std::unique_ptr<zlog::LogImpl>(
+      new zlog::LogImpl(backend, nullptr, name, hoid, prefix));
+
+  // handle/release now owned by log
+  log->be_handle = handle;
+  log->be_release = release;
+
+  ret = log->UpdateView();
+  if (ret) {
+    return ret;
+  }
+
+  if (log->striper.Empty()) {
+    return -EINVAL;
+  }
+
+  *logpp = log.release();
+
+  return 0;
+}
+
+int Log::Create(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts,
+    SeqrClient *seqr, Log **logpp)
+{
+  void *handle;
+  Backend *backend;
+  backend_release_t release;
+
+  int ret = LogImpl::OpenBackend(scheme, opts,
+      &handle, &backend, &release, nullptr);
+  if (ret)
+    return ret;
+
+  ret = Create(backend, name, seqr, logpp);
+  if (ret) {
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  // backend is now managed by the log instance
+  ((LogImpl*)(*logpp))->be_handle = handle;
+  ((LogImpl*)(*logpp))->be_release = release;
+
+  return 0;
 }
 
 int Log::Create(Backend *backend, const std::string& name,
@@ -103,6 +260,21 @@ int Log::Open(Backend *backend, const std::string& name,
   return 0;
 }
 
+LogImpl::~LogImpl()
+{
+  if (active_seqr && active_seqr != shared_seqr)
+    delete active_seqr;
+
+  // backend owned by log instance?
+  if (be_handle || be_release) {
+    assert(be_handle && be_release);
+    // release instance in backend module
+    be_release(be);
+    // release our reference on the module
+    dlclose(const_cast<void*>(be_handle));
+  }
+}
+
 int LogImpl::UpdateView()
 {
   // striper initialized from epoch 0
@@ -136,7 +308,7 @@ int LogImpl::UpdateView()
           assert(!view.exclusive_cookie().empty());
           if (view.exclusive_cookie() == exclusive_cookie) { // cookie match (GOOD)
             auto client = std::unique_ptr<FakeSeqrClient>(
-                new FakeSeqrClient(be->pool(), name,
+                new FakeSeqrClient(be->meta(), name,
                   exclusive_empty, exclusive_position));
             active_seqr = client.release();
             // TODO: we don't do anything to clean-up the sequencers so this is
@@ -344,7 +516,13 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
       std::cerr << "no active sequencer" << std::endl;
       return -EINVAL;
     }
-    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+    // TODO: the sequencer at this level of abstraction should not be exposing
+    // pools and log names. It should just be a simple CheckTail interface. The
+    // constructor can take care of the rest. For instance, it might be that a
+    // connection implies certain metadata and we odn't need to send it. Or
+    // maybe the sequener transparently adds this metadata from the configured
+    // backend.
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->meta(),
         name, pposition, increment);
     if (ret == -EAGAIN) {
       sleep(1);
@@ -373,7 +551,7 @@ int LogImpl::CheckTail(std::vector<uint64_t>& positions, size_t count)
       std::cerr << "no active sequencer" << std::endl;
       return -EINVAL;
     }
-    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->meta(),
         name, result, count);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;
@@ -403,7 +581,7 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
       std::cerr << "no active sequencer" << std::endl;
       return -EINVAL;
     }
-    int ret = active_seqr->CheckTail(striper.Epoch(), be->pool(),
+    int ret = active_seqr->CheckTail(striper.Epoch(), be->meta(),
         name, stream_ids, stream_backpointers, pposition, increment);
     if (ret == -EAGAIN) {
       //std::cerr << "check tail ret -ESPIPE" << std::endl;

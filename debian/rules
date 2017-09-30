@@ -2,6 +2,7 @@
 
 export DH_VERBOSE = 1
 
+extraopts += -DCMAKE_INSTALL_LIBDIR=/usr/lib
 extraopts += -DWITH_JNI=ON
 
 #DPKG_EXPORT_BUILDFLAGS = 1
@@ -9,6 +10,9 @@ extraopts += -DWITH_JNI=ON
 
 %:
 	dh $@ --buildsystem=cmake --with javahelper --parallel
+
+override_dh_auto_configure:
+	dh_auto_configure --buildsystem=cmake -- $(extraopts)
 
 override_dh_strip:
 	dh_strip -plibzlog1 --dbg-package=libzlog1-dbg

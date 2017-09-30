@@ -11,24 +11,18 @@
 class LMDBBackend : public Backend {
  public:
   LMDBBackend() {
-    std::stringstream ss;
-    ss << "fakepool." << std::rand();
-    pool_ = ss.str();
+    options["scheme"] = "lmdb";
   }
-
-  explicit LMDBBackend(std::string pool) :
-    pool_(pool)
-  {}
 
   ~LMDBBackend();
 
-  void Init(const std::string& path, bool empty);
+  void Init(const std::string& path);
+
+  int Initialize(const std::map<std::string, std::string>& opts) override;
 
   void Close();
 
-  virtual std::string pool() override {
-    return pool_;
-  }
+  std::map<std::string, std::string> meta() override;
 
   int CreateLog(const std::string& name,
       const std::string& initial_view) override;
@@ -69,8 +63,7 @@ class LMDBBackend : public Backend {
       std::function<void(void*, int)> callback) override;
 
  private:
-  std::string pool_;
-
+  std::map<std::string, std::string> options;
   MDB_env *env;
   MDB_dbi db_obj;
 
@@ -158,28 +151,28 @@ class LMDBBackend : public Backend {
       uint64_t position)
   {
     std::stringstream ss;
-    ss << pool_ << "." << oid << "." << position;
+    ss << oid << "." << position;
     return ss.str();
   }
 
   std::string MaxPosKey(const std::string& oid)
   {
     std::stringstream ss;
-    ss << pool_ << "." << oid << ".maxpos";
+    ss << oid << ".maxpos";
     return ss.str();
   }
 
   std::string ObjectKey(const std::string& oid)
   {
     std::stringstream ss;
-    ss << pool_ << "." << oid;
+    ss << oid;
     return ss.str();
   }
 
   std::string ProjectionKey(const std::string& oid, uint64_t epoch)
   {
     std::stringstream ss;
-    ss << pool_ << "." << oid << "." << epoch;
+    ss << oid << "." << epoch;
     return ss.str();
   }
 

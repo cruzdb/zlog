@@ -10,6 +10,9 @@
 
 namespace zlog {
 
+typedef Backend *(*backend_allocate_t)(void);
+typedef void (*backend_release_t)(Backend*);
+
 class LogImpl : public Log {
  public:
   LogImpl(const LogImpl&) = delete;
@@ -23,6 +26,8 @@ class LogImpl : public Log {
       const std::string& hoid,
       const std::string& prefix) :
     be(backend),
+    be_handle(nullptr),
+    be_release(nullptr),
     active_seqr(nullptr),
     shared_seqr(shared_seqr),
     name(name),
@@ -30,10 +35,7 @@ class LogImpl : public Log {
     striper(prefix)
   {}
 
-  ~LogImpl() {
-    if (active_seqr && active_seqr != shared_seqr)
-      delete active_seqr;
-  }
+  ~LogImpl();
 
  public:
   int UpdateView();
@@ -46,6 +48,14 @@ class LogImpl : public Log {
       uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
   int ProposeSharedMode();
   int ProposeExclusiveMode();
+
+  static int OpenBackend(const std::string& scheme,
+      const std::map<std::string, std::string>& opts,
+      void **hp, Backend **bpp, backend_release_t *rp,
+      bool *extra_ref);
+  static int Open(const std::string& scheme, const std::string& name,
+      const std::map<std::string, std::string>& opts, LogImpl **logpp,
+      bool *extra_ref);
 
  public:
   int CheckTail(uint64_t *pposition) override;
@@ -100,6 +110,8 @@ class LogImpl : public Log {
   std::mutex lock;
 
   Backend *be;
+  void *be_handle;
+  void (*be_release)(Backend*);
 
   SeqrClient *active_seqr;
   SeqrClient *shared_seqr;

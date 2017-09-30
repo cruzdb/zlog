@@ -36,13 +36,16 @@ class SeqrClient {
 
   virtual void Connect();
 
-  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch,
+      const std::map<std::string, std::string>& meta,
       const std::string& name, uint64_t *position, bool next);
 
-  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch,
+      const std::map<std::string, std::string>& meta,
       const std::string& name, std::vector<uint64_t>& positions, size_t count);
 
-  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch,
+      const std::map<std::string, std::string>& meta,
       const std::string& name, const std::set<uint64_t>& stream_ids,
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);

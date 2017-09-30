@@ -6,23 +6,16 @@ set(libzlog_sources
   capi.cc
   ../port/stack_trace.cc)
 
-add_library(libzlog SHARED ${libzlog_sources})
+add_definitions("-DZLOG_LIBDIR=\"${CMAKE_INSTALL_FULL_LIBDIR}\"")
+add_definitions("-DCMAKE_SHARED_LIBRARY_SUFFIX=\"${CMAKE_SHARED_LIBRARY_SUFFIX}\"")
+add_definitions("-DCMAKE_SHARED_LIBRARY_PREFIX=\"${CMAKE_SHARED_LIBRARY_PREFIX}\"")
 
-# TODO: no link rados
-if(BUILD_CEPH_BACKEND)
-  target_include_directories(libzlog
-      PUBLIC ${LIBRADOS_INCLUDE_DIRS}
-   )
-   target_link_libraries(libzlog
-      zlog_backend_ceph
-      ${LIBRADOS_LIBRARIES}
-      ${Boost_SYSTEM_LIBRARY}
-   )
-endif(BUILD_CEPH_BACKEND)
+add_library(libzlog SHARED ${libzlog_sources})
 
 target_link_libraries(libzlog
     zlog_proto
     zlog_seqr
+    dl
     ${Boost_SYSTEM_LIBRARY}
     ${Backtrace_LIBRARIES}
 )

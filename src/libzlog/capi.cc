@@ -37,6 +37,32 @@ extern "C" int zlog_create(zlog_backend_t backend, const char *name,
   return ret;
 }
 
+extern "C" int zlog_create_nobe(const char *scheme,
+    const char *name,
+    char const* const* keys,
+    char const* const* vals,
+    size_t num,
+    zlog_sequencer_t seqr,
+    zlog_log_t *log)
+{
+  std::map<std::string, std::string> opts;
+  for (size_t i = 0; i < num; i++) {
+    opts.emplace(keys[i], vals[i]);
+  }
+
+  zlog_log_ctx *ctx = new zlog_log_ctx;
+
+  int ret = zlog::Log::Create(scheme, name,
+      opts, (zlog::SeqrClient*)seqr, &ctx->log);
+  if (ret) {
+    delete ctx;
+  } else {
+    *log = ctx;
+  }
+
+  return ret;
+}
+
 extern "C" int zlog_open(zlog_backend_t backend, const char *name,
     zlog_sequencer_t seqr, zlog_log_t *log)
 {

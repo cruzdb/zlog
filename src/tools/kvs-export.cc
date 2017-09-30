@@ -15,8 +15,8 @@ using namespace rapidjson;
 
 int main(int argc, char **argv)
 {
-  auto be = new LMDBBackend("fakepool");
-  be->Init("/tmp/zlog-db", false);
+  auto be = new LMDBBackend();
+  be->Init("/tmp/zlog-db");
 
   zlog::Log *log;
   int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);

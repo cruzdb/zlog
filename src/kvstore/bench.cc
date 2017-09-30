@@ -53,8 +53,8 @@ int main(int argc, char **argv)
     stop_after = atoi(argv[2]);
   }
 
-  auto be = new LMDBBackend("fakepool");
-  be->Init(db_path, false);
+  auto be = new LMDBBackend();
+  be->Init(db_path);
 
   zlog::Log *log;
   int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);

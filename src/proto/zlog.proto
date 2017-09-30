@@ -23,13 +23,18 @@ message View {
   optional string exclusive_cookie = 3;
 }
 
+message StringPair {
+  required string key = 1;
+  required string val = 2;
+}
+
 message MSeqRequest {
     required uint64 epoch = 1;
-    required string pool = 2;
-    required string name = 3;
-    required bool next = 4;
-    required uint32 count = 5;
-    repeated uint64 stream_ids = 6 [packed = true];
+    required string name = 2;
+    required bool next = 3;
+    required uint32 count = 4;
+    repeated uint64 stream_ids = 5 [packed = true];
+    repeated StringPair meta = 6;
 }
 
 message StreamBackPointer {

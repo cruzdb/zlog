@@ -11,7 +11,7 @@ export TRAVIS_OS_NAME="linux"
 export DOCKER_IMAGE=ubuntu:xenial
 export TRAVIS_BUILD_DIR=${ZLOG_DIR}
 
-trap "docker kill micro-osd; docker rm micro-osd" EXIT
+trap "docker kill micro-osd ceph-plugin-built; docker rm micro-osd ceph-plugin-built" EXIT
 
 ci/before_install.sh
 ci/script.sh

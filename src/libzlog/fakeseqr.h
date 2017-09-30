@@ -3,10 +3,14 @@
 #include <iostream>
 #include "libzlog/log_impl.h"
 
+// fake sequencer is designed to manage sequence for many different logs. but it
+// is only used in practice to manage a single log. thus, the past
+// differentiator, the pool name, is fixed. we should simply the design...
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
-  FakeSeqrClient(const std::string& pool, const std::string& name,
-      bool empty, uint64_t position) : SeqrClient("", "")
+  FakeSeqrClient(const std::map<std::string, std::string>& meta,
+      const std::string& name,
+      bool empty, uint64_t position) : SeqrClient("", ""), pool("0xdeadbeef")
   {
     entry *e = &entries_[std::make_pair(pool, name)];
     if (empty)
@@ -17,7 +21,8 @@ class FakeSeqrClient : public zlog::SeqrClient {
 
   void Connect() {}
 
-  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch,
+      const std::map<std::string, std::string>& meta,
       const std::string& name, uint64_t *position, bool next)
   {
     entry *e;
@@ -37,13 +42,15 @@ class FakeSeqrClient : public zlog::SeqrClient {
     return 0;
   }
 
-  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch,
+      const std::map<std::string, std::string>& meta,
       const std::string& name, std::vector<uint64_t>& positions, size_t count)
   {
     assert(0);
   }
 
-  virtual int CheckTail(uint64_t epoch, const std::string& pool,
+  virtual int CheckTail(uint64_t epoch,
+      const std::map<std::string, std::string>& meta,
       const std::string& name, const std::set<uint64_t>& stream_ids,
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next)
@@ -141,6 +148,8 @@ class FakeSeqrClient : public zlog::SeqrClient {
  private:
   typedef std::deque<uint64_t> stream_backpointers_t;
   typedef std::map<uint64_t, stream_backpointers_t> stream_index_t;
+
+  const std::string pool;
 
   struct entry {
     std::atomic<uint64_t> seq;

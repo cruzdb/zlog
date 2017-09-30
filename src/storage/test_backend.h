@@ -5,7 +5,7 @@
 
 class BackendTest : public ::testing::Test {
  protected:
-  class Context;
+  struct Context;
 
   void SetUp() override;
   void TearDown() override;

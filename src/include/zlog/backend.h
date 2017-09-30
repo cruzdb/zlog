@@ -8,6 +8,8 @@
 // For the C API
 typedef void *zlog_backend_t;
 
+// TODO: add macros for the extern C factory methods
+
 #ifdef __cplusplus
 
 // All methods return 0 on success, or a negative error code on failure. The
@@ -26,7 +28,24 @@ typedef void *zlog_backend_t;
 //   - object doesn't exist
 class Backend {
  public:
+  // TODO: pure virt constructors?
+  //
   virtual ~Backend() {}
+
+  // Initialize the backend.
+  //
+  // This method is called when the backend is loaded as a dynamic module. In
+  // that case the log implementation has only a `Backend*` and thus any
+  // backend-specific initialization must be completed through a generic
+  // interface. The backend should be able to initialize itself based on the set
+  // of provided options, and each backend should document the set of options
+  // that it expects. Initialization with this method is optional, for instance
+  // when explicitly creating backend instances of a particular type, the
+  // dervied classes may have more convenient interfaces for instantiation.
+  virtual int Initialize(
+      const std::map<std::string, std::string>& options) = 0;
+
+  virtual std::map<std::string, std::string> meta() = 0;
 
   // log management
  public:
@@ -117,10 +136,6 @@ class Backend {
   virtual int AioWrite(const std::string& oid, uint64_t epoch,
       uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback) = 0;
-
-  // backend-specific
- public:
-  virtual std::string pool() = 0;
 };
 
 #endif

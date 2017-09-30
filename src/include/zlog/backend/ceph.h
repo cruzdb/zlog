@@ -7,11 +7,14 @@
 
 class CephBackend : public Backend {
  public:
+  CephBackend();
   explicit CephBackend(librados::IoCtx *ioctx);
 
-  std::string pool() override {
-    return pool_;
-  }
+  ~CephBackend();
+
+  std::map<std::string, std::string> meta() override;
+
+  int Initialize(const std::map<std::string, std::string>& opts) override;
 
   int CreateLog(const std::string& name,
       const std::string& initial_view) override;
@@ -60,6 +63,9 @@ class CephBackend : public Backend {
     std::string *data;
   };
 
+  std::map<std::string, std::string> options;
+
+  librados::Rados *cluster_;
   librados::IoCtx *ioctx_;
   std::string pool_;
 

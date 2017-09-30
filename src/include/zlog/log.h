@@ -53,6 +53,10 @@ class Log {
 
   virtual int StripeWidth() = 0;
 
+  static int Create(const std::string& scheme, const std::string& name,
+      const std::map<std::string, std::string>& params, SeqrClient *seqr,
+      Log **log);
+
   static int CreateWithStripeWidth(Backend *backend, const std::string& name,
       SeqrClient *seqr, int stripe_width, Log **logptr);
 
@@ -62,6 +66,7 @@ class Log {
   static int Open(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr);
 
+  // TODO remove, or move to backend?
   static int OpenOrCreate(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr) {
     int ret = Open(backend, name, seqr, logptr);

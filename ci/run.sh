@@ -49,13 +49,13 @@ if [ -e ${CEPH_CONF} ]; then
   ceph --version || true
   ceph status || true
 
-  # start the sequencer
-  zlog-seqr --port 5678 --streams --daemon
-
   # ceph tests
   tests="${tests} zlog_test_cls_zlog"
   tests="${tests} zlog_test_backend_ceph"
 fi
+
+# start the sequencer
+zlog-seqr --port 5678 --streams --daemon
 
 for test_runner in $tests; do
   ${test_runner}
