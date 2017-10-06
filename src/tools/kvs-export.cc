@@ -18,6 +18,10 @@ int main(int argc, char **argv)
   auto be = new LMDBBackend();
   be->Init(argv[1]);
 
+  bool dump_val = false;
+  if (argc >= 3 && atoi(argv[2]))
+    dump_val = true;
+
   zlog::Log *log;
   int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
   assert(ret == 0);
@@ -62,7 +66,10 @@ int main(int argc, char **argv)
         writer.String(node.key().c_str());
 
         writer.Key("val");
-        writer.String(node.val().c_str());
+        if (dump_val)
+          writer.String(node.val().c_str());
+        else
+          writer.String("");
 
         writer.Key("left");
         writer.StartObject();
