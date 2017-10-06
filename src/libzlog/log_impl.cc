@@ -12,6 +12,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <dlfcn.h>
+#include <stdlib.h>
 
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
@@ -85,9 +86,12 @@ int LogImpl::OpenBackend(const std::string& scheme,
 
   auto handle = dlopen(path, RTLD_NOW);
   if (handle == nullptr) {
-    // try $PWD/lib
+    const char *libdir = getenv("ZLOG_BE_LIBDIR");
+    if (libdir == nullptr)
+      libdir = "lib";
+
     ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
-        "lib", scheme.c_str());
+        libdir, scheme.c_str());
     if (ret >= (int)sizeof(path)) {
       return -ENAMETOOLONG;
     }
@@ -179,6 +183,42 @@ int LogImpl::Open(const std::string& scheme, const std::string& name,
   *logpp = log.release();
 
   return 0;
+}
+
+int Log::Open(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts, SeqrClient *seqr,
+    Log **logpp)
+{
+  void *handle;
+  Backend *backend;
+  backend_release_t release;
+
+  int ret = LogImpl::OpenBackend(scheme, opts,
+      &handle, &backend, &release, nullptr);
+  if (ret)
+    return ret;
+
+  ret = Open(backend, name, seqr, logpp);
+  if (ret) {
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  // backend is now managed by the log instance
+  ((LogImpl*)(*logpp))->be_handle = handle;
+  ((LogImpl*)(*logpp))->be_release = release;
+
+  return 0;
+}
+
+int Log::OpenOrCreate(Backend *backend, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
+{
+  int ret = Open(backend, name, seqr, logptr);
+  if (ret != -ENOENT)
+    return ret;
+  return Create(backend, name, seqr, logptr);
 }
 
 int Log::Create(const std::string& scheme, const std::string& name,

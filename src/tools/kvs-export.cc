@@ -16,7 +16,11 @@ using namespace rapidjson;
 int main(int argc, char **argv)
 {
   auto be = new LMDBBackend();
-  be->Init("/tmp/zlog-db");
+  be->Init(argv[1]);
+
+  bool dump_val = false;
+  if (argc >= 3 && atoi(argv[2]))
+    dump_val = true;
 
   zlog::Log *log;
   int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
@@ -28,7 +32,7 @@ int main(int argc, char **argv)
 
   std::cerr << "tail: " << tail << std::endl;
 
-  uint64_t pos = tail;
+  uint64_t pos = 0;
   do {
     std::string data;
     ret = log->Read(pos, &data);
@@ -62,7 +66,10 @@ int main(int argc, char **argv)
         writer.String(node.key().c_str());
 
         writer.Key("val");
-        writer.String(node.val().c_str());
+        if (dump_val)
+          writer.String(node.val().c_str());
+        else
+          writer.String("");
 
         writer.Key("left");
         writer.StartObject();
@@ -99,7 +106,7 @@ int main(int argc, char **argv)
     } else {
       std::cerr << "pos " << pos << " err " << ret << std::endl;
     }
-  } while (pos--);
+  } while (++pos <= tail);
 
   return 0;
 }

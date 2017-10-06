@@ -1,6 +1,7 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <random>
 #include <map>
 #include <cstdlib>
 #include <time.h>
@@ -33,20 +34,20 @@ static inline uint64_t getns()
 static inline std::string tostr(int value)
 {
   std::stringstream ss;
-  ss << std::setw(9) << std::setfill('0') << value;
+  ss << std::setw(10) << std::setfill('0') << value;
   return ss.str();
 }
 
 int main(int argc, char **argv)
 {
-  int stop_after = 0;
   char *db_path;
+  int stop_after = 0;
+  int max_key = 20000;
 
   if (argc < 2) {
     fprintf(stderr, "must provide db path\n");
     return 1;
   }
-
   db_path = argv[1];
 
   if (argc > 2) {
@@ -64,16 +65,17 @@ int main(int argc, char **argv)
   ret = DB::Open(log, true, &db);
   assert(ret == 0);
 
-  std::srand(0);
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(0, max_key);
 
   uint64_t txn_count = 0;
   int total_txn_count = 0;
   uint64_t start_ns = getns();
 
-  int x = 0;
   while (true) {
     auto txn = db->BeginTransaction();
-    int nkey = x++;//std::rand();
+    int nkey = dis(gen);
     const std::string key = tostr(nkey);
     txn->Put(key, key);
     txn->Commit();
@@ -91,7 +93,7 @@ int main(int argc, char **argv)
     }
 
     total_txn_count++;
-    if (stop_after  && total_txn_count >= stop_after)
+    if (stop_after && total_txn_count >= stop_after)
       break;
   }
 

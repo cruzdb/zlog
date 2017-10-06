@@ -1,91 +1,69 @@
 import sys
-import csv
-import json
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+from matplotlib.ticker import MaxNLocator
+import seaborn as sns
+import kvs
 
-class NodePtr(object):
-    __slots__ = ('nil', 'same', 'pos', 'off')
-    def __init__(self, logpos, ptr):
-        self.nil = ptr["nil"]
-        self.same = ptr["self"]
-        if self.same:
-            self.pos = logpos
-        else:
-            self.pos = ptr["csn"]
-        self.off = ptr["off"]
+sns.set_style("whitegrid", {'grid.linestyle': '--'})
 
-class Node(object):
-    __slots__= ('key', 'val', 'red', 'left', 'right')
-    def __init__(self, pos, node):
-        self.key = int(node["key"])
-        self.val = int(node["val"])
-        self.red = node["red"]
-        self.left = NodePtr(pos, node["left"])
-        self.right = NodePtr(pos, node["right"])
+def plot_cdf(ax, x, l):
+    n = np.arange(1, len(x)+1) / np.float(len(x))
+    xs = np.sort(x)
+    ax.step(xs, n, label=l)
 
-class Log(object):
-    __slots__ = ('entries')
-    def __init__(self, f):
-        # build index of log entries
-        tmp = {}
-        for line in sys.stdin.xreadlines():
-            entry = json.loads(line)
-            pos = entry["pos"]
-            assert pos not in tmp
-            nodes = []
-            for node in entry["tree"]:
-                n = Node(pos, node)
-                nodes.append(n)
-            tmp[pos] = (nodes, entry["bytes"])
-        # move to list for direct indexing
-        maxpos = max(tmp)
-        self.entries = (maxpos + 1) * [None]
-        for k, v in tmp.iteritems():
-            self.entries[k] = v
+# plot the length of each path in the db
+def add_path_lengths(db, ax, name):
+    lens = map(lambda p: len(p), db.paths())
+    plot_cdf(ax, lens, name)
 
-    def written_positions(self):
-        snapshots = []
-        for i in range(len(self.entries)):
-            if self.entries[i] is not None:
-                snapshots.append(i)
-        return snapshots
+# plot the frequency of each path address
+def add_path_unique(db, ax, name):
+    freqs = map(lambda path:
+            len(set(map(lambda (n,a): a, path))),
+            db.paths())
+    plot_cdf(ax, freqs, name)
 
-class Database(object):
-    def __init__(self, log, snapshot=None):
-        self.log = log
-        if snapshot is None:
-            snapshot = -1
-        tree, nbytes = self.log.entries[snapshot]
-        self.root = tree[-1] if tree else None
+def add_path_adjacent(db, ax, name):
+    def collapse(path):
+        count = 0
+        curr = None
+        for path, addr in path:
+            assert addr != None
+            if addr == curr:
+                continue
+            curr = addr
+            count += 1
+        return count
+    lens = map(lambda p: collapse(p), db.paths())
+    plot_cdf(ax, lens, name)
 
-        # stats
-        self.resolves = 1
-        self.nbytes = nbytes
+# prepare an empty figure for each of the striping
+# widths that will be simulated
+figs = {}
+widths = (1, 2, 4, 8, 16, 32, 64, 128, 1024)
+for width in widths:
+    fig, ax = plt.subplots(figsize=(8,4))
+    figs[width] = fig, ax
 
-    def resolve(self, ptr):
-        if ptr.nil:
-            return None
-        self.resolves += 1
-        tree, nbytes = self.log.entries[ptr.pos]
-        self.nbytes += nbytes
-        return tree[ptr.off]
+log = kvs.Log(sys.stdin)
+snapshot = log.latest_snapshot()
 
-    def get(self, key):
-        curr = self.root
-        while curr:
-            if curr.key == key:
-                return curr.val
-            elif curr.key > key:
-                curr = self.resolve(curr.left)
-            else:
-                curr = self.resolve(curr.right)
-        return None
+for width in widths:
+    fig, ax = figs[width]
+    db = kvs.Database(log, width, snapshot)
+    add_path_unique(db, ax, "uniq-" + `width`)
+    add_path_adjacent(db, ax, "simp-" + `width`)
+    add_path_lengths(db, ax, "naive")
 
-log = Log(sys.stdin)
-
-writer = csv.writer(sys.stdout)
-writer.writerow(("snapshot", "resolves", "nbytes"))
-snapshots = log.written_positions()
-for snapshot in snapshots:
-    db = Database(log, snapshot)
-    assert db.get(-1) is None
-    writer.writerow((snapshot, db.resolves, db.nbytes))
+count = 0
+for fig, ax in figs.itervalues():
+    ax.set_ylabel('Probability')
+    ax.set_xlabel('Unique Partitions')
+    ax.legend()
+    ax.set_ylim(bottom=0.0, top=1.0)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    fig.savefig("%d.png" % (count,))
+    count += 1
