@@ -212,6 +212,15 @@ int Log::Open(const std::string& scheme, const std::string& name,
   return 0;
 }
 
+int Log::OpenOrCreate(Backend *backend, const std::string& name,
+    SeqrClient *seqr, Log **logptr)
+{
+  int ret = Open(backend, name, seqr, logptr);
+  if (ret != -ENOENT)
+    return ret;
+  return Create(backend, name, seqr, logptr);
+}
+
 int Log::Create(const std::string& scheme, const std::string& name,
     const std::map<std::string, std::string>& opts,
     SeqrClient *seqr, Log **logpp)

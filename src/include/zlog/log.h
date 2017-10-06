@@ -70,14 +70,8 @@ class Log {
   static int Open(Backend *backend, const std::string& name,
       SeqrClient *seqr, Log **logptr);
 
-  // TODO remove, or move to backend?
   static int OpenOrCreate(Backend *backend, const std::string& name,
-      SeqrClient *seqr, Log **logptr) {
-    int ret = Open(backend, name, seqr, logptr);
-    if (ret != -ENOENT)
-      return ret;
-    return Create(backend, name, seqr, logptr);
-  }
+      SeqrClient *seqr, Log **logptr);
 
  private:
   Log(const Log&);
