@@ -12,6 +12,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <dlfcn.h>
+#include <stdlib.h>
 
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
@@ -85,9 +86,12 @@ int LogImpl::OpenBackend(const std::string& scheme,
 
   auto handle = dlopen(path, RTLD_NOW);
   if (handle == nullptr) {
-    // try $PWD/lib
+    const char *libdir = getenv("ZLOG_BE_LIBDIR");
+    if (libdir == nullptr)
+      libdir = "lib";
+
     ret = snprintf(path, sizeof(path), "%s/" BE_PREFIX "%s" BE_SUFFIX,
-        "lib", scheme.c_str());
+        libdir, scheme.c_str());
     if (ret >= (int)sizeof(path)) {
       return -ENAMETOOLONG;
     }
