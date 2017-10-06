@@ -181,6 +181,33 @@ int LogImpl::Open(const std::string& scheme, const std::string& name,
   return 0;
 }
 
+int Log::Open(const std::string& scheme, const std::string& name,
+    const std::map<std::string, std::string>& opts, SeqrClient *seqr,
+    Log **logpp)
+{
+  void *handle;
+  Backend *backend;
+  backend_release_t release;
+
+  int ret = LogImpl::OpenBackend(scheme, opts,
+      &handle, &backend, &release, nullptr);
+  if (ret)
+    return ret;
+
+  ret = Open(backend, name, seqr, logpp);
+  if (ret) {
+    release(backend);
+    dlclose(handle);
+    return ret;
+  }
+
+  // backend is now managed by the log instance
+  ((LogImpl*)(*logpp))->be_handle = handle;
+  ((LogImpl*)(*logpp))->be_release = release;
+
+  return 0;
+}
+
 int Log::Create(const std::string& scheme, const std::string& name,
     const std::map<std::string, std::string>& opts,
     SeqrClient *seqr, Log **logpp)
