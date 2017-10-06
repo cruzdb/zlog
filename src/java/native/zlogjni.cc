@@ -190,34 +190,29 @@ jlong Java_com_cruzdb_DB_transaction(JNIEnv *env, jobject jdb,
 void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
     jstring jdb_path, jstring jlog_name)
 {
-  // backend
+  auto log = std::unique_ptr<LogWrapper>(new LogWrapper);
+  std::map<std::string, std::string> opts;
+
   const char *db_path = env->GetStringUTFChars(jdb_path, 0);
-  auto be = new LMDBBackend();
-  be->Init(db_path);
+  opts["path"] = db_path;
   env->ReleaseStringUTFChars(jdb_path, db_path);
 
-  // hold log state for java
-  auto log = new LogWrapper;
-  log->be = be;
-  log->seqr_client = nullptr;
-
-  // create or open the log
   const char *log_name = env->GetStringUTFChars(jlog_name, 0);
-  int ret = zlog::Log::OpenOrCreate(log->be, log_name,
+  int ret = zlog::Log::Open("lmdb", log_name, opts,
       log->seqr_client, &log->log);
-  if (ret)
-    goto out;
-
+  if (ret == -ENOENT) {
+    ret = zlog::Log::Create("lmdb", log_name, opts,
+        log->seqr_client, &log->log);
+  }
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)
     goto out;
 
-  ZlogJni::setHandle(env, jobj, log);
+  ZlogJni::setHandle(env, jobj, log.release());
   return;
 
 out:
   ZlogExceptionJni::ThrowNew(env, ret);
-  delete log;
 }
 
 #ifndef WITH_RADOS
