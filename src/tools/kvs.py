@@ -47,8 +47,8 @@ class Node(object):
     __slots__= ('key', 'val', 'red', 'left', 'right')
 
     def __init__(self, pos, node):
-        self.key = int(node["key"])
-        self.val = int(node["val"])
+        self.key = node["key"]
+        self.val = node["val"]
         self.red = node["red"]
         self.left = NodePointer(pos, node["left"])
         self.right = NodePointer(pos, node["right"])
