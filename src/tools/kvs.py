@@ -30,6 +30,11 @@ class NodePointer(object):
             self.pos = int(ptr["csn"])
         self.off = int(ptr["off"])
 
+    def address(self):
+        if self.nil:
+            return None
+        return "%d.%d" % (self.pos, self.off)
+
     def __repr__(self):
         if self.nil:
             return "nil"
@@ -44,17 +49,22 @@ class Node(object):
     The node is red if `red` is true, otherwise it is black. The left and
     right children are provided by the `left` and `right` fields.
     """
-    __slots__= ('key', 'val', 'red', 'left', 'right')
+    __slots__= ('key', 'val', 'red', 'left', 'right', 'pos', 'off')
 
-    def __init__(self, pos, node):
+    def __init__(self, pos, offset, node):
         self.key = node["key"]
         self.val = node["val"]
         self.red = node["red"]
         self.left = NodePointer(pos, node["left"])
         self.right = NodePointer(pos, node["right"])
+        self.pos = pos
+        self.off = offset
+
+    def address(self):
+        return "%d.%d" % (self.pos, self.off)
 
     def __repr__(self):
-        return "%d/%s/%s" % (self.key, self.left, self.right)
+        return "%s/%s/%s" % (self.key, self.left, self.right)
 
 class Log(object):
     __slots__ = ('_entries')
@@ -67,9 +77,11 @@ class Log(object):
             pos = entry["pos"]
             assert pos not in tmp
             nodes = []
+            offset = 0
             for node in entry["tree"]:
-                n = Node(pos, node)
+                n = Node(pos, offset, node)
                 nodes.append(n)
+                offset += 1
             tmp[pos] = (nodes, entry["bytes"])
 
         # rebuild for direct indexing
@@ -148,3 +160,17 @@ class Database(object):
             else:
                 curr, _ = self._resolve(curr.right)
         return None
+
+    def preorder(self):
+        node, _ = self._get_snapshot()
+        if not node:
+            return
+        stack = []
+        stack.append(node)
+        while stack:
+            node = stack.pop()
+            yield node
+            left, _ = self._resolve(node.left)
+            if left: stack.append(left)
+            right, _ = self._resolve(node.right)
+            if right: stack.append(right)
