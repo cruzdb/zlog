@@ -58,12 +58,10 @@ for width in widths:
     add_path_adjacent(db, ax, "simp-" + `width`)
     add_path_lengths(db, ax, "naive")
 
-count = 0
-for fig, ax in figs.itervalues():
+    ax.set_title(sys.argv[1] + " / width " + `width`)
     ax.set_ylabel('Probability')
     ax.set_xlabel('Unique Partitions')
     ax.legend()
     ax.set_ylim(bottom=0.0, top=1.0)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    fig.savefig("%d.png" % (count,))
-    count += 1
+    fig.savefig(sys.argv[1] + ".w" + `width` + ".png")
