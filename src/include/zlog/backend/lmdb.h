@@ -1,12 +1,12 @@
 #pragma once
-#include "zlog/backend.h"
-
-#ifdef __cplusplus
 #include <vector>
 #include <sstream>
 #include <iostream>
 #include <memory>
 #include <lmdb.h>
+#include "zlog/backend.h"
+
+namespace zlog {
 
 class LMDBBackend : public Backend {
  public:
@@ -183,12 +183,4 @@ class LMDBBackend : public Backend {
   bool closed = false;
 };
 
-extern "C" {
-#endif
-
-int zlog_create_lmdb_backend(const char *path, zlog_backend_t *backend);
-int zlog_destroy_lmdb_backend(zlog_backend_t backend);
-
-#ifdef __cplusplus
 }
-#endif

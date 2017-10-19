@@ -15,7 +15,7 @@ using namespace rapidjson;
 
 int main(int argc, char **argv)
 {
-  auto be = new LMDBBackend();
+  auto be = std::unique_ptr<zlog::LMDBBackend>(new zlog::LMDBBackend());
   be->Init(argv[1]);
 
   bool dump_val = false;
@@ -23,7 +23,7 @@ int main(int argc, char **argv)
     dump_val = true;
 
   zlog::Log *log;
-  int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
+  int ret = zlog::Log::CreateWithBackend(std::move(be), "log", &log);
   assert(ret == 0);
 
   uint64_t tail;

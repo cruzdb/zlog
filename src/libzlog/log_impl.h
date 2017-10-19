@@ -1,6 +1,8 @@
 #pragma once
 #include <condition_variable>
+#include <list>
 #include <mutex>
+#include <thread>
 #include "include/zlog/log.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
@@ -20,24 +22,24 @@ class LogImpl : public Log {
   LogImpl& operator=(const LogImpl&) = delete;
   LogImpl& operator=(const LogImpl&&) = delete;
 
-  LogImpl(Backend *backend,
-      SeqrClient *shared_seqr,
+  LogImpl(std::shared_ptr<Backend> backend,
       const std::string& name,
       const std::string& hoid,
       const std::string& prefix) :
-    be(backend),
-    be_handle(nullptr),
-    be_release(nullptr),
-    active_seqr(nullptr),
-    shared_seqr(shared_seqr),
+    shutdown(false),
+    backend(backend),
+    sequencer(nullptr),
     name(name),
     hoid(hoid),
     striper(prefix)
-  {}
+  {
+    view_update_thread = std::thread(&LogImpl::ViewUpdater, this);
+  }
 
   ~LogImpl();
 
  public:
+  void ViewUpdater();
   int UpdateView();
 
   int CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
@@ -49,18 +51,15 @@ class LogImpl : public Log {
   int ProposeSharedMode();
   int ProposeExclusiveMode();
 
-  static int OpenBackend(const std::string& scheme,
-      const std::map<std::string, std::string>& opts,
-      void **hp, Backend **bpp, backend_release_t *rp,
-      bool *extra_ref);
   static int Open(const std::string& scheme, const std::string& name,
       const std::map<std::string, std::string>& opts, LogImpl **logpp,
-      bool *extra_ref);
+      std::shared_ptr<Backend> *out_backend);
 
  public:
   int CheckTail(uint64_t *pposition) override;
-  int CheckTail(uint64_t *pposition, bool increment);
-  int CheckTail(std::vector<uint64_t>& positions, size_t count);
+  int CheckTail(uint64_t *pposition, uint64_t *epoch, bool increment);
+
+#ifdef STREAMING_SUPPORT
   /*
    * When next == true
    *   - position: new log tail
@@ -73,6 +72,7 @@ class LogImpl : public Log {
   int CheckTail(const std::set<uint64_t>& stream_ids,
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);
+#endif
 
  public:
   int Read(uint64_t position, std::string *data) override;
@@ -92,6 +92,7 @@ class LogImpl : public Log {
   int AioAppend(zlog::AioCompletion *c, const Slice& data,
       uint64_t *pposition = NULL) override;
 
+#ifdef STREAMING_SUPPORT
  public:
   int OpenStream(uint64_t stream_id, zlog::Stream **streamptr) override;
   int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) override;
@@ -100,6 +101,7 @@ class LogImpl : public Log {
       size_t *header_size = NULL);
   int MultiAppend(const Slice& data, const std::set<uint64_t>& stream_ids,
       uint64_t *pposition = NULL) override;
+#endif
 
  public:
   int StripeWidth() override {
@@ -107,22 +109,26 @@ class LogImpl : public Log {
   }
 
  public:
+  bool shutdown;
   std::mutex lock;
 
-  Backend *be;
-  void *be_handle;
-  void (*be_release)(Backend*);
+  // thread-safe
+  std::shared_ptr<Backend> backend;
 
-  SeqrClient *active_seqr;
-  SeqrClient *shared_seqr;
+  std::shared_ptr<SeqrClient> sequencer;
   const std::string name;
   const std::string hoid;
 
+  // thread-safe
   Striper striper;
 
   std::string exclusive_cookie;
   uint64_t exclusive_position;
   bool exclusive_empty;
+
+  std::condition_variable view_update;
+  std::list<std::pair<std::condition_variable*, bool*>> view_update_waiters;
+  std::thread view_update_thread;
 };
 
 }

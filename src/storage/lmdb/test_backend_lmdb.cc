@@ -2,6 +2,11 @@
 #include "libzlog/test_libzlog.h"
 #include "include/zlog/backend/lmdb.h"
 #include "port/stack_trace.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <limits.h>
+#include <google/protobuf/stubs/common.h>
 
 void BackendTest::SetUp() {}
 void BackendTest::TearDown() {}
@@ -22,16 +27,6 @@ struct DBPathContext {
 };
 
 struct LibZLogTest::Context : public DBPathContext {
-  LMDBBackend *backend = nullptr;
-  zlog::SeqrClient *client = nullptr;
-  ~Context() {
-    if (backend) {
-      backend->Close();
-      delete backend;
-    }
-    if (client)
-      delete client;
-  }
 };
 
 void LibZLogTest::SetUp() {
@@ -41,22 +36,23 @@ void LibZLogTest::SetUp() {
   ASSERT_NE(mkdtemp(context->dbpath), nullptr);
   ASSERT_GT(strlen(context->dbpath), (unsigned)0);
 
-  if (exclusive()) {
-    // default is ok
-  } else {
-    context->client = new zlog::SeqrClient("localhost", "5678");
-    ASSERT_NO_THROW(context->client->Connect());
-  }
-
   if (lowlevel()) {
-    context->backend = new LMDBBackend();
-    context->backend->Init(context->dbpath);
-    int ret = zlog::Log::Create(context->backend,
-        "mylog", context->client, &log);
+    ASSERT_TRUE(exclusive());
+    auto backend = std::unique_ptr<zlog::LMDBBackend>(new zlog::LMDBBackend());
+    backend->Init(context->dbpath);
+    int ret = zlog::Log::CreateWithBackend(std::move(backend),
+        "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
+    std::string host = "";
+    std::string port = "";
+    if (exclusive()) {
+    } else {
+      host = "localhost";
+      port = "5678";
+    }
     int ret = zlog::Log::Create("lmdb", "mylog",
-        {{"path", context->dbpath}}, context->client, &log);
+        {{"path", context->dbpath}}, host, port, &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -69,15 +65,6 @@ void LibZLogTest::TearDown() {
 }
 
 struct LibZLogCAPITest::Context : public DBPathContext {
-  zlog_backend_t backend = nullptr;
-  zlog_sequencer_t client = nullptr;
-  ~Context() {
-    if (backend) {
-      zlog_destroy_lmdb_backend(backend);
-    }
-    if (client)
-      zlog_destroy_sequencer(client);
-  }
 };
 
 void LibZLogCAPITest::SetUp() {
@@ -87,28 +74,21 @@ void LibZLogCAPITest::SetUp() {
   ASSERT_NE(mkdtemp(context->dbpath), nullptr);
   ASSERT_GT(strlen(context->dbpath), (unsigned)0);
 
+  ASSERT_FALSE(lowlevel());
+
+  std::string host = "";
+  std::string port = "";
   if (exclusive()) {
-    // default is ok
   } else {
-    int ret = zlog_create_sequencer("localhost", "5678",
-        &context->client);
-    ASSERT_EQ(ret, 0);
+    host = "localhost";
+    port = "5678";
   }
 
-  if (lowlevel()) {
-    int ret = zlog_create_lmdb_backend(context->dbpath,
-        &context->backend);
-    ASSERT_EQ(ret, 0);
-    ret = zlog_create(context->backend, "c_mylog",
-        context->client, &log);
-    ASSERT_EQ(ret, 0);
-  } else {
-    const char *keys[] = {"path"};
-    const char *vals[] = {context->dbpath};
-    int ret = zlog_create_nobe("lmdb", "c_mylog",
-        keys, vals, 1, context->client, &log);
-    ASSERT_EQ(ret, 0);
-  }
+  const char *keys[] = {"path"};
+  const char *vals[] = {context->dbpath};
+  int ret = zlog_create("lmdb", "c_mylog",
+      keys, vals, 1, host.c_str(), port.c_str(), &log);
+  ASSERT_EQ(ret, 0);
 }
 
 void LibZLogCAPITest::TearDown() {
@@ -120,18 +100,21 @@ void LibZLogCAPITest::TearDown() {
 }
 
 INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
-    ::testing::Combine(
-      ::testing::Values(true, false),
-      ::testing::Values(true, false)));
+    ::testing::Values(
+      std::make_tuple(true, true),
+      std::make_tuple(false, true),
+      std::make_tuple(false, false)));
 
 INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-    ::testing::Combine(
-      ::testing::Values(true, false),
-      ::testing::Values(true, false)));
+    ::testing::Values(
+      std::make_tuple(false, true),
+      std::make_tuple(false, false)));
 
 int main(int argc, char **argv)
 {
   rocksdb::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  int ret = RUN_ALL_TESTS();
+  google::protobuf::ShutdownProtobufLibrary();
+  return ret;
 }

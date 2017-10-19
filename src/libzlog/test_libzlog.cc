@@ -1,6 +1,7 @@
 #include <numeric>
 #include <deque>
 #include "test_libzlog.h"
+#include "zlog/stream.h"
 
 struct aio_state {
   zlog::AioCompletion *c;
@@ -250,6 +251,7 @@ TEST_P(LibZLogTest, Trim) {
   ASSERT_EQ(ret, 0);
 }
 
+#ifdef STREAMING_SUPPORT
 TEST_P(LibZLogTest, Stream_MultiAppend) {
   {
     // empty set of streams
@@ -554,6 +556,7 @@ TEST_P(LibZLogTest, Stream_Sync) {
     delete streams[i];
   }
 }
+#endif
 
 TEST_P(LibZLogCAPITest, Trim) {
   // can trim empty spot
@@ -734,6 +737,7 @@ TEST_P(LibZLogCAPITest, Read) {
   ASSERT_EQ(ret, -ENODATA);
 }
 
+#ifdef STREAMING_SUPPORT
 TEST_P(LibZLogCAPITest, Stream_MultiAppend) {
   // empty set of streams
   int ret = zlog_multiappend(log, NULL, 1, NULL, 0, NULL);
@@ -1053,3 +1057,4 @@ TEST_P(LibZLogCAPITest, Stream_Append) {
   ASSERT_EQ((unsigned)ret, sizeof(data));
   ASSERT_EQ(pos, pos2);
 }
+#endif

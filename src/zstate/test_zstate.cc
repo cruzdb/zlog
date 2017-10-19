@@ -31,11 +31,10 @@ static void make_context(librados::Rados& rados, librados::IoCtx& ioctx)
   assert(!rados.ioctx_create("contrail", ioctx));
 }
 
-static void get_log(librados::IoCtx& ioctx, zlog::Log **log, std::string name,
-    zlog::SeqrClient *client)
+static void get_log(librados::IoCtx& ioctx, zlog::Log **log, std::string name)
 {
-  CephBackend *be = new CephBackend(&ioctx);
-  int ret = zlog::Log::OpenOrCreate(be, name, client, log);
+  auto be = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
+  int ret = zlog::Log::CreateWithBackend(std::move(be), name, log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(*log, nullptr);
 }
@@ -45,12 +44,9 @@ TEST(Register, DefaultValue) {
   librados::IoCtx ioctx;
   make_context(rados, ioctx);
 
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   std::string log_name = randstr();
   zlog::Log *log;
-  get_log(ioctx, &log, log_name, &client);
+  get_log(ioctx, &log, log_name);
 
   Register reg(log);
 
@@ -66,13 +62,10 @@ TEST(Register, Basic) {
   librados::IoCtx ioctx;
   make_context(rados, ioctx);
 
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   std::string log_name = randstr();
 
   zlog::Log *log;
-  get_log(ioctx, &log, log_name, &client);
+  get_log(ioctx, &log, log_name);
 
   Register reg(log);
 
@@ -94,11 +87,8 @@ static void thrash_log(librados::Rados *rados, std::string pool_name, std::strin
   librados::IoCtx ioctx;
   assert(!rados->ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  get_log(ioctx, &log, log_name, &client);
+  get_log(ioctx, &log, log_name);
 
   Register reg(log);
 
@@ -125,11 +115,8 @@ TEST(Register, MultiThreaded) {
   librados::IoCtx ioctx;
   assert(!rados.ioctx_create(pool_name.c_str(), ioctx));
 
-  zlog::SeqrClient client("localhost", "5678");
-  ASSERT_NO_THROW(client.Connect());
-
   zlog::Log *log;
-  get_log(ioctx, &log, log_name, &client);
+  get_log(ioctx, &log, log_name);
 
   std::vector<std::thread> threads;
   for (int i = 0; i < 3; i++) {

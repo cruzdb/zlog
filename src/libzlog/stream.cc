@@ -1,6 +1,8 @@
+#ifdef STREAMING_SUPPORT
 #include "log_impl.h"
 #include <iostream>
 #include "proto/zlog.pb.h"
+#include "zlog/stream.h"
 
 namespace zlog {
 
@@ -339,7 +341,7 @@ int LogImpl::MultiAppend(const Slice& data,
 
     auto mapping = striper.MapPosition(position);
 
-    ret = be->Write(mapping.oid, Slice(out_data), mapping.epoch, position);
+    ret = backend->Write(mapping.oid, Slice(out_data), mapping.epoch, position);
     if (ret == 0) {
       if (pposition)
         *pposition = position;
@@ -363,3 +365,4 @@ int LogImpl::MultiAppend(const Slice& data,
 }
 
 }
+#endif

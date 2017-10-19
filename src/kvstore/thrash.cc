@@ -193,8 +193,8 @@ int main(int argc, char **argv)
     assert(ret == 0);
 
     zlog::Log *log;
-    CephBackend *be = new CephBackend(&ioctx);
-    ret = zlog::Log::Create(be, "log", NULL, &log);
+    auto be = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
+    ret = zlog::Log::CreateWithBackend(std::move(be), "log", &log);
     assert(ret == 0);
 
     DB *db;
@@ -270,7 +270,6 @@ int main(int argc, char **argv)
 
     delete db;
     delete log;
-    delete be;
   }
 
   return 0;

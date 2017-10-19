@@ -39,14 +39,14 @@ int main(int argc, char **argv)
   ret = cluster.ioctx_create(pool.c_str(), ioctx);
   assert(ret == 0);
 
-  zlog::SeqrClient *client = NULL;
+  //zlog::SeqrClient *client = NULL;
   //client = new zlog::SeqrClient(server.c_str(), port.c_str());
   //client->Connect();
 
-  CephBackend *be = new CephBackend(&ioctx);
+  auto be = std::shared_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
 
   zlog::Log *baselog;
-  ret = zlog::Log::Open(be, log_name, client, &baselog);
+  ret = zlog::Log::OpenWithBackend(be, log_name, &baselog);
   assert(ret == 0);
   zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 

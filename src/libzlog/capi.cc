@@ -1,4 +1,3 @@
-#include "libseq/libseqr.h"
 #include "include/zlog/slice.h"
 #include "include/zlog/stream.h"
 #include "include/zlog/log.h"
@@ -21,29 +20,9 @@ extern "C" int zlog_destroy(zlog_log_t log)
   return 0;
 }
 
-extern "C" int zlog_create(zlog_backend_t backend, const char *name,
-    zlog_sequencer_t seqr, zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  int ret = zlog::Log::Create(*((Backend**)backend), name,
-      (zlog::SeqrClient*)seqr, &ctx->log);
-  if (ret) {
-    delete ctx;
-  } else {
-    *log = ctx;
-  }
-
-  return ret;
-}
-
-extern "C" int zlog_create_nobe(const char *scheme,
-    const char *name,
-    char const* const* keys,
-    char const* const* vals,
-    size_t num,
-    zlog_sequencer_t seqr,
-    zlog_log_t *log)
+extern "C" int zlog_create(const char *scheme, const char *name,
+    char const* const* keys, char const* const* vals, size_t num,
+    const char *host, const char *port, zlog_log_t *log)
 {
   std::map<std::string, std::string> opts;
   for (size_t i = 0; i < num; i++) {
@@ -53,7 +32,7 @@ extern "C" int zlog_create_nobe(const char *scheme,
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
   int ret = zlog::Log::Create(scheme, name,
-      opts, (zlog::SeqrClient*)seqr, &ctx->log);
+      opts, host, port, &ctx->log);
   if (ret) {
     delete ctx;
   } else {
@@ -62,96 +41,6 @@ extern "C" int zlog_create_nobe(const char *scheme,
 
   return ret;
 }
-
-extern "C" int zlog_open(zlog_backend_t backend, const char *name,
-    zlog_sequencer_t seqr, zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  int ret = zlog::Log::Open(*((Backend**)backend), name,
-      (zlog::SeqrClient*)seqr, &ctx->log);
-  if (ret) {
-    delete ctx;
-  } else {
-    *log = ctx;
-  }
-
-  return ret;
-}
-
-extern "C" int zlog_open_or_create(zlog_backend_t backend, const char *name,
-    zlog_sequencer_t seqr, zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  int ret = zlog::Log::OpenOrCreate(*((Backend**)backend), name,
-      (zlog::SeqrClient*)seqr, &ctx->log);
-  if (ret) {
-    delete ctx;
-  } else {
-    *log = ctx;
-  }
-
-  return ret;
-}
-
-#if 0
-extern "C" int zlog_open(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port,
-    zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
-  ctx->be = new CephBackend(&ctx->ioctx);
-
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
-  int ret = zlog::Log::Open(ctx->be, name,
-      ctx->seqr, &ctx->log);
-  if (ret) {
-    delete ctx->be;
-    delete ctx->seqr;
-    delete ctx;
-    return ret;
-  }
-
-  *log = ctx;
-
-  return 0;
-}
-
-extern "C" int zlog_create(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
-{
-}
-
-extern "C" int zlog_open_or_create(rados_ioctx_t ioctx, const char *name,
-    const char *host, const char *port, zlog_log_t *log)
-{
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  librados::IoCtx::from_rados_ioctx_t(ioctx, ctx->ioctx);
-  ctx->be = new CephBackend(&ctx->ioctx);
-
-  ctx->seqr = new zlog::SeqrClient(host, port);
-  ctx->seqr->Connect();
-
-  int ret = zlog::Log::OpenOrCreate(ctx->be, name,
-      ctx->seqr, &ctx->log);
-  if (ret) {
-    delete ctx->be;
-    delete ctx->seqr;
-    delete ctx;
-    return ret;
-  }
-
-  *log = ctx;
-
-  return 0;
-}
-#endif
 
 extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition)
 {
@@ -164,17 +53,6 @@ extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   return ctx->log->Append(Slice((char*)data, len), pposition);
-}
-
-extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
-    size_t data_len, const uint64_t *stream_ids, size_t stream_ids_len,
-    uint64_t *pposition)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  if (stream_ids_len == 0)
-    return -EINVAL;
-  std::set<uint64_t> ids(stream_ids, stream_ids + stream_ids_len);
-  return ctx->log->MultiAppend(Slice((char*)data, data_len), ids, pposition);
 }
 
 extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
@@ -202,6 +80,18 @@ extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
   return ctx->log->Trim(position);
+}
+
+#ifdef STREAMING_SUPPORT
+extern "C" int zlog_multiappend(zlog_log_t log, const void *data,
+    size_t data_len, const uint64_t *stream_ids, size_t stream_ids_len,
+    uint64_t *pposition)
+{
+  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
+  if (stream_ids_len == 0)
+    return -EINVAL;
+  std::set<uint64_t> ids(stream_ids, stream_ids + stream_ids_len);
+  return ctx->log->MultiAppend(Slice((char*)data, data_len), ids, pposition);
 }
 
 extern "C" int zlog_stream_open(zlog_log_t log, uint64_t stream_id,
@@ -298,4 +188,4 @@ extern "C" int zlog_stream_membership(zlog_log_t log,
 
   return size;
 }
-
+#endif

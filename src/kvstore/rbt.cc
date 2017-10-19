@@ -14,9 +14,9 @@ static inline std::string tostr(int value)
 int main(int argc, char **argv)
 {
   zlog::Log *log;
-  auto be = new LMDBBackend();
+  auto be = std::unique_ptr<zlog::LMDBBackend>(new zlog::LMDBBackend());
   be->Init("/tmp/zlog.bench.db");
-  int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
+  int ret = zlog::Log::CreateWithBackend(std::move(be), "log", &log);
   assert(ret == 0);
 
   DB *db;

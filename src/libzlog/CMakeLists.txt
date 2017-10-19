@@ -4,6 +4,8 @@ set(libzlog_sources
   striper.cc
   aio.cc
   capi.cc
+  log.cc
+  backend.cc
   ../port/stack_trace.cc)
 
 add_definitions("-DZLOG_LIBDIR=\"${CMAKE_INSTALL_FULL_LIBDIR}\"")

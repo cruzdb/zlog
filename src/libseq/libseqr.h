@@ -1,9 +1,5 @@
 #pragma once
-
-// For the C API
-typedef void *zlog_sequencer_t;
-
-#ifdef __cplusplus
+#include <iostream>
 #include <set>
 #include <vector>
 #include <mutex>
@@ -19,8 +15,8 @@ namespace zlog {
 // OSX will quickly reach an open file descriptor limit..
 class SeqrClient {
  public:
-  SeqrClient(const char *host, const char *port) :
-    host_(host), port_(port)
+  SeqrClient(const char *host, const char *port, uint64_t epoch) :
+    host_(host), port_(port), epoch_(epoch)
   {
     num_channels_ = 5;
     next_channel_ = 0;
@@ -30,8 +26,11 @@ class SeqrClient {
   }
 
   virtual ~SeqrClient() {
-    for (channel *chan : channels_)
+    for (channel *chan : channels_) {
+      chan->io_service_.stop();
+      chan->socket_.close();
       delete chan;
+    }
   }
 
   virtual void Connect();
@@ -42,13 +41,13 @@ class SeqrClient {
 
   virtual int CheckTail(uint64_t epoch,
       const std::map<std::string, std::string>& meta,
-      const std::string& name, std::vector<uint64_t>& positions, size_t count);
-
-  virtual int CheckTail(uint64_t epoch,
-      const std::map<std::string, std::string>& meta,
       const std::string& name, const std::set<uint64_t>& stream_ids,
       std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
       uint64_t *position, bool next);
+
+  uint64_t Epoch() const {
+    return epoch_;
+  }
 
  private:
   struct channel {
@@ -63,20 +62,10 @@ class SeqrClient {
 
   std::string host_;
   std::string port_;
+  uint64_t epoch_;
 
   int num_channels_;
   std::atomic<int> next_channel_;
 };
 
 }
-
-extern "C" {
-#endif
-
-int zlog_create_sequencer(const char *host, const char *port,
-    zlog_sequencer_t *seqr);
-int zlog_destroy_sequencer(zlog_sequencer_t seqr);
-
-#ifdef __cplusplus
-}
-#endif

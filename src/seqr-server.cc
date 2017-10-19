@@ -307,7 +307,7 @@ class LogManager {
     uint64_t epoch;
   };
 
-  std::set<std::string> loaded_backends_;
+  std::map<std::string, std::shared_ptr<zlog::Backend>> loaded_backends_;
 
   /*
    * Prepare the log for this sequencer. After this function runs a new
@@ -336,17 +336,15 @@ class LogManager {
     // now.
     bool extra_ref = loaded_backends_.find(scheme) == loaded_backends_.end();
 
+    std::shared_ptr<zlog::Backend> backend;
     zlog::LogImpl *log;
-    int ret = zlog::LogImpl::Open(scheme, name, meta, &log, &extra_ref);
+    int ret = zlog::LogImpl::Open(scheme, name, meta, &log, &backend);
+    if (extra_ref && backend)
+        loaded_backends_[scheme] = backend;
     if (ret) {
-      if (extra_ref)
-        loaded_backends_.insert(scheme);
       std::cerr << "failed to open log " << ret << std::endl;
       return ret;
     }
-
-    if (extra_ref)
-      loaded_backends_.insert(scheme);
 
     uint64_t epoch;
     uint64_t position;
@@ -365,6 +363,7 @@ class LogManager {
      * more dynamic and efficient during a later rewrite of the streaming
      * interface.
      */
+#ifdef STREAMING_SUPPORT
     if (stream_support && !empty) {
       uint64_t tail = position;
       std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
@@ -412,6 +411,7 @@ class LogManager {
       }
       ptrs.swap(ptrs_out);
     }
+#endif
 
     *pepoch = epoch;
     if (empty)
@@ -744,6 +744,7 @@ class Session {
       reply_.add_position(pos);
     }
 
+#ifdef STREAMING_SUPPORT
     size_t stream_index = 0;
     for (std::vector<std::vector<uint64_t>>::const_iterator it =
          stream_backpointers.begin(); it != stream_backpointers.end(); it++) {
@@ -755,6 +756,7 @@ class Session {
         ptrs->add_backpointer(pos);
       }
     }
+#endif
 
     assert(reply_.IsInitialized());
 
