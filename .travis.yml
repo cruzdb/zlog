@@ -34,8 +34,6 @@ matrix:
       env: DOCKER_IMAGE=fedora:25
     - os: linux
       env: DOCKER_IMAGE=fedora:24
-   #- os: linux
-   #  env: DOCKER_IMAGE=fedora:23
     - os: linux
       env: DOCKER_IMAGE=debian:jessie
     - os: linux
@@ -48,6 +46,8 @@ matrix:
       env: DOCKER_IMAGE=ubuntu:zesty RUN_COVERAGE=0
     - os: linux
       env: DOCKER_IMAGE=ubuntu:zesty RUN_COVERAGE=1
+    - os: osx
+  allow_failures:
     - os: osx
 
 # the coverity build runs in the standard travis environment (job config #1
