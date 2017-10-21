@@ -1,3 +1,4 @@
+#include <cerrno>
 #include "include/zlog/slice.h"
 #include "include/zlog/stream.h"
 #include "include/zlog/log.h"

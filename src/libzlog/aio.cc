@@ -221,16 +221,24 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
   if (!finish) {
     // if we are appending, get a new position
     uint64_t position;
-    // FIXME: epoch
-    ret = impl->log->CheckTail(&position, nullptr, true);
-    if (ret)
-      finish = true;
-    else
-      impl->position = position;
+    uint64_t seq_epoch;
+    Striper::Mapping mapping;
+    while (true) {
+      ret = impl->log->CheckTail(&position, &seq_epoch, true);
+      if (ret) {
+        finish = true;
+        break;
+      }
+      mapping = impl->log->striper.MapPosition(position);
+      if (seq_epoch != mapping.epoch) {
+        std::cerr << "trying new seq" << std::endl;
+        continue;
+      }
+    }
 
     // we are still good. build a new aio
     if (!finish) {
-      auto mapping = impl->log->striper.MapPosition(impl->position);
+      impl->position = position;
 
       // refresh
       impl->epoch = mapping.epoch;
@@ -320,12 +328,24 @@ zlog::AioCompletion *Log::aio_create_completion()
 int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
     uint64_t *pposition)
 {
-  // initial position guess
+  // initial guess. see #194 about moving sequencer call into the callback for
+  // full async behavior.
   uint64_t position;
-  // FIXME: epoch
-  int ret = CheckTail(&position, nullptr, true);
-  if (ret)
-    return ret;
+  uint64_t seq_epoch;
+  Striper::Mapping mapping;
+  while (true) {
+    int ret = CheckTail(&position, &seq_epoch, true);
+    if (ret)
+      return ret;
+
+    mapping = striper.MapPosition(position);
+    if (seq_epoch != mapping.epoch) {
+      std::cerr << "retry with new seq" << std::endl;
+      continue;
+    }
+
+    break;
+  }
 
   AioCompletionImplWrapper *wrapper =
     reinterpret_cast<AioCompletionImplWrapper*>(c);
@@ -338,8 +358,6 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->backend = backend;
   impl->type = ZLOG_AIO_APPEND;
 
-  auto mapping = striper.MapPosition(position);
-
   // used to identify if state changes have occurred since dispatching the
   // request in order to avoid reconfiguration later (important when lots of
   // threads or contexts try to do the same thing).
@@ -347,7 +365,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
   impl->get(); // backend now has a reference
 
-  ret = backend->AioWrite(mapping.oid, mapping.epoch, position, data,
+  int ret = backend->AioWrite(mapping.oid, mapping.epoch, position, data,
       impl, AioCompletionImpl::aio_safe_cb_write);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

@@ -1,4 +1,5 @@
 #include <dlfcn.h>
+#include <cerrno>
 #include <iostream>
 #include <stdlib.h>
 #include <limits.h>
