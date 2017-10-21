@@ -27,7 +27,7 @@ class AioCompletionImpl {
    * base log and rados completion
    */
   LogImpl *log;
-  Backend *backend;
+  std::shared_ptr<Backend> backend;
 
   /*
    * Common
@@ -221,7 +221,8 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
   if (!finish) {
     // if we are appending, get a new position
     uint64_t position;
-    ret = impl->log->CheckTail(&position, true);
+    // FIXME: epoch
+    ret = impl->log->CheckTail(&position, nullptr, true);
     if (ret)
       finish = true;
     else
@@ -321,7 +322,8 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 {
   // initial position guess
   uint64_t position;
-  int ret = CheckTail(&position, true);
+  // FIXME: epoch
+  int ret = CheckTail(&position, nullptr, true);
   if (ret)
     return ret;
 
@@ -333,7 +335,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->data.assign(data.data(), data.size());
   impl->position = position;
   impl->pposition = pposition;
-  impl->backend = be;
+  impl->backend = backend;
   impl->type = ZLOG_AIO_APPEND;
 
   auto mapping = striper.MapPosition(position);
@@ -345,7 +347,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
   impl->get(); // backend now has a reference
 
-  ret = be->AioWrite(mapping.oid, mapping.epoch, position, data,
+  ret = backend->AioWrite(mapping.oid, mapping.epoch, position, data,
       impl, AioCompletionImpl::aio_safe_cb_write);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -367,14 +369,14 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   impl->log = this;
   impl->datap = datap;
   impl->position = position;
-  impl->backend = be;
+  impl->backend = backend;
   impl->type = ZLOG_AIO_READ;
 
   impl->get(); // backend now has a reference
 
   auto mapping = striper.MapPosition(position);
 
-  int ret = be->AioRead(mapping.oid, mapping.epoch, position, &impl->data,
+  int ret = backend->AioRead(mapping.oid, mapping.epoch, position, &impl->data,
       impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

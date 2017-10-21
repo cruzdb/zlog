@@ -27,11 +27,11 @@ zlog_proto::View Striper::InitViewData(uint32_t width)
 // the views_ data structure tries to collapse compatible views. as a result we
 // can't reliably reproduce the latest view from this data structure, so we
 // actually keep around a copy of the latest.
-zlog_proto::View Striper::LatestView() const
+std::pair<uint64_t, zlog_proto::View> Striper::LatestView() const
 {
   std::lock_guard<std::mutex> l(lock_);
   assert(!views_.empty());
-  return latest_view_;
+  return std::make_pair(epoch_, latest_view_);
 }
 
 int Striper::Add(uint64_t epoch, const std::string& data)

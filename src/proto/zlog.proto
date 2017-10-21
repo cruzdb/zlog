@@ -21,6 +21,9 @@ message View {
   // this is to encode the next_epoch in the string which is guaranteed to be
   // unique if it is accepted.
   optional string exclusive_cookie = 3;
+
+  optional string host = 4;
+  optional string port = 5;
 }
 
 message StringPair {

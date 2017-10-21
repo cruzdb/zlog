@@ -1,9 +1,9 @@
 #pragma once
+#include <iostream>
+#include <rados/librados.hpp>
 #include "zlog/backend.h"
 
-#ifdef __cplusplus
-#include <rados/librados.hpp>
-#include <iostream>
+namespace zlog {
 
 class CephBackend : public Backend {
  public:
@@ -79,12 +79,4 @@ class CephBackend : public Backend {
   int InitHeadObject(const std::string& hoid, const std::string& prefix);
 };
 
-extern "C" {
-#endif
-
-int zlog_create_ceph_backend(rados_ioctx_t ioctx, zlog_backend_t *backend);
-int zlog_destroy_ceph_backend(zlog_backend_t backend);
-
-#ifdef __cplusplus
 }
-#endif

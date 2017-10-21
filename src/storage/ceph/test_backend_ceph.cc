@@ -11,15 +11,6 @@
 void BackendTest::SetUp() {}
 void BackendTest::TearDown() {}
 
-// 4.1 use scheme in seqr
-// 4. make sure linking is all awesome
-// 5. figure out what to do with create/open tests
-//   - non fixture based test?
-// CreateWithBackend
-// (3): shared, exclusive
-// remove pool
-// apple dynlib
-
 struct UniquePoolContext {
   rados_t cluster = nullptr;
   rados_ioctx_t ioctx = nullptr;
@@ -63,8 +54,6 @@ struct UniquePoolContext {
 struct LibZLogTest::Context : public UniquePoolContext {
   librados::IoCtx ioctxpp;
   bool close_ioctxpp = false;
-  CephBackend *backend = nullptr;
-  zlog::SeqrClient *client = nullptr;
 
   void Init(bool lowlevel) {
     ASSERT_NO_FATAL_FAILURE(UniquePoolContext::Init());
@@ -75,12 +64,6 @@ struct LibZLogTest::Context : public UniquePoolContext {
   }
 
   ~Context() {
-    if (client) {
-      delete client;
-    }
-    if (backend) {
-      delete backend;
-    }
     if (close_ioctxpp) {
       ioctxpp.close();
     }
@@ -91,22 +74,22 @@ void LibZLogTest::SetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init(lowlevel()));
 
-  if (exclusive()) {
-    // default is ok
-  } else {
-    context->client = new zlog::SeqrClient("localhost", "5678");
-    ASSERT_NO_THROW(context->client->Connect());
-  }
-
   if (lowlevel()) {
-    context->backend = new CephBackend(&context->ioctxpp);
-    int ret = zlog::Log::Create(context->backend, "mylog",
-        context->client, &log);
+    ASSERT_TRUE(exclusive());
+    auto backend = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&context->ioctxpp));
+    int ret = zlog::Log::CreateWithBackend(std::move(backend), "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
+    std::string host = "";
+    std::string port = "";
+    if (exclusive()) {
+    } else {
+      host = "localhost";
+      port = "5678";
+    }
     int ret = zlog::Log::Create("ceph", "mylog",
         {{"conf_file", ""}, {"pool", context->pool_name}},
-        context->client, &log);
+        host, port, &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -119,44 +102,26 @@ void LibZLogTest::TearDown() {
 }
 
 struct LibZLogCAPITest::Context : public UniquePoolContext {
-  zlog_backend_t backend = nullptr;
-  zlog_sequencer_t client = nullptr;
-
-  ~Context() {
-    if (backend)
-      zlog_destroy_ceph_backend(backend);
-    if (client)
-      zlog_destroy_sequencer(client);
-  }
 };
 
 void LibZLogCAPITest::SetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init());
 
+  ASSERT_FALSE(lowlevel());
+
+  std::string host = "";
+  std::string port = "";
   if (exclusive()) {
-    // default is ok
-  } else {
-    int ret = zlog_create_sequencer("localhost", "5678",
-        &context->client);
-    ASSERT_EQ(ret, 0);
+    host = "localhost";
+    port = "5678";
   }
 
-  if (lowlevel()) {
-    int ret = zlog_create_ceph_backend(context->ioctx,
-        &context->backend);
-    ASSERT_EQ(ret, 0);
-
-    ret = zlog_create(context->backend, "c_mylog",
-        context->client, &log);
-    ASSERT_EQ(ret, 0);
-  } else {
-    const char *keys[] = {"conf_file", "pool"};
-    const char *vals[] = {"", context->pool_name.c_str()};
-    int ret = zlog_create_nobe("ceph", "c_mylog",
-        keys, vals, 2, context->client, &log);
-    ASSERT_EQ(ret, 0);
-  }
+  const char *keys[] = {"conf_file", "pool"};
+  const char *vals[] = {"", context->pool_name.c_str()};
+  int ret = zlog_create("ceph", "c_mylog",
+      keys, vals, 2, host.c_str(), port.c_str(), &log);
+  ASSERT_EQ(ret, 0);
 }
 
 void LibZLogCAPITest::TearDown() {
@@ -167,14 +132,15 @@ void LibZLogCAPITest::TearDown() {
     delete context;
 }
 INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
-    ::testing::Combine(
-      ::testing::Values(true, false),
-      ::testing::Values(true, false)));
+    ::testing::Values(
+      std::make_tuple(true, true),
+      std::make_tuple(false, true),
+      std::make_tuple(false, false)));
 
 INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-    ::testing::Combine(
-      ::testing::Values(true, false),
-      ::testing::Values(true, false)));
+    ::testing::Values(
+      std::make_tuple(false, true),
+      std::make_tuple(false, false)));
 
 int main(int argc, char **argv)
 {

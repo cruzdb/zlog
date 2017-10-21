@@ -159,7 +159,7 @@ static void nextseq_workload_func(zlog::LogImpl *log_impl)
 {
   while (!stop) {
     uint64_t tail;
-    int ret = log_impl->CheckTail(&tail, true);
+    int ret = log_impl->CheckTail(&tail, nullptr, true);
     assert(ret == 0);
 
     ios_completed++;
@@ -333,22 +333,23 @@ int main(int argc, char **argv)
   assert(ret == 0);
 
   // connect to the sequencer
-  zlog::SeqrClient client(server.c_str(), port.c_str());
-  client.Connect();
+  std::cerr << "using outdated api: using exclusive writer mode, default stripe width" << std::endl;
 
-  CephBackend *be = new CephBackend(&ioctx);
+  auto be = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
 
   // open log
   zlog::Log *log;
   if (stripe_width == -1) {
     // default stripe width
-    ret = zlog::Log::OpenOrCreate(be, logname, &client, &log);
+    ret = zlog::Log::CreateWithBackend(std::move(be), logname, &log);
   } else {
-    ret = zlog::Log::Open(be, logname, &client, &log);
+    ret = zlog::Log::OpenWithBackend(std::move(be), logname, &log);
     if (ret == -ENOENT)
-      ret = zlog::Log::CreateWithStripeWidth(be, logname, &client, stripe_width, &log);
+      ret = zlog::Log::CreateWithBackend(std::move(be), logname, &log);
+#if 0
     if (ret == 0)
       assert(log->StripeWidth() == stripe_width);
+#endif
   }
   assert(ret == 0);
 

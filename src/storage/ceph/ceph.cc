@@ -7,6 +7,8 @@
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog.pb.h"
 
+namespace zlog {
+
 // TODO: make this constructor private and used by the plugin-based allocator
 // interface. Same for the destructor.
 CephBackend::CephBackend() :
@@ -409,31 +411,6 @@ void CephBackend::aio_safe_cb_read(librados::completion_t cb, void *arg)
   delete c;
 }
 
-// backend must be first member for proper casting by capi. this needs a better
-// safer method.
-struct CephBackendWrapper {
-  CephBackend *backend;
-  librados::IoCtx ioctx;
-};
-
-extern "C" int zlog_create_ceph_backend(rados_ioctx_t ioctx,
-    zlog_backend_t *backend)
-{
-  auto b = std::unique_ptr<CephBackendWrapper>(new CephBackendWrapper);
-  librados::IoCtx::from_rados_ioctx_t(ioctx, b->ioctx);
-  b->backend = new CephBackend(&b->ioctx);
-  *backend = (void*)b.release();
-  return 0;
-}
-
-extern "C" int zlog_destroy_ceph_backend(zlog_backend_t backend)
-{
-  auto b = (CephBackendWrapper*)backend;
-  delete b->backend;
-  delete b;
-  return 0;
-}
-
 extern "C" Backend *__backend_allocate(void)
 {
   auto b = new CephBackend();
@@ -445,4 +422,6 @@ extern "C" void __backend_release(Backend *p)
   // TODO: whats the correct type of cast here
   CephBackend *backend = (CephBackend*)p;
   delete backend;
+}
+
 }

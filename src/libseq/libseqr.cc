@@ -78,69 +78,6 @@ int SeqrClient::CheckTail(uint64_t epoch,
 
 int SeqrClient::CheckTail(uint64_t epoch,
     const std::map<std::string, std::string>& meta,
-    const std::string& name, std::vector<uint64_t>& positions, size_t count)
-{
-  if (count <= 0 || count > 100)
-    return -EINVAL;
-
-  // fill in msg
-  zlog_proto::MSeqRequest req;
-  req.set_epoch(epoch);
-  req.set_name(name);
-  for (auto e : meta) {
-    auto sp = req.add_meta();
-    sp->set_key(e.first);
-    sp->set_val(e.second);
-  }
-  req.set_next(true);
-  req.set_count(count);
-
-  channel *chan = channels_[next_channel_++ % num_channels_];
-  std::lock_guard<std::mutex> l(chan->lock_);
-
-  // serialize header and protobuf message
-  uint32_t msg_size = req.ByteSize();
-  uint32_t be_msg_size = htonl(msg_size);
-  uint32_t total_msg_size = msg_size + sizeof(be_msg_size);
-  assert(total_msg_size <= sizeof(chan->buffer));
-
-  // add header
-  memcpy(chan->buffer, &be_msg_size, sizeof(be_msg_size));
-
-  // add protobuf msg
-  assert(req.IsInitialized());
-  assert(req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size));
-
-  // send
-  boost::asio::write(chan->socket_, boost::asio::buffer(chan->buffer, total_msg_size));
-
-  // get reply
-  boost::asio::read(chan->socket_, boost::asio::buffer(&be_msg_size, sizeof(be_msg_size)));
-  msg_size = ntohl(be_msg_size);
-  assert(msg_size < sizeof(chan->buffer));
-  boost::asio::read(chan->socket_, boost::asio::buffer(chan->buffer, msg_size));
-
-  // deserialize
-  zlog_proto::MSeqReply reply;
-  assert(reply.ParseFromArray(chan->buffer, msg_size));
-  assert(reply.IsInitialized());
-
-  if (reply.status() == zlog_proto::MSeqReply::INIT_LOG)
-    return -EAGAIN;
-  else if (reply.status() == zlog_proto::MSeqReply::STALE_EPOCH)
-    return -ERANGE;
-  else {
-    assert(reply.status() == zlog_proto::MSeqReply::OK);
-    std::vector<uint64_t> result(reply.position().begin(),
-        reply.position().end());
-    positions.swap(result);
-  }
-
-  return 0;
-}
-
-int SeqrClient::CheckTail(uint64_t epoch,
-    const std::map<std::string, std::string>& meta,
     const std::string& name, const std::set<uint64_t>& stream_ids,
     std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
     uint64_t *pposition, bool next)
@@ -220,22 +157,6 @@ int SeqrClient::CheckTail(uint64_t epoch,
       *pposition = reply.position(0);
   }
 
-  return 0;
-}
-
-extern "C" int zlog_create_sequencer(const char *host, const char *port,
-    zlog_sequencer_t *seqr)
-{
-  auto s = new zlog::SeqrClient(host, port);
-  s->Connect();
-  *seqr = (void*)s;
-  return 0;
-}
-
-extern "C" int zlog_destroy_sequencer(zlog_sequencer_t seqr)
-{
-  auto s = (zlog::SeqrClient*)seqr;
-  delete s;
   return 0;
 }
 

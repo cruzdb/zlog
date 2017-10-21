@@ -54,11 +54,11 @@ int main(int argc, char **argv)
     stop_after = atoi(argv[2]);
   }
 
-  auto be = new LMDBBackend();
+  auto be = std::unique_ptr<zlog::LMDBBackend>(new zlog::LMDBBackend());
   be->Init(db_path);
 
   zlog::Log *log;
-  int ret = zlog::Log::OpenOrCreate(be, "log", NULL, &log);
+  int ret = zlog::Log::CreateWithBackend(std::move(be), "log", &log);
   assert(ret == 0);
 
   DB *db;
@@ -99,6 +99,4 @@ int main(int argc, char **argv)
 
   delete db;
   delete log;
-  be->Close();
-  delete be;
 }

@@ -8,23 +8,9 @@ extern "C" {
 typedef void *zlog_log_t;
 typedef void *zlog_stream_t;
 
-int zlog_create(zlog_backend_t backend, const char *name,
-    zlog_sequencer_t seqr, zlog_log_t *log);
-
-// TODO: better name
-int zlog_create_nobe(const char *scheme,
-    const char *name,
-    char const* const* keys,
-    char const* const* vals,
-    size_t num,
-    zlog_sequencer_t seqr,
-    zlog_log_t *log);
-
-int zlog_open(zlog_backend_t backend, const char *name,
-    zlog_sequencer_t seqr, zlog_log_t *log);
-
-int zlog_open_or_create(zlog_backend_t backend, const char *name,
-    zlog_sequencer_t seqr, zlog_log_t *log);
+int zlog_create(const char *scheme, const char *name,
+    char const* const* keys, char const* const* vals, size_t num,
+    const char *host, const char *port, zlog_log_t *log);
 
 /*
  *
@@ -63,6 +49,7 @@ int zlog_fill(zlog_log_t log, uint64_t position);
  */
 int zlog_trim(zlog_log_t log, uint64_t position);
 
+#ifdef STREAMING_SUPPORT
 /*
  *
  */
@@ -106,6 +93,7 @@ size_t zlog_stream_history(zlog_stream_t stream, uint64_t *pos, size_t len);
  */
 int zlog_stream_membership(zlog_log_t log, uint64_t *stream_ids,
     size_t len, uint64_t position);
+#endif
 
 #ifdef __cplusplus
 }

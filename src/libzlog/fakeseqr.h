@@ -9,8 +9,8 @@
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
   FakeSeqrClient(const std::map<std::string, std::string>& meta,
-      const std::string& name,
-      bool empty, uint64_t position) : SeqrClient("", ""), pool("0xdeadbeef")
+      const std::string& name, bool empty, uint64_t position,
+      uint64_t epoch) : SeqrClient("", "", epoch), pool("0xdeadbeef")
   {
     entry *e = &entries_[std::make_pair(pool, name)];
     if (empty)

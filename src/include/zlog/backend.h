@@ -2,15 +2,11 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include "zlog/slice.h"
 
-// For the C API
-typedef void *zlog_backend_t;
-
-// TODO: add macros for the extern C factory methods
-
-#ifdef __cplusplus
+namespace zlog {
 
 // All methods return 0 on success, or a negative error code on failure. The
 // following error codes are common for all methods, unless otherwise specified
@@ -26,11 +22,15 @@ typedef void *zlog_backend_t;
 //   - Stale epoch
 // -ENOENT
 //   - object doesn't exist
+//
+// All methods should be thread-safe.
 class Backend {
  public:
-  // TODO: pure virt constructors?
-  //
   virtual ~Backend() {}
+
+  static int Load(const std::string& scheme,
+      const std::map<std::string, std::string>& opts,
+      std::shared_ptr<Backend>& backend);
 
   // Initialize the backend.
   //
@@ -138,4 +138,4 @@ class Backend {
       std::function<void(void*, int)> callback) = 0;
 };
 
-#endif
+}

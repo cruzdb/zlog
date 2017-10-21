@@ -1,11 +1,17 @@
-#ifndef LIBZLOG_ZLOG_HPP
-#define LIBZLOG_ZLOG_HPP
-#include "libseq/libseqr.h"
-#include "zlog/stream.h"
-#include "zlog/slice.h"
-#include "zlog/backend.h"
+#pragma once
+#include <functional>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include "slice.h"
 
 namespace zlog {
+
+class Backend;
+#if STREAMING_SUPPORT
+class Stream;
+#endif
 
 class AioCompletion {
  public:
@@ -42,36 +48,37 @@ class Log {
   /*
    * Stream API
    */
+#if STREAMING_SUPPORT
   virtual int OpenStream(uint64_t stream_id, Stream **streamptr) = 0;
   virtual int MultiAppend(const Slice& data,
       const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) = 0;
   virtual int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) = 0;
+#endif
 
   /*
    * Log Management
    */
-
+ public:
   virtual int StripeWidth() = 0;
 
+ public:
   static int Create(const std::string& scheme, const std::string& name,
-      const std::map<std::string, std::string>& params, SeqrClient *seqr,
+      const std::map<std::string, std::string>& params,
+      const std::string& host, const std::string& port,
       Log **log);
 
   static int Open(const std::string& scheme, const std::string& name,
-      const std::map<std::string, std::string>& params, SeqrClient *seqr,
+      const std::map<std::string, std::string>& params,
+      const std::string& host, const std::string& port,
       Log **log);
 
-  static int CreateWithStripeWidth(Backend *backend, const std::string& name,
-      SeqrClient *seqr, int stripe_width, Log **logptr);
+ public:
+  // TODO: open/create if already shared, or if exclusive force?
+  static int CreateWithBackend(std::shared_ptr<Backend> backend,
+      const std::string& name, Log **logptr);
 
-  static int Create(Backend *backend, const std::string& name,
-      SeqrClient *seqr, Log **logptr);
-
-  static int Open(Backend *backend, const std::string& name,
-      SeqrClient *seqr, Log **logptr);
-
-  static int OpenOrCreate(Backend *backend, const std::string& name,
-      SeqrClient *seqr, Log **logptr);
+  static int OpenWithBackend(std::shared_ptr<Backend> backend,
+      const std::string& name, Log **logptr);
 
  private:
   Log(const Log&);
@@ -79,5 +86,3 @@ class Log {
 };
 
 }
-
-#endif

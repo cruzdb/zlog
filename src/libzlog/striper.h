@@ -22,7 +22,7 @@ class Striper {
   {}
 
   static zlog_proto::View InitViewData(uint32_t width);
-  zlog_proto::View LatestView() const;
+  std::pair<uint64_t, zlog_proto::View> LatestView() const;
 
   // Add the serialized view data for an epoch
   int Add(uint64_t epoch, const std::string& data);

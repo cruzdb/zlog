@@ -199,10 +199,10 @@ void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
 
   const char *log_name = env->GetStringUTFChars(jlog_name, 0);
   int ret = zlog::Log::Open("lmdb", log_name, opts,
-      log->seqr_client, &log->log);
+      "", "", &log->log);
   if (ret == -ENOENT) {
     ret = zlog::Log::Create("lmdb", log_name, opts,
-        log->seqr_client, &log->log);
+        "", "", &log->log);
   }
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)
@@ -215,83 +215,36 @@ out:
   ZlogExceptionJni::ThrowNew(env, ret);
 }
 
-#ifndef WITH_RADOS
 void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
     jstring jseqr_server, jint jseqr_port, jstring jlog_name)
 {
-  ZlogExceptionJni::ThrowNew(env, -ENOTSUP);
-}
-#else
-void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
-    jstring jseqr_server, jint jseqr_port, jstring jlog_name)
-{
-  std::stringstream port;
-  const char *seqr_server;
-  const char *log_name;
-  const char *pool;
-  LogWrapper *log = new LogWrapper;
-  // FIXME: this is a memory leak!
-  CephBackend *be;
+  auto log = std::unique_ptr<LogWrapper>(new LogWrapper);
+  std::map<std::string, std::string> opts;
 
-  /*
-   * Connect to RADOS
-   */
-  int ret = log->rados.init(NULL);
-  if (ret)
-    goto out;
-
-  ret = log->rados.conf_read_file(NULL);
-  if (ret)
-    goto out;
-
-  ret = log->rados.conf_parse_env(NULL);
-  if (ret)
-    goto out;
-
-  ret = log->rados.connect();
-  if (ret)
-    goto out;
-
-  pool = env->GetStringUTFChars(jpool, 0);
-  ret = log->rados.ioctx_create(pool, log->ioctx);
+  const char *pool = env->GetStringUTFChars(jpool, 0);
+  opts["pool"] = pool;
   env->ReleaseStringUTFChars(jpool, pool);
-  if (ret)
-    goto out;
 
-  /*
-   * Connect to sequencer
-   */
+  const char *c_server = env->GetStringUTFChars(jseqr_server, 0);
+  std::string server = c_server;
+  env->ReleaseStringUTFChars(jseqr_server, c_server);
+
+  std::stringstream port;
   port << jseqr_port;
-  seqr_server = env->GetStringUTFChars(jseqr_server, 0);
-  log->seqr_client = new zlog::SeqrClient(seqr_server, port.str().c_str());
-  env->ReleaseStringUTFChars(jseqr_server, seqr_server);
-  try {
-    log->seqr_client->Connect();
-  } catch (...) {
-    ZlogExceptionJni::ThrowNew(env,
-        boost::current_exception_diagnostic_information());
-    goto out_noexcept;
-  }
 
-  // FIXME: this is a memory leak!
-  be = new CephBackend(&log->ioctx);
-
-  log_name = env->GetStringUTFChars(jlog_name, 0);
-  ret = zlog::Log::OpenOrCreate(be, log_name, log->seqr_client, &log->log);
+  const char *log_name = env->GetStringUTFChars(jlog_name, 0);
+  int ret = zlog::Log::Create("ceph", log_name, opts,
+      server, port.str(), &log->log);
   env->ReleaseStringUTFChars(jlog_name, log_name);
   if (ret)
     goto out;
 
-  ZlogJni::setHandle(env, jobj, log);
+  ZlogJni::setHandle(env, jobj, log.release());
   return;
 
 out:
   ZlogExceptionJni::ThrowNew(env, ret);
-
-out_noexcept:
-  delete log;
 }
-#endif
 
 jlong Java_com_cruzdb_Log_append(JNIEnv *env, jobject jlog,
     jlong jlog_handle, jbyteArray jdata, jint jdata_len)

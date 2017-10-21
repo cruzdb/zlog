@@ -3,17 +3,10 @@
 
 #include <jni.h>
 #include <cassert>
+#include <sstream>
 #include "zlog/log.h"
 #include "zlog/db.h"
-#include "zlog/backend.h"
 #include "zlog/slice.h"
-
-#include "zlog/backend/lmdb.h"
-
-#ifdef WITH_RADOS
-# include <rados/librados.hpp>
-# include "zlog/backend/ceph.h"
-#endif
 
 template<class PTR, class DERIVED> class ZlogNativeClass {
  public:
@@ -44,28 +37,15 @@ template<class PTR, class DERIVED> class ZlogNativeClass {
 class LogWrapper {
  public:
   LogWrapper() :
-    be(nullptr),
-    log(nullptr),
-    seqr_client(nullptr)
+    log(nullptr)
   {}
 
   ~LogWrapper() {
     if (log)
       delete log;
-    if (seqr_client)
-      delete seqr_client;
-    if (be)
-      delete be;
   }
 
-  Backend *be;
   zlog::Log *log;
-  zlog::SeqrClient *seqr_client;
-
-#ifdef WITH_RADOS
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-#endif
 };
 
 class ZlogDBJni : public ZlogNativeClass<DB*, ZlogDBJni> {
