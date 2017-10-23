@@ -1,13 +1,11 @@
 add_library(zlogjni SHARED
   zlogjni.cc
-  iterator.cc
-  transaction.cc
   portal.h)
 set_target_properties(zlogjni PROPERTIES
   VERSION 1.0.0
   SOVERSION 1)
 
-set(add_libs libzlog zlog_seqr libkvstore ${JNI_LIBRARIES})
+set(add_libs libzlog zlog_seqr ${JNI_LIBRARIES})
 
 if(BUILD_CEPH_BACKEND)
   target_compile_definitions(zlogjni PRIVATE -DWITH_RADOS)

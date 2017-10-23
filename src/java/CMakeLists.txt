@@ -11,10 +11,7 @@ set(java_srcs
   src/main/java/com/cruzdb/NativeLibraryLoader.java
   src/main/java/com/cruzdb/NotWrittenException.java
   src/main/java/com/cruzdb/ReadOnlyException.java
-  src/main/java/com/cruzdb/ZObject.java
-  src/main/java/com/cruzdb/DB.java
-  src/main/java/com/cruzdb/CruzIterator.java
-  src/main/java/com/cruzdb/Transaction.java)
+  src/main/java/com/cruzdb/ZObject.java)
 
 set(CMAKE_JAVA_COMPILE_FLAGS "-source" "1.7" "-target" "1.7" "-Xlint:-options")
 add_jar(zlog_jar SOURCES ${java_srcs} OUTPUT_NAME zlog)
@@ -26,10 +23,7 @@ set(java_classes
   com.cruzdb.LogException
   com.cruzdb.NativeLibraryLoader
   com.cruzdb.NotWrittenException
-  com.cruzdb.ZObject
-  com.cruzdb.DB
-  com.cruzdb.CruzIterator
-  com.cruzdb.Transaction)
+  com.cruzdb.ZObject)
 
 get_property(zlog_jar_path TARGET zlog_jar PROPERTY JAR_FILE)
 
@@ -91,27 +85,9 @@ add_custom_command(
   DEPENDS ${java_srcs}
   COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path} -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_h} com.cruzdb.Log)
 
-set(java_db_h native/com_cruzdb_DB.h)
-add_custom_command(
-  OUTPUT ${java_db_h}
-  DEPENDS ${java_srcs}
-  COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path} -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_db_h} com.cruzdb.DB)
-
-set(java_it_h native/com_cruzdb_CruzIterator.h)
-add_custom_command(
-  OUTPUT ${java_it_h}
-  DEPENDS ${java_srcs}
-  COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path} -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_it_h} com.cruzdb.CruzIterator)
-
-set(java_txn_h native/com_cruzdb_Transaction.h)
-add_custom_command(
-  OUTPUT ${java_txn_h}
-  DEPENDS ${java_srcs}
-  COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path} -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_txn_h} com.cruzdb.Transaction)
-
 add_custom_target(
   jni_headers
-  DEPENDS ${java_h} ${java_db_h} ${java_it_h} ${java_txn_h})
+  DEPENDS ${java_h})
 add_dependencies(jni_headers zlog_jar)
 
 set(CMAKE_JAVA_INCLUDE_PATH ${JAVA_TESTCLASSPATH} ${zlog_jar_path})

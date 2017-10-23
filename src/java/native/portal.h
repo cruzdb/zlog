@@ -5,7 +5,6 @@
 #include <cassert>
 #include <sstream>
 #include "zlog/log.h"
-#include "zlog/db.h"
 #include "zlog/slice.h"
 
 template<class PTR, class DERIVED> class ZlogNativeClass {
@@ -46,13 +45,6 @@ class LogWrapper {
   }
 
   zlog::Log *log;
-};
-
-class ZlogDBJni : public ZlogNativeClass<DB*, ZlogDBJni> {
- public:
-  static jclass getJClass(JNIEnv *env) {
-    return ZlogNativeClass::getJClass(env, "com/cruzdb/DB");
-  }
 };
 
 class ZlogJni : public ZlogNativeClass<LogWrapper*, ZlogJni> {
