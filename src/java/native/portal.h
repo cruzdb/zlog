@@ -33,21 +33,7 @@ template<class PTR, class DERIVED> class ZlogNativeClass {
   }
 };
 
-class LogWrapper {
- public:
-  LogWrapper() :
-    log(nullptr)
-  {}
-
-  ~LogWrapper() {
-    if (log)
-      delete log;
-  }
-
-  zlog::Log *log;
-};
-
-class ZlogJni : public ZlogNativeClass<LogWrapper*, ZlogJni> {
+class ZlogJni : public ZlogNativeClass<zlog::Log*, ZlogJni> {
  public:
   static jclass getJClass(JNIEnv *env) {
     return ZlogNativeClass::getJClass(env, "com/cruzdb/Log");

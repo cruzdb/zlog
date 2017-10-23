@@ -33,6 +33,10 @@ public abstract class ZObject {
     return nativeHandle_ != 0;
   }
 
+  public long handle() {
+    return nativeHandle_;
+  }
+
   @Override
   protected void finalize() throws Throwable {
     dispose();
