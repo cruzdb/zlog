@@ -11,55 +11,69 @@ void Java_org_cruzdb_zlog_Log_disposeInternal(
   delete reinterpret_cast<zlog::Log*>(jhandle);
 }
 
-void Java_org_cruzdb_zlog_Log_openLMDBNative(JNIEnv *env, jobject jobj,
-    jstring jdb_path, jstring jlog_name)
+JNIEXPORT void JNICALL Java_org_cruzdb_zlog_Log_openNative
+  (JNIEnv *env, jobject jobj, jstring jscheme,
+   jobjectArray jkeys, jobjectArray jvals, jstring jname)
 {
+  const jsize len_opts = env->GetArrayLength(jkeys);
+  assert(len_opts == env->GetArrayLength(jvals));
+
   std::map<std::string, std::string> opts;
+  for (jsize i = 0; i < len_opts; i++) {
+    jobject jobj_key = env->GetObjectArrayElement(jkeys, i);
+    if (env->ExceptionCheck()) {
+      return;
+    }
 
-  const char *db_path = env->GetStringUTFChars(jdb_path, 0);
-  opts["path"] = db_path;
-  env->ReleaseStringUTFChars(jdb_path, db_path);
+    jobject jobj_val = env->GetObjectArrayElement(jvals, i);
+    if (env->ExceptionCheck()) {
+      env->DeleteLocalRef(jobj_key);
+      return;
+    }
 
-  zlog::Log *log;
-  const char *log_name = env->GetStringUTFChars(jlog_name, 0);
-  int ret = zlog::Log::Open("lmdb", log_name, opts,
-      "", "", &log);
-  if (ret == -ENOENT) {
-    ret = zlog::Log::Create("lmdb", log_name, opts,
-        "", "", &log);
+    jstring jkey = reinterpret_cast<jstring>(jobj_key);
+    jstring jval = reinterpret_cast<jstring>(jobj_val);
+
+    const char *key = env->GetStringUTFChars(jkey, 0);
+    if (key == nullptr) {
+      env->DeleteLocalRef(jobj_val);
+      env->DeleteLocalRef(jobj_key);
+      return;
+    }
+
+    const char *val = env->GetStringUTFChars(jval, 0);
+    if (val == nullptr) {
+      env->ReleaseStringUTFChars(jkey, key);
+      env->DeleteLocalRef(jobj_val);
+      env->DeleteLocalRef(jobj_key);
+      return;
+    }
+
+    opts[key] = val;
+
+    env->ReleaseStringUTFChars(jval, val);
+    env->ReleaseStringUTFChars(jkey, key);
+    env->DeleteLocalRef(jobj_val);
+    env->DeleteLocalRef(jobj_key);
   }
-  env->ReleaseStringUTFChars(jlog_name, log_name);
-  if (ret)
-    goto out;
 
-  ZlogJni::setHandle(env, jobj, log);
-  return;
+  const char *scheme = env->GetStringUTFChars(jscheme, 0);
+  if (scheme == nullptr) {
+    return;
+  }
 
-out:
-  ZlogExceptionJni::ThrowNew(env, ret);
-}
-
-void Java_org_cruzdb_zlog_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
-    jstring jseqr_server, jint jseqr_port, jstring jlog_name)
-{
-  std::map<std::string, std::string> opts;
-
-  const char *pool = env->GetStringUTFChars(jpool, 0);
-  opts["pool"] = pool;
-  env->ReleaseStringUTFChars(jpool, pool);
-
-  const char *c_server = env->GetStringUTFChars(jseqr_server, 0);
-  std::string server = c_server;
-  env->ReleaseStringUTFChars(jseqr_server, c_server);
-
-  std::stringstream port;
-  port << jseqr_port;
+  const char *name = env->GetStringUTFChars(jname, 0);
+  if (name == nullptr) {
+    env->ReleaseStringUTFChars(jscheme, scheme);
+    return;
+  }
 
   zlog::Log *log;
-  const char *log_name = env->GetStringUTFChars(jlog_name, 0);
-  int ret = zlog::Log::Create("ceph", log_name, opts,
-      server, port.str(), &log);
-  env->ReleaseStringUTFChars(jlog_name, log_name);
+  int ret = zlog::Log::Create(scheme, name, opts, "", "", &log);
+
+  env->ReleaseStringUTFChars(jscheme, scheme);
+  env->ReleaseStringUTFChars(jname, name);
+
   if (ret)
     goto out;
 
