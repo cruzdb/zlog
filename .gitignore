@@ -83,3 +83,5 @@ debian/libzlog/
 zlog.spec
 
 sa_results
+
+bin

@@ -5,25 +5,25 @@ include(UseJava)
 add_subdirectory(native)
 
 set(java_srcs
-  src/main/java/com/cruzdb/FilledException.java
-  src/main/java/com/cruzdb/Log.java
-  src/main/java/com/cruzdb/LogException.java
-  src/main/java/com/cruzdb/NativeLibraryLoader.java
-  src/main/java/com/cruzdb/NotWrittenException.java
-  src/main/java/com/cruzdb/ReadOnlyException.java
-  src/main/java/com/cruzdb/ZObject.java)
+  src/main/java/org/cruzdb/zlog/FilledException.java
+  src/main/java/org/cruzdb/zlog/Log.java
+  src/main/java/org/cruzdb/zlog/LogException.java
+  src/main/java/org/cruzdb/zlog/NativeLibraryLoader.java
+  src/main/java/org/cruzdb/zlog/NotWrittenException.java
+  src/main/java/org/cruzdb/zlog/ReadOnlyException.java
+  src/main/java/org/cruzdb/zlog/ZObject.java)
 
 set(CMAKE_JAVA_COMPILE_FLAGS "-source" "1.7" "-target" "1.7" "-Xlint:-options")
 add_jar(zlog_jar SOURCES ${java_srcs} OUTPUT_NAME zlog)
 install_jar(zlog_jar share/java)
 
 set(java_classes
-  com.cruzdb.FilledException
-  com.cruzdb.Log
-  com.cruzdb.LogException
-  com.cruzdb.NativeLibraryLoader
-  com.cruzdb.NotWrittenException
-  com.cruzdb.ZObject)
+  org.cruzdb.zlog.FilledException
+  org.cruzdb.zlog.Log
+  org.cruzdb.zlog.LogException
+  org.cruzdb.zlog.NativeLibraryLoader
+  org.cruzdb.zlog.NotWrittenException
+  org.cruzdb.zlog.ZObject)
 
 get_property(zlog_jar_path TARGET zlog_jar PROPERTY JAR_FILE)
 
@@ -79,11 +79,12 @@ endif()
 # TODO:
 #   https://cmake.org/Wiki/CMake_FAQ#How_can_I_generate_a_source_file_during_the_build.3F
 #
-set(java_h native/com_cruzdb_Log.h)
+set(java_h native/org_cruzdb_zlog_Log.h)
 add_custom_command(
   OUTPUT ${java_h}
   DEPENDS ${java_srcs}
-  COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path} -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_h} com.cruzdb.Log)
+  COMMAND ${Java_JAVAH_EXECUTABLE} -classpath ${zlog_jar_path}
+    -jni -o ${CMAKE_CURRENT_BINARY_DIR}/${java_h} org.cruzdb.zlog.Log)
 
 add_custom_target(
   jni_headers
@@ -92,14 +93,14 @@ add_dependencies(jni_headers zlog_jar)
 
 set(CMAKE_JAVA_INCLUDE_PATH ${JAVA_TESTCLASSPATH} ${zlog_jar_path})
 set(java_test_srcs
-  src/test/java/com/cruzdb/AllTests.java
-  src/test/java/com/cruzdb/LogTest.java)
+  src/test/java/org/cruzdb/zlog/AllTests.java
+  src/test/java/org/cruzdb/zlog/LogTest.java)
 add_jar(zlog-test ${java_test_srcs})
 add_dependencies(zlog-test zlog_jar)
 install_jar(zlog-test share/java)
 
 create_javadoc(zlog
-  PACKAGES com.cruzdb
+  PACKAGES org.cruzdb.zlog
   SOURCEPATH ${CMAKE_CURRENT_SOURCE_DIR}/src/main/java
   WINDOWTITLE "ZLogJava"
   DOCTITLE "<h1>ZLog</h1>"

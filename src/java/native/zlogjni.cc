@@ -2,16 +2,16 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <jni.h>
 
-#include "com_cruzdb_Log.h"
+#include "org_cruzdb_zlog_Log.h"
 #include "portal.h"
 
-void Java_com_cruzdb_Log_disposeInternal(
+void Java_org_cruzdb_zlog_Log_disposeInternal(
     JNIEnv *env, jobject jobj, jlong jhandle)
 {
   delete reinterpret_cast<zlog::Log*>(jhandle);
 }
 
-void Java_com_cruzdb_Log_openLMDBNative(JNIEnv *env, jobject jobj,
+void Java_org_cruzdb_zlog_Log_openLMDBNative(JNIEnv *env, jobject jobj,
     jstring jdb_path, jstring jlog_name)
 {
   std::map<std::string, std::string> opts;
@@ -39,7 +39,7 @@ out:
   ZlogExceptionJni::ThrowNew(env, ret);
 }
 
-void Java_com_cruzdb_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
+void Java_org_cruzdb_zlog_Log_openNative(JNIEnv *env, jobject jobj, jstring jpool,
     jstring jseqr_server, jint jseqr_port, jstring jlog_name)
 {
   std::map<std::string, std::string> opts;
@@ -70,7 +70,7 @@ out:
   ZlogExceptionJni::ThrowNew(env, ret);
 }
 
-jlong Java_com_cruzdb_Log_append(JNIEnv *env, jobject jlog,
+jlong Java_org_cruzdb_zlog_Log_append(JNIEnv *env, jobject jlog,
     jlong jlog_handle, jbyteArray jdata, jint jdata_len)
 {
   auto log = reinterpret_cast<zlog::Log*>(jlog_handle);
@@ -85,7 +85,7 @@ jlong Java_com_cruzdb_Log_append(JNIEnv *env, jobject jlog,
   return position;
 }
 
-jbyteArray Java_com_cruzdb_Log_read(JNIEnv *env, jobject jlog,
+jbyteArray Java_org_cruzdb_zlog_Log_read(JNIEnv *env, jobject jlog,
     jlong jlog_handle, jlong jpos)
 {
   auto log = reinterpret_cast<zlog::Log*>(jlog_handle);
@@ -110,7 +110,7 @@ jbyteArray Java_com_cruzdb_Log_read(JNIEnv *env, jobject jlog,
   return result;
 }
 
-void Java_com_cruzdb_Log_fill(JNIEnv *env, jobject jlog,
+void Java_org_cruzdb_zlog_Log_fill(JNIEnv *env, jobject jlog,
     jlong jlog_handle, jlong jpos)
 {
   auto log = reinterpret_cast<zlog::Log*>(jlog_handle);
@@ -123,7 +123,7 @@ void Java_com_cruzdb_Log_fill(JNIEnv *env, jobject jlog,
     ZlogExceptionJni::ThrowNew(env, ret);
 }
 
-void Java_com_cruzdb_Log_trim(JNIEnv *env, jobject jlog,
+void Java_org_cruzdb_zlog_Log_trim(JNIEnv *env, jobject jlog,
     jlong jlog_handle, jlong jpos)
 {
   auto log = reinterpret_cast<zlog::Log*>(jlog_handle);
@@ -133,7 +133,7 @@ void Java_com_cruzdb_Log_trim(JNIEnv *env, jobject jlog,
   ZlogExceptionJni::ThrowNew(env, ret);
 }
 
-jlong Java_com_cruzdb_Log_tail(JNIEnv *env, jobject jlog,
+jlong Java_org_cruzdb_zlog_Log_tail(JNIEnv *env, jobject jlog,
     jlong jlog_handle)
 {
   auto log = reinterpret_cast<zlog::Log*>(jlog_handle);
