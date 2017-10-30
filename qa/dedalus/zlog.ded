@@ -1,0 +1,93 @@
+////////////////////////////////////////////////////////////////////////////////
+
+entries(Obj, Position, Value)@next :- entries(Obj, Position, Value);
+valid_entries(Obj, Position, Value) :- entries(Obj, Position, Value),
+                                       Value != "__INVAL__";
+
+// reply to `req_maxpos` request. the two `rep_maxpos` relations have mutually
+// exclusive rules such that an object with no entries will return maxpos = 1.
+max_pos(Obj, max<Position>)            :- valid_entries(Obj, Position, _);
+rep_maxpos(Src, Obj, MaxPos + 1)@async :- req_maxpos(Obj, Src), max_pos(Obj, MaxPos);
+rep_maxpos(Src, Obj, 1)@async          :- req_maxpos(Obj, Src), notin max_pos(Obj, _);
+
+////////////////////////////////////////////////////////////////////////////////
+// Sequencer Initialization
+////////////////////////////////////////////////////////////////////////////////
+
+// send a `req_maxpos` message to every object provided the sequencer
+// is uninitialized (pos=0), and it is the active sequencer (tbd).
+req_maxpos(Obj, Seq)@async :- seq(Seq, 0), object(Obj);
+
+// record all the max position request replies. after the sequencer
+// initializes, all of the replies are dropped in the next timestep.
+// see below for why this is useful.
+maxpos_replies(Server, Obj, MaxPos)      :- rep_maxpos(Server, Obj, MaxPos);
+maxpos_replies(Server, Obj, MaxPos)@next :- maxpos_replies(Server, Obj, MaxPos),
+                                            seq(Server, 0);
+
+// count the number of (unique) objects that have replied with max pos
+maxpos_replies_uniq(Server, Obj)         :- maxpos_replies(Server, Obj, _);
+maxpos_replies_count(Server, count<Obj>) :- maxpos_replies_uniq(Server, Obj);
+
+// compute the final max position once all replies have been received
+maxpos(Server, max<MaxPos>) :- maxpos_replies(Server, _, MaxPos),
+                               maxpos_replies_count(Server, Count),
+                               Count == 2; // TODO; auto compute
+
+// there are three states of a sequencer counter:
+//
+//   1. uninitialized  (pos=0, maxpos f) => !next,  seq
+//   2. initialization (pos=0, maxpos t) => !next,  maxpos **
+//   3. initialized    (pos>0, maxpos f) => next?t, inc
+//   4. initialized    (pos>0, maxpos f) => next?f, seq
+//
+// initialization (2). maxpos true uniquely identifies this state
+seq(Server, MaxPos)@next  :- maxpos(Server, MaxPos);
+
+// uninitialized (1).
+seq(Server, Seq)@next :- seq(Server, Seq),
+                         notin maxpos(Server, _),
+                         Seq == 0;
+
+// initialized, no request (4).
+seq(Server, Seq)@next :- seq(Server, Seq),
+                         notin req_next(Server, _, _),
+                         Seq > 0;
+
+// initialized, has request (3).
+seq(Server, Seq + 1)@next :- seq(Server, Seq),
+                             req_next(Server, _, _),
+                             Seq > 0;
+
+// ignore req_next until after initialization (Seq > 0)
+rep_next(Client, Server, Seq, Value)@async :- seq(Server, Seq),
+                                              req_next(Server, Client, Value),
+                                              Seq > 0;
+
+// TODO: handle reply in same as maxpos
+// TODO: handle mutlple messages in reqests
+// TODO: object_cnt
+
+////////////////////////////////////////////////////////////////////////////////
+
+// send requests to the sequencer until we get a reply
+need_req(Client, Server, Value) :- client_req(Client, Server, Value),
+                                   notin rep_next(Client, Server, _, Value);
+req_next(Server, Client, Value)@async :- need_req(Client, Server, Value);
+client_req(Client, Server, Value)@next :- need_req(Client, Server, Value);
+
+////////////////////////////////////////////////////////////////////////////////
+
+pre(S, Q) :- seq(S, Q);
+post(S, Q) :- pre(S, Q);
+
+client_req("c0", "s0", "v0")@1;
+
+seq("s0", 0)@1;
+
+object("o0")@1;
+object("o1")@1;
+object(Obj)@next :- object(Obj);
+
+entries("o0", 0, "__INVAL__")@1;
+entries("o1", 0, "__INVAL__")@1;
