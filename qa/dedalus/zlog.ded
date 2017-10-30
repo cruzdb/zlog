@@ -16,7 +16,7 @@ rep_maxpos(Src, Obj, 1)@async          :- req_maxpos(Obj, Src), notin max_pos(Ob
 
 // send a `req_maxpos` message to every object provided the sequencer
 // is uninitialized (pos=0), and it is the active sequencer (tbd).
-req_maxpos(Obj, Seq)@async :- seq(Seq, 0), object(Obj);
+req_maxpos(Obj, Seq)@async :- seq(Seq, 0), object(Seq, Obj);
 
 // record all the max position request replies. after the sequencer
 // initializes, all of the replies are dropped in the next timestep.
@@ -32,7 +32,7 @@ maxpos_replies_count(Server, count<Obj>) :- maxpos_replies_uniq(Server, Obj);
 // compute the final max position once all replies have been received
 maxpos(Server, max<MaxPos>) :- maxpos_replies(Server, _, MaxPos),
                                maxpos_replies_count(Server, Count),
-                               Count == 2; // TODO; auto compute
+                               num_objects(Server, Count);
 
 // there are three states of a sequencer counter:
 //
@@ -85,9 +85,11 @@ client_req("c0", "s0", "v0")@1;
 
 seq("s0", 0)@1;
 
-object("o0")@1;
-object("o1")@1;
-object(Obj)@next :- object(Obj);
+// nodes know about all the objects
+object("s0", "o0")@1;
+object("s0", "o1")@1;
+object(Node, Obj)@next :- object(Node, Obj);
+num_objects(Node, count<Obj>) :- object(Node, Obj);
 
 entries("o0", 0, "__INVAL__")@1;
 entries("o1", 0, "__INVAL__")@1;
