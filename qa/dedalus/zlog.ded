@@ -18,21 +18,20 @@ rep_maxpos(Src, Obj, 1)@async          :- req_maxpos(Obj, Src), notin max_pos(Ob
 // is uninitialized (pos=0), and it is the active sequencer (tbd).
 req_maxpos(Obj, Seq)@async :- seq(Seq, 0), object(Seq, Obj);
 
-// record all the max position request replies. after the sequencer
-// initializes, all of the replies are dropped in the next timestep.
-// see below for why this is useful.
-maxpos_replies(Server, Obj, MaxPos)      :- rep_maxpos(Server, Obj, MaxPos);
+// record all maxpos replies until the sequencer is initialized
+maxpos_replies(Server, Obj, MaxPos)      :- rep_maxpos(Server, Obj, MaxPos),
+                                            seq(Server, 0);
 maxpos_replies(Server, Obj, MaxPos)@next :- maxpos_replies(Server, Obj, MaxPos),
                                             seq(Server, 0);
 
-// count the number of (unique) objects that have replied with max pos
-maxpos_replies_uniq(Server, Obj)         :- maxpos_replies(Server, Obj, _);
-maxpos_replies_count(Server, count<Obj>) :- maxpos_replies_uniq(Server, Obj);
+// from which objects are replies missing
+missing_replies(Server) :- object(Server, Obj),
+                           notin maxpos_replies(Server, Obj, _);
 
-// compute the final max position once all replies have been received
+// maximum position computed from all maxpos replies, provided that
+// we are not missing replies from any object.
 maxpos(Server, max<MaxPos>) :- maxpos_replies(Server, _, MaxPos),
-                               maxpos_replies_count(Server, Count),
-                               num_objects(Server, Count);
+                               notin missing_replies(Server);
 
 // there are three states of a sequencer counter:
 //
@@ -88,8 +87,9 @@ seq("s0", 0)@1;
 // nodes know about all the objects
 object("s0", "o0")@1;
 object("s0", "o1")@1;
+object("s0", "o2")@1;
 object(Node, Obj)@next :- object(Node, Obj);
-num_objects(Node, count<Obj>) :- object(Node, Obj);
 
 entries("o0", 0, "__INVAL__")@1;
 entries("o1", 0, "__INVAL__")@1;
+entries("o2", 0, "__INVAL__")@1;
