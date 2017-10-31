@@ -1,44 +1,58 @@
 ////////////////////////////////////////////////////////////////////////////////
+// Object
+////////////////////////////////////////////////////////////////////////////////
 
-entries(Obj, Position, Value)@next :- entries(Obj, Position, Value);
-valid_entries(Obj, Position, Value) :- entries(Obj, Position, Value),
-                                       Value != "__INVAL__";
+entries(Obj, Pos, Value)@next :- entries(Obj, Pos, Value);
+entries_summary(Obj, count<Pos>, max<Pos>) :- entries(Obj, Pos, _);
 
-// reply to `req_maxpos` request. the two `rep_maxpos` relations have mutually
-// exclusive rules such that an object with no entries will return maxpos = 1.
-max_pos(Obj, max<Position>)            :- valid_entries(Obj, Position, _);
-rep_maxpos(Src, Obj, MaxPos + 1)@async :- req_maxpos(Obj, Src), max_pos(Obj, MaxPos);
-rep_maxpos(Src, Obj, 1)@async          :- req_maxpos(Obj, Src), notin max_pos(Obj, _);
+// reply to a `req_maxpos` request for the maximum position written
+rep_maxpos(Seq, Obj, Count, MaxPos)@async :- req_maxpos(Obj, Seq),
+                                             entries_summary(Obj, Count, MaxPos);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sequencer Initialization
 ////////////////////////////////////////////////////////////////////////////////
 
+// provided the sequencer is not initialized, send a `req_maxpos` request to
+// every object. the replies will be used to calculate the initial soft state.
 req_maxpos(Obj, Seq)@async :- object(Seq, Obj), notin seq(Seq, _);
 
-// record all maxpos replies until the sequencer is initialized
-maxpos_replies(Server, Obj, MaxPos)      :- rep_maxpos(Server, Obj, MaxPos),
-                                            notin seq(Server, _);
-maxpos_replies(Server, Obj, MaxPos)@next :- maxpos_replies(Server, Obj, MaxPos),
-                                            notin seq(Server, _);
+// persist each `rep_maxpos` reply until the sequencer is initialized
+maxpos_replies(Seq, Obj, Count, MaxPos)      :- rep_maxpos(Seq, Obj, Count, MaxPos),
+                                                notin seq(Seq, _);
+maxpos_replies(Seq, Obj, Count, MaxPos)@next :- maxpos_replies(Seq, Obj, Count, MaxPos),
+                                                notin seq(Seq, _);
 
-// from which objects are replies missing
-missing_replies(Server) :- object(Server, Obj),
-                           notin maxpos_replies(Server, Obj, _);
+// TODO: predicate on non-initialization to empty table after init?
+// sequencers that are missing maxpos replies from all objects
+missing_maxpos_replies(Seq) :- object(Seq, Obj),
+                               notin maxpos_replies(Seq, Obj, _, _);
 
-// maximum position computed from all maxpos replies, provided that
-// we are not missing replies from any object.
-maxpos(Server, max<MaxPos>) :- maxpos_replies(Server, _, MaxPos),
-                               notin missing_replies(Server);
+// calculate the maximum position across non-empty objects provided that
+// replies have been received from all objects
+nonempty_maxpos(Seq, max<MaxPos>) :- maxpos_replies(Seq, _, Count, MaxPos),
+                                     notin missing_maxpos_replies(Seq),
+                                     Count > 0;
 
-// assertion error in C4: seq(Server, MaxPos)  :- maxpos(Server, MaxPos);
-seq(Server, MaxPos)@next  :- maxpos(Server, MaxPos);
+// if a position has been written, then the sequencer state should be
+// initialized to the position immediately following the max position
+maybe_seq_init(Seq, MaxPos + 1) :- nonempty_maxpos(Seq, MaxPos);
 
-seq(Server, Seq)@next :- seq(Server, Seq),
-                         notin req_next(Server, _, _);
+// if all objects are empty the sequencer state is initialized to zero.  here
+// we contribute 0 for all empty objects, and then next take the max over all
+// rows to select the correct result if any non-empty object exists.
+maybe_seq_init(Seq, 0) :- maxpos_replies(Seq, _, Count, _),
+                          notin missing_maxpos_replies(Seq),
+                          Count == 0;
 
-seq(Server, Seq + 1)@next :- seq(Server, Seq),
-                             req_next(Server, _, _);
+// final initialization value. TODO sticking seq_init into seq during the
+// current timestep makes C4 barf, which is unfortunate because id like to do
+// that to handle req_next requests in the same timestep as initializaiton.
+seq_init(Seq, max<InitPos>) :- maybe_seq_init(Seq, InitPos);
+seq(Seq, InitPos)@next  :- seq_init(Seq, InitPos);
+
+seq(Server, Seq)@next     :- seq(Server, Seq), notin req_next(Server, _, _);
+seq(Server, Seq + 1)@next :- seq(Server, Seq), req_next(Server, _, _);
 
 rep_next(Client, Server, Seq, Value)@async :- seq(Server, Seq),
                                               req_next(Server, Client, Value);
@@ -61,9 +75,11 @@ client_req("c0", "s0", "v0")@1;
 // nodes know about all the objects
 object("s0", "o0")@1;
 object("s0", "o1")@1;
-//object("s0", "o2")@1;
+object("s0", "o2")@1;
+//object("s0", "o3")@1;
 object(Node, Obj)@next :- object(Node, Obj);
 
-entries("o0", 0, "__INVAL__")@1;
-entries("o1", 0, "__INVAL__")@1;
-//entries("o2", 0, "__INVAL__")@1;
+entries("o0", 0, "a")@1;
+entries("o1", 1, "b")@1;
+entries("o2", 2, "c")@1;
+//entries("o3", 3, "d")@1;
