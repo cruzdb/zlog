@@ -51,6 +51,10 @@ maybe_seq_init(Seq, 0) :- maxpos_replies(Seq, _, Count, _),
 seq_init(Seq, max<InitPos>) :- maybe_seq_init(Seq, InitPos);
 seq(Seq, InitPos)@next  :- seq_init(Seq, InitPos);
 
+////////////////////////////////////////////////////////////////////////////////
+// Sequencer Next Op
+////////////////////////////////////////////////////////////////////////////////
+
 seq(Server, Seq)@next     :- seq(Server, Seq), notin req_next(Server, _, _);
 seq(Server, Seq + 1)@next :- seq(Server, Seq), req_next(Server, _, _);
 
