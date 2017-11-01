@@ -43,7 +43,7 @@ maybe_seq_init(Seq, 0) :- maxpos_replies(Seq, _, Count, _),
 // final initialization value. without the intermediate seq_init table c4
 // throws an assertion failure.
 seq_init(Seq, max<InitPos>) :- maybe_seq_init(Seq, InitPos);
-seq(Seq, InitPos) :- seq_init(Seq, InitPos), notin seq(Seq, _);
+seq(Seq, InitPos)@next :- seq_init(Seq, InitPos), notin seq(Seq, _);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sequencer Next Op
