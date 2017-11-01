@@ -14,7 +14,8 @@ rep_maxpos(Seq, Obj, Count, MaxPos)@async :- req_maxpos(Obj, Seq),
 ////////////////////////////////////////////////////////////////////////////////
 
 // provided the sequencer is not initialized, send a `req_maxpos` request to
-// every object. the replies will be used to calculate the initial soft state.
+// every object that we have not yet received replies. the replies will be
+// used to calculate the initial soft state counter of the sequencer
 req_maxpos(Obj, Seq)@async :- object(Seq, Obj),
                               notin maxpos_replies(Seq, Obj, _, _),
                               notin seq(Seq, _);
