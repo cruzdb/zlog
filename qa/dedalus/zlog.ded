@@ -45,11 +45,9 @@ maybe_seq_init(Seq, 0) :- maxpos_replies(Seq, _, Count, _),
                           notin missing_maxpos_replies(Seq),
                           Count == 0;
 
-// final initialization value. TODO sticking seq_init into seq during the
-// current timestep makes C4 barf, which is unfortunate because id like to do
-// that to handle req_next requests in the same timestep as initializaiton.
+// final initialization value.
 seq_init(Seq, max<InitPos>) :- maybe_seq_init(Seq, InitPos);
-seq(Seq, InitPos)@next  :- seq_init(Seq, InitPos);
+seq(Seq, InitPos) :- seq_init(Seq, InitPos);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sequencer Next Op
