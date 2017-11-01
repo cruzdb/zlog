@@ -61,11 +61,13 @@ rep_next(Client, Server, Seq, Value)@async :- seq(Server, Seq),
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// send requests to the sequencer until we get a reply
-need_req(Client, Server, Value) :- client_req(Client, Server, Value),
-                                   notin rep_next(Client, Server, _, Value);
-req_next(Server, Client, Value)@async :- need_req(Client, Server, Value);
-client_req(Client, Server, Value)@next :- need_req(Client, Server, Value);
+next_replies(Client, Server, Seq, Value) :- rep_next(Client, Server, Seq, Value);
+next_replies(Client, Server, Seq, Value)@next :- next_replies(Client, Server, Seq, Value);
+
+req_next(Server, Client, Value)@async :- client_req(Client, Server, Value),
+                                         notin next_replies(Client, Server, _, Value);
+
+client_req(Client, Server, Value)@next :- client_req(Client, Server, Value);
 
 ////////////////////////////////////////////////////////////////////////////////
 
