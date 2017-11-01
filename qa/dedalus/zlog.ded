@@ -18,36 +18,29 @@ rep_maxpos(Seq, Obj, Count, MaxPos)@async :- req_maxpos(Obj, Seq),
 req_maxpos(Obj, Seq)@async :- object(Seq, Obj), notin seq(Seq, _);
 
 // persist each `rep_maxpos` reply until the sequencer is initialized
-maxpos_replies(Seq, Obj, Count, MaxPos)      :- rep_maxpos(Seq, Obj, Count, MaxPos),
-                                                notin seq(Seq, _);
+maxpos_replies(Seq, Obj, Count, MaxPos)      :- rep_maxpos(Seq, Obj, Count, MaxPos);
 maxpos_replies(Seq, Obj, Count, MaxPos)@next :- maxpos_replies(Seq, Obj, Count, MaxPos),
                                                 notin seq(Seq, _);
 
-// TODO: predicate on non-initialization to empty table after init?
 // sequencers that are missing maxpos replies from all objects
-missing_maxpos_replies(Seq) :- object(Seq, Obj),
-                               notin maxpos_replies(Seq, Obj, _, _);
+missing_maxpos_replies(Seq) :- object(Seq, Obj), notin maxpos_replies(Seq, Obj, _, _);
 
-// calculate the maximum position across non-empty objects provided that
-// replies have been received from all objects
-nonempty_maxpos(Seq, max<MaxPos>) :- maxpos_replies(Seq, _, Count, MaxPos),
-                                     notin missing_maxpos_replies(Seq),
-                                     Count > 0;
+// non-empty objects contribute candidates maxpos + 1
+maybe_seq_init(Seq, MaxPos + 1) :- maxpos_replies(Seq, _, Count, MaxPos),
+                                   notin missing_maxpos_replies(Seq),
+                                   Count > 0;
 
-// if a position has been written, then the sequencer state should be
-// initialized to the position immediately following the max position
-maybe_seq_init(Seq, MaxPos + 1) :- nonempty_maxpos(Seq, MaxPos);
-
-// if all objects are empty the sequencer state is initialized to zero.  here
-// we contribute 0 for all empty objects, and then next take the max over all
-// rows to select the correct result if any non-empty object exists.
+// empty objects contribute candidate maxpos of 0. note that 0 is also a valid
+// maxpos resposne from a non-empty object, but it would be transformed into
+// the value 1 by the previosu rule.
 maybe_seq_init(Seq, 0) :- maxpos_replies(Seq, _, Count, _),
                           notin missing_maxpos_replies(Seq),
                           Count == 0;
 
-// final initialization value.
+// final initialization value. without the intermediate seq_init table c4
+// throws an assertion failure.
 seq_init(Seq, max<InitPos>) :- maybe_seq_init(Seq, InitPos);
-seq(Seq, InitPos) :- seq_init(Seq, InitPos);
+seq(Seq, InitPos) :- seq_init(Seq, InitPos), notin seq(Seq, _);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sequencer Next Op
