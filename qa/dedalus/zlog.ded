@@ -65,6 +65,10 @@ req_next(Server, Client, Value)@async :- client_req(Client, Server, Value),
 
 client_req(Client, Server, Value)@next :- client_req(Client, Server, Value);
 
+//mod("s0", A, N, A - NQ) :- a(Node, A), n(Node, N), nq(Node, A, N, NQ);
+//nq(Node, A, N, N * Q)   :- a(Node, A), n(Node, N), q(Node, A, N, Q);
+//q(Node, A, N, A / N)    :- a(Node, A), n(Node, N);
+
 ////////////////////////////////////////////////////////////////////////////////
 
 pre(S, Q) :- seq(S, Q);
