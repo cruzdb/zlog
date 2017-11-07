@@ -52,8 +52,24 @@ seq(Seq, InitPos)@next :- seq_init(Seq, InitPos), notin seq(Seq, _);
 seq(Server, Seq)@next     :- seq(Server, Seq), notin req_next(Server, _, _);
 seq(Server, Seq + 1)@next :- seq(Server, Seq), req_next(Server, _, _);
 
+// reply to the request with the minimum value. make sure to arrange for
+// all values to be unique
+req_next_min_val(Server, min<Value>) :- req_next(Server, _, Value);
 rep_next(Client, Server, Seq, Value)@async :- seq(Server, Seq),
-                                              req_next(Server, Client, Value);
+                                              req_next(Server, Client, Value),
+                                              req_next_min_val(Server, Value);
+
+// trying to do all the assignments in the current timestep
+//
+//req_next_cnt(Server, count<Value>) :- req_next(Server, _, Value);
+//seq(Server, Seq + Cnt)@next :- seq(Server, Seq), req_next_cnt(Server, Cnt);
+// assign the request with the minimum value the current sequence number
+//req_next_seq(Server, min<Value>, Seq) :- req_next(Server, _, Value),
+//                                         seq(Server, Seq);
+//req_next_seq_max(Server, max<Seq>) :- req_next_seq(Server, _, Seq);
+//req_next_seq(Server, min<Value>, Seq + 1) :- req_next(Server, _, Value),
+//                                             req_next_seq_max(Server, Seq),
+//                                             notin req_next_seq(Server, Value, _);
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +90,8 @@ client_req(Client, Server, Value)@next :- client_req(Client, Server, Value);
 pre(S, Q) :- seq(S, Q);
 post(S, Q) :- pre(S, Q);
 
-client_req("c0", "s0", "v0")@1;
+// use unique numeric values
+client_req("c0", "s0", 1)@1;
 
 // nodes know about all the objects
 object("s0", "o0")@1;
