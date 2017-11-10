@@ -62,7 +62,7 @@ seq(Server, Seq + 1)@next :- seq(Server, Seq), req_next(Server, _, _);
 // reply to the request with the minimum value. requests must be constructed by
 // clients in the model such that values are unique so that there is exactly one
 // tuple defined by the min value in any given batch of requests.
-req_next_min_val(Server, min<Value>) :- req_next(Server, _, Value);
+req_next_min_val(Server, min<Value>) :- req_next(Server, _, Value), seq(Server, _);
 req_next(Server, Client, Value)@next :- req_next(Server, Client, Value),
                                         notin req_next_min_val(Server, Value);
 rep_next(Client, Server, Seq, Value)@async :- seq(Server, Seq),
