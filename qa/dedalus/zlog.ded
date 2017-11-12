@@ -16,6 +16,25 @@ entries_summary(Obj, count<Pos>, max<Pos>) :- entries(Obj, Pos, _);
 rep_maxpos(Seq, Obj, Count, MaxPos)@async :- req_maxpos(Obj, Seq),
                                              entries_summary(Obj, Count, MaxPos);
 
+// remove write requests with positions that have already been written
+req_write_ok(O, C, P, V) :- req_write(O, C, P, V),
+                            notin entries(O, P, _);
+req_write_ok(O, C, P, V)@next :- req_write_ok(O, C, P, V),
+                                 notin req_write_choice(O, C, P, V);
+
+// we handle only one write per timestep. we need to winnow down the set.  find
+// the req with minimum value. by construction clients deal in unique values, so
+// the result will correspond to a single client.
+req_write_minval(O, min<V>) :- req_write_ok(O, _, _, V);
+
+// its possible that there are multiple requests for the same value pending
+// under different positions. take the minimum.
+req_write_choice(O, C, min<P>, V) :- req_write_ok(O, C, P, V),
+                                     req_write_minval(O, V);
+
+entries(Obj, Pos, Value)@next :- req_write_choice(Obj, _, Pos, Value);
+ack_write(C, O, P, V)@async :- req_write_choice(O, C, P, V);
+
 ////////////////////////////////////////////////////////////////////////////////
 // Sequencer Initialization
 ////////////////////////////////////////////////////////////////////////////////
@@ -117,7 +136,7 @@ next_reqs(C, S, V) :- missing_pos(C, S, V),
 // start a timer for each request
 // TODO: notice that we identify everything as S,V pairs, except timeout. That's
 // probably wrong in the face of multiple sequencers.
-timer_svc(Client, Value, 2) :- next_reqs(Client, _, Value);
+timer_svc(Client, Value, 5) :- next_reqs(Client, _, Value);
 
 // add requests to the pending set
 pending_pos(C, S, V)@next :- next_reqs(C, S, V);
@@ -133,6 +152,27 @@ client_req(Client, Server, Value)@next :- client_req(Client, Server, Value);
 //nq(Node, A, N, N * Q)   :- a(Node, A), n(Node, N), q(Node, A, N, Q);
 //q(Node, A, N, A / N)    :- a(Node, A), n(Node, N);
 
+// which client requests have not successfully written to an object
+write_acks(C, O, P, V)      :- ack_write(C, O, P, V);
+write_acks(C, O, P, V)@next :- write_acks(C, O, P, V);
+missing_write_acks(C, V) :- client_req(C, _, V), notin write_acks(C, _, _, V);
+
+// for each write that needs to be completed, do we have a position assigned?
+write(C, V, min<P>) :- missing_write_acks(C, V), next_replies(C, _, P, V);
+
+// now compute P mod Nobjs == Oid
+num_objects(C, count<O>) :- client_object(C, _, O);
+an(C, P, O)              :- write(C, _, P), num_objects(C, O);
+q(Node, A, N, A / N)     :- an(Node, A, N);
+nq(Node, A, N, N * Q)    :- an(Node, A, N), q(Node, A, N, Q);
+mod(Node, A, N, A - NQ)  :- an(Node, A, N), nq(Node, A, N, NQ);
+
+// map Oid for write request to object process name. holy shit
+req_write(O, C, P, V)@async :- write(C, V, P),
+                               num_objects(C, Nobjs),
+                               mod(C, P, Nobjs, Oid),
+                               client_object(C, O, Oid);
+
 ////////////////////////////////////////////////////////////////////////////////
 
 pre(S, Q) :- seq(S, Q);
@@ -140,15 +180,23 @@ post(S, Q) :- pre(S, Q);
 
 // use unique numeric values
 client_req("c0", "s0", 1)@1;
+client_req("c1", "s0", 2)@1;
+client_req("c1", "s0", 3)@1;
 
-// nodes know about all the objects
 object("s0", "o0")@1;
 object("s0", "o1")@1;
 object("s0", "o2")@1;
-//object("s0", "o3")@1;
-object(Node, Obj)@next :- object(Node, Obj);
 
-entries("o0", 0, "a")@1;
-entries("o1", 1, "b")@1;
-entries("o2", 2, "c")@1;
-//entries("o3", 3, "d")@1;
+client_object("c0", "o0", 0)@1;
+client_object("c0", "o1", 1)@1;
+client_object("c0", "o2", 2)@1;
+client_object("c1", "o0", 0)@1;
+client_object("c1", "o1", 1)@1;
+client_object("c1", "o2", 2)@1;
+
+object(Node, Obj)@next :- object(Node, Obj);
+client_object(Node, Obj, Oid)@next :- client_object(Node, Obj, Oid);
+
+entries("o0", 0, 0)@1;
+entries("o1", 1, 1)@1;
+entries("o2", 2, 2)@1;
