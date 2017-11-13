@@ -1,0 +1,220 @@
+////////////////////////////////////////////////////////////////////////////////
+// timer helper. there are multiple versions of the helper to deal with datatype
+// mismatches across use cases.
+////////////////////////////////////////////////////////////////////////////////
+
+seq_maxpos_timer_state(H, I, T-1)@next :- seq_maxpos_timer_svc(H, I, T);
+seq_maxpos_timer_state(H, I, T-1)@next :- seq_maxpos_timer_state(H, I, T),
+                                          notin seq_maxpos_timer_cancel(H, I),
+                                          T > 1;
+seq_maxpos_timeout(H, I) :- seq_maxpos_timer_state(H, I, 1);
+
+client_nextpos_timer_state(H, I, T-1)@next :- client_nextpos_timer_svc(H, I, T);
+client_nextpos_timer_state(H, I, T-1)@next :- client_nextpos_timer_state(H, I, T),
+                                              notin client_nextpos_timer_cancel(H, I),
+                                              T > 1;
+client_nextpos_timeout(H, I) :- client_nextpos_timer_state(H, I, 1);
+
+client_write_timer_state(H, I, T-1)@next :- client_write_timer_svc(H, I, T);
+client_write_timer_state(H, I, T-1)@next :- client_write_timer_state(H, I, T),
+                                            notin client_write_timer_cancel(H, I),
+                                            T > 1;
+client_write_timeout(H, I) :- client_write_timer_state(H, I, 1);
+
+////////////////////////////////////////////////////////////////////////////////
+// object max pos request
+////////////////////////////////////////////////////////////////////////////////
+
+obj_stats(O, count<P>, max<P>) :- obj_entry(O, P, _);
+maxpos_reply(From, O, C, P)@async :- maxpos_request(O, From), obj_stats(O, C, P);
+
+////////////////////////////////////////////////////////////////////////////////
+// object write request
+////////////////////////////////////////////////////////////////////////////////
+
+// subset of write requests whose positions have not been written
+obj_wr_req_ok(O, C, P, V)      :- write_request(O, C, P, V), notin obj_entry(O, P, _);
+
+// persist requests except for the request we'll respond to in this time step
+obj_wr_req_ok(O, C, P, V)@next :- obj_wr_req_ok(O, C, P, V),
+                                  notin obj_wr_req_choice(O, C, P, V);
+
+// we handle only one write per timestep. we need to winnow down the set.  find
+// the req with minimum value. by construction clients deal in unique values, so
+// the result will correspond to a single client.
+obj_wr_req_minval(O, min<V>) :- obj_wr_req_ok(O, _, _, V);
+
+// its possible that there are multiple requests for the same value pending
+// under different positions. take the minimum.
+obj_wr_req_choice(O, C, min<P>, V) :- obj_wr_req_ok(O, C, P, V),
+                                      obj_wr_req_minval(O, V);
+
+// write entry and ack client
+obj_entry(O, P, V)@next :- obj_wr_req_choice(O, _, P, V);
+write_reply(C, O, P, V)@async :- obj_wr_req_choice(O, C, P, V);
+
+////////////////////////////////////////////////////////////////////////////////
+// sequencer initialization
+////////////////////////////////////////////////////////////////////////////////
+
+// PHASE 1.
+
+// collect maxpos replies
+seq_maxpos_replies(S, O, C, P)@next :- maxpos_reply(S, O, C, P);
+seq_maxpos_replies(S, O, C, P)@next :- seq_maxpos_replies(S, O, C, P);
+
+// objects from which maxpos replies are missing
+seq_maxpos_replies_missing(S, O)       :- objects(S, O),
+                                          notin seq_maxpos_replies(S, O, _, _);
+
+// inflight maxpos reqs, still missing. timeout removes from this set
+seq_maxpos_requests_pending(S, O)@next :- seq_maxpos_requests_pending(S, O),
+                                          seq_maxpos_replies_missing(S, O),
+                                          notin seq_maxpos_timeout(S, O);
+
+// maxpos requests that will be sent out. still missing, not inflight
+seq_maxpos_requests_next(S, O)         :- seq_maxpos_replies_missing(S, O),
+                                          notin seq_maxpos_requests_pending(S, O);
+
+// dispatch maxpos reqs, update inflight reqs and timers
+seq_maxpos_timer_svc(S, O, 5)          :- seq_maxpos_requests_next(S, O);
+seq_maxpos_timer_cancel(S, O)          :- maxpos_reply(S, O, _, _);
+seq_maxpos_requests_pending(S, O)@next :- seq_maxpos_requests_next(S, O);
+maxpos_request(O, S)@async             :- seq_maxpos_requests_next(S, O);
+
+// PHASE 2.
+
+// provided that the sequencer is not intialized and all maxpos replies have
+// been received, reduce them down to the sequencer initialization value.
+seq_init_maxpos(S, C, P) :- seq_maxpos_replies(S, _, C, P),
+                            notin seq_maxpos_replies_missing(S, _),
+                            notin seq_counter(S, _);
+seq_init_domain(S, P+1)  :- seq_init_maxpos(S, C, P), C > 0;
+seq_init_domain(S, 0)    :- seq_init_maxpos(S, C, _), C == 0;
+seq_init(S, max<P>)      :- seq_init_domain(S, P);
+seq_counter(S, P)@next   :- seq_init(S, P);
+
+////////////////////////////////////////////////////////////////////////////////
+// sequencer nextpos request
+////////////////////////////////////////////////////////////////////////////////
+
+// persist the counter, and increment when a request is pending
+seq_counter(S, P)@next   :- seq_counter(S, P), notin nextpos_request(S, _, _);
+seq_counter(S, P+1)@next :- seq_counter(S, P), nextpos_request(S, _, _);
+
+// reply to exactly one nextpos request, chosen by the minimum value of
+// requests. note that by construction each client deals in unique values. this
+// is important since below we assume the minimum value gives us a unique
+// request. if a client had sent duplicate requests for the same value, it will
+// have to deal with that itself.
+seq_nextpos_req_minval(S, min<V>)  :- nextpos_request(S, _, V), seq_counter(S, _);
+nextpos_request(S, C, V)@next      :- nextpos_request(S, C, V),
+                                      notin seq_nextpos_req_minval(S, V);
+nextpos_reply(C, S, V, P)@async    :- seq_counter(S, P),
+                                      nextpos_request(S, C, V),
+                                      seq_nextpos_req_minval(S, V);
+
+////////////////////////////////////////////////////////////////////////////////
+// client appending
+////////////////////////////////////////////////////////////////////////////////
+
+// PHASE 1. get a log position from sequencer
+
+// collect nextpos replies from sequencer
+client_nextpos_replies(C, S, V, P)@next :- nextpos_reply(C, S, V, P);
+client_nextpos_replies(C, S, V, P)@next :- client_nextpos_replies(C, S, V, P);
+
+// client appends that have not been assigned a position
+client_pos_missing(C, V)       :- append(C, V),
+                                  notin client_nextpos_replies(C, _, V, _);
+
+// inflight nextpos requests for appends missing a position
+client_pos_pending(C, V)@next  :- client_pos_pending(C, V),
+                                  client_pos_missing(C, V),
+                                  notin client_nextpos_timeout(C, V);
+
+// set of nextpos requests to send out this timestep
+client_nextpos_reqs(C, V)      :- client_pos_missing(C, V),
+                                  notin client_pos_pending(C, V);
+
+// dispatch nextpos requests, update pending set and timers
+client_nextpos_timer_svc(C, V, 10) :- client_nextpos_reqs(C, V);
+client_nextpos_timer_cancel(C, V) :- nextpos_reply(C, _, V, _);
+client_pos_pending(C, V)@next     :- client_nextpos_reqs(C, V);
+nextpos_request(S, C, V)@async    :- client_nextpos_reqs(C, V),
+                                     current_seq(C, S);
+
+// PHASE 2. write entry into object to which the position maps
+
+// collect acks from writing to an object
+client_write_replies(C, O, P, V)@next :- write_reply(C, O, P, V);
+client_write_replies(C, O, P, V)@next :- client_write_replies(C, O, P, V);
+
+// client appends that have not yet been written to an object
+client_missing_write_replies(C, V) :- append(C, V),
+                                      notin client_write_replies(C, _, _, V);
+
+// appends that haven't succeeded, that have been assigned a position. note that
+// here we break ties by choosing the max/latest position from the sequencer.
+// the current implementation doesn't have clients retry with the sequencer.
+client_missing_write_ready(C, V, max<P>) :- client_missing_write_replies(C, V),
+                                            client_nextpos_replies(C, _, V, P);
+
+client_write_pending(C, V, P)@next :- client_write_pending(C, V, P),
+                                      client_missing_write_ready(C, V, P),
+                                      notin client_write_timeout(C, V);
+
+client_write_reqs(C, V, P) :- client_missing_write_ready(C, V, P),
+                              notin client_write_pending(C, V, P);
+
+client_write_timer_svc(C, V, 5)    :- client_write_reqs(C, V, _);
+client_write_timer_cancel(C, V)    :- write_reply(C, _, _, V);
+client_write_pending(C, V, P)@next :- client_write_reqs(C, V, P);
+
+// calc pos % num_objs for round-robin placement
+client_num_objects(C, count<O>) :- client_objects(C, _, O);
+client_an(C, P, No)             :- client_write_reqs(C, _, P),
+                                   client_num_objects(C, No);
+client_q(Node, A, N, A / N)     :- client_an(Node, A, N);
+client_nq(Node, A, N, N * Q)    :- client_an(Node, A, N), client_q(Node, A, N, Q);
+client_mod(Node, A, N, A - NQ)  :- client_an(Node, A, N), client_nq(Node, A, N, NQ);
+
+write_request(O, C, P, V)@async :- client_write_reqs(C, V, P),
+                                   client_num_objects(C, Nobjs),
+                                   client_mod(C, P, Nobjs, Oid),
+                                   client_objects(C, O, Oid);
+
+////////////////////////////////////////////////////////////////////////////////
+
+append("c0", 1)@1;
+append("c0", 3)@1;
+append("c1", 2)@1;
+append(C, V)@next :- append(C, V);
+
+current_seq("c0", "seq0")@1;
+current_seq("c1", "seq0")@1;
+current_seq(C, S)@next :- current_seq(C, S);
+
+// initial values in objects
+obj_entry("obj0", 3, 0)@1;
+obj_entry("obj1", 1, 1)@1;
+obj_entry("obj2", 2, 2)@1;
+obj_entry(O, P, V)@next :- obj_entry(O, P, V);
+
+objects("seq0", "obj0")@1;
+objects("seq0", "obj1")@1;
+objects("seq0", "obj2")@1;
+objects(N, O)@next :- objects(N, O);
+
+client_objects("c0", "obj0", 0)@1;
+client_objects("c0", "obj1", 1)@1;
+client_objects("c0", "obj2", 2)@1;
+
+client_objects("c1", "obj0", 0)@1;
+client_objects("c1", "obj1", 1)@1;
+client_objects("c1", "obj2", 2)@1;
+client_objects(N, O, Oid)@next :- client_objects(N, O, Oid);
+
+
+pre(O) :- obj_entry(O, _, _);
+post(O) :- pre(O);
