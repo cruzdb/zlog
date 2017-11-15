@@ -2,68 +2,131 @@
 #define NUM_OBJECTS 2
 
 mtype {
-  maxpos
+  ok,
+  write
 };
 
-chan object_request[NUM_OBJECTS] = [0] of { mtype, chan };
+// channel for requesting maximum position from object
+chan maxpos_req[NUM_OBJECTS] = [0] of { chan };
 
-// entries:
-//   0: unwritten position
-//
-proctype Object(chan request) {
-  byte entries[MAX_ENTRIES];
+// channel for object entry operations (read, write, etc...)
+chan entry_req[NUM_OBJECTS] = [0] of { mtype, chan, byte };
+
+// channel for sequencer next position requests
+chan nextpos_req = [0] of { chan };
+
+#define p2o(pos) (pos % NUM_OBJECTS)
+
+proctype Object(byte id) {
   chan reply;
 
-  entries[2] = 1;
+  // log entries managed by this object
+  byte entries[MAX_ENTRIES];
+
+  // handling maxpos requests
+  byte i, max;
+  bool bare;
+
+  // handling write requests
+  byte pos;
 
 end:
   do
-  // handle maxpos request. the (empty, maxpos) tuple is returned. the value of
-  // maxpos is undefined if the object is empty.
-  :: request ? maxpos(reply) ->
-    int i, max
-    bool bare = true
-    for (i in entries) {
-      if
-      :: entries[i] > 0 ->
-        bare = false
+  // handle maxpos request. if bare, pos is undefined
+  :: maxpos_req[id] ? reply ->
+    d_step {
+      bare = true
+      for (i in entries) {
         if
-        :: i > max -> max = i
+        :: entries[i] > 0 ->
+          bare = false
+          if
+          :: i > max -> max = i
+          :: else -> skip
+          fi
         :: else -> skip
         fi
-      :: else -> skip
-      fi
+      }
     }
     reply ! bare, max
+
+  // handle write request
+  :: entry_req[id] ? write(reply, pos) ->
+    if
+    :: entries[pos] > 0 ->
+      assert(false)
+    :: else ->
+      entries[pos] = 1
+      reply ! ok
+    fi
   od;
 }
 
 proctype Sequencer() {
-  bool bare;
-  int i, max;
-  int seq;
+  chan maxpos_reply = [NUM_OBJECTS] of { bool, int };
+  chan nextpos_reply;
 
-  // sequencer initialization. send a maxpos request to each object.
-  chan seq_reply = [0] of { bool, int };
-  for (i in object_request) {
-    object_request[i] ! maxpos(seq_reply)
-    seq_reply ? bare, max
-    if
-    :: bare -> skip
-    :: else ->
-      if
-      :: (max + 1) > seq -> seq = max + 1
-      :: else -> skip
-      fi
-    fi
+  // log tail position
+  byte seq;
+
+  // initialization
+  byte i, max;
+  bool bare;
+
+  // initialization. phase 1: send maxpos requests
+  for (i in maxpos_req) {
+    maxpos_req[i] ! maxpos_reply
   }
-  printf("COUNT %d\n", seq)
+
+  // initialization. phase 2: reduce replies
+  seq = 0;
+  for (i in maxpos_req) {
+    maxpos_reply ? bare, max;
+    if
+    :: !bare && (max + 1) > seq
+      -> seq = max + 1
+    :: else -> skip
+    fi;
+  }
+
+end:
+  do
+  // handle nextpos request
+  :: nextpos_req ? nextpos_reply ->
+    nextpos_reply ! seq
+    seq++
+  od;
+}
+
+proctype Client() {
+  byte pos
+  byte oid
+  chan reply = [0] of { byte }
+  chan entry_reply = [0] of { mtype };
+  mtype status;
+
+  nextpos_req ! reply
+  reply ? pos
+  oid = p2o(pos)
+  entry_req[oid] ! write(entry_reply, pos)
+  entry_reply ? status;
+  printf("write %d -> %e\n", pos, status)
+
+  nextpos_req ! reply
+  reply ? pos
+  oid = p2o(pos)
+  entry_req[oid] ! write(entry_reply, pos)
+  entry_reply ? status;
+  printf("write %d -> %e\n", pos, status)
 }
 
 init {
+  byte i;
   atomic {
-    run Object(object_request[0]);
-    run Object(object_request[1]);
+    for (i : 0 .. (NUM_OBJECTS-1)) {
+      run Object(i)
+    }
     run Sequencer();
+    run Client();
   }
 }
