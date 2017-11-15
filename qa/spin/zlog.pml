@@ -72,27 +72,31 @@ proctype Sequencer() {
   // initialization
   byte i, max;
   bool bare;
+  bool initok = false
 
-  // initialization. phase 1: send maxpos requests
-  for (i in maxpos_req) {
-    maxpos_req[i] ! maxpos_reply
-  }
-
-  // initialization. phase 2: reduce replies
-  seq = 0;
-  for (i in maxpos_req) {
-    maxpos_reply ? bare, max;
-    if
-    :: !bare && (max + 1) > seq
-      -> seq = max + 1
-    :: else -> skip
-    fi;
-  }
-
-end:
   do
+  :: true ->
+    // initialization. phase 1: send maxpos requests
+    for (i in maxpos_req) {
+      maxpos_req[i] ! maxpos_reply
+    }
+
+    // initialization. phase 2: reduce replies
+    seq = 0;
+    for (i in maxpos_req) {
+      maxpos_reply ? bare, max;
+      if
+      :: !bare && (max + 1) > seq
+        -> seq = max + 1
+      :: else -> skip
+      fi;
+    }
+    initok = true
+
   // handle nextpos request
-  :: nextpos_req ? nextpos_reply ->
+  :: initok ->
+end:
+    nextpos_req ? nextpos_reply
     nextpos_reply ! seq
     seq++
   od;
