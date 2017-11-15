@@ -112,16 +112,16 @@ proctype Client() {
   nextpos_req ! reply
   reply ? pos
   oid = p2o(pos)
+  printf("writing at pos %d\n", pos)
   entry_req[oid] ! write(entry_reply, pos)
   entry_reply ? status;
-  printf("write %d -> %e\n", pos, status)
 
   nextpos_req ! reply
   reply ? pos
   oid = p2o(pos)
+  printf("writing at pos %d\n", pos)
   entry_req[oid] ! write(entry_reply, pos)
   entry_reply ? status;
-  printf("write %d -> %e\n", pos, status)
 }
 
 init {
