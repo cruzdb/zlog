@@ -180,6 +180,20 @@ write0:
   :: else -> skip
   fi
   assert(status == ok)
+
+write1:
+  nextpos_req ! reply
+  reply ? pos
+  oid = p2o(pos)
+  entry_req[oid] ! write(entry_reply, epoch, pos)
+  entry_reply ? status;
+  if
+  :: status == stale_epoch ->
+    epoch = global_epoch
+    goto write1
+  :: else -> skip
+  fi
+  assert(status == ok)
 }
 
 init {
