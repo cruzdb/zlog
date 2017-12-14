@@ -1,2 +1,6 @@
-native/com_cruzdb_*.h
+native/org_*.h
 libzlogjni.so*
+javadoc/
+test-libs/
+zlog-test.jar
+zlog.jar

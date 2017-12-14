@@ -62,28 +62,3 @@ Depends: libzlog-backend-lmdb1 (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: zlog dev is log dev.
-
-Package: libcruzdb1
-Architecture: linux-any
-Section: libs
-Depends: libzlog1 (= ${binary:Version}),
-         ${misc:Depends},
-         ${shlibs:Depends}
-Description: zlog is log.
-
-Package: libcruzdb1-dbg
-Architecture: linux-any
-Section: debug
-Priority: extra
-Depends: libcruzdb1 (= ${binary:Version}),
-         ${misc:Depends}
-Description: zlog debug is log debug.
-
-Package: libcruzdb-dev
-Architecture: linux-any
-Section: libdevel
-Depends: libzlog-dev (= ${binary:Version}),
-         libcruzdb1 (= ${binary:Version}),
-         ${misc:Depends},
-         ${shlibs:Depends}
-Description: zlog dev is log dev.

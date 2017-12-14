@@ -1,5 +1,6 @@
-package com.cruzdb;
+package org.cruzdb.zlog;
 
+import java.util.Map;
 import java.io.IOException;
 
 /**
@@ -13,9 +14,6 @@ public class Log extends ZObject {
     Log.loadLibrary();
   }
 
-  /**
-   *
-   */
   public static synchronized void loadLibrary() {
     String tmpDir = System.getenv("ZLOG_SHAREDLIB_DIR");
     try {
@@ -38,42 +36,25 @@ public class Log extends ZObject {
   }
 
   /**
-   * @param pool the RADOS pool.
-   * @param seqr_server sequencer host name.
-   * @param seqr_port sequencer port number.
-   * @param log_name name of the log.
+   * @param scheme name of backend
+   * @param options backend options
+   * @param name name of the log.
    * @return the log instance.
-   * @throws com.cruzdb.LogException if an error occurs in the native library.
+   * @throws org.cruzdb.zlog.LogException if an error occurs in the native library.
    */
-  public static Log openCeph(final String pool, final String seqr_server,
-      int seqr_port, String log_name) throws LogException {
+  public static Log open(final String scheme, final Map<String, String> options,
+      final String name) throws LogException {
+    int count = 0;
+    String[] keys = new String[options.size()];
+    String[] vals = new String[options.size()];
+    for (Map.Entry<String, String> entry : options.entrySet()) {
+      keys[count] = entry.getKey();
+      vals[count] = entry.getValue();
+    }
     Log log = new Log();
-    log.openNative(pool, seqr_server, seqr_port, log_name);
+    log.openNative(scheme, keys, vals, name);
     return log;
   }
-
-  /**
-   * @param logName name of the log.
-   * @return the log instance.
-   * @throws com.cruzdb.LogException if an error occurs in the native library.
-   */
-  public static Log openLMDB(String logName) throws LogException {
-    return openLMDB("db", logName);
-  }
-
-  /**
-   *
-   * @param dbPath path to LMDB database.
-   * @param logName name of the log.
-   * @return the log instance.
-   * @throws com.cruzdb.LogException if an error occurs in the native library.
-   */
-  public static Log openLMDB(String dbPath, String logName) throws LogException {
-    Log log = new Log();
-    log.openLMDBNative(dbPath, logName);
-    return log;
-  }
-
 
   /**
    * Append "data" to the tail of the log.
@@ -143,9 +124,8 @@ public class Log extends ZObject {
   }
 
   private native void disposeInternal(long handle);
-  private native void openNative(String pool, String seqr_server,
-      int seqr_port, String log_name) throws LogException;
-  private native void openLMDBNative(String dbPath, String logName) throws LogException;
+  private native void openNative(String scheme, String[] keys,
+      String[] vals, String name) throws LogException;
   private native long append(long handle, byte[] data, int dataLen) throws LogException;
   private native byte[] read(long handle, long position) throws LogException;
   private native void fill(long handle, long position) throws LogException;

@@ -1,4 +1,4 @@
-package com.cruzdb;
+package org.cruzdb.zlog;
 
 import org.junit.*;
 import org.junit.runners.Suite;

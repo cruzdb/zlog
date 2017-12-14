@@ -93,8 +93,21 @@ int LMDBBackend::CreateLog(const std::string& name,
 int LMDBBackend::OpenLog(const std::string& name,
     std::string& hoid, std::string& prefix)
 {
+  auto txn = NewTransaction();
+
+  MDB_val val;
+  std::string oid_key = ObjectKey(name);
+  int ret = txn.Get(oid_key, val);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  txn.Abort();
+
   hoid = name;
   prefix = name;
+
   return 0;
 }
 

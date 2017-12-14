@@ -2,10 +2,4 @@
 	path = src/googletest
 	url = git://github.com/cruzdb/googletest
 	branch = cruzdb
-    ignore = dirty
-[submodule "src/spdlog"]
-	path = src/spdlog
-	url = https://github.com/gabime/spdlog
-[submodule "src/rapidjson"]
-	path = src/rapidjson
-	url = https://github.com/miloyip/rapidjson
+	ignore = dirty

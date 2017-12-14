@@ -1,4 +1,4 @@
-package com.cruzdb;
+package org.cruzdb.zlog;
 
 public abstract class ZObject {
   protected ZObject() {
@@ -31,6 +31,10 @@ public abstract class ZObject {
 
   protected boolean isInitialized() {
     return nativeHandle_ != 0;
+  }
+
+  public long handle() {
+    return nativeHandle_;
   }
 
   @Override

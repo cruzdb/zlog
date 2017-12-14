@@ -48,19 +48,12 @@ rm -rf %{buildroot}
 %files
 
 %{_bindir}/zlog_test_backend_lmdb
-%{_bindir}/zlog_test_kvstore
 %{_includedir}/zlog/backend.h
 %{_includedir}/zlog/backend/lmdb.h
 %{_includedir}/zlog/capi.h
-%{_includedir}/zlog/db.h
-%{_includedir}/zlog/iterator.h
 %{_includedir}/zlog/log.h
 %{_includedir}/zlog/slice.h
 %{_includedir}/zlog/stream.h
-%{_includedir}/zlog/transaction.h
-%{_libdir}/libcruzdb.so
-%{_libdir}/libcruzdb.so.1
-%{_libdir}/libcruzdb.so.1.0.0
 %{_libdir}/libzlog.so
 %{_libdir}/libzlog.so.1
 %{_libdir}/libzlog.so.1.0.0

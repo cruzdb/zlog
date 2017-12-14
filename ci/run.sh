@@ -41,7 +41,6 @@ PATH=${INSTALL_DIR}/bin:$PATH
 
 # list of tests to run
 tests="zlog_test_backend_lmdb"
-tests="${tests} zlog_test_kvstore"
 
 # run ceph backend tests
 export CEPH_CONF=/tmp/micro-osd/ceph.conf

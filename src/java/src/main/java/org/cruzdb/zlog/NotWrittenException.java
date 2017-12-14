@@ -1,4 +1,4 @@
-package com.cruzdb;
+package org.cruzdb.zlog;
 
 /**
  * Signals that a log position has not been written.

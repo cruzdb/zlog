@@ -15,8 +15,6 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src/include)
-include_directories(${CMAKE_SOURCE_DIR}/src/spdlog/include)
-include_directories(${CMAKE_SOURCE_DIR}/src/rapidjson/include)
 
 ################################################################################
 
@@ -26,9 +24,7 @@ add_subdirectory(proto)
 add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(storage)
-add_subdirectory(kvstore)
 add_subdirectory(zstate)
-add_subdirectory(tools)
 add_subdirectory(bench)
 
 option(WITH_JNI "build with JNI" OFF)
