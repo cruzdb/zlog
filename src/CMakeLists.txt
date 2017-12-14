@@ -15,8 +15,6 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src/include)
-include_directories(${CMAKE_SOURCE_DIR}/src/spdlog/include)
-include_directories(${CMAKE_SOURCE_DIR}/src/rapidjson/include)
 
 ################################################################################
 

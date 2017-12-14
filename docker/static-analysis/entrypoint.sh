@@ -45,11 +45,9 @@ function run_cppcheck() {
     -I${bdir}/src/java/native \
     -I/src/zlog/src \
     -I/src/zlog/src/include \
-    -I/src/zlog/src/spdlog/include \
     -I/src/zlog/src/rapidjson/include \
     -I/src/zlog/src/googletest/googletest/include \
     -i${bdir} \
-    -i/src/zlog/src/spdlog \
     -i/src/zlog/src/rapidjson \
     -i/src/zlog/src/googletest \
     /src/zlog 2>&1 | tee /results/cppcheck.txt
