@@ -1,4 +1,0 @@
-usr/include/zlog/db.h
-usr/include/zlog/iterator.h
-usr/include/zlog/transaction.h
-usr/lib/libcruzdb.so

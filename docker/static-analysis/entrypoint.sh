@@ -52,7 +52,6 @@ function run_cppcheck() {
     -i/src/zlog/src/spdlog \
     -i/src/zlog/src/rapidjson \
     -i/src/zlog/src/googletest \
-    -i/src/zlog/src/kvstore/persistent-rbtree.cc \
     /src/zlog 2>&1 | tee /results/cppcheck.txt
 }
 
