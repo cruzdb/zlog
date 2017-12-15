@@ -76,7 +76,7 @@ void LibZLogTest::SetUp() {
 
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
-    auto backend = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&context->ioctxpp));
+    auto backend = std::unique_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&context->ioctxpp));
     int ret = zlog::Log::CreateWithBackend(std::move(backend), "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {

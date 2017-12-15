@@ -92,7 +92,7 @@ jlong Java_org_cruzdb_zlog_Log_append(JNIEnv *env, jobject jlog,
   jbyte *data = env->GetByteArrayElements(jdata, 0);
 
   uint64_t position;
-  int ret = log->Append(Slice((char*)data, jdata_len), &position);
+  int ret = log->Append(zlog::Slice((char*)data, jdata_len), &position);
   ZlogExceptionJni::ThrowNew(env, ret);
   env->ReleaseByteArrayElements(jdata, data, JNI_ABORT);
 

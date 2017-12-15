@@ -38,7 +38,8 @@ void LibZLogTest::SetUp() {
 
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
-    auto backend = std::unique_ptr<zlog::LMDBBackend>(new zlog::LMDBBackend());
+    auto backend = std::unique_ptr<zlog::storage::lmdb::LMDBBackend>(
+        new zlog::storage::lmdb::LMDBBackend());
     backend->Init(context->dbpath);
     int ret = zlog::Log::CreateWithBackend(std::move(backend),
         "mylog", &log);

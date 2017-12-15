@@ -8,6 +8,8 @@
 #include "storage/ceph/cls_zlog.pb.h"
 
 namespace zlog {
+namespace storage {
+namespace ceph {
 
 // TODO: make this constructor private and used by the plugin-based allocator
 // interface. Same for the destructor.
@@ -171,7 +173,7 @@ int CephBackend::OpenLog(const std::string& name,
 {
   zlog_ceph_proto::LinkObjectHeader link;
   {
-    ceph::bufferlist bl;
+    ::ceph::bufferlist bl;
     auto loid = LinkObjectName(name);
     int ret = ioctx_->read(loid, bl, 0, 0);
     if (ret < 0) {
@@ -186,7 +188,7 @@ int CephBackend::OpenLog(const std::string& name,
 
   zlog_ceph_proto::HeadObjectHeader head;
   {
-    ceph::bufferlist bl;
+    ::ceph::bufferlist bl;
     int ret = ioctx_->getxattr(hoid, HEAD_HEADER_KEY, bl);
     if (ret < 0) {
       return ret;
@@ -213,7 +215,7 @@ int CephBackend::ReadViews(const std::string& hoid,
   // read views starting with specified epoch
   librados::ObjectReadOperation op;
   zlog::cls_zlog_read_view(op, epoch);
-  ceph::bufferlist bl;
+  ::ceph::bufferlist bl;
   int ret = ioctx_->operate(hoid, &op, &bl);
   if (ret)
     return ret;
@@ -238,7 +240,7 @@ int CephBackend::ReadViews(const std::string& hoid,
 int CephBackend::ProposeView(const std::string& hoid,
     uint64_t epoch, const std::string& view)
 {
-  ceph::bufferlist bl;
+  ::ceph::bufferlist bl;
   bl.append(view.c_str(), view.size());
   librados::ObjectWriteOperation op;
   zlog::cls_zlog_create_view(op, epoch, bl);
@@ -252,7 +254,7 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
   librados::ObjectReadOperation op;
   zlog::cls_zlog_read(op, epoch, position);
 
-  ceph::bufferlist bl;
+  ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
   if (ret)
     return ret;
@@ -265,7 +267,7 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
 int CephBackend::Write(const std::string& oid, const Slice& data,
           uint64_t epoch, uint64_t position)
 {
-  ceph::bufferlist data_bl;
+  ::ceph::bufferlist data_bl;
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
@@ -346,7 +348,7 @@ int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
       NULL, CephBackend::aio_safe_cb_append);
   assert(c->c);
 
-  ceph::bufferlist data_bl;
+  ::ceph::bufferlist data_bl;
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
@@ -368,7 +370,7 @@ int CephBackend::CreateLinkObject(const std::string& name,
   zlog_ceph_proto::LinkObjectHeader meta;
   meta.set_hoid(hoid);
 
-  ceph::bufferlist bl;
+  ::ceph::bufferlist bl;
   encode(bl, meta);
 
   librados::ObjectWriteOperation op;
@@ -424,4 +426,6 @@ extern "C" void __backend_release(Backend *p)
   delete backend;
 }
 
+}
+}
 }

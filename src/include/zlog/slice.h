@@ -22,6 +22,8 @@
 #include <string.h>
 #include <string>
 
+namespace zlog {
+
 class Slice {
  public:
   // Create an empty slice.
@@ -155,4 +157,6 @@ inline size_t Slice::difference_offset(const Slice& b) const {
     if (data_[off] != b.data_[off]) break;
   }
   return off;
+}
+
 }

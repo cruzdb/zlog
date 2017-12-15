@@ -33,7 +33,7 @@ static void make_context(librados::Rados& rados, librados::IoCtx& ioctx)
 
 static void get_log(librados::IoCtx& ioctx, zlog::Log **log, std::string name)
 {
-  auto be = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
+  auto be = std::unique_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&ioctx));
   int ret = zlog::Log::CreateWithBackend(std::move(be), name, log);
   ASSERT_EQ(ret, 0);
   ASSERT_NE(*log, nullptr);

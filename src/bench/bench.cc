@@ -103,7 +103,7 @@ static void append_workload_func(zlog::Log *log, const int qdepth, int entry_siz
       size_t buf_offset = rand_dist(generator);
 
       // queue aio append operation
-      int ret = log->AioAppend(io->c, Slice(rand_buf_raw + buf_offset, entry_size));
+      int ret = log->AioAppend(io->c, zlog::Slice(rand_buf_raw + buf_offset, entry_size));
       assert(ret == 0);
 
       outstanding_ios++;
@@ -145,7 +145,7 @@ static void append_workload_sync_func(zlog::Log *log, int entry_size)
     size_t buf_offset = rand_dist(generator);
 
     uint64_t pos;
-    int ret = log->Append(Slice(rand_buf_raw + buf_offset, entry_size), &pos);
+    int ret = log->Append(zlog::Slice(rand_buf_raw + buf_offset, entry_size), &pos);
     assert(ret == 0);
 
     ios_completed++;
@@ -335,7 +335,7 @@ int main(int argc, char **argv)
   // connect to the sequencer
   std::cerr << "using outdated api: using exclusive writer mode, default stripe width" << std::endl;
 
-  auto be = std::unique_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
+  auto be = std::unique_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&ioctx));
 
   // open log
   zlog::Log *log;
@@ -377,7 +377,7 @@ int main(int argc, char **argv)
   // when we send out of a bunch of async requests they don't all initially
   // fail due to an old epoch. TODO: this should probably be handled when we
   // open the log?? TODO: try without this...
-  log->Append(Slice());
+  log->Append(zlog::Slice());
 
   signal(SIGINT, sigint_handler);
 

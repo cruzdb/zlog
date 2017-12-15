@@ -43,7 +43,7 @@ int main(int argc, char **argv)
   //client = new zlog::SeqrClient(server.c_str(), port.c_str());
   //client->Connect();
 
-  auto be = std::shared_ptr<zlog::Backend>(new zlog::CephBackend(&ioctx));
+  auto be = std::shared_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&ioctx));
 
   zlog::Log *baselog;
   ret = zlog::Log::OpenWithBackend(be, log_name, &baselog);
