@@ -16,7 +16,11 @@ More information:
 * Asynchronous API Design: https://nwat.io/blog/2015/09/04/zlog-asynchronous-i/o-support/
 * Key-Value Store: https://nwat.io/blog/2016/08/02/introduction-to-the-zlog-transaction-key-value-store/
 
-**The project is undergoing a transition to https://github.com/cruzdb
+**Note 1: the key-value store project has be split off from zlog and moved to a
+dedicated repository as a full client of zlog. You can find that at
+https://github.com/cruzdb/cruzdb/.**
+
+**Note 2: The project is undergoing a transition to https://github.com/cruzdb
 organization. Please let us know if we notice any broken links!**
 
 ## Getting Started
