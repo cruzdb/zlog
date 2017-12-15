@@ -70,26 +70,27 @@ for test_runner in $tests; do
   fi
 done
 
-#if [[ "$OSTYPE" != "darwin"* ]]; then
-#  pushd ${BUILD_DIR}/src/java
-#
-#  export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:$LD_LIBRARY_PATH
-#  # i'm giving up for the time being on how to fix a dynamic library loading
-#  # issue that is only showing up on debian jessie. see issue #143
-#  OS_ID=$(lsb_release -si)
-#  OS_CODE=$(lsb_release -sc)
-#  if [[ ${OS_ID} == "Debian" && ${OS_CODE} == "jessie" ]]; then
-#    export LD_LIBRARY_PATH=/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/amd64/xawt/:$LD_LIBRARY_PATH
-#  fi
-#
-#  export CP=${INSTALL_DIR}/share/java/zlog.jar
-#  export CP=${CP}:${INSTALL_DIR}/share/java/zlog-test.jar
-#  export CP=${CP}:${ZLOG_DIR}/src/java/test-libs/junit-4.12.jar
-#  export CP=${CP}:${ZLOG_DIR}/src/java/test-libs/hamcrest-core-1.3.jar
-#  export CP=${CP}:${ZLOG_DIR}/src/java/test-libs/assertj-core-1.7.1.jar
-#
-#  mkdir db
-#  java -cp $CP org.junit.runner.JUnitCore com.cruzdb.AllTests
-#
-#  popd
-#fi
+if [[ "$OSTYPE" != "darwin"* ]]; then
+  pushd ${BUILD_DIR}/src/java
+
+  export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:${INSTALL_DIR}/lib64:${INSTALL_DIR}/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+
+  # i'm giving up for the time being on how to fix a dynamic library loading
+  # issue that is only showing up on debian jessie. see issue #143
+  OS_ID=$(lsb_release -si)
+  OS_CODE=$(lsb_release -sc)
+  if [[ ${OS_ID} == "Debian" && ${OS_CODE} == "jessie" ]]; then
+    export LD_LIBRARY_PATH=/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/amd64/xawt/:$LD_LIBRARY_PATH
+  fi
+
+  export CP=${INSTALL_DIR}/share/java/zlog.jar
+  export CP=${CP}:${INSTALL_DIR}/share/java/zlog-test.jar
+  export CP=${CP}:${BUILD_DIR}/src/java/test-libs/junit-4.12.jar
+  export CP=${CP}:${BUILD_DIR}/src/java/test-libs/hamcrest-core-1.3.jar
+  export CP=${CP}:${BUILD_DIR}/src/java/test-libs/assertj-core-1.7.1.jar
+
+  mkdir db
+  java -cp $CP org.junit.runner.JUnitCore org.cruzdb.zlog.AllTests
+
+  popd
+fi
