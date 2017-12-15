@@ -1,4 +1,4 @@
-# ZLog - a distributed shared log for ceph
+# ZLog - a fast distributed shared log
 
 [![Build Status](https://travis-ci.org/noahdesu/zlog.svg?branch=master)](https://travis-ci.org/noahdesu/zlog)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/9894/badge.svg)](https://scan.coverity.com/projects/noahdesu-zlog)
@@ -6,15 +6,19 @@
 [![docs](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://noahdesu.github.io/zlog)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/noahdesu-zlog/Lobby)
 
-ZLog is a strongly consistent shared log designed to run on top of Ceph.
-Specifically, it is an implementation of the CORFU protocol adapted for RADOS,
-the distributed object storage system that powers Ceph.
+ZLog is a high-performance, strongly consistent shared-log. Currently ZLog runs
+on top of the Ceph and RADOS distributed storage system, but supports plugging
+in additional storage targets. Its goal is to replicate the CORFU protocol
+adapted for software-defined storage.
 
 More information:
 
 * System Design: https://nwat.io/blog/2014/10/26/zlog-a-distributed-shared-log-on-ceph/
 * Asynchronous API Design: https://nwat.io/blog/2015/09/04/zlog-asynchronous-i/o-support/
 * Key-Value Store: https://nwat.io/blog/2016/08/02/introduction-to-the-zlog-transaction-key-value-store/
+
+**The project is undergoing a transition to https://github.com/cruzdb
+organization. Please let us know if we notice any broken links!**
 
 ## Getting Started
 
