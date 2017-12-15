@@ -4,6 +4,8 @@
 #include "zlog/backend/lmdb.h"
 
 namespace zlog {
+namespace storage {
+namespace lmdb {
 
 #define ZLOG_LMDB_ASSERT(ret, cond) do { \
   if (!(cond)) { \
@@ -537,4 +539,6 @@ extern "C" void __backend_release(Backend *p)
   delete backend;
 }
 
+}
+}
 }

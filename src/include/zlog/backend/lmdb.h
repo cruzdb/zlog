@@ -7,6 +7,8 @@
 #include "zlog/backend.h"
 
 namespace zlog {
+namespace storage {
+namespace lmdb {
 
 class LMDBBackend : public Backend {
  public:
@@ -183,4 +185,6 @@ class LMDBBackend : public Backend {
   bool closed = false;
 };
 
+}
+}
 }

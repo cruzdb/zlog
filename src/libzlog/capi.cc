@@ -4,6 +4,8 @@
 #include "include/zlog/log.h"
 #include "include/zlog/capi.h"
 
+namespace zlog {
+
 struct zlog_log_ctx {
   zlog::Log *log;
 };
@@ -190,3 +192,5 @@ extern "C" int zlog_stream_membership(zlog_log_t log,
   return size;
 }
 #endif
+
+}

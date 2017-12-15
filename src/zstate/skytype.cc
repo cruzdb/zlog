@@ -6,7 +6,7 @@ using namespace skytype;
 
 int SkyObject::update_helper(const void *data, size_t size)
 {
-  int ret = log_->Append(Slice((char*)data, size));
+  int ret = log_->Append(zlog::Slice((char*)data, size));
   if (ret)
     return ret;
 

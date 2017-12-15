@@ -35,7 +35,7 @@ TEST_P(LibZLogTest, Aio) {
     ASSERT_NE(ctx->in_data, ctx->out_data);
     ctx->c = zlog::Log::aio_create_completion(
         std::bind(handle_aio_cb, ctx));
-    int ret = log->AioAppend(ctx->c, Slice(ctx->in_data), &ctx->position);
+    int ret = log->AioAppend(ctx->c, zlog::Slice(ctx->in_data), &ctx->position);
     ASSERT_EQ(ret, 0);
     aios.push_back(ctx);
   }
@@ -136,7 +136,7 @@ TEST_P(LibZLogTest, Append) {
 
   for (int i = 0; i < 100; i++) {
     uint64_t pos;
-    ret = log->Append(Slice(), &pos);
+    ret = log->Append(zlog::Slice(), &pos);
     ASSERT_EQ(ret, 0);
 
     ASSERT_EQ(pos, tail);
@@ -152,7 +152,7 @@ TEST_P(LibZLogTest, Append) {
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Append(Slice(), &pos2);
+  ret = log->Append(zlog::Slice(), &pos2);
   ASSERT_EQ(ret, 0);
   ASSERT_GT(pos2, pos);
 }
@@ -168,7 +168,7 @@ TEST_P(LibZLogTest, Fill) {
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ret = log->Append(Slice(), &pos);
+  ret = log->Append(zlog::Slice(), &pos);
   ASSERT_EQ(ret, 0);
 
   ret = log->Fill(pos);
@@ -204,13 +204,13 @@ TEST_P(LibZLogTest, Read) {
 
   const char *input = "asdfasdfasdf";
   uint64_t pos;
-  ret = log->Append(Slice(input), &pos);
+  ret = log->Append(zlog::Slice(input), &pos);
   ASSERT_EQ(ret, 0);
 
   ret = log->Read(pos, &entry);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_TRUE(Slice(input) == Slice(entry));
+  ASSERT_TRUE(zlog::Slice(input) == zlog::Slice(entry));
 
   // trim a written position
   ret = log->Trim(pos);
@@ -239,7 +239,7 @@ TEST_P(LibZLogTest, Trim) {
 
   // can trim written spot
   uint64_t pos;
-  ret = log->Append(Slice(), &pos);
+  ret = log->Append(zlog::Slice(), &pos);
   ASSERT_EQ(ret, 0);
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
@@ -256,7 +256,7 @@ TEST_P(LibZLogTest, Stream_MultiAppend) {
   {
     // empty set of streams
     std::set<uint64_t> stream_ids;
-    int ret = log->MultiAppend(Slice(), stream_ids, NULL);
+    int ret = log->MultiAppend(zlog::Slice(), stream_ids, NULL);
     ASSERT_EQ(ret, -EINVAL);
   }
 
@@ -278,7 +278,7 @@ TEST_P(LibZLogTest, Stream_MultiAppend) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    int ret = log->MultiAppend(Slice(), stream_ids, &pos);
+    int ret = log->MultiAppend(zlog::Slice(), stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     stream_ids_list.push_back(stream_ids);
@@ -328,7 +328,7 @@ TEST_P(LibZLogTest, Stream_Append) {
 
   // add something to stream
   uint64_t pos2;
-  ret = stream->Append(Slice(entry), &pos2);
+  ret = stream->Append(zlog::Slice(entry), &pos2);
   ASSERT_EQ(ret, 0);
 
   // still don't see it...
@@ -372,7 +372,7 @@ TEST_P(LibZLogTest, Stream_ReadNext) {
 
   // append something to the stream
   uint64_t pos2;
-  ret = stream->Append(Slice(data, sizeof(data)), &pos2);
+  ret = stream->Append(zlog::Slice(data, sizeof(data)), &pos2);
   ASSERT_EQ(ret, 0);
 
   ret = stream->Sync();
@@ -383,7 +383,7 @@ TEST_P(LibZLogTest, Stream_ReadNext) {
   ret = stream->ReadNext(&entry2, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(Slice(data, sizeof(data)) == entry2);
+  ASSERT_TRUE(zlog::Slice(data, sizeof(data)) == entry2);
 
   // we just read it, so it should be empty stream again
   ret = stream->ReadNext(&entry, &pos);
@@ -393,7 +393,7 @@ TEST_P(LibZLogTest, Stream_ReadNext) {
   char data2[234];
 
   // again
-  ret = stream->Append(Slice(data2, sizeof(data2)), &pos2);
+  ret = stream->Append(zlog::Slice(data2, sizeof(data2)), &pos2);
   ASSERT_EQ(ret, 0);
 
   ret = stream->Sync();
@@ -403,7 +403,7 @@ TEST_P(LibZLogTest, Stream_ReadNext) {
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(entry == Slice(data2, sizeof(data2)));
+  ASSERT_TRUE(entry == zlog::Slice(data2, sizeof(data2)));
 
   // we just read it, so it should be empty stream again
   ret = stream->ReadNext(&entry, &pos);
@@ -437,7 +437,7 @@ TEST_P(LibZLogTest, Stream_Reset) {
   char data[1234];
 
   uint64_t pos2;
-  ret = stream->Append(Slice(data, sizeof(data)), &pos2);
+  ret = stream->Append(zlog::Slice(data, sizeof(data)), &pos2);
   ASSERT_EQ(ret, 0);
 
   ret = stream->Sync();
@@ -447,7 +447,7 @@ TEST_P(LibZLogTest, Stream_Reset) {
   ret = stream->ReadNext(&entry, &pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, pos2);
-  ASSERT_TRUE(Slice(entry) == Slice(data, sizeof(data)));
+  ASSERT_TRUE(zlog::Slice(entry) == zlog::Slice(data, sizeof(data)));
 
   // we just read it, so it should be empty stream again
   ret = stream->ReadNext(&entry, &pos);
@@ -499,7 +499,7 @@ TEST_P(LibZLogTest, Stream_Sync) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    ret = log->MultiAppend(Slice(), stream_ids, &pos);
+    ret = log->MultiAppend(zlog::Slice(), stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();
@@ -535,7 +535,7 @@ TEST_P(LibZLogTest, Stream_Sync) {
       stream_ids.insert(indicies[j]);
 
     uint64_t pos;
-    ret = log->MultiAppend(Slice(), stream_ids, &pos);
+    ret = log->MultiAppend(zlog::Slice(), stream_ids, &pos);
     ASSERT_EQ(ret, 0);
 
     for (std::set<uint64_t>::iterator it = stream_ids.begin();

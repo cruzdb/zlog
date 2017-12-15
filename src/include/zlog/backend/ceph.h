@@ -4,6 +4,8 @@
 #include "zlog/backend.h"
 
 namespace zlog {
+namespace storage {
+namespace ceph {
 
 class CephBackend : public Backend {
  public:
@@ -59,7 +61,7 @@ class CephBackend : public Backend {
     librados::AioCompletion *c;
     void *arg;
     std::function<void(void*, int)> cb;
-    ceph::bufferlist bl;
+    ::ceph::bufferlist bl;
     std::string *data;
   };
 
@@ -79,4 +81,6 @@ class CephBackend : public Backend {
   int InitHeadObject(const std::string& hoid, const std::string& prefix);
 };
 
+}
+}
 }
