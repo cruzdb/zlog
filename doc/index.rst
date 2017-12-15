@@ -15,14 +15,13 @@ Community
 #########
 
 * Mailing list: https://groups.google.com/group/cruzdb/
-* Gitter channel: https://gitter.im/noahdesu-zlog
-* Tracker: https://github.com/noahdesu/zlog/issues
+* Tracker: https://github.com/cruzdb/zlog/issues
 
 We welcome and encourage people to learn and contribute to the ZLog project.
 If you are looking for ways to get started, we use the
-`E-easy <https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy>`_
+`E-easy <https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy>`_
 and
-`E-intermediate <https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate>`_
+`E-intermediate <https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate>`_
 labels to tag issues that are good candidates for new contributors.
 
 ####################
@@ -30,14 +29,14 @@ Building from source
 ####################
 
 Clone a copy of the source tree which can be found at
-https://github.com/noahdesu/zlog.
+https://github.com/cruzdb/zlog.
 When cloning the source repository be sure to use ``--recursive`` to also fetch
 the sub-modules. If you forget to use ``--recursive`` then you can fetch them
 later using ``git submodule update --init --recursive``.
 
 .. code-block:: bash
 
-    git clone --recursive https://github.com/noahdesu/zlog.git
+    git clone --recursive https://github.com/cruzdb/zlog.git
 
 The base set of dependencies required to build ZLog can be installed by
 running the script ``install-dep.sh`` found in the root of the source tree.

@@ -48,7 +48,7 @@ RUN cd /src/ceph/src && \
   cp cls/zlog_bench/cls_zlog_bench_client.h /usr/include/rados/
 
 ### fetch zlog and build
-RUN git clone --branch=physical-design https://github.com/noahdesu/zlog.git /src/zlog
+RUN git clone --branch=physical-design https://github.com/cruzdb/zlog.git /src/zlog
 
 # for firefly
 #RUN cd /src/zlog && ./makeconf.sh && ./configure --without-cls-zlog --without-cls-zlog-bench && make

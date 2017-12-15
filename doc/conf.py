@@ -15,7 +15,7 @@ html_theme_options = {
 
 html_context = {
     'display_github': True,
-    'github_user': 'noahdesu',
+    'github_user': 'cruzdb',
     'github_repo': 'zlog',
     'github_version': 'master',
     'conf_py_path': '/doc/',
