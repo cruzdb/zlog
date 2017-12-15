@@ -109,9 +109,9 @@ jbyteArray Java_org_cruzdb_zlog_Log_read(JNIEnv *env, jobject jlog,
 
   int ret = log->Read(position, &entry);
   if (ret) {
-    if (ret == -ENODEV)
+    if (ret == -ENOENT)
       NotWrittenExceptionJni::ThrowNew(env, ret);
-    else if (ret == -EFAULT)
+    else if (ret == -ENODATA)
       FilledExceptionJni::ThrowNew(env, ret);
     else
       ZlogExceptionJni::ThrowNew(env, ret);
