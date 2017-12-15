@@ -4,7 +4,7 @@ set -e
 set -x
 
 if [ ! -d "/src/zlog" ]; then
-  git clone --recursive https://github.com/noahdesu/zlog /src/zlog
+  git clone --recursive https://github.com/cruzdb/zlog /src/zlog
 fi
 
 dir=$(mktemp -d)

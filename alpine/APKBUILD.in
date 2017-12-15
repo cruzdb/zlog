@@ -5,7 +5,7 @@ pkgrel=@RELEASE@
 pkgdesc="ZLog is a distributed shared log"
 #pkgusers="ceph"
 #pkggroups="ceph"
-url="https://github.com/noahdesu/zlog"
+url="https://github.com/cruzdb/zlog"
 arch="x86_64"
 license="LGPL-2.1"
 

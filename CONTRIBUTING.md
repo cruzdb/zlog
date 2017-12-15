@@ -2,9 +2,9 @@
 
 ## Getting Started
 
-We want the process of becoming a new contributor to be as easy as possible ([idea for improvement?](https://github.com/noahdesu/zlog/issues/new?title=suggestion+for+improving+project+for+new+contributors)). We've put together the following list of tasks that have low complexity and are beginner-friendly.
+We want the process of becoming a new contributor to be as easy as possible ([idea for improvement?](https://github.com/cruzdb/zlog/issues/new?title=suggestion+for+improving+project+for+new+contributors)). We've put together the following list of tasks that have low complexity and are beginner-friendly.
 
-* Work on an [easy](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy) or [intermediate](https://github.com/noahdesu/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate) issue
+* Work on an [easy](https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy) or [intermediate](https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate) issue
 * Fix a [Coverity defect](#coverity-scan) warning
 
 Finding something to work on is only part of the process. We encourage anyone interested in becoming involved as a contributor to reach out to a developer for help or mentoring.
@@ -19,4 +19,4 @@ If you set your `user.name` and `user.email` in git config (e.g. $HOME/.gitconfi
 
 ## Coverity Scan
 
-We run [Coverity static analysis](https://scan.coverity.com/projects/noahdesu-zlog) periodically on the `covery_scan` branch. The list of [defects can be found here](https://scan.coverity.com/projects/noahdesu-zlog), but you'll need to be added to the project to view the defects. On the defects page click the *Add me to project* link and we'll grant you access. When submitting a patch that fixes a Coverity issue, use a commit message of the form `coverity/<id>: <description>` where `<id>` is the Coverity ID (CID).
+We run [Coverity static analysis](https://scan.coverity.com/projects/cruzdb-zlog) periodically on the `covery_scan` branch. The list of [defects can be found here](https://scan.coverity.com/projects/cruzdb-zlog), but you'll need to be added to the project to view the defects. On the defects page click the *Add me to project* link and we'll grant you access. When submitting a patch that fixes a Coverity issue, use a commit message of the form `coverity/<id>: <description>` where `<id>` is the Coverity ID (CID).

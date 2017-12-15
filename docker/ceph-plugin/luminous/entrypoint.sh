@@ -27,7 +27,7 @@ case $ID in
 esac
 
 mkdir -p /src
-git clone --recursive https://github.com/noahdesu/zlog.git /src/zlog
+git clone --recursive https://github.com/cruzdb/zlog.git /src/zlog
 pushd /src/zlog
 mkdir build
 pushd build

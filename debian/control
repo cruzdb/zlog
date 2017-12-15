@@ -1,9 +1,9 @@
 Source: zlog
 Section: admin
 Priority: optional
-Homepage: https://github.com/noahdesu/zlog
-Vcs-Git: git://github.com/noahdesu/zlog.git
-Vcs-Browser: https://github.com/noahdesu/zlog
+Homepage: https://github.com/cruzdb/zlog
+Vcs-Git: git://github.com/cruzdb/zlog.git
+Vcs-Browser: https://github.com/cruzdb/zlog
 Maintainer: Noah Watkins <noahwatkins@gmail.com>
 Build-Depends: cmake,
   libprotobuf-dev,

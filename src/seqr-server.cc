@@ -328,7 +328,7 @@ class LogManager {
     auto scheme = meta.at("scheme");
 
     // TODO: on some distributions loading the same protobuf multiple times
-    // leads to an error (see https://github.com/noahdesu/zlog/issues/187). the
+    // leads to an error (see https://github.com/cruzdb/zlog/issues/187). the
     // true parameter in LogImpl::Open causes an extra reference to be taken on
     // the backend which prevents it from being unloaded. This means that we
     // never actually unload a loaded backend. This is silly, but figuring out

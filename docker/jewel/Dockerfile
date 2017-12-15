@@ -34,7 +34,7 @@ RUN cd /src/ceph/src && \
   cp .libs/libcls_zlog_client.* /usr/lib/ && \
   cp cls/zlog/cls_zlog_client.h /usr/include/rados/
 
-RUN git clone --recursive https://github.com/noahdesu/zlog.git /src/zlog
+RUN git clone --recursive https://github.com/cruzdb/zlog.git /src/zlog
 RUN cd /src/zlog && ./makeconf.sh && ./configure --prefix=/usr && make && make install
 
 ADD entrypoint.sh /entrypoint.sh

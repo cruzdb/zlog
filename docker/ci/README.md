@@ -8,7 +8,7 @@ Usage
 -----
 
 By default the image will checkout and build zlog from the master branch of
-the repository located at https://github.com/noahdesu/zlog:
+the repository located at https://github.com/cruzdb/zlog:
 
   `docker run zlog/ci`
 

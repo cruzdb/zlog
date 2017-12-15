@@ -1,7 +1,7 @@
 ## checkout zlog
 
 ```bash
-git clone --branch=physical-design https://github.com/noahdesu/zlog.git
+git clone --branch=physical-design https://github.com/cruzdb/zlog.git
 pushd zlog/docker/physical-design
 ```
 
