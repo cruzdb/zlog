@@ -4,8 +4,7 @@ Using the API
 
 The ``zlog`` library provides a high-performance, strongly consistent shared-log
 abstraction, and may be used directly as a basis for a
-distributed service or application. Additionally, the ``zlog`` project provides a
-transactional key-value store engine built on top of the log service.
+distributed service or application.
 
 ##################
 Shared-Log Service

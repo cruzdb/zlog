@@ -2,15 +2,11 @@
 Welcome to ZLog
 ===============
 
-ZLog is a strong consistent shared-log designed to run at high-performance
-over distributed storage systems. It is an implementation of the CORFU
-protocol, and currently operates on top of the Ceph software-defined storage
-system (with support for other backends in progress).
-
-In addition to the low-level shared-log abstraction, the project includes an
-implementation of a MVCC key-value store, and an implementation of the Tango
-programming model for building distributed metadata services. There are
-language bindings for C/C++, Java, and Go.
+ZLog is a strong consistent shared-log designed to run at high-performance over
+distributed storage systems. It is an implementation of the CORFU protocol, and
+currently operates on top of the Ceph software-defined storage system (with
+support for other backends in progress).  There are language bindings for C/C++,
+Java, and Go.
 
 .. _community:
 
@@ -75,8 +71,7 @@ storage engine.
 
 .. code-block:: bash
 
-    ./src/test/zlog-test-ram
-    ./src/test/zlog-db-test
+    ./src/test/zlog_test_backend_lmdb
 
 Next read about the storage engines that ZLog can use to provide
 high-performance reliable storage for your log.
