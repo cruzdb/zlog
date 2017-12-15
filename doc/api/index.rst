@@ -17,20 +17,21 @@ provide here an example of instantiating an instance of the in-memory backend.
 Development Backend
 *******************
 
-The following code snippet creates a new log instance using the development storage backend.
+The following code snippet creates a new log instance using the LMDB development
+storage backend.
 
 .. code-block:: c++
 
 	#include <zlog/log.h>
-	#include <zlog/backend/ram.h>
-	
-	Backend *backend = new RAMBackend();
-	SeqrClient *seqclient = new FakeSeqrClient();
-	
-	zlog::Log *log;
-	int ret = zlog::Log::Create(backend, "mylog", seqclient, &log);
 
-Now the log is ready to use. Next we'll go over the basic log operations.
+	zlog::Log *log;
+        int ret = zlog::Log::Create("lmdb", "mylog",
+          {{"path", "/tmp/zlog.tmp.db"}}, "", "", &log);
+
+
+Now the log is ready to use. Next we'll go over the basic log operations. Note
+that there are other ways to construct log instances that provide low-level
+customization if the most common case isn't sufficient.
 
 ####################
 Appending to the log
@@ -194,12 +195,6 @@ Now create the context objects and issue the asynchronous read:
 	assert(ret == 0);
 	
 	// do other stuff while I/O completes
-
-##################
-Stream Abstraction
-##################
-
-.. note:: work-in-progress. see src/include/zlog/stream.h
 
 #############
 Java Bindings

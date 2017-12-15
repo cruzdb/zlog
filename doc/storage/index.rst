@@ -9,10 +9,8 @@ backend is designed to provide high-performance and reliability.
 Development Backend
 ###################
 
-There are two development backends available, one that stores the entire log
-in RAM, and one that stores the log in an LMDB database. Both are are built-in
-automatically so there are no additional steps required to make these backends
-available.
+The development backend is based on the LMDB database. It is built-in
+automatically so there are no additional steps required to make it available.
 
 ############
 Ceph Backend
@@ -47,7 +45,7 @@ backend will be built.
 
 .. code-block:: bash
 
-    cmake .
+    cmake -DWITH_CEPH=ON .
     # -- Found LIBRADOS: /usr/lib/librados.so  
     # -- Building Ceph backend /usr/lib/librados.so
     make

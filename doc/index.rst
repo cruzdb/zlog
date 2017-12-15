@@ -4,9 +4,9 @@ Welcome to ZLog
 
 ZLog is a strong consistent shared-log designed to run at high-performance over
 distributed storage systems. It is an implementation of the CORFU protocol, and
-currently operates on top of the Ceph software-defined storage system (with
-support for other backends in progress).  There are language bindings for C/C++,
-Java, and Go.
+currently operates on top of the Ceph software-defined storage system (with a
+pluggable storage backend).  There are language bindings for C/C++, Java, and
+Go.
 
 .. _community:
 
@@ -54,7 +54,7 @@ running the script ``install-dep.sh`` found in the root of the source tree.
     ./install-deps.sh
 
 Once the dependencies have been installed the tree can be built using
-``cmake``. By default only the in-memory storage backend will be built. This
+``cmake``. By default only the LMDB storage backend will be built. This
 is suitable for development and testing, but in order to run ZLog in
 production a distributed storage engine such as Ceph should be used.
 
@@ -64,7 +64,7 @@ production a distributed storage engine such as Ceph should be used.
     make
     make install
 
-Run a basic set of unit tests using the in-memory backend.  For information on
+Run a basic set of unit tests using the development backend.  For information on
 testing a specific storage engine refer to the documentation on a given
 storage engine.
 
