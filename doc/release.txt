@@ -1,0 +1,4 @@
+1. update debian/changelog to include an entry for the new release
+2. git tag -a vA.B.C
+3. use "zlog vA.B.C" for the message
+4. push the commit and tag
