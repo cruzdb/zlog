@@ -1,0 +1,398 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Storage Backends &mdash; zlog  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex/"/>
+        <link rel="search" title="Search" href="../search/"/>
+    <link rel="top" title="zlog  documentation" href="../"/>
+        <link rel="prev" title="Using the API" href="../api/"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../" class="icon icon-home"> zlog
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../api/">Using the API</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Storage Backends</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#development-backend">Development Backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ceph-backend">Ceph Backend</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#building-zlog-with-ceph-support">Building ZLog With Ceph Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#building-the-ceph-plugin">Building the Ceph Plugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#notes-on-jewel-support">Notes on Jewel Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#run-ceph-backed-tests">Run Ceph-backed tests</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../">zlog</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../">Docs</a> &raquo;</li>
+      
+    <li>Storage Backends</li>
+    <li class="wy-breadcrumbs-aside">
+      
+          
+          
+            <a href="https://github.com/cruzdb/zlog/blob/master/doc/storage/index.rst" class="fa fa-github"> Edit on GitHub</a>
+          
+        
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="storage-backends">
+<h1>Storage Backends<a class="headerlink" href="#storage-backends" title="Permalink to this headline">¶</a></h1>
+<p>The development backend is meant for testing and development, and the Ceph
+backend is designed to provide high-performance and reliability.</p>
+<div class="section" id="development-backend">
+<h2>Development Backend<a class="headerlink" href="#development-backend" title="Permalink to this headline">¶</a></h2>
+<p>The development backend is based on the LMDB database. It is built-in
+automatically so there are no additional steps required to make it available.</p>
+</div>
+<div class="section" id="ceph-backend">
+<h2>Ceph Backend<a class="headerlink" href="#ceph-backend" title="Permalink to this headline">¶</a></h2>
+<p>Running ZLog on Ceph provides high-performance, durability, and scalability.
+In order to use Ceph the ZLog library must be built with Ceph support, and a
+special ZLog plugin loaded into your Ceph cluster.</p>
+<div class="section" id="building-zlog-with-ceph-support">
+<h3>Building ZLog With Ceph Support<a class="headerlink" href="#building-zlog-with-ceph-support" title="Permalink to this headline">¶</a></h3>
+<p>The ZLog tree will build with Ceph support automatically if the RADOS
+development packages are installed. Typically this can be accomplished using
+your package manager of choice.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>apt-get install librados-dev
+
+<span class="c1"># or on fedora/rhel/centos:</span>
+yum install -y librados-devel
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Please refer to the <a class="reference external" href="https://ceph.com/docs">Ceph documentation</a> for
+complete instructions on installing Ceph on your platform.</p>
+</div>
+<p>Once the RADOS development package is installed run (or re-run) CMake and
+build. The build system should report that RADOS was found and that the Ceph
+backend will be built.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>cmake -DWITH_CEPH<span class="o">=</span>ON .
+<span class="c1"># -- Found LIBRADOS: /usr/lib/librados.so</span>
+<span class="c1"># -- Building Ceph backend /usr/lib/librados.so</span>
+make
+</pre></div>
+</div>
+<p>That&#8217;s it. Now ZLog can communicate with Ceph, but the Ceph plugin still needs
+to be built and installed.</p>
+</div>
+<div class="section" id="building-the-ceph-plugin">
+<h3>Building the Ceph Plugin<a class="headerlink" href="#building-the-ceph-plugin" title="Permalink to this headline">¶</a></h3>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">See the next section below for Jewel support.</p>
+</div>
+<p>The easiest way to build the Ceph plugin is to use the <cite>build-ceph-plugin.sh</cite>
+script found in the ZLog source tree. This script builds the plugin for a
+variety of OS distributions and Ceph versions.</p>
+<p>The following example shows how to use the script to build the plugin for
+the Ceph <cite>luminous</cite> release targetting an OSD running <cite>ubuntu:xenial</cite>. After
+the build completes the plugin can be found in a local directory named
+<cite>libcls_zlog_ubuntu&lt;identifier&gt;</cite>:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$&gt; docker/build-ceph-plugin.sh -i ubuntu:xenial -c luminous
+
+<span class="o">[</span>nwatkins@martini zlog<span class="o">]</span>$ ls -l libcls_zlog_ubuntu<span class="se">\:</span>xenial.luminous/
+total <span class="m">740</span>
+lrwxrwxrwx. <span class="m">1</span> nwatkins nwatkins     <span class="m">16</span> Jun  <span class="m">5</span> <span class="m">22</span>:37 libcls_zlog.so -&gt; libcls_zlog.so.1
+lrwxrwxrwx. <span class="m">1</span> nwatkins nwatkins     <span class="m">20</span> Jun  <span class="m">5</span> <span class="m">22</span>:37 libcls_zlog.so.1 -&gt; libcls_zlog.so.1.0.0
+-rwxr-xr-x. <span class="m">1</span> nwatkins nwatkins <span class="m">754704</span> Jun  <span class="m">5</span> <span class="m">22</span>:37 libcls_zlog.so.1.0.0
+</pre></div>
+</div>
+<p>The <cite>build-ceph-plugin.sh</cite> script has been tested with the following
+configurations. Please contact us if you need a different configuration, such
+as support for an older version of Ceph (see <a class="reference internal" href="../#community"><span class="std std-ref">Community</span></a> to get in touch
+with us).</p>
+<ul class="simple">
+<li><dl class="first docutils">
+<dt>Luminous v12.0.0 (or newer)</dt>
+<dd><ul class="first last">
+<li>ubuntu:{trusty,xenial}</li>
+<li>debian:jessie</li>
+<li>fedora:{24,25}</li>
+<li>centos:7</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+<div class="section" id="notes-on-jewel-support">
+<h3>Notes on Jewel Support<a class="headerlink" href="#notes-on-jewel-support" title="Permalink to this headline">¶</a></h3>
+<p>This section is only relevant for Jewel. The following notes are for building
+the Ceph ZLog plugin from source for Jewel. The Jewel plugin is not included
+in our CI system. Please let us know if you have any issue on other
+distributions.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span><span class="c1"># grab the source tree with the plugin</span>
+git clone --recursive --branch<span class="o">=</span>zlog/jewel <span class="se">\</span>
+    https://github.com/noahdesu/ceph.git
+<span class="nb">cd</span> ceph
+
+<span class="c1"># prepare the build</span>
+
+apt-get install libprotobuf-dev protobuf-compiler
+<span class="c1"># or yum/dnf install protobuf-devel protobuf-compiler</span>
+
+./install-dep.sh
+./autogen.sh
+./configure
+
+<span class="c1"># build the plugin</span>
+<span class="nb">cd</span> src
+make cls/zlog/zlog.pb.cc
+make libcls_zlog.la
+</pre></div>
+</div>
+<p>The resulting plugin is located in the <cite>.libs</cite> directory:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>nwatkins@node0:/mnt/data/ceph/src$ ls -l .libs <span class="p">|</span> grep libcls_zlog
+-rw-r--r-- <span class="m">1</span> nwatkins zlog-PG0     <span class="m">82</span> Aug  <span class="m">3</span> <span class="m">15</span>:34 libcls_zlog.exp
+lrwxrwxrwx <span class="m">1</span> nwatkins zlog-PG0     <span class="m">17</span> Aug  <span class="m">3</span> <span class="m">15</span>:34 libcls_zlog.la -&gt; ../libcls_zlog.la
+-rw-r--r-- <span class="m">1</span> nwatkins zlog-PG0   <span class="m">1021</span> Aug  <span class="m">3</span> <span class="m">15</span>:34 libcls_zlog.lai
+-rwxr-xr-x <span class="m">1</span> nwatkins zlog-PG0 <span class="m">899808</span> Aug  <span class="m">3</span> <span class="m">15</span>:34 libcls_zlog.so
+</pre></div>
+</div>
+<p>Below in the installation section, use the generated <cite>.so</cite> file in place
+of the libraries produced by Docker.</p>
+</div>
+<div class="section" id="installation">
+<h3>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h3>
+<p>The Ceph plugin library needs to be copied onto each OSD in your cluster so
+that Ceph can find it at runtime.  In the code snippet below the folder
+containing the plugin, <cite>libcls_zlog_&lt;identifer&gt;</cite> will be named according to
+the configuration it was built with. For example,
+<cite>libcls_zlog_ubuntu:xenial_luminous</cite>. Copy the libraries into the
+<cite>rados-classes</cite> directory, found at <cite>/usr/lib/rados-classes</cite> and Debian-based
+systems, and <cite>/usr/lib64/rados-classes</cite> on Fedora, CentOS, and RHEL.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>sudo cp -a libcls_zlog_&lt;identifer&gt;/libcls_zlog.so* /usr/lib/rados-classes
+
+<span class="c1"># or on fedora/rhel/centos</span>
+sudo cp -a libcls_zlog_&lt;identifer&gt;/libcls_zlog.so* /usr/lib64/rados-classes
+</pre></div>
+</div>
+<p>A note about Jewel support. When installing from Jewel, if you followed the
+Jewel-specific instructions above, then you&#8217;ll want to install the plugin like
+this:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>sudo cp -a .libs/libcls_zlog.so /usr/lib/rados-classes
+
+<span class="c1"># or on fedora/rhel/centos</span>
+sudo cp -a .libs/libcls_zlog.so /usr/lib64/rados-classes
+</pre></div>
+</div>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">The plugin requires (1) Google Protocol buffers to be installed on the OSDs,
+and (2) Ceph must be configured to support external plugins. See next:</p>
+</div>
+<p>Install Google Protocol Buffers using your system&#8217;s package manager. This must
+be done on each node in the system running an OSD:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span><span class="c1"># Debian-based systems</span>
+apt-get install libprotobuf-dev
+
+<span class="c1"># CentOS, Fedora, RHEL</span>
+yum install protobuf-devel
+</pre></div>
+</div>
+<p>Configure Ceph to allow external plugins by adding the following to
+<cite>ceph.conf</cite>, either system wide or locally on each OSD ndoe.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>osd class load <span class="nv">list</span> <span class="o">=</span> *
+osd class default <span class="nv">list</span> <span class="o">=</span> *
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Each OSD needs to be restarted after editing the <cite>ceph.conf</cite>
+configuration. After installing the plugin, each OSD needs to be restarted
+only if the installation is an upgrade of the plugin.</p>
+</div>
+<div class="section" id="run-ceph-backed-tests">
+<h4>Run Ceph-backed tests<a class="headerlink" href="#run-ceph-backed-tests" title="Permalink to this headline">¶</a></h4>
+<p>Once everything is setup test out the Ceph backend by running the unit tests.
+You&#8217;ll need to start the ZLog sequencer for these tests.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>zlog-seqr --port <span class="m">5678</span> --streams --daemon
+zlog-test-cls-zlog
+zlog-test-ceph
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="../api/" class="btn btn-neutral" title="Using the API" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright .
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,288 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Welcome to ZLog &mdash; zlog  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex/"/>
+        <link rel="search" title="Search" href="search/"/>
+    <link rel="top" title="zlog  documentation" href="#"/>
+        <link rel="next" title="Using the API" href="api/"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="#" class="icon icon-home"> zlog
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="api/">Using the API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="storage/">Storage Backends</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="#">zlog</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="#">Docs</a> &raquo;</li>
+      
+    <li>Welcome to ZLog</li>
+    <li class="wy-breadcrumbs-aside">
+      
+          
+          
+            <a href="https://github.com/cruzdb/zlog/blob/master/doc/index.rst" class="fa fa-github"> Edit on GitHub</a>
+          
+        
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="welcome-to-zlog">
+<h1>Welcome to ZLog<a class="headerlink" href="#welcome-to-zlog" title="Permalink to this headline">¶</a></h1>
+<p>ZLog is a strong consistent shared-log designed to run at high-performance over
+distributed storage systems. It is an implementation of the CORFU protocol, and
+currently operates on top of the Ceph software-defined storage system (with a
+pluggable storage backend).  There are language bindings for C/C++, Java, and
+Go.</p>
+<div class="section" id="community">
+<span id="id1"></span><h2>Community<a class="headerlink" href="#community" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Mailing list: <a class="reference external" href="https://groups.google.com/group/cruzdb/">https://groups.google.com/group/cruzdb/</a></li>
+<li>Tracker: <a class="reference external" href="https://github.com/cruzdb/zlog/issues">https://github.com/cruzdb/zlog/issues</a></li>
+</ul>
+<p>We welcome and encourage people to learn and contribute to the ZLog project.
+If you are looking for ways to get started, we use the
+<a class="reference external" href="https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-easy">E-easy</a>
+and
+<a class="reference external" href="https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate">E-intermediate</a>
+labels to tag issues that are good candidates for new contributors.</p>
+</div>
+<div class="section" id="building-from-source">
+<h2>Building from source<a class="headerlink" href="#building-from-source" title="Permalink to this headline">¶</a></h2>
+<p>Clone a copy of the source tree which can be found at
+<a class="reference external" href="https://github.com/cruzdb/zlog">https://github.com/cruzdb/zlog</a>.
+When cloning the source repository be sure to use <code class="docutils literal"><span class="pre">--recursive</span></code> to also fetch
+the sub-modules. If you forget to use <code class="docutils literal"><span class="pre">--recursive</span></code> then you can fetch them
+later using <code class="docutils literal"><span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span> <span class="pre">--init</span> <span class="pre">--recursive</span></code>.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>git clone --recursive https://github.com/cruzdb/zlog.git
+</pre></div>
+</div>
+<p>The base set of dependencies required to build ZLog can be installed by
+running the script <code class="docutils literal"><span class="pre">install-dep.sh</span></code> found in the root of the source tree.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The <code class="docutils literal"><span class="pre">install-deps.sh</span></code> has been tested on Fedora, RHEL/CentOS, Ubuntu,
+Debian, and MacOS (using homebrew). Please contact us (see <a class="reference internal" href="#community"><span class="std std-ref">Community</span></a>)
+if you have any issues getting started.</p>
+</div>
+<div class="highlight-bash"><div class="highlight"><pre><span></span><span class="nb">cd</span> zlog
+./install-deps.sh
+</pre></div>
+</div>
+<p>Once the dependencies have been installed the tree can be built using
+<code class="docutils literal"><span class="pre">cmake</span></code>. By default only the LMDB storage backend will be built. This
+is suitable for development and testing, but in order to run ZLog in
+production a distributed storage engine such as Ceph should be used.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>cmake .
+make
+make install
+</pre></div>
+</div>
+<p>Run a basic set of unit tests using the development backend.  For information on
+testing a specific storage engine refer to the documentation on a given
+storage engine.</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>./src/test/zlog_test_backend_lmdb
+</pre></div>
+</div>
+<p>Next read about the storage engines that ZLog can use to provide
+high-performance reliable storage for your log.</p>
+</div>
+<div class="section" id="more-documentation">
+<h2>More Documentation<a class="headerlink" href="#more-documentation" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/">Using the API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/#shared-log-service">Shared-Log Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#appending-to-the-log">Appending to the log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#reading-from-the-log">Reading from the log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#check-log-tail">Check log tail</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#filling-a-log-position">Filling a log position</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#trimming-the-log">Trimming the log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#asynchronous-operations">Asynchronous Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#asynchronous-callbacks">Asynchronous Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/#java-bindings">Java Bindings</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="storage/">Storage Backends</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="storage/#development-backend">Development Backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="storage/#ceph-backend">Ceph Backend</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="api/" class="btn btn-neutral float-right" title="Using the API" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright .
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

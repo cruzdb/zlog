@@ -1,0 +1,386 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Using the API &mdash; zlog  documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex/"/>
+        <link rel="search" title="Search" href="../search/"/>
+    <link rel="top" title="zlog  documentation" href="../"/>
+        <link rel="next" title="Storage Backends" href="../storage/"/>
+        <link rel="prev" title="Welcome to ZLog" href="../"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../" class="icon icon-home"> zlog
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Using the API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#shared-log-service">Shared-Log Service</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#development-backend">Development Backend</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#appending-to-the-log">Appending to the log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reading-from-the-log">Reading from the log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#check-log-tail">Check log tail</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filling-a-log-position">Filling a log position</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#trimming-the-log">Trimming the log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#asynchronous-operations">Asynchronous Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#asynchronous-callbacks">Asynchronous Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#java-bindings">Java Bindings</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../storage/">Storage Backends</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../">zlog</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../">Docs</a> &raquo;</li>
+      
+    <li>Using the API</li>
+    <li class="wy-breadcrumbs-aside">
+      
+          
+          
+            <a href="https://github.com/cruzdb/zlog/blob/master/doc/api/index.rst" class="fa fa-github"> Edit on GitHub</a>
+          
+        
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="using-the-api">
+<h1>Using the API<a class="headerlink" href="#using-the-api" title="Permalink to this headline">¶</a></h1>
+<p>The <code class="docutils literal"><span class="pre">zlog</span></code> library provides a high-performance, strongly consistent shared-log
+abstraction, and may be used directly as a basis for a
+distributed service or application.</p>
+<div class="section" id="shared-log-service">
+<h2>Shared-Log Service<a class="headerlink" href="#shared-log-service" title="Permalink to this headline">¶</a></h2>
+<p>A log is created by first providing an instance of a storage backend. We
+provide here an example of instantiating an instance of the in-memory backend.</p>
+<div class="section" id="development-backend">
+<h3>Development Backend<a class="headerlink" href="#development-backend" title="Permalink to this headline">¶</a></h3>
+<p>The following code snippet creates a new log instance using the LMDB development
+storage backend.</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="cp">#include</span> <span class="cpf">&lt;zlog/log.h&gt;</span><span class="cp"></span>
+
+<span class="n">zlog</span><span class="o">::</span><span class="n">Log</span> <span class="o">*</span><span class="n">log</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">zlog</span><span class="o">::</span><span class="n">Log</span><span class="o">::</span><span class="n">Create</span><span class="p">(</span><span class="s">&quot;lmdb&quot;</span><span class="p">,</span> <span class="s">&quot;mylog&quot;</span><span class="p">,</span>
+  <span class="p">{{</span><span class="s">&quot;path&quot;</span><span class="p">,</span> <span class="s">&quot;/tmp/zlog.tmp.db&quot;</span><span class="p">}},</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">log</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Now the log is ready to use. Next we&#8217;ll go over the basic log operations. Note
+that there are other ways to construct log instances that provide low-level
+customization if the most common case isn&#8217;t sufficient.</p>
+</div>
+</div>
+<div class="section" id="appending-to-the-log">
+<h2>Appending to the log<a class="headerlink" href="#appending-to-the-log" title="Permalink to this headline">¶</a></h2>
+<p>In the following code snippet a string is appended to the log which returns the
+position at which the string was stored.  Finally the string at the reported
+position is read back and verified.</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">input</span> <span class="o">=</span> <span class="s">&quot;My first log entry&quot;</span><span class="p">;</span>
+
+<span class="kt">uint64_t</span> <span class="n">pos</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">Append</span><span class="p">(</span><span class="n">Slice</span><span class="p">(</span><span class="n">input</span><span class="p">),</span> <span class="o">&amp;</span><span class="n">pos</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Once an append occurs it is immutable and cannot be changed (the exception to
+this rule is garbage collection. see below for the <code class="docutils literal"><span class="pre">trim</span></code> operation).</p>
+</div>
+<div class="section" id="reading-from-the-log">
+<h2>Reading from the log<a class="headerlink" href="#reading-from-the-log" title="Permalink to this headline">¶</a></h2>
+<p>Any position in the log may be read. If valid data exists it will be returned,
+and log entries that have not been written or have been filled or garbage
+collected will return appropriate error messages. In the following snippet we
+verify the data written in the previous example.</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">output</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">Read</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">output</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+
+<span class="n">assert</span><span class="p">(</span><span class="n">input</span> <span class="o">==</span> <span class="n">ouput</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="check-log-tail">
+<h2>Check log tail<a class="headerlink" href="#check-log-tail" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal"><span class="pre">Log::CheckTail</span></code> method is used to query the sequencer service about the
+current tail of the log. The position returned by the <code class="docutils literal"><span class="pre">Log::CheckTail</span></code> method
+is the position that the next append will be written to. This method is useful
+determining how much of the log must be read to be up-to-date with other
+processes in the system.</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="kt">uint64_t</span> <span class="n">tail</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">CheckTail</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tail</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;next append position: &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">tail</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="filling-a-log-position">
+<h2>Filling a log position<a class="headerlink" href="#filling-a-log-position" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal"><span class="pre">fill</span></code> operation is a light-weight mechanism for invalidating a log entry
+and is analogous to an application writing data to a log entry that all other
+clients would consider a <em>junk</em> value. This is useful when clients are
+processing the log in strict serial order: if a writer is slow a reader may
+fill a log position in order to make forward progress. Other readers will
+always skip the position without concern for missing an entry because any
+writer to the filled position will be forced to retry an append.</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">output</span><span class="p">;</span>
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">Read</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">output</span><span class="p">);</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="n">zlog</span><span class="o">::</span><span class="n">NOT_WRITTEN</span><span class="p">)</span> <span class="p">{</span>
+  <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">Fill</span><span class="p">(</span><span class="n">pos</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="n">zlog</span><span class="o">::</span><span class="n">READ_ONLY</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// try the read again. it was a race</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="c1">// position filled. read next position</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="trimming-the-log">
+<h2>Trimming the log<a class="headerlink" href="#trimming-the-log" title="Permalink to this headline">¶</a></h2>
+<p>In order to reclaim space the log supports a <code class="docutils literal"><span class="pre">trim</span></code> method that marks a log
+position for garbage collection. Any readers to the position will receive an
+error indicated that the log position has been invalidated. It is the
+responsibility of the application to ensure correctness (e.g. no pointers to
+the trimmed position exist).</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">Trim</span><span class="p">(</span><span class="n">pos</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="asynchronous-operations">
+<h2>Asynchronous Operations<a class="headerlink" href="#asynchronous-operations" title="Permalink to this headline">¶</a></h2>
+<p>Asynchronous versions of the log operations are also available. The <code class="docutils literal"><span class="pre">zlog</span></code>
+library provides a <code class="docutils literal"><span class="pre">Log::AioCompletion</span></code> type for managing the context of an
+asynchronous operation. First create an instance of <code class="docutils literal"><span class="pre">Log::AioCompletion</span></code> using
+<code class="docutils literal"><span class="pre">Log::aio_create_completion()</span></code>:</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="n">Log</span><span class="o">::</span><span class="n">AioCompletion</span> <span class="o">*</span><span class="n">c</span> <span class="o">=</span> <span class="n">Log</span><span class="o">::</span><span class="n">aio_create_completion</span><span class="p">();</span>
+
+<span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">input</span> <span class="o">=</span> <span class="s">&quot;Hello log&quot;</span><span class="p">;</span>
+<span class="kt">uint64_t</span> <span class="n">position</span><span class="p">;</span>
+
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="p">.</span><span class="n">AioAppend</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">Slice</span><span class="p">(</span><span class="n">input</span><span class="p">),</span> <span class="o">&amp;</span><span class="n">position</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>After <code class="docutils literal"><span class="pre">log::AioAppend</span></code> returns the completion object can be used to determine
+the state of the append operation.</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="n">c</span><span class="o">-&gt;</span><span class="n">WaitForComplete</span><span class="p">();</span> <span class="c1">// block until the operation finishes</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">ReturnValue</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span> <span class="c1">// success</span>
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;appended data at: &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">position</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">:::</span><span class="n">endl</span><span class="p">;</span>
+<span class="k">delete</span> <span class="n">c</span><span class="p">;</span> <span class="c1">// clean-up</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="asynchronous-callbacks">
+<h2>Asynchronous Callbacks<a class="headerlink" href="#asynchronous-callbacks" title="Permalink to this headline">¶</a></h2>
+<p>Rather than waiting on the operation to complete, a callback can be specified
+when creating the completion object. In the following example we use an
+<code class="docutils literal"><span class="pre">AioState</span></code> type to keep track of the context. In the following example an
+asynchronous read is issued and the data read is printed to standard out in the
+callback handler.</p>
+<p>First define the callback context and the callback handler:</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="k">struct</span> <span class="n">AioState</span> <span class="p">{</span>
+  <span class="n">Log</span><span class="o">::</span><span class="n">AioCompletion</span> <span class="o">*</span><span class="n">c</span><span class="p">;</span>
+  <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">output</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">void</span> <span class="n">aio_cb</span><span class="p">(</span><span class="n">AioState</span> <span class="o">*</span><span class="n">state</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">assert</span><span class="p">(</span><span class="n">state</span><span class="o">-&gt;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">ReturnValue</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span> <span class="c1">// success?</span>
+
+  <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;data read: &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">output</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+
+  <span class="k">delete</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">c</span><span class="p">;</span>
+  <span class="k">delete</span> <span class="n">state</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Now create the context objects and issue the asynchronous read:</p>
+<div class="highlight-c++"><div class="highlight"><pre><span></span><span class="n">AioState</span> <span class="o">*</span><span class="n">state</span> <span class="o">=</span> <span class="k">new</span> <span class="n">AioState</span><span class="p">;</span>
+<span class="n">state</span><span class="o">-&gt;</span><span class="n">c</span> <span class="o">=</span> <span class="n">zlog</span><span class="o">::</span><span class="n">Log</span><span class="o">::</span><span class="n">aio_create_completion</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">bind</span><span class="p">(</span><span class="n">aio_cb</span><span class="p">,</span> <span class="n">state</span><span class="p">));</span>
+<span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">log</span><span class="o">-&gt;</span><span class="n">AioRead</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span> <span class="n">state</span><span class="o">-&gt;</span><span class="n">c</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">state</span><span class="o">-&gt;</span><span class="n">data</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">ret</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+
+<span class="c1">// do other stuff while I/O completes</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="java-bindings">
+<h2>Java Bindings<a class="headerlink" href="#java-bindings" title="Permalink to this headline">¶</a></h2>
+<p>View the auto-generated <a class="reference external" href="java/">JavaDoc pages for the ZLog Java bindings</a>.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../storage/" class="btn btn-neutral float-right" title="Storage Backends" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../" class="btn btn-neutral" title="Welcome to ZLog" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright .
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
