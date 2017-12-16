@@ -19,6 +19,6 @@ touch .nojekyll # skip jekyll processing
 git add .
 git commit -m "published"
 
-git remote add origin git@github.com:noahdesu/zlog.git
+git remote add origin git@github.com:cruzdb/zlog.git
 git push -f origin master:gh-pages
 popd
