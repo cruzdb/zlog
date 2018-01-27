@@ -39,13 +39,9 @@ matrix:
     - os: linux
       env: DOCKER_IMAGE=ubuntu:trusty
     - os: linux
-      env: DOCKER_IMAGE=ubuntu:xenial
+      env: DOCKER_IMAGE=ubuntu:xenial RUN_COVERAGE=0
     - os: linux
-      env: DOCKER_IMAGE=ubuntu:yakkety
-    - os: linux
-      env: DOCKER_IMAGE=ubuntu:zesty RUN_COVERAGE=0
-    - os: linux
-      env: DOCKER_IMAGE=ubuntu:zesty RUN_COVERAGE=1
+      env: DOCKER_IMAGE=ubuntu:xenial RUN_COVERAGE=1
     - os: osx
 
 # the coverity build runs in the standard travis environment (job config #1
