@@ -40,7 +40,7 @@ popd
 PATH=${INSTALL_DIR}/bin:$PATH
 
 # list of tests to run
-tests="zlog_test_backend_lmdb"
+tests="zlog_test_backend_lmdb zlog_test_backend_ram"
 
 # run ceph backend tests
 export CEPH_CONF=/tmp/micro-osd/ceph.conf
