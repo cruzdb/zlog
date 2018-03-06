@@ -65,6 +65,43 @@ void LibZLogTest::TearDown() {
     delete context;
 }
 
+int LibZLogTest::reopen()
+{
+  zlog::Log *new_log = nullptr;
+
+  if (lowlevel()) {
+    auto backend = std::unique_ptr<zlog::storage::lmdb::LMDBBackend>(
+        new zlog::storage::lmdb::LMDBBackend());
+    backend->Init(context->dbpath);
+    int ret = zlog::Log::OpenWithBackend(std::move(backend),
+        "mylog", &new_log);
+    if (ret)
+      return ret;
+  } else {
+    std::string host = "";
+    std::string port = "";
+    if (exclusive()) {
+    } else {
+      host = "localhost";
+      port = "5678";
+    }
+    int ret = zlog::Log::Open("lmdb", "mylog",
+        {{"path", context->dbpath}}, host, port, &new_log);
+    if (ret)
+      return ret;
+  }
+
+  if (log)
+    delete log;
+  log = new_log;
+  return 0;
+}
+
+std::string LibZLogTest::backend()
+{
+  return "lmdb";
+}
+
 struct LibZLogCAPITest::Context : public DBPathContext {
 };
 

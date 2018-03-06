@@ -29,6 +29,16 @@ void LibZLogTest::TearDown() {
     delete log;
 }
 
+int LibZLogTest::reopen()
+{
+  return -EOPNOTSUPP;
+}
+
+std::string LibZLogTest::backend()
+{
+  return "ram";
+}
+
 void LibZLogCAPITest::SetUp() {
   ASSERT_FALSE(lowlevel());
   ASSERT_TRUE(exclusive());

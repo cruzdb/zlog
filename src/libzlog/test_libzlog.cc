@@ -22,6 +22,40 @@ static void handle_aio_cb_read(aio_state *ctx)
   ctx->retval = ctx->c->ReturnValue();
 }
 
+TEST_P(LibZLogTest, OpenClose) {
+  if (backend() != "lmdb") {
+    std::cout << "OpenClose test not enabled for "
+      << backend() << " backend" << std::endl;
+    return;
+  }
+
+  const std::string input = "oh the input";
+
+  uint64_t pos;
+  int ret = log->Append(zlog::Slice(input), &pos);
+  ASSERT_EQ(ret, 0);
+
+  // destroy log client and reopen
+  ret = reopen();
+  ASSERT_EQ(ret, 0);
+
+  uint64_t tail;
+  ret = log->CheckTail(&tail);
+  ASSERT_EQ(ret, 0);
+
+  std::string output;
+  ret = log->Read(tail - 1, &output);
+  ASSERT_EQ(ret, 0);
+
+  ret = log->Read(tail - 1, &output);
+  ASSERT_EQ(ret, 0);
+
+  ret = log->Read(tail - 1, &output);
+  ASSERT_EQ(ret, 0);
+
+  ASSERT_EQ(input, output);
+}
+
 TEST_P(LibZLogTest, Aio) {
   // issue some appends
   std::vector<aio_state*> aios;
