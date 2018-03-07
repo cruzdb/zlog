@@ -164,12 +164,6 @@ void LogImpl::ViewUpdater()
     std::lock_guard<std::mutex> lk(lock);
 
     sequencer = client;
-
-    for (auto w : view_update_waiters) {
-      w.first->notify_one();
-      *w.second = true;
-    }
-    view_update_waiters.clear();
   }
   std::lock_guard<std::mutex> lk(lock);
   assert(view_update_waiters.empty());

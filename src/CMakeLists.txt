@@ -26,6 +26,7 @@ add_subdirectory(libzlog)
 add_subdirectory(storage)
 add_subdirectory(zstate)
 add_subdirectory(bench)
+add_subdirectory(test)
 
 option(WITH_JNI "build with JNI" OFF)
 if(WITH_JNI)

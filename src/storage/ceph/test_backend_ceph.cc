@@ -101,6 +101,16 @@ void LibZLogTest::TearDown() {
     delete context;
 }
 
+int LibZLogTest::reopen()
+{
+  return -EOPNOTSUPP;
+}
+
+std::string LibZLogTest::backend()
+{
+  return "ceph";
+}
+
 struct LibZLogCAPITest::Context : public UniquePoolContext {
 };
 
