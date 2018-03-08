@@ -26,11 +26,19 @@ class Log {
   Log() {}
   virtual ~Log();
 
-  /*
-   * Synchronous API
-   */
+  // Append data to the tail of the log.
   virtual int Append(const Slice& data, uint64_t *pposition = NULL) = 0;
+  // TODO: checkout the write batch object used in rocksdb
+  virtual int Append(const Slice& data, const std::map<int, std::string>& entries,
+      uint64_t *pposition = NULL) = 0;
+
+  // Read data from the log.
   virtual int Read(uint64_t position, std::string *data) = 0;
+  virtual int Read(uint64_t position, std::string *data,
+      std::map<int, std::string> *vals) = 0;
+  virtual int Read(uint64_t position, std::string *data,
+      const std::set<int>& keys, std::map<int, std::string> *vals) = 0;
+
   virtual int Fill(uint64_t position) = 0;
   virtual int CheckTail(uint64_t *pposition) = 0;
   virtual int Trim(uint64_t position) = 0;

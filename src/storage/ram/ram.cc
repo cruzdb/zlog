@@ -126,6 +126,76 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
   }
 }
 
+int RAMBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data,
+    std::map<int, std::string> *vals)
+{
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(epoch, oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  if (lobj) {
+    const auto it = lobj->entries.find(position);
+    if (it == lobj->entries.end())
+      return -ENOENT;
+
+    const LogEntry& entry = it->second;
+    if (entry.trimmed || entry.invalidated)
+      return -ENODATA;
+
+    if (data)
+      data->assign(entry.data);
+
+    *vals = entry.items;
+    return 0;
+  } else {
+    return -ENOENT;
+  }
+}
+
+// TODO: all three versions of Read can be unified
+int RAMBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data, const std::set<int>& keys,
+    std::map<int, std::string> *vals)
+{
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(epoch, oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  if (lobj) {
+    const auto it = lobj->entries.find(position);
+    if (it == lobj->entries.end())
+      return -ENOENT;
+
+    const LogEntry& entry = it->second;
+    if (entry.trimmed || entry.invalidated)
+      return -ENODATA;
+
+    if (data)
+      data->assign(entry.data);
+
+    std::map<int, std::string> vals_out;
+    for (auto key : keys) {
+      auto it = entry.items.find(key);
+      if (it != entry.items.end())
+        vals_out.emplace(it->first, it->second);
+    }
+    vals->swap(vals_out);
+
+    return 0;
+  } else {
+    return -ENOENT;
+  }
+}
+
 int RAMBackend::Write(const std::string& oid, const Slice& data,
     uint64_t epoch, uint64_t position)
 {
@@ -146,6 +216,41 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
   if (it == lobj->entries.end()) {
     // TODO: more efficent!
     LogEntry entry;
+    entry.data = data.ToString();
+    lobj->entries.emplace(position, entry);
+    lobj->maxpos = std::max(lobj->maxpos, position);
+    return 0;
+  } else {
+    return -EROFS;
+  }
+}
+
+// TODO: unify with the other Write interface
+int RAMBackend::Write(const std::string& oid, const Slice& data,
+    const std::map<int, std::string>& entries,
+    uint64_t epoch, uint64_t position)
+{
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(epoch, oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  if (!lobj) {
+    auto ret = objects_.emplace(oid, LogObject());
+    lobj = &boost::get<LogObject>(ret.first->second);
+  }
+
+  auto it = lobj->entries.find(position);
+  if (it == lobj->entries.end()) {
+    std::map<int, std::string> items;
+    for (auto& it : entries) {
+      items.emplace(it.first, it.second);
+    }
+    LogEntry entry;
+    entry.items = items;
     entry.data = data.ToString();
     lobj->entries.emplace(position, entry);
     lobj->maxpos = std::max(lobj->maxpos, position);

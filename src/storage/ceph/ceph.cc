@@ -264,6 +264,20 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
   return 0;
 }
 
+int CephBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data,
+    std::map<int, std::string> *vals)
+{
+  return -EOPNOTSUPP;
+}
+
+int CephBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data, const std::set<int>& keys,
+    std::map<int, std::string> *vals)
+{
+  return -EOPNOTSUPP;
+}
+
 int CephBackend::Write(const std::string& oid, const Slice& data,
           uint64_t epoch, uint64_t position)
 {
@@ -274,6 +288,13 @@ int CephBackend::Write(const std::string& oid, const Slice& data,
   zlog::cls_zlog_write(op, epoch, position, data_bl);
 
   return ioctx_->operate(oid, &op);
+}
+
+int CephBackend::Write(const std::string& oid, const Slice& data,
+    const std::map<int, std::string>& entries,
+    uint64_t epoch, uint64_t position)
+{
+  return -EOPNOTSUPP;
 }
 
 int CephBackend::Fill(const std::string& oid, uint64_t epoch,

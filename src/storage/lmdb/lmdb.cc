@@ -255,6 +255,13 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
   return 0;
 }
 
+int LMDBBackend::Write(const std::string& oid, const Slice& data,
+    const std::map<int, std::string>& entries,
+    uint64_t epoch, uint64_t position)
+{
+  return -EOPNOTSUPP;
+}
+
 int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
     uint64_t position, std::string *data)
 {
@@ -290,6 +297,20 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
     return ret;
 
   return 0;
+}
+
+int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data,
+    std::map<int, std::string> *vals)
+{
+  return -EOPNOTSUPP;
+}
+
+int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data, const std::set<int>& keys,
+    std::map<int, std::string> *vals)
+{
+  return -EOPNOTSUPP;
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,

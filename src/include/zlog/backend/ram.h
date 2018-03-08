@@ -39,7 +39,19 @@ class RAMBackend : public Backend {
   int Read(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data) override;
 
+  int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data,
+      std::map<int, std::string> *vals) override;
+
+  int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data, const std::set<int>& keys,
+      std::map<int, std::string> *vals) override;
+
   int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) override;
+
+  int Write(const std::string& oid, const Slice& data,
+      const std::map<int, std::string>& entries,
       uint64_t epoch, uint64_t position) override;
 
   int Fill(const std::string& oid, uint64_t epoch,
@@ -73,6 +85,7 @@ class RAMBackend : public Backend {
     bool trimmed;
     bool invalidated;
     std::string data;
+    std::map<int, std::string> items;
     LogEntry() : trimmed(false), invalidated(false) {}
   };
 

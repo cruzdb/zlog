@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include "zlog/slice.h"
 
@@ -87,6 +88,10 @@ class Backend {
 
   // Read a log entry.
   //
+  // The caller must ensure that it uses a consistent read/write interface for
+  // each log position. If key-value pairs are written, reading the entry using
+  // the blob interface will return an empty value, and vice versa.
+  //
   // -ENOENT
   //   - position not written (nor invalidated)
   // -ENODATA
@@ -94,11 +99,27 @@ class Backend {
   virtual int Read(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data) = 0;
 
+  virtual int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data,
+      std::map<int, std::string> *vals) = 0;
+
+  virtual int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data, const std::set<int>& keys,
+      std::map<int, std::string> *vals) = 0;
+
   // Write a log entry.
+  //
+  // The caller must ensure that it uses a consistent read/write interface for
+  // each log position. If key-value pairs are written, reading the entry using
+  // the blob interface will return an empty value, and vice versa.
   //
   // -EROFS
   //   - position is read-only (written or invalid)
   virtual int Write(const std::string& oid, const Slice& data,
+      uint64_t epoch, uint64_t position) = 0;
+
+  virtual int Write(const std::string& oid, const Slice& data,
+      const std::map<int, std::string>& entries,
       uint64_t epoch, uint64_t position) = 0;
 
   // Invalidate a log entry.

@@ -424,7 +424,50 @@ int LogImpl::Read(uint64_t position, std::string *data)
 {
   while (true) {
     auto mapping = striper.MapPosition(position);
-    int ret = backend->Read(mapping.oid, mapping.epoch, position, data);
+    int ret = backend->Read(mapping.oid, mapping.epoch,
+        position, data);
+    if (!ret)
+      return 0;
+    if (ret == -ESPIPE) {
+      ret = UpdateView();
+      if (ret)
+        return ret;
+      continue;
+    }
+    return ret;
+  }
+  assert(0);
+  return -EIO;
+}
+
+int LogImpl::Read(uint64_t position, std::string *data,
+    std::map<int, std::string> *vals)
+{
+  while (true) {
+    auto mapping = striper.MapPosition(position);
+    int ret = backend->Read(mapping.oid, mapping.epoch,
+        position, data, vals);
+    if (!ret)
+      return 0;
+    if (ret == -ESPIPE) {
+      ret = UpdateView();
+      if (ret)
+        return ret;
+      continue;
+    }
+    return ret;
+  }
+  assert(0);
+  return -EIO;
+}
+
+int LogImpl::Read(uint64_t position, std::string *data,
+    const std::set<int>& keys, std::map<int, std::string> *vals)
+{
+  while (true) {
+    auto mapping = striper.MapPosition(position);
+    int ret = backend->Read(mapping.oid, mapping.epoch,
+        position, data, keys, vals);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {
@@ -459,6 +502,51 @@ int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
   return -EIO;
 }
 #endif
+
+int LogImpl::Append(const Slice& data, const std::map<int, std::string>& entries,
+    uint64_t *pposition)
+{
+  while (true) {
+    // contact the sequencer for the append position. the latest epoch at which
+    // the sequencer instance is valid is returned.
+    uint64_t seq_epoch;
+    uint64_t position;
+    int ret = CheckTail(&position, &seq_epoch, true);
+    if (ret)
+      return ret;
+
+    // map the position from the sequencer to a storage object. if the epoch has
+    // changed, it may mean the sequencer changed, so we behave conservatively
+    // and retry. note that one could optimize this case and check only that the
+    // sequencer was invalidated even if the view changed.
+    auto mapping = striper.MapPosition(position);
+    if (seq_epoch != mapping.epoch) {
+      std::cerr << "retry with new seq" << std::endl;
+      continue;
+    }
+
+    ret = backend->Write(mapping.oid, data, entries, mapping.epoch, position);
+    if (!ret) {
+      if (pposition)
+        *pposition = position;
+      return 0;
+    }
+
+    if (ret == -ESPIPE) {
+      ret = UpdateView();
+      if (ret)
+        return ret;
+      continue;
+    }
+
+    if (ret == -EROFS)
+      continue;
+
+    return ret;
+  }
+  assert(0);
+  return -EIO;
+}
 
 int LogImpl::Append(const Slice& data, uint64_t *pposition)
 {
