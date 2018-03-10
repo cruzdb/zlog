@@ -81,6 +81,9 @@ class LogImpl : public Log {
   int Read(uint64_t position, std::string *data,
       const std::set<int>& keys,
       std::map<int, std::string> *vals) override;
+  int Read(uint64_t position, std::string *data,
+      const std::set<int>& keys, float f,
+      std::map<int, std::string> *vals) override;
   int Read(uint64_t epoch, uint64_t position, std::string *data);
 
  public:

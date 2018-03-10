@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include "zlog/backend.h"
 #include "zlog/backend/ram.h"
@@ -187,6 +189,64 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
       auto it = entry.items.find(key);
       if (it != entry.items.end())
         vals_out.emplace(it->first, it->second);
+    }
+    vals->swap(vals_out);
+
+    return 0;
+  } else {
+    return -ENOENT;
+  }
+}
+
+// TODO: all three versions of Read can be unified
+int RAMBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data, const std::set<int>& keys,
+    float f, std::map<int, std::string> *vals)
+{
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(epoch, oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  if (lobj) {
+    const auto it = lobj->entries.find(position);
+    if (it == lobj->entries.end())
+      return -ENOENT;
+
+    const LogEntry& entry = it->second;
+    if (entry.trimmed || entry.invalidated)
+      return -ENODATA;
+
+    if (data)
+      data->assign(entry.data);
+
+    // i guess we could probably create something even more inefficient...
+    std::vector<std::pair<int, std::string>> kvs;
+    for (auto e : entry.items) {
+      kvs.push_back(e);
+    }
+    std::random_shuffle(kvs.begin(), kvs.end());
+
+    int count = std::ceil(f * kvs.size());
+    count = std::max(0, count);
+    count = std::min(count, (int)kvs.size());
+    assert(count >= 0 && count <= (int)kvs.size());
+
+    std::map<int, std::string> vals_out;
+    for (int i = 0; i < count; i++) {
+      vals_out.emplace(kvs[i].first, kvs[i].second);
+    }
+
+    for (auto key : keys) {
+      if (vals_out.find(key) == vals_out.end()) {
+        auto it = entry.items.find(key);
+        if (it != entry.items.end()) {
+          vals_out.emplace(it->first, it->second);
+        }
+      }
     }
     vals->swap(vals_out);
 

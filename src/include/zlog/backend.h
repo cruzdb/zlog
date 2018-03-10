@@ -107,6 +107,10 @@ class Backend {
       uint64_t position, std::string *data, const std::set<int>& keys,
       std::map<int, std::string> *vals) = 0;
 
+  virtual int Read(const std::string& oid, uint64_t epoch,
+      uint64_t position, std::string *data, const std::set<int>& keys,
+      float f, std::map<int, std::string> *vals) = 0;
+
   // Write a log entry.
   //
   // The caller must ensure that it uses a consistent read/write interface for

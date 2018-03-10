@@ -482,6 +482,27 @@ int LogImpl::Read(uint64_t position, std::string *data,
   return -EIO;
 }
 
+int LogImpl::Read(uint64_t position, std::string *data,
+    const std::set<int>& keys, float f, std::map<int, std::string> *vals)
+{
+  while (true) {
+    auto mapping = striper.MapPosition(position);
+    int ret = backend->Read(mapping.oid, mapping.epoch,
+        position, data, keys, f, vals);
+    if (!ret)
+      return 0;
+    if (ret == -ESPIPE) {
+      ret = UpdateView();
+      if (ret)
+        return ret;
+      continue;
+    }
+    return ret;
+  }
+  assert(0);
+  return -EIO;
+}
+
 #ifdef STREAMING_SUPPORT
 int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
 {
