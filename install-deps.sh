@@ -86,6 +86,17 @@ function rpms() {
   $SUDO $yumdnf install -y python-virtualenv
 }
 
+function pacman() {
+  local tmp=$(mktemp -d)
+  trap "rm -rf $tmp" EXIT
+
+  $SUDO pacman -Su
+
+  $SUDO pacman -S boost protobuf cmake lmdb
+
+  exit 0
+}
+
 source /etc/os-release
 case $ID in
   debian|ubuntu)
@@ -94,6 +105,10 @@ case $ID in
 
   centos|fedora)
     rpms
+    ;;
+
+  arch)
+    pacman
     ;;
 
   *)
