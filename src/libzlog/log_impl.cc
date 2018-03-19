@@ -483,6 +483,28 @@ int LogImpl::Read(uint64_t position, std::string *data,
 }
 
 int LogImpl::Read(uint64_t position, std::string *data,
+    const Slice *key_target, const std::set<int>& keys,
+    std::map<int, std::string> *vals)
+{
+  while (true) {
+    auto mapping = striper.MapPosition(position);
+    int ret = backend->Read(mapping.oid, mapping.epoch,
+        position, data, key_target, keys, vals);
+    if (!ret)
+      return 0;
+    if (ret == -ESPIPE) {
+      ret = UpdateView();
+      if (ret)
+        return ret;
+      continue;
+    }
+    return ret;
+  }
+  assert(0);
+  return -EIO;
+}
+
+int LogImpl::Read(uint64_t position, std::string *data,
     const std::set<int>& keys, float f, std::map<int, std::string> *vals)
 {
   while (true) {

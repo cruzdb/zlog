@@ -1,4 +1,8 @@
-add_library(zlog_backend_ram SHARED ram.cc)
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS cruzdb.proto)
+
+add_library(zlog_backend_ram SHARED ram.cc ${PROTO_SRCS})
+target_include_directories(zlog_backend_ram
+  PUBLIC ${PROTOBUF_INCLUDE_DIR})
 set_target_properties(zlog_backend_ram PROPERTIES
   OUTPUT_NAME zlog_backend_ram
   VERSION 1.0.0

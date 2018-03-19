@@ -320,6 +320,13 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
   return -EOPNOTSUPP;
 }
 
+int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data, const Slice *key_target,
+    const std::set<int>& keys, std::map<int, std::string> *vals)
+{
+  return -EOPNOTSUPP;
+}
+
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
     uint64_t position)
 {

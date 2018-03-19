@@ -1,0 +1,74 @@
+syntax = "proto2";
+
+package cruzdb_proto;
+
+option optimize_for = SPEED;
+
+message NodePtr {
+    required bool nil = 1;
+    required bool self = 2;
+    optional uint64 intention  = 3;
+    optional uint64 afterimage = 4;
+    optional uint32 off = 5;
+}
+
+message Node {
+    required bool red = 1;
+    required string key = 2;
+    required string val = 3;
+    required NodePtr left = 4;
+    required NodePtr right = 5;
+}
+
+// there are two after images produced in the current version. when a
+// transaction initially runs the snapshot points to the snapshot the txn runs
+// against. but then we create an after image when the transaction is replayed
+// and a commit decision is made. in that second case, the snapshot is just the
+// latest committed state from the log. we might want to keep the first around
+// in case we end up wanting that information later for a meld-like strategy. i
+// think the second case it provides no useful information.
+//
+// the intention: this is the position of the intention that produced this after
+// image. this is ONLY valid when its an after image produced by the replay
+// process. its junk for the initial transaction that plays. all these special
+// cases is due to the restructing of the txn processing strategy and we'll need
+// to refactor a lot of this.
+message AfterImage {
+    required uint64 intention = 1;
+    repeated Node tree = 2;
+}
+
+message TransactionOp {
+    enum OpType {
+       GET = 0;
+       PUT = 1;
+       DELETE = 2;
+       COPY = 3;
+    }
+    required OpType op  = 1;
+    required string key = 2;
+    optional string val = 3;
+}
+
+// TODO: this intention needs to store additional information for ranges that
+// were read, and/or operations through other vectors such as the iterator
+// interface.
+message Intention {
+    required uint64 snapshot = 1;
+    required uint64 token = 2;
+
+    // a flush intention ignores the snapshot and token
+    required bool flush = 3;
+
+    repeated TransactionOp ops = 4;
+}
+
+message LogEntry {
+    enum EntryType {
+       INTENTION = 0;
+       AFTER_IMAGE = 1;
+    }
+  required EntryType type = 1;
+  optional Intention intention = 2;
+  optional AfterImage after_image = 3;
+}

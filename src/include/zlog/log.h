@@ -40,6 +40,9 @@ class Log {
       const std::set<int>& keys, std::map<int, std::string> *vals) = 0;
   virtual int Read(uint64_t position, std::string *data,
       const std::set<int>& keys, float f, std::map<int, std::string> *vals) = 0;
+  virtual int Read(uint64_t position, std::string *data,
+      const Slice *key_target, const std::set<int>& keys,
+      std::map<int, std::string> *vals) = 0;
 
   virtual int Fill(uint64_t position) = 0;
   virtual int CheckTail(uint64_t *pposition) = 0;

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "storage/ram/cruzdb.pb.h"
 #include "zlog/backend.h"
 #include "zlog/backend/ram.h"
 
@@ -250,6 +251,78 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
     }
     vals->swap(vals_out);
 
+    return 0;
+  } else {
+    return -ENOENT;
+  }
+}
+
+int RAMBackend::Read(const std::string& oid, uint64_t epoch,
+    uint64_t position, std::string *data, const Slice *key_target,
+    const std::set<int>& keys, std::map<int, std::string> *vals)
+{
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(epoch, oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  if (lobj) {
+    const auto it = lobj->entries.find(position);
+    if (it == lobj->entries.end())
+      return -ENOENT;
+
+    const LogEntry& entry = it->second;
+    if (entry.trimmed || entry.invalidated)
+      return -ENODATA;
+
+    if (data)
+      data->assign(entry.data);
+
+    // starting node. we can generalize the semantics of the keys parameter
+    // later.
+    assert(keys.size() == 1);
+    int offset = *keys.begin();
+
+    std::map<int, std::string> vals_out;
+    while (true) {
+      auto blob = entry.items.at(offset);
+      vals_out.emplace(offset, blob);
+
+      // break immediately once the requested key offset is added to the output.
+      // otherwise we'll try to traverse down a path.
+      if (!key_target) {
+        break;
+      }
+
+      cruzdb_proto::Node node;
+      assert(node.ParseFromString(blob));
+      assert(node.IsInitialized());
+
+      int cmp = key_target->compare(Slice(node.key().data(),
+            node.key().size()));
+      if (cmp == 0)
+        break;
+      else if (cmp < 0) {
+        if (node.left().self()) {
+          assert(!node.left().nil());
+          offset = node.left().off();
+        } else {
+          break;
+        }
+      } else {
+        assert(cmp > 0);
+        if (node.right().self()) {
+          assert(!node.right().nil());
+          offset = node.right().off();
+        } else {
+          break;
+        }
+      }
+    }
+    vals->swap(vals_out);
     return 0;
   } else {
     return -ENOENT;
