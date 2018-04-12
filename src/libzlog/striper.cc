@@ -1,26 +1,39 @@
 #include "striper.h"
-#include <sstream>
 #include "proto/zlog.pb.h"
 
-Striper::Mapping Striper::MapPosition(uint64_t position) const
+// TODO:
+//  - check for overflow when computing max pos
+//  - collapse views instead of creating explicit copy of each
+//  - handle view overlap so we can force seal a stripe
+//  - fix naming scheme for objects
+
+boost::optional<Striper::Mapping> Striper::MapPosition(uint64_t position) const
 {
   std::lock_guard<std::mutex> l(lock_);
+
   assert(!views_.empty());
   auto it = views_.upper_bound(position);
   it--;
 
-  auto width = it->second;
-  auto oid = oids_[position % width];
+  assert(it->first <= position);
+  if (position <= it->second.maxpos()) {
+    auto oid = it->second.map(position);
+    return Mapping{epoch_, oid};
+  }
 
-  return Mapping{epoch_, oid};
+  return boost::none;
 }
 
-zlog_proto::View Striper::InitViewData(uint32_t width)
+zlog_proto::View Striper::InitViewData(uint32_t width, uint32_t entries_per_object)
 {
   assert(width > 0);
+  assert(entries_per_object > 0);
+
   zlog_proto::View view;
   view.set_position(0);
   view.set_width(width);
+  view.set_entries_per_object(entries_per_object);
+
   return view;
 }
 
@@ -42,46 +55,29 @@ int Striper::Add(uint64_t epoch, const std::string& data)
   }
 
   assert(view.width() > 0);
+  assert(view.entries_per_object() > 0);
 
   std::lock_guard<std::mutex> l(lock_);
 
   if (views_.empty()) {
     assert(epoch == 0);
     assert(view.position() == 0);
-    views_.emplace(0, view.width());
+    uint64_t maxpos = (view.width() * view.entries_per_object()) - 1;
     epoch_ = 0;
-    GenerateObjects();
+    views_.emplace(0, ViewEntry(prefix_, epoch_, view.width(), maxpos));
   } else {
     assert(epoch == (epoch_ + 1));
-    assert(views_.rbegin()->first <= view.position());
-    if (views_.rbegin()->second != view.width()) {
-      auto res = views_.emplace(view.position(), view.width());
-      assert(res.second);
-      (void)res;
-      GenerateObjects();
-    }
+
+    auto latest_view = views_.rbegin();
+    assert(latest_view->first <= view.position());
+
     epoch_ = epoch;
+    uint64_t maxpos = view.position() +
+      (view.width() * view.entries_per_object()) - 1;
+    views_.emplace(view.position(), ViewEntry(prefix_, epoch_, view.width(), maxpos));
   }
 
   latest_view_ = view;
 
   return 0;
-}
-
-void Striper::GenerateObjects()
-{
-  assert(!views_.empty());
-
-  auto it = views_.rbegin();
-  auto position = it->first;
-  auto width = it->second;
-
-  std::vector<std::string> oids;
-  for (uint32_t i = 0; i < width; i++) {
-    std::stringstream oid;
-    oid << prefix_ << "." << position << "." << i;
-    oids.push_back(oid.str());
-  }
-
-  oids_.swap(oids);
 }

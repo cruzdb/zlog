@@ -193,7 +193,11 @@ static int entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EIO;
   }
 
-  out->append(entry.data());
+  ret = cls_cxx_read(hctx, entry.offset(), entry.length(), out);
+  if (ret < 0) {
+    CLS_ERR("ERROR: read(): failed to read entry: %d", ret);
+    return ret;
+  }
 
   return 0;
 }
@@ -226,8 +230,30 @@ static int entry_write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bu
   }
 
   if (ret == -ENOENT) {
+    // get object size
+    uint64_t obj_size;
+    ret = cls_cxx_stat(hctx, &obj_size, NULL);
+    if (ret < 0) {
+      if (ret == -ENOENT) {
+        obj_size = 0;
+      } else {
+        CLS_ERR("ERROR: write(): stat failed: %D", ret);
+        return ret;
+      }
+    }
+
+    ceph::bufferlist entry_bl;
+    entry_bl.append(op.data());
+
     zlog_ceph_proto::LogEntry entry;
-    entry.set_data(op.data());
+    entry.set_offset(obj_size);
+    entry.set_length(entry_bl.length());
+
+    ret = cls_cxx_write(hctx, obj_size, entry_bl.length(), &entry_bl);
+    if (ret < 0) {
+      CLS_ERR("ERROR: write(): failed to write entry: %d", ret);
+      return ret;
+    }
 
     ret = entry_write_entry(hctx, key, entry);
     if (ret < 0) {

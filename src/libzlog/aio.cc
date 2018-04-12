@@ -151,12 +151,21 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
    */
   if (!finish) {
     auto mapping = impl->log->striper.MapPosition(impl->position);
+    while (!mapping) {
+      ret = impl->log->ExtendMap();
+      if (ret)
+        break;
+      mapping = impl->log->striper.MapPosition(impl->position);
+    }
 
     // don't need impl->get(): reuse reference
 
-    // submit new aio op
-    ret = impl->backend->AioRead(mapping.oid, mapping.epoch, impl->position, &impl->data,
-        impl, AioCompletionImpl::aio_safe_cb_read);
+    if (mapping) {
+      // submit new aio op
+      ret = impl->backend->AioRead(mapping->oid, mapping->epoch, impl->position, &impl->data,
+          impl, AioCompletionImpl::aio_safe_cb_read);
+    }
+
     if (ret)
       finish = true;
   }
@@ -222,7 +231,7 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
     // if we are appending, get a new position
     uint64_t position;
     uint64_t seq_epoch;
-    Striper::Mapping mapping;
+    boost::optional<Striper::Mapping> mapping;
     while (true) {
       ret = impl->log->CheckTail(&position, &seq_epoch, true);
       if (ret) {
@@ -230,10 +239,22 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
         break;
       }
       mapping = impl->log->striper.MapPosition(position);
-      if (seq_epoch != mapping.epoch) {
+      while (!mapping) {
+        ret = impl->log->ExtendMap();
+        if (ret)
+          break;
+        mapping = impl->log->striper.MapPosition(position);
+      }
+      if (ret) {
+        finish = true;
+        break;
+      }
+      if (seq_epoch != mapping->epoch) {
         std::cerr << "trying new seq" << std::endl;
         continue;
       }
+
+      break;
     }
 
     // we are still good. build a new aio
@@ -241,12 +262,12 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
       impl->position = position;
 
       // refresh
-      impl->epoch = mapping.epoch;
+      impl->epoch = mapping->epoch;
 
       // don't need impl->get(): reuse reference
 
       // submit new aio op
-      ret = impl->backend->AioWrite(mapping.oid, mapping.epoch, impl->position,
+      ret = impl->backend->AioWrite(mapping->oid, mapping->epoch, impl->position,
           Slice(impl->data.data(), impl->data.size()),
           impl, AioCompletionImpl::aio_safe_cb_write);
       if (ret)
@@ -332,14 +353,21 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   // full async behavior.
   uint64_t position;
   uint64_t seq_epoch;
-  Striper::Mapping mapping;
+  boost::optional<Striper::Mapping> mapping;
   while (true) {
     int ret = CheckTail(&position, &seq_epoch, true);
     if (ret)
       return ret;
 
     mapping = striper.MapPosition(position);
-    if (seq_epoch != mapping.epoch) {
+    while (!mapping) {
+      ret = ExtendMap();
+      if (ret)
+        return ret;
+      mapping = striper.MapPosition(position);
+    }
+
+    if (seq_epoch != mapping->epoch) {
       std::cerr << "retry with new seq" << std::endl;
       continue;
     }
@@ -361,11 +389,11 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   // used to identify if state changes have occurred since dispatching the
   // request in order to avoid reconfiguration later (important when lots of
   // threads or contexts try to do the same thing).
-  impl->epoch = mapping.epoch;
+  impl->epoch = mapping->epoch;
 
   impl->get(); // backend now has a reference
 
-  int ret = backend->AioWrite(mapping.oid, mapping.epoch, position, data,
+  int ret = backend->AioWrite(mapping->oid, mapping->epoch, position, data,
       impl, AioCompletionImpl::aio_safe_cb_write);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -393,8 +421,14 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   impl->get(); // backend now has a reference
 
   auto mapping = striper.MapPosition(position);
+  while (!mapping) {
+    int ret = ExtendMap();
+    if (ret)
+      return ret;
+    mapping = striper.MapPosition(position);
+  }
 
-  int ret = backend->AioRead(mapping.oid, mapping.epoch, position, &impl->data,
+  int ret = backend->AioRead(mapping->oid, mapping->epoch, position, &impl->data,
       impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

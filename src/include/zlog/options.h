@@ -9,6 +9,8 @@ struct Options {
   // TODO: add reference to width adjustment api/tools
   // TODO: add option for create vs open (default and force new width)
   int width = 10;
+
+  int entries_per_object = 200;
 };
 
 }

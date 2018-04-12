@@ -175,8 +175,27 @@ void LogImpl::ViewUpdater()
 }
 
 // generate a new view, but do not propose it.
+//
+// TODO
+//   - with fixed number of entries per stripe, we have two different types of
+//   sealing. when creating a normal view to extend the current one, we really
+//   don't need to seal any objects. we only need to seal when mappings are
+//   going to _change_
+//   - CURRENTLY we create strictly disjoint views that are abutt. so we
+//   actually don't care what the current maximum position is in a stripe when
+//   sealing---if the stripe isn't full, the mappings to that stripe will still
+//   remain valid. however, when we start to allow stripes to be sealed shut
+//   before they are full, we actually will care about the max position.
+//   - when sealing to trim current stripe, watch out for multiple empty stripes
+//   being present and what that might mean for calculating the max pos.
+//
+//   - Need to figure out what extending means for sealing and seqr recovery.
+//   this actually probably works correctly now. but if there were very little
+//   positions haveing been written, but lots of extended views, then the seal
+//   process would create a giant hole. the sequencer woudl start handing out
+//   positions at the end. but... we can optimize that later.
 int LogImpl::CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
-    zlog_proto::View& view)
+    zlog_proto::View& view, bool extend)
 {
   int ret = UpdateView();
   if (ret)
@@ -198,12 +217,20 @@ int LogImpl::CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
   // current stripe.
   uint64_t out_maxpos = 0; // initialization is ONLY for -Werror=maybe-uninitialized
   bool out_empty;
-  view = striper.LatestView().second;
-  if (empty) {
+  view = striper.LatestView().second; // start with a copy of the current view
+  if (extend) {
+    assert(!pempty);
+    assert(!pmaxpos);
+    uint64_t next_pos = view.position() +
+      (view.width() * view.entries_per_object());
+    view.set_position(next_pos);
+  } else if (empty) {
     if (conf.minpos == 0) {
       // the log is empty, so out_maxpos is undefined.
+      // view will have the same configuration, newer epoch
       out_empty = true;
     } else {
+      assert(conf.minpos > 0);
       out_empty = false;
       out_maxpos = conf.minpos - 1;
     }
@@ -253,11 +280,14 @@ int LogImpl::ProposeNextView(uint64_t next_epoch,
   return 0;
 }
 
-int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty)
+// Want to seal to get accurate maximum, but we don't really want to change any
+// mappings. we just need everyone to stop so the sequencer can initialize its
+// state.
+int LogImpl::CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty, bool extend)
 {
   uint64_t next_epoch;
   zlog_proto::View view;
-  int ret = CreateNextView(&next_epoch, pmaxpos, pempty, view);
+  int ret = CreateNextView(&next_epoch, pmaxpos, pempty, view, extend);
   if (ret)
     return ret;
 
@@ -356,6 +386,25 @@ int LogImpl::ProposeExclusiveMode()
   return ProposeNextView(next_epoch, view);
 }
 
+// TODO: in order extend we use create cut which seals the current stripe.
+// really we want to extend the stripe without sealing. this is ok, we just need
+// to change the way we build the view map. later...
+//
+// TODO: if the current view is empty, create cut doesn't extend it. if a
+// sequencer hands out a bunch of positions that span the next view, but that
+// view hasn't been craeted yet AND the current view is empty which could happen
+// with a race, extend map will just keep duplicating the current map. this
+// happened with the Fill unit test that starts off appending to a position in
+// the next view. So we need to add a mode so that create cut will extend the
+// map.
+//
+// TODO: we also don't need to seal for extension
+int LogImpl::ExtendMap()
+{
+  std::cout << "extending map" << std::endl;
+  return CreateCut(nullptr, nullptr, nullptr, true);
+}
+
 int LogImpl::CheckTail(uint64_t *pposition)
 {
   return CheckTail(pposition, nullptr, false);
@@ -433,7 +482,13 @@ int LogImpl::Read(uint64_t position, std::string *data)
 {
   while (true) {
     auto mapping = striper.MapPosition(position);
-    int ret = backend->Read(mapping.oid, mapping.epoch, position, data);
+    if (!mapping) {
+      int ret = ExtendMap();
+      if (ret < 0)
+        return ret;
+      continue;
+    }
+    int ret = backend->Read(mapping->oid, mapping->epoch, position, data);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {
@@ -485,12 +540,19 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
     // and retry. note that one could optimize this case and check only that the
     // sequencer was invalidated even if the view changed.
     auto mapping = striper.MapPosition(position);
-    if (seq_epoch != mapping.epoch) {
+    while (!mapping) {
+      ret = ExtendMap();
+      if (ret < 0)
+        return ret;
+      mapping = striper.MapPosition(position);
+    }
+
+    if (seq_epoch != mapping->epoch) {
       std::cerr << "retry with new seq" << std::endl;
       continue;
     }
 
-    ret = backend->Write(mapping.oid, data, mapping.epoch, position);
+    ret = backend->Write(mapping->oid, data, mapping->epoch, position);
     if (!ret) {
       if (pposition)
         *pposition = position;
@@ -517,7 +579,14 @@ int LogImpl::Fill(uint64_t position)
 {
   while (true) {
     auto mapping = striper.MapPosition(position);
-    int ret = backend->Fill(mapping.oid, mapping.epoch, position);
+    if (!mapping) {
+      int ret = ExtendMap();
+      if (ret < 0)
+        return ret;
+      continue;
+    }
+
+    int ret = backend->Fill(mapping->oid, mapping->epoch, position);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {
@@ -557,7 +626,14 @@ int LogImpl::Trim(uint64_t position)
 {
   while (true) {
     auto mapping = striper.MapPosition(position);
-    int ret = backend->Trim(mapping.oid, mapping.epoch, position);
+    if (!mapping) {
+      int ret = ExtendMap();
+      if (ret < 0)
+        return ret;
+      continue;
+    }
+
+    int ret = backend->Trim(mapping->oid, mapping->epoch, position);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {

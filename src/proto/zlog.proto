@@ -5,13 +5,15 @@ package zlog_proto;
 option optimize_for = SPEED;
 
 message View {
-  // the minimum (inclusive) log position that maps to this view. the upper
-  // limit is bound by the next view in the view set, and is +inf for the most
-  // recent view.
+  // the minimum (inclusive) log position that maps to this view. the highest
+  // numbered position in this view is position + width * entries_per_object - 1.
   required uint64 position = 1;
 
   // the number of objects that the log is striped across.
   required uint32 width = 2;
+
+  // the number of log entries stored in each object.
+  required uint32 entries_per_object = 3;
 
   // single-writer mode. when the exclusive_cookie field is not specified, then
   // clients rely on a external sequencer service. when a value for the
@@ -20,10 +22,10 @@ message View {
   // its own sequencer. it is critical that this value be unique. one way to do
   // this is to encode the next_epoch in the string which is guaranteed to be
   // unique if it is accepted.
-  optional string exclusive_cookie = 3;
+  optional string exclusive_cookie = 4;
 
-  optional string host = 4;
-  optional string port = 5;
+  optional string host = 5;
+  optional string port = 6;
 }
 
 message StringPair {

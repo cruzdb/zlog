@@ -18,8 +18,13 @@ int Log::Create(const Options& options,
     const std::string& host, const std::string& port,
     Log **logpp)
 {
-  if (options.width < 1) {
-    std::cerr << "width must be great than 1" << std::endl;
+  if (options.width <= 0) {
+    std::cerr << "width must be great than 0" << std::endl;
+    return -EINVAL;
+  }
+
+  if (options.entries_per_object <= 0) {
+    std::cerr << "entries_per_object must be great than 0" << std::endl;
     return -EINVAL;
   }
 
@@ -30,7 +35,7 @@ int Log::Create(const Options& options,
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(options.width);
+  auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
   if (host.empty()) {
     auto uuid = boost::uuids::random_generator()();
     auto hostname = boost::asio::ip::host_name();
@@ -143,14 +148,19 @@ int Log::CreateWithBackend(const Options& options,
     std::shared_ptr<Backend> backend,
     const std::string& name, Log **logptr)
 {
-  if (options.width < 1) {
-    std::cerr << "width must be great than 1" << std::endl;
+  if (options.width <= 0) {
+    std::cerr << "width must be great than 0" << std::endl;
+    return -EINVAL;
+  }
+
+  if (options.entries_per_object <= 0) {
+    std::cerr << "entries_per_object must be great than 0" << std::endl;
     return -EINVAL;
   }
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(options.width);
+  auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
   auto uuid = boost::uuids::random_generator()();
   auto hostname = boost::asio::ip::host_name();
   std::stringstream exclusive_cookie_ss;

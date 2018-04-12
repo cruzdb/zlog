@@ -43,9 +43,9 @@ class LogImpl : public Log {
   int UpdateView();
 
   int CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
-      zlog_proto::View& view);
+      zlog_proto::View& view, bool extend = false);
   int ProposeNextView(uint64_t next_epoch, const zlog_proto::View& view);
-  int CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty);
+  int CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty, bool extend = false);
   int Seal(const std::vector<std::string>& objects,
       uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
   int ProposeSharedMode();
@@ -107,6 +107,8 @@ class LogImpl : public Log {
   int StripeWidth() override {
     return striper.GetCurrent().width;
   }
+
+  int ExtendMap();
 
  public:
   bool shutdown;

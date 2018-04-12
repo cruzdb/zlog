@@ -40,17 +40,20 @@ message LogObjectHeader {
   optional uint64 max_pos = 2;
 }
 
-// single log entry
+// log entry metadata
+
 message LogEntry {
   enum Flags {
     INVALID = 1;
     FORCED  = 2;
   }
   optional uint32 flags = 1 [default = 0];
-  optional bytes data = 2;
+  optional uint32 offset = 2;
+  optional uint32 length = 3;
 }
 
 // log object methods and replies
+
 message ReadMaxPos {
   required uint64 epoch = 1;
 }
