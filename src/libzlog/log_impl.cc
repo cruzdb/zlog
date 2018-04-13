@@ -488,7 +488,8 @@ int LogImpl::Read(uint64_t position, std::string *data)
         return ret;
       continue;
     }
-    int ret = backend->Read(mapping->oid, mapping->epoch, position, data);
+    int ret = backend->Read(mapping->oid, mapping->epoch, position,
+        mapping->width, mapping->max_size, data);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {
@@ -552,7 +553,8 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       continue;
     }
 
-    ret = backend->Write(mapping->oid, data, mapping->epoch, position);
+    ret = backend->Write(mapping->oid, data, mapping->epoch, position,
+        mapping->width, mapping->max_size);
     if (!ret) {
       if (pposition)
         *pposition = position;
@@ -586,7 +588,8 @@ int LogImpl::Fill(uint64_t position)
       continue;
     }
 
-    int ret = backend->Fill(mapping->oid, mapping->epoch, position);
+    int ret = backend->Fill(mapping->oid, mapping->epoch, position,
+        mapping->width, mapping->max_size);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {
@@ -633,7 +636,8 @@ int LogImpl::Trim(uint64_t position)
       continue;
     }
 
-    int ret = backend->Trim(mapping->oid, mapping->epoch, position);
+    int ret = backend->Trim(mapping->oid, mapping->epoch, position,
+        mapping->width, mapping->max_size);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {

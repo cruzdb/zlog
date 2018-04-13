@@ -7,36 +7,44 @@
 namespace zlog {
 
 void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::ReadEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
+  call.set_stride(stride);
+  call.set_max_size(max_size);
   encode(bl, call);
   op.exec("zlog", "entry_read", bl);
 }
 
 void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
-    uint64_t position, ceph::bufferlist& data)
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    ceph::bufferlist& data)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::WriteEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
+  call.set_stride(stride);
+  call.set_max_size(max_size);
   call.set_data(data.c_str(), data.length());
   encode(bl, call);
   op.exec("zlog", "entry_write", bl);
 }
 
 void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
-    uint64_t epoch, uint64_t position, bool force)
+    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size,
+    bool force)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::InvalidateEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
   call.set_force(force);
+  call.set_stride(stride);
+  call.set_max_size(max_size);
   encode(bl, call);
   op.exec("zlog", "entry_invalidate", bl);
 }

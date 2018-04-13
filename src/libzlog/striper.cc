@@ -18,7 +18,9 @@ boost::optional<Striper::Mapping> Striper::MapPosition(uint64_t position) const
   assert(it->first <= position);
   if (position <= it->second.maxpos()) {
     auto oid = it->second.map(position);
-    return Mapping{epoch_, oid};
+    auto width = it->second.width();
+    auto max_size = it->second.max_size();
+    return Mapping{epoch_, width, max_size, oid};
   }
 
   return boost::none;
@@ -32,6 +34,7 @@ zlog_proto::View Striper::InitViewData(uint32_t width, uint32_t entries_per_obje
   zlog_proto::View view;
   view.set_position(0);
   view.set_width(width);
+  view.set_max_entry_size(1024); // TODO
   view.set_entries_per_object(entries_per_object);
 
   return view;
@@ -64,7 +67,8 @@ int Striper::Add(uint64_t epoch, const std::string& data)
     assert(view.position() == 0);
     uint64_t maxpos = (view.width() * view.entries_per_object()) - 1;
     epoch_ = 0;
-    views_.emplace(0, ViewEntry(prefix_, epoch_, view.width(), maxpos));
+    views_.emplace(0, ViewEntry(prefix_, epoch_, view.width(), maxpos,
+          view.max_entry_size()));
   } else {
     assert(epoch == (epoch_ + 1));
 
@@ -74,7 +78,8 @@ int Striper::Add(uint64_t epoch, const std::string& data)
     epoch_ = epoch;
     uint64_t maxpos = view.position() +
       (view.width() * view.entries_per_object()) - 1;
-    views_.emplace(view.position(), ViewEntry(prefix_, epoch_, view.width(), maxpos));
+    views_.emplace(view.position(), ViewEntry(prefix_, epoch_, view.width(), maxpos,
+          view.max_entry_size()));
   }
 
   latest_view_ = view;

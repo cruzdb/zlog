@@ -722,7 +722,7 @@ TEST_P(LibZLogCAPITest, Fill) {
 }
 
 TEST_P(LibZLogCAPITest, Read) {
-  char data[4096];
+  char data[1024];
 
   int ret = zlog_read(log, 0, data, sizeof(data));
   ASSERT_EQ(ret, -ENOENT);
@@ -750,7 +750,7 @@ TEST_P(LibZLogCAPITest, Read) {
   ret = zlog_append(log, data, sizeof(data), &pos);
   ASSERT_EQ(ret, 0);
 
-  char data2[4096];
+  char data2[1024];
   memset(data2, 0, sizeof(data2));
   ret = zlog_read(log, pos, data2, sizeof(data2));
   ASSERT_EQ((unsigned)ret, sizeof(data2));

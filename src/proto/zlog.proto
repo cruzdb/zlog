@@ -15,6 +15,8 @@ message View {
   // the number of log entries stored in each object.
   required uint32 entries_per_object = 3;
 
+  required uint32 max_entry_size = 4;
+
   // single-writer mode. when the exclusive_cookie field is not specified, then
   // clients rely on a external sequencer service. when a value for the
   // exclusive_cookie field is specified, the client whose proposed change was
@@ -22,10 +24,10 @@ message View {
   // its own sequencer. it is critical that this value be unique. one way to do
   // this is to encode the next_epoch in the string which is guaranteed to be
   // unique if it is accepted.
-  optional string exclusive_cookie = 4;
+  optional string exclusive_cookie = 5;
 
-  optional string host = 5;
-  optional string port = 6;
+  optional string host = 6;
+  optional string port = 7;
 }
 
 message StringPair {

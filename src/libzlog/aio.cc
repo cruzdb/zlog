@@ -162,7 +162,8 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 
     if (mapping) {
       // submit new aio op
-      ret = impl->backend->AioRead(mapping->oid, mapping->epoch, impl->position, &impl->data,
+      ret = impl->backend->AioRead(mapping->oid, mapping->epoch, impl->position,
+          mapping->width, mapping->max_size, &impl->data,
           impl, AioCompletionImpl::aio_safe_cb_read);
     }
 
@@ -268,6 +269,7 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
 
       // submit new aio op
       ret = impl->backend->AioWrite(mapping->oid, mapping->epoch, impl->position,
+          mapping->width, mapping->max_size,
           Slice(impl->data.data(), impl->data.size()),
           impl, AioCompletionImpl::aio_safe_cb_write);
       if (ret)
@@ -393,7 +395,8 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
   impl->get(); // backend now has a reference
 
-  int ret = backend->AioWrite(mapping->oid, mapping->epoch, position, data,
+  int ret = backend->AioWrite(mapping->oid, mapping->epoch, position,
+      mapping->width, mapping->max_size, data,
       impl, AioCompletionImpl::aio_safe_cb_write);
   /*
    * Currently aio_operate never fails. If in the future that changes then we
@@ -428,7 +431,8 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
     mapping = striper.MapPosition(position);
   }
 
-  int ret = backend->AioRead(mapping->oid, mapping->epoch, position, &impl->data,
+  int ret = backend->AioRead(mapping->oid, mapping->epoch, position,
+      mapping->width, mapping->max_size, &impl->data,
       impl, AioCompletionImpl::aio_safe_cb_read);
   /*
    * Currently aio_operate never fails. If in the future that changes then we

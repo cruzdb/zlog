@@ -202,7 +202,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
 }
 
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position)
+    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
 {
   auto txn = NewTransaction();
 
@@ -257,7 +257,8 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data)
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    std::string *data)
 {
   auto txn = NewTransaction(true);
 
@@ -294,7 +295,7 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   auto txn = NewTransaction();
 
@@ -333,7 +334,7 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   auto txn = NewTransaction();
 
@@ -379,19 +380,21 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, const Slice& data, void *arg,
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position);
+  int ret = Write(oid, data, epoch, position, stride, max_size);
   callback(arg, ret);
   return 0;
 }
 
 int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data, void *arg,
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, data);
+  int ret = Read(oid, epoch, position, stride, max_size, data);
   callback(arg, ret);
   return 0;
 }

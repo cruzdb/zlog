@@ -38,6 +38,8 @@ message Views {
 message LogObjectHeader {
   optional uint64 epoch = 1;
   optional uint64 max_pos = 2;
+  optional uint32 stride = 3;
+  optional uint32 max_size = 4;
 }
 
 // log entry metadata
@@ -66,19 +68,26 @@ message Seal {
   required uint64 epoch = 1;
 }
 
+// TODO: split out data, and also move to flatbuffer
 message WriteEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
-  required bytes data = 3;
+  required uint32 stride = 3;
+  required uint32 max_size = 4;
+  required bytes data = 5;
 }
 
 message ReadEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
+  required uint32 stride = 3;
+  required uint32 max_size = 4;
 }
 
 message InvalidateEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
   required bool force = 3;
+  required uint32 stride = 4;
+  required uint32 max_size = 5;
 }

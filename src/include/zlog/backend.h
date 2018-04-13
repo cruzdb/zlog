@@ -92,25 +92,27 @@ class Backend {
   // -ENODATA
   //   - position has been invalidated (fill or trim)
   virtual int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data) = 0;
+      uint64_t position, uint32_t stride, uint32_t max_size,
+      std::string *data) = 0;
 
   // Write a log entry.
   //
   // -EROFS
   //   - position is read-only (written or invalid)
   virtual int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position) = 0;
+      uint64_t epoch, uint64_t position, uint32_t stride,
+      uint32_t max_size) = 0;
 
   // Invalidate a log entry.
   //
   // -EROFS
   //   - position is read-only (written or invalid)
   virtual int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position) = 0;
+      uint64_t position, uint32_t stride, uint32_t max_size) = 0;
 
   // Force invalidate a log entry.
   virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) = 0;
+      uint64_t position, uint32_t stride, uint32_t max_size) = 0;
 
   // Set a new log data object epoch.
   virtual int Seal(const std::string& oid, uint64_t epoch) = 0;
@@ -129,12 +131,14 @@ class Backend {
 
   // See Read()
   virtual int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data, void *arg,
+      uint64_t position, uint32_t stride, uint32_t max_size,
+      std::string *data, void *arg,
       std::function<void(void*, int)> callback) = 0;
 
   // See Write()
   virtual int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, const Slice& data, void *arg,
+      uint64_t position, uint32_t stride, uint32_t max_size,
+      const Slice& data, void *arg,
       std::function<void(void*, int)> callback) = 0;
 };
 

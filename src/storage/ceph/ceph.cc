@@ -250,10 +250,10 @@ int CephBackend::ProposeView(const std::string& hoid,
 }
 
 int CephBackend::Read(const std::string& oid, uint64_t epoch,
-                      uint64_t position, std::string *data)
+    uint64_t position, uint32_t stride, uint32_t max_size, std::string *data)
 {
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position);
+  zlog::cls_zlog_read(op, epoch, position, stride, max_size);
 
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
@@ -266,31 +266,31 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int CephBackend::Write(const std::string& oid, const Slice& data,
-          uint64_t epoch, uint64_t position)
+          uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
 {
   ::ceph::bufferlist data_bl;
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, stride, max_size, data_bl);
 
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, false);
+  zlog::cls_zlog_invalidate(op, epoch, position, stride, max_size, false);
 
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Trim(const std::string& oid, uint64_t epoch,
-                      uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, true);
+  zlog::cls_zlog_invalidate(op, epoch, position, stride, max_size, true);
 
   return ioctx_->operate(oid, &op);
 }
@@ -320,7 +320,8 @@ int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
 }
 
 int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data, void *arg,
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
   AioContext *c = new AioContext;
@@ -332,13 +333,14 @@ int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
   assert(c->c);
 
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position);
+  zlog::cls_zlog_read(op, epoch, position, stride, max_size);
 
   return ioctx_->aio_operate(oid, c->c, &op, &c->bl);
 }
 
 int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, const Slice& data, void *arg,
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
   AioContext *c = new AioContext;
@@ -353,7 +355,7 @@ int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, stride, max_size, data_bl);
 
   return ioctx_->aio_operate(oid, c->c, &op);
 }
