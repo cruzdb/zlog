@@ -12,13 +12,16 @@ namespace zlog {
 
 Log::~Log() {}
 
-int Log::Create(const std::string& scheme, const std::string& name,
+int Log::Create(const Options& options,
+    const std::string& scheme, const std::string& name,
     const std::map<std::string, std::string>& opts,
     const std::string& host, const std::string& port,
     Log **logpp)
 {
-  // FIXME
-  const int stripe_size = 10;
+  if (options.width < 1) {
+    std::cerr << "width must be great than 1" << std::endl;
+    return -EINVAL;
+  }
 
   std::shared_ptr<Backend> backend;
   int ret = Backend::Load(scheme, opts, backend);
@@ -27,7 +30,7 @@ int Log::Create(const std::string& scheme, const std::string& name,
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(stripe_size);
+  auto init_view = Striper::InitViewData(options.width);
   if (host.empty()) {
     auto uuid = boost::uuids::random_generator()();
     auto hostname = boost::asio::ip::host_name();
@@ -81,7 +84,8 @@ int Log::Create(const std::string& scheme, const std::string& name,
   return 0;
 }
 
-int Log::Open(const std::string& scheme, const std::string& name,
+int Log::Open(const Options& options,
+    const std::string& scheme, const std::string& name,
     const std::map<std::string, std::string>& opts,
     const std::string& host, const std::string& port,
     Log **logpp)
@@ -132,15 +136,18 @@ int Log::Open(const std::string& scheme, const std::string& name,
   return 0;
 }
 
-int Log::CreateWithBackend(std::shared_ptr<Backend> backend,
+int Log::CreateWithBackend(const Options& options,
+    std::shared_ptr<Backend> backend,
     const std::string& name, Log **logptr)
 {
-  // FIXME
-  const int stripe_size = 10;
+  if (options.width < 1) {
+    std::cerr << "width must be great than 1" << std::endl;
+    return -EINVAL;
+  }
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(stripe_size);
+  auto init_view = Striper::InitViewData(options.width);
   auto uuid = boost::uuids::random_generator()();
   auto hostname = boost::asio::ip::host_name();
   std::stringstream exclusive_cookie_ss;
@@ -187,7 +194,8 @@ int Log::CreateWithBackend(std::shared_ptr<Backend> backend,
   return 0;
 }
 
-int Log::OpenWithBackend(std::shared_ptr<Backend> backend,
+int Log::OpenWithBackend(const Options& options,
+    std::shared_ptr<Backend> backend,
     const std::string& name, Log **logptr)
 {
   if (name.empty())

@@ -36,13 +36,15 @@ void LibZLogTest::SetUp() {
   ASSERT_NE(mkdtemp(context->dbpath), nullptr);
   ASSERT_GT(strlen(context->dbpath), (unsigned)0);
 
+  zlog::Options options;
+
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
     auto backend = std::unique_ptr<zlog::storage::lmdb::LMDBBackend>(
         new zlog::storage::lmdb::LMDBBackend());
     backend->Init(context->dbpath);
-    int ret = zlog::Log::CreateWithBackend(std::move(backend),
-        "mylog", &log);
+    int ret = zlog::Log::CreateWithBackend(options,
+        std::move(backend), "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
     std::string host = "";
@@ -52,7 +54,7 @@ void LibZLogTest::SetUp() {
       host = "localhost";
       port = "5678";
     }
-    int ret = zlog::Log::Create("lmdb", "mylog",
+    int ret = zlog::Log::Create(options, "lmdb", "mylog",
         {{"path", context->dbpath}}, host, port, &log);
     ASSERT_EQ(ret, 0);
   }
@@ -69,12 +71,14 @@ int LibZLogTest::reopen()
 {
   zlog::Log *new_log = nullptr;
 
+  zlog::Options options;
+
   if (lowlevel()) {
     auto backend = std::unique_ptr<zlog::storage::lmdb::LMDBBackend>(
         new zlog::storage::lmdb::LMDBBackend());
     backend->Init(context->dbpath);
-    int ret = zlog::Log::OpenWithBackend(std::move(backend),
-        "mylog", &new_log);
+    int ret = zlog::Log::OpenWithBackend(options,
+        std::move(backend), "mylog", &new_log);
     if (ret)
       return ret;
   } else {
@@ -85,7 +89,7 @@ int LibZLogTest::reopen()
       host = "localhost";
       port = "5678";
     }
-    int ret = zlog::Log::Open("lmdb", "mylog",
+    int ret = zlog::Log::Open(options, "lmdb", "mylog",
         {{"path", context->dbpath}}, host, port, &new_log);
     if (ret)
       return ret;

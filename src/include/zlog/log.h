@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include "slice.h"
+#include "options.h"
 
 namespace zlog {
 
@@ -62,22 +63,26 @@ class Log {
   virtual int StripeWidth() = 0;
 
  public:
-  static int Create(const std::string& scheme, const std::string& name,
+  static int Create(const Options& options, const std::string& scheme,
+      const std::string& name,
       const std::map<std::string, std::string>& params,
       const std::string& host, const std::string& port,
       Log **log);
 
-  static int Open(const std::string& scheme, const std::string& name,
+  static int Open(const Options& options, const std::string& scheme,
+      const std::string& name,
       const std::map<std::string, std::string>& params,
       const std::string& host, const std::string& port,
       Log **log);
 
  public:
   // TODO: open/create if already shared, or if exclusive force?
-  static int CreateWithBackend(std::shared_ptr<Backend> backend,
+  static int CreateWithBackend(const Options& options,
+      std::shared_ptr<Backend> backend,
       const std::string& name, Log **logptr);
 
-  static int OpenWithBackend(std::shared_ptr<Backend> backend,
+  static int OpenWithBackend(const Options& options,
+      std::shared_ptr<Backend> backend,
       const std::string& name, Log **logptr);
 
  private:

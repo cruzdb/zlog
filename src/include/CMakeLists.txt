@@ -4,6 +4,7 @@ install(FILES
     zlog/log.h
     zlog/slice.h
     zlog/stream.h
+    zlog/options.h
     DESTINATION include/zlog
 )
 

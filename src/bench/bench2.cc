@@ -23,6 +23,8 @@
 
 namespace po = boost::program_options;
 
+// TODO: reduce data copying in ceph v2
+
 class rand_data_gen {
  public:
   rand_data_gen(size_t buf_size, size_t samp_size) :
@@ -175,8 +177,9 @@ int main(int argc, char **argv)
         new zlog::storage::ceph::CephBackend(&ioctx));
   }
 
+  zlog::Options options;
   zlog::Log *log;
-  int ret = zlog::Log::CreateWithBackend(
+  int ret = zlog::Log::CreateWithBackend(options,
       std::move(backend), logname, &log);
   assert(ret == 0);
 

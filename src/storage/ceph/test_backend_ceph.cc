@@ -74,10 +74,14 @@ void LibZLogTest::SetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init(lowlevel()));
 
+  zlog::Options options;
+
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
-    auto backend = std::unique_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&context->ioctxpp));
-    int ret = zlog::Log::CreateWithBackend(std::move(backend), "mylog", &log);
+    auto backend = std::unique_ptr<zlog::Backend>(
+        new zlog::storage::ceph::CephBackend(&context->ioctxpp));
+    int ret = zlog::Log::CreateWithBackend(options,
+        std::move(backend), "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
     std::string host = "";
@@ -87,7 +91,7 @@ void LibZLogTest::SetUp() {
       host = "localhost";
       port = "5678";
     }
-    int ret = zlog::Log::Create("ceph", "mylog",
+    int ret = zlog::Log::Create(options, "ceph", "mylog",
         {{"conf_file", ""}, {"pool", context->pool_name}},
         host, port, &log);
     ASSERT_EQ(ret, 0);
