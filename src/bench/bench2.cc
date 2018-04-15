@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <boost/crc.hpp>
 #include <boost/program_options.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -24,10 +25,6 @@
 
 namespace po = boost::program_options;
 
-// TODO: reduce data copying in ceph v2
-// 1. figure out metrics to collect
-// 2. run some tests
-
 class rand_data_gen {
  public:
   rand_data_gen(size_t buf_size, size_t samp_size) :
@@ -36,11 +33,16 @@ class rand_data_gen {
   {}
 
   void generate() {
+    std::uniform_int_distribution<uint64_t> d(
+        std::numeric_limits<uint64_t>::min(),
+        std::numeric_limits<uint64_t>::max());
     buf_.reserve(buf_size_);
-    std::ifstream ifs("/dev/urandom",
-        std::ios::binary | std::ios::in);
-    std::copy_n(std::istreambuf_iterator<char>(ifs),
-        buf_size_, std::back_inserter(buf_));
+    while (buf_.size() < buf_size_) {
+      uint64_t val = d(gen_);
+      buf_.append((const char *)&val, sizeof(val));
+    }
+    if (buf_.size() > buf_size_)
+      buf_.resize(buf_size_);
   }
 
   inline const char *sample() {
@@ -60,9 +62,15 @@ struct aio_state {
   std::string data;
   uint64_t pos;
   uint64_t start_us;
+  uint32_t crc32;
 };
 
 static size_t entry_size;
+
+static bool verify_writes;
+static std::string checksum_file;
+static std::unordered_map<uint64_t, uint32_t> checksums;
+
 static sem_t sem;
 static std::mutex lock;
 static std::condition_variable cond;
@@ -90,13 +98,20 @@ static inline uint64_t getus()
   return __getns(CLOCK_MONOTONIC) / 1000;
 }
 
+static uint32_t crc32(const char *data, size_t size)
+{
+  boost::crc_32_type result;
+  result.process_bytes(data, size);
+  return result.checksum();
+}
+
 static void handle_aio_append_cb(aio_state *io)
 {
   auto latency_us = getus() - io->start_us;
+  ops_done.fetch_add(1);
 
   sem_post(&sem);
 
-  // clean-up
   if (io->c->ReturnValue()) {
     std::cout << "error: io retval = "
       << io->c->ReturnValue() << std::endl;
@@ -105,11 +120,11 @@ static void handle_aio_append_cb(aio_state *io)
     exit(1);
   }
 
-  ops_done.fetch_add(1);
+  if (verify_writes) {
+    checksums.emplace(io->pos, io->crc32);
+  }
 
   delete io->c;
-  io->c = NULL;
-
   delete io;
 
   std::lock_guard<std::mutex> lk(hist_lock);
@@ -118,9 +133,11 @@ static void handle_aio_append_cb(aio_state *io)
 
 static void handle_aio_read_cb(aio_state *io)
 {
+  auto latency_us = getus() - io->start_us;
+  ops_done.fetch_add(1);
+
   sem_post(&sem);
 
-  // clean-up
   if (io->c->ReturnValue()) {
     std::cout << "error: io retval = "
       << io->c->ReturnValue() << std::endl;
@@ -136,15 +153,20 @@ static void handle_aio_read_cb(aio_state *io)
     exit(1);
   }
 
-  ops_done.fetch_add(1);
-
-  auto latency_us = getus() - io->start_us;
-  hdr_record_value(histogram, latency_us);
+  if (verify_writes) {
+    auto checksum = crc32(io->data.c_str(), io->data.size());
+    auto expected = checksums.at(io->pos);
+    if (checksum != expected) {
+      std::cerr << "checksum error at pos " << io->pos << std::endl;
+      exit(1);
+    }
+  }
 
   delete io->c;
-  io->c = NULL;
-
   delete io;
+
+  std::lock_guard<std::mutex> lk(hist_lock);
+  hdr_record_value(histogram, latency_us);
 }
 
 static void reporter(const std::string prefix)
@@ -225,6 +247,7 @@ int main(int argc, char **argv)
     ("qdepth,q", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
     ("ram", po::bool_switch(&ram)->default_value(false), "ram backend")
     ("prefix", po::value<std::string>(&prefix)->default_value(""), "name prefix")
+    ("verify", po::value<std::string>(&checksum_file)->default_value(""), "verify writes data")
   ;
 
   po::variables_map vm;
@@ -242,6 +265,19 @@ int main(int argc, char **argv)
     auto uuid = boost::uuids::random_generator()();
     ss << uuid << ".log";
     logname = ss.str();
+  }
+
+  if (!checksum_file.empty()) {
+    verify_writes = true;
+    if (scan) {
+      std::fstream in(checksum_file, std::ios_base::in);
+      uint64_t pos;
+      uint32_t crc32;
+      while (in >> pos) {
+        in >> crc32;
+        checksums.emplace(pos, crc32);
+      }
+    }
   }
 
   // only used for ceph backend
@@ -311,7 +347,6 @@ int main(int argc, char **argv)
     }
     for (uint64_t pos = 0; pos < tail; pos++) {
       sem_wait(&sem);
-
       if (stop)
         break;
 
@@ -319,8 +354,9 @@ int main(int argc, char **argv)
       io->c = zlog::Log::aio_create_completion(
           std::bind(handle_aio_read_cb, io));
       io->start_us = getus();
+      io->pos = pos;
 
-      int ret = log->AioRead(pos, io->c, &io->data);
+      int ret = log->AioRead(io->pos, io->c, &io->data);
       if (ret) {
         std::cerr << "aio read failed " << ret << std::endl;
         exit(1);
@@ -329,7 +365,6 @@ int main(int argc, char **argv)
   } else {
     for (;;) {
       sem_wait(&sem);
-
       if (stop)
         break;
 
@@ -338,8 +373,15 @@ int main(int argc, char **argv)
           std::bind(handle_aio_append_cb, io));
       io->start_us = getus();
 
+      auto data = dgen.sample();
+
+      if (verify_writes) {
+        io->crc32 = crc32(data, entry_size);
+      }
+
       int ret = log->AioAppend(io->c,
-          zlog::Slice(dgen.sample(), entry_size), &io->pos);
+          zlog::Slice(data, entry_size), &io->pos);
+
       if (ret) {
         std::cerr << "aio append failed " << ret << std::endl;
         exit(1);
@@ -347,19 +389,28 @@ int main(int argc, char **argv)
     }
   }
 
-  // wait for I/Os to complete
   while (true) {
     int val;
     sem_getvalue(&sem, &val);
     if (val == qdepth)
       break;
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(100));
   }
 
   stop = 1;
   cond.notify_all();
   reporter_thread.join();
   hdr_close(histogram);
+
+  if (!checksum_file.empty()) {
+    std::fstream out(checksum_file, std::ios_base::out | std::ios_base::trunc);
+    for (auto it = checksums.begin(); it != checksums.end();) {
+      out << it->first << std::endl << it->second;
+      if (++it != checksums.end())
+        out << std::endl;
+    }
+  }
 
   if (!ram) {
     ioctx.aio_flush();
