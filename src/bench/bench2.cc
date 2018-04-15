@@ -16,6 +16,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <signal.h>
 #include <time.h>
+#include <hdr_histogram.h>
 #include <rados/librados.hpp>
 #include "include/zlog/backend/ceph.h"
 #include "include/zlog/backend/ram.h"
@@ -58,6 +59,7 @@ struct aio_state {
   zlog::AioCompletion *c;
   std::string data;
   uint64_t pos;
+  uint64_t start_us;
 };
 
 static size_t entry_size;
@@ -71,10 +73,27 @@ static void sigint_handler(int sig) {
   sem_post(&sem);
 }
 
+static struct hdr_histogram *histogram;
+static std::mutex hist_lock;
+
 static std::atomic<uint64_t> ops_done;
+
+static inline uint64_t __getns(clockid_t clock)
+{
+  struct timespec ts;
+  clock_gettime(clock, &ts);
+  return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
+}
+
+static inline uint64_t getus()
+{
+  return __getns(CLOCK_MONOTONIC) / 1000;
+}
 
 static void handle_aio_append_cb(aio_state *io)
 {
+  auto latency_us = getus() - io->start_us;
+
   sem_post(&sem);
 
   // clean-up
@@ -92,6 +111,9 @@ static void handle_aio_append_cb(aio_state *io)
   io->c = NULL;
 
   delete io;
+
+  std::lock_guard<std::mutex> lk(hist_lock);
+  hdr_record_value(histogram, latency_us);
 }
 
 static void handle_aio_read_cb(aio_state *io)
@@ -116,37 +138,68 @@ static void handle_aio_read_cb(aio_state *io)
 
   ops_done.fetch_add(1);
 
+  auto latency_us = getus() - io->start_us;
+  hdr_record_value(histogram, latency_us);
+
   delete io->c;
   io->c = NULL;
 
   delete io;
 }
 
-static void reporter()
+static void reporter(const std::string prefix)
 {
+  FILE *tpf = nullptr;
+  if (!prefix.empty()) {
+    std::stringstream fn;
+    fn << prefix << ".iops.csv";
+    tpf = fopen(fn.str().c_str(), "w");
+    fprintf(tpf, "us,iops\n");
+  }
+
   while (true) {
     std::unique_lock<std::mutex> lk(lock);
 
-    auto start = std::chrono::steady_clock::now();
     auto ops_start = ops_done.load();
+    auto start_us = getus();
 
     cond.wait_for(lk, std::chrono::seconds(1),
         [&] { return stop; });
+    if (stop)
+      break;
 
-    auto end = std::chrono::steady_clock::now();
+    auto end_us = getus();
     auto ops_end = ops_done.load();
 
-    auto elapsed = std::chrono::duration_cast<
-      std::chrono::microseconds>(end - start);
+    auto elapsed_us = end_us - start_us;
 
     auto iops = (double)((ops_end - ops_start) *
-        1000000ULL) / (double)elapsed.count();
+        1000000ULL) / (double)elapsed_us;
 
     std::cout << iops << std::endl;
 
-    if (stop)
-      break;
+    if (tpf) {
+      fprintf(tpf, "%lu,%f\n", end_us, iops);
+    }
   }
+
+  if (tpf) {
+    fclose(tpf);
+  }
+
+  std::lock_guard<std::mutex> lk(hist_lock);
+
+  if (!prefix.empty()) {
+    std::stringstream fn;
+    fn << prefix << ".latency.csv";
+    FILE *ltf = fopen(fn.str().c_str(), "w");
+    hdr_percentiles_print(histogram,
+        ltf, 5, 1.0, CSV);
+    fclose(ltf);
+  }
+
+  hdr_percentiles_print(histogram,
+      stdout, 1, 1.0, CLASSIC);
 }
 
 int main(int argc, char **argv)
@@ -158,6 +211,7 @@ int main(int argc, char **argv)
   int width;
   bool ram;
   bool scan;
+  std::string prefix;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
@@ -170,6 +224,7 @@ int main(int argc, char **argv)
     ("size,s", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
     ("qdepth,q", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
     ("ram", po::bool_switch(&ram)->default_value(false), "ram backend")
+    ("prefix", po::value<std::string>(&prefix)->default_value(""), "name prefix")
   ;
 
   po::variables_map vm;
@@ -239,8 +294,10 @@ int main(int argc, char **argv)
   rand_data_gen dgen(1ULL << 22, entry_size);
   dgen.generate();
 
+  hdr_init(1, INT64_C(50000000), 3, &histogram);
+
   ops_done = 0;
-  std::thread reporter_thread(reporter);
+  std::thread reporter_thread(reporter, prefix);
 
   sem_init(&sem, 0, qdepth);
 
@@ -261,6 +318,7 @@ int main(int argc, char **argv)
       aio_state *io = new aio_state;
       io->c = zlog::Log::aio_create_completion(
           std::bind(handle_aio_read_cb, io));
+      io->start_us = getus();
 
       int ret = log->AioRead(pos, io->c, &io->data);
       if (ret) {
@@ -278,6 +336,7 @@ int main(int argc, char **argv)
       aio_state *io = new aio_state;
       io->c = zlog::Log::aio_create_completion(
           std::bind(handle_aio_append_cb, io));
+      io->start_us = getus();
 
       int ret = log->AioAppend(io->c,
           zlog::Slice(dgen.sample(), entry_size), &io->pos);
@@ -300,6 +359,7 @@ int main(int argc, char **argv)
   stop = 1;
   cond.notify_all();
   reporter_thread.join();
+  hdr_close(histogram);
 
   if (!ram) {
     ioctx.aio_flush();

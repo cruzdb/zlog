@@ -9,6 +9,7 @@ target_link_libraries(zlog_bench2
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     atomic
+    hdr_histogram_static
 )
 install(TARGETS zlog_bench2 DESTINATION bin)
 
