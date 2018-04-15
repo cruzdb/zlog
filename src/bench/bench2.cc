@@ -76,9 +76,11 @@ static std::mutex lock;
 static std::condition_variable cond;
 
 static volatile int stop = 0;
-static void sigint_handler(int sig) {
+static void sig_handler(int sig) {
+  if (sig == SIGALRM) {
+    std::cout << "runtime exceeded" << std::endl;
+  }
   stop = 1;
-  sem_post(&sem);
 }
 
 static struct hdr_histogram *histogram;
@@ -234,6 +236,7 @@ int main(int argc, char **argv)
   bool ram;
   bool scan;
   std::string prefix;
+  double max_gbs;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
@@ -248,6 +251,7 @@ int main(int argc, char **argv)
     ("ram", po::bool_switch(&ram)->default_value(false), "ram backend")
     ("prefix", po::value<std::string>(&prefix)->default_value(""), "name prefix")
     ("verify", po::value<std::string>(&checksum_file)->default_value(""), "verify writes data")
+    ("max_gbs", po::value<double>(&max_gbs)->default_value(0.0), "max gbs to write")
   ;
 
   po::variables_map vm;
@@ -279,6 +283,12 @@ int main(int argc, char **argv)
       }
     }
   }
+
+  if (runtime == 0 && max_gbs == 0.0) {
+    runtime = 30;
+  }
+
+  const uint64_t max_bytes = (1ULL << 30) * max_gbs;
 
   // only used for ceph backend
   librados::Rados cluster;
@@ -323,8 +333,8 @@ int main(int argc, char **argv)
     }
   }
 
-  signal(SIGINT, sigint_handler);
-  signal(SIGALRM, sigint_handler);
+  signal(SIGINT, sig_handler);
+  signal(SIGALRM, sig_handler);
   alarm(runtime);
 
   rand_data_gen dgen(1ULL << 22, entry_size);
@@ -363,10 +373,16 @@ int main(int argc, char **argv)
       }
     }
   } else {
+    uint64_t bytes_written = 0;
     for (;;) {
       sem_wait(&sem);
-      if (stop)
+      if (stop || (max_bytes > 0 && bytes_written >= max_bytes)) {
+        if (bytes_written >= max_bytes) {
+          std::cout << "max bytes written reached" << std::endl;
+        }
+        sem_post(&sem);
         break;
+      }
 
       aio_state *io = new aio_state;
       io->c = zlog::Log::aio_create_completion(
@@ -381,6 +397,7 @@ int main(int argc, char **argv)
 
       int ret = log->AioAppend(io->c,
           zlog::Slice(data, entry_size), &io->pos);
+      bytes_written += entry_size;
 
       if (ret) {
         std::cerr << "aio append failed " << ret << std::endl;
