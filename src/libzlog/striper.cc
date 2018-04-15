@@ -57,6 +57,7 @@ int Striper::Add(uint64_t epoch, const std::string& data)
     if (views_.rbegin()->second != view.width()) {
       auto res = views_.emplace(view.position(), view.width());
       assert(res.second);
+      (void)res;
       GenerateObjects();
     }
     epoch_ = epoch;

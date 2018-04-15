@@ -7,6 +7,7 @@ int main(int argc, char **argv)
   int ret = zlog::Log::Create(options, "lmdb", "mylog",
       {{"path", "/tmp/zlog.tmp.db"}}, "", "", &log);
   assert(ret == 0);
+  (void)ret;
 
   const std::string input = "oh the input";
 

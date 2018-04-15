@@ -129,7 +129,12 @@ void LogImpl::ViewUpdater()
         exit(0);
         return;
       }
-      striper.Add(it->first, it->second);
+      ret = striper.Add(it->first, it->second);
+      if (ret) {
+        std::cerr << "failed to add view" << std::endl;
+        exit(1);
+        return;
+      }
       epoch++;
     }
 
@@ -223,7 +228,11 @@ int LogImpl::ProposeNextView(uint64_t next_epoch,
     const zlog_proto::View& view)
 {
   std::string view_data;
-  assert(view.SerializeToString(&view_data));
+  if (!view.SerializeToString(&view_data)) {
+    std::cerr << "invalid proto" << std::endl << std::flush;
+    exit(1);
+    return -EINVAL;
+  }
 
   int ret = backend->ProposeView(hoid, next_epoch, view_data);
   if (ret)

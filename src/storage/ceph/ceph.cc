@@ -230,6 +230,7 @@ int CephBackend::ReadViews(const std::string& hoid,
     std::string data(view.data().c_str(), view.data().size());
     auto res = tmp.emplace(view.epoch(), data);
     assert(res.second);
+    (void)res;
   }
 
   out.swap(tmp);

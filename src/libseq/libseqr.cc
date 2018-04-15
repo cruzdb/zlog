@@ -47,7 +47,9 @@ int SeqrClient::CheckTail(uint64_t epoch,
 
   // add protobuf msg
   assert(req.IsInitialized());
-  assert(req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size));
+  if (!req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size)) {
+    return -EIO;
+  }
 
   // send
   boost::asio::write(chan->socket_, boost::asio::buffer(chan->buffer, total_msg_size));
@@ -60,7 +62,9 @@ int SeqrClient::CheckTail(uint64_t epoch,
 
   // deserialize
   zlog_proto::MSeqReply reply;
-  assert(reply.ParseFromArray(chan->buffer, msg_size));
+  if (!reply.ParseFromArray(chan->buffer, msg_size)) {
+    return -EIO;
+  }
   assert(reply.IsInitialized());
 
   if (reply.status() == zlog_proto::MSeqReply::INIT_LOG)
@@ -116,7 +120,9 @@ int SeqrClient::CheckTail(uint64_t epoch,
 
   // add protobuf msg
   assert(req.IsInitialized());
-  assert(req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size));
+  if (!req.SerializeToArray(chan->buffer + sizeof(be_msg_size), msg_size)) {
+    return -EIO;
+  }
 
   // send
   boost::asio::write(chan->socket_, boost::asio::buffer(chan->buffer, total_msg_size));
@@ -129,7 +135,9 @@ int SeqrClient::CheckTail(uint64_t epoch,
 
   // deserialize
   zlog_proto::MSeqReply reply;
-  assert(reply.ParseFromArray(chan->buffer, msg_size));
+  if (!reply.ParseFromArray(chan->buffer, msg_size)) {
+    return -EIO;
+  }
   assert(reply.IsInitialized());
 
   if (reply.status() == zlog_proto::MSeqReply::INIT_LOG)

@@ -24,6 +24,7 @@ LMDBBackend::Transaction LMDBBackend::NewTransaction(bool read_only)
   int flags = read_only ? MDB_RDONLY : 0;
   int ret = mdb_txn_begin(env, NULL, flags, &txn);
   assert(ret == 0);
+  (void)ret;
   return Transaction(txn, this);
 }
 
@@ -490,6 +491,7 @@ void LMDBBackend::Init(const std::string& path)
 
   int ret = mdb_env_create(&env);
   assert(ret == 0);
+  (void)ret;
 
   ret = mdb_env_set_maxdbs(env, 2);
   assert(ret == 0);

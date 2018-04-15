@@ -106,6 +106,7 @@ class ClsZlogTest : public ::testing::Test {
       auto view = views.views(i);
       std::string data(view.data().c_str(), view.data().size());
       auto res = tmp.emplace(view.epoch(), data);
+      (void)res;
       assert(res.second);
     }
 

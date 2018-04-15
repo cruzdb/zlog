@@ -24,6 +24,9 @@
 namespace po = boost::program_options;
 
 // TODO: reduce data copying in ceph v2
+// 1. figure out metrics to collect
+// 2. run some tests
+// 3. compile with release
 
 class rand_data_gen {
  public:
@@ -168,6 +171,7 @@ int main(int argc, char **argv)
     cluster.conf_read_file(NULL);
     int ret = cluster.connect();
     assert(ret == 0);
+    (void)ret;
 
     // open pool i/o context
     ret = cluster.ioctx_create(pool.c_str(), ioctx);
@@ -182,6 +186,7 @@ int main(int argc, char **argv)
   int ret = zlog::Log::CreateWithBackend(options,
       std::move(backend), logname, &log);
   assert(ret == 0);
+  (void)ret;
 
   signal(SIGINT, sigint_handler);
   signal(SIGALRM, sigint_handler);

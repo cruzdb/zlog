@@ -24,7 +24,7 @@ static int report_sec;
 static uint64_t get_time()
 {
   struct timeval tv;
-  assert(gettimeofday(&tv, NULL) == 0);
+  gettimeofday(&tv, NULL);
   uint64_t res = tv.tv_sec * 1000000000ULL;
   return res + tv.tv_usec * 1000ULL;
 }
@@ -34,6 +34,7 @@ static uint64_t get_time(void)
   struct timespec ts;
   int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
   assert(ret == 0);
+  (void)ret;
   uint64_t nsec = ((uint64_t)ts.tv_sec) * ((uint64_t)1000000000);
   nsec += ts.tv_nsec;
   return nsec;
@@ -529,7 +530,11 @@ class LogManager {
         name = it->second;
       }
 
-      uint64_t position, epoch;
+      uint64_t position;
+      // assignment to only for uniitialized use error. InitLog always sets
+      // epoch when it returns zero, so epoch use below in the next block is
+      // safe.
+      uint64_t epoch = 0;
       std::map<uint64_t, std::deque<uint64_t>> ptrs;
       int ret = InitLog(meta, name, &epoch, &position, ptrs);
       if (ret) {
@@ -762,7 +767,10 @@ class Session {
 
     uint32_t msg_size = reply_.ByteSize();
     assert(msg_size < sizeof(buffer_));
-    assert(reply_.SerializeToArray(buffer_, msg_size));
+    if (!reply_.SerializeToArray(buffer_, msg_size)) {
+      std::cerr << "failed to serialize message" << std::endl;
+      exit(1);
+    }
 
     // scatter/gather buffers
     std::vector<boost::asio::const_buffer> out;

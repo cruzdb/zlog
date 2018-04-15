@@ -12,6 +12,7 @@ int main(int argc, char **argv)
   uint64_t tail;
   ret = log->CheckTail(&tail);
   assert(ret == 0);
+  (void)ret;
 
   std::string output;
   ret = log->Read(tail-1, &output);

@@ -44,7 +44,10 @@ int Log::Create(const Options& options,
     init_view.set_host(host);
     init_view.set_port(port);
   }
-  assert(init_view.SerializeToString(&init_view_data));
+  if (!init_view.SerializeToString(&init_view_data)) {
+    std::cerr << "failed to serialize view" << std::endl;
+    return -EIO;
+  }
 
   ret = backend->CreateLog(name, init_view_data);
   if (ret) {
@@ -156,7 +159,11 @@ int Log::CreateWithBackend(const Options& options,
   const auto cookie = exclusive_cookie_ss.str();
 
   init_view.set_exclusive_cookie(cookie);
-  assert(init_view.SerializeToString(&init_view_data));
+
+  if (!init_view.SerializeToString(&init_view_data)) {
+    std::cerr << "failed to serialize view" << std::endl;
+    return -EIO;
+  }
 
   int ret = backend->CreateLog(name, init_view_data);
   if (ret) {

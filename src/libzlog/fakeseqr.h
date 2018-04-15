@@ -47,6 +47,8 @@ class FakeSeqrClient : public zlog::SeqrClient {
       const std::string& name, std::vector<uint64_t>& positions, size_t count)
   {
     assert(0);
+    exit(1);
+    return -EOPNOTSUPP;
   }
 
   virtual int CheckTail(uint64_t epoch,
