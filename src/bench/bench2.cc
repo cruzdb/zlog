@@ -26,7 +26,6 @@ namespace po = boost::program_options;
 // TODO: reduce data copying in ceph v2
 // 1. figure out metrics to collect
 // 2. run some tests
-// 3. compile with release
 
 class rand_data_gen {
  public:
@@ -57,9 +56,11 @@ class rand_data_gen {
 
 struct aio_state {
   zlog::AioCompletion *c;
+  std::string data;
   uint64_t pos;
 };
 
+static size_t entry_size;
 static sem_t sem;
 static std::mutex lock;
 static std::condition_variable cond;
@@ -72,14 +73,43 @@ static void sigint_handler(int sig) {
 
 static std::atomic<uint64_t> ops_done;
 
-static void handle_aio_cb(aio_state *io)
+static void handle_aio_append_cb(aio_state *io)
 {
   sem_post(&sem);
 
   // clean-up
   if (io->c->ReturnValue()) {
-    std::cout << "error: io retval = " << io->c->ReturnValue() << std::endl;
+    std::cout << "error: io retval = "
+      << io->c->ReturnValue() << std::endl;
     assert(io->c->ReturnValue() == 0);
+    stop = 1;
+    exit(1);
+  }
+
+  ops_done.fetch_add(1);
+
+  delete io->c;
+  io->c = NULL;
+
+  delete io;
+}
+
+static void handle_aio_read_cb(aio_state *io)
+{
+  sem_post(&sem);
+
+  // clean-up
+  if (io->c->ReturnValue()) {
+    std::cout << "error: io retval = "
+      << io->c->ReturnValue() << std::endl;
+    assert(io->c->ReturnValue() == 0);
+    stop = 1;
+    exit(1);
+  }
+
+  if (io->data.size() != entry_size) {
+    std::cerr << "invalid data size read "
+      << io->data.size() << std::endl;
     stop = 1;
     exit(1);
   }
@@ -102,8 +132,6 @@ static void reporter()
 
     cond.wait_for(lk, std::chrono::seconds(1),
         [&] { return stop; });
-    if (stop)
-      break;
 
     auto end = std::chrono::steady_clock::now();
     auto ops_end = ops_done.load();
@@ -115,6 +143,9 @@ static void reporter()
         1000000ULL) / (double)elapsed.count();
 
     std::cout << iops << std::endl;
+
+    if (stop)
+      break;
   }
 }
 
@@ -124,18 +155,19 @@ int main(int argc, char **argv)
   std::string logname;
   int runtime;
   int qdepth;
-  int entry_size;
   int width;
   bool ram;
+  bool scan;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
     ("help,h", "show help message")
     ("logname,l", po::value<std::string>(&logname)->default_value(""), "Log name")
+    ("scan", po::bool_switch(&scan)->default_value(false), "scan a log")
     ("runtime,r", po::value<int>(&runtime)->default_value(0), "runtime")
     ("pool,p", po::value<std::string>(&pool)->required(), "Pool name")
     ("width,w", po::value<int>(&width)->default_value(10), "stripe width")
-    ("size,s", po::value<int>(&entry_size)->default_value(1024), "entry size")
+    ("size,s", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
     ("qdepth,q", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
     ("ram", po::bool_switch(&ram)->default_value(false), "ram backend")
   ;
@@ -183,10 +215,22 @@ int main(int argc, char **argv)
 
   zlog::Options options;
   zlog::Log *log;
-  int ret = zlog::Log::CreateWithBackend(options,
-      std::move(backend), logname, &log);
-  assert(ret == 0);
-  (void)ret;
+
+  if (scan) {
+    int ret = zlog::Log::OpenWithBackend(options,
+        std::move(backend), logname, &log);
+    if (ret) {
+      std::cerr << "failed to open log " << ret << std::endl;
+      exit(1);
+    }
+  } else {
+    int ret = zlog::Log::CreateWithBackend(options,
+        std::move(backend), logname, &log);
+    if (ret) {
+      std::cerr << "failed to create log " << ret << std::endl;
+      exit(1);
+    }
+  }
 
   signal(SIGINT, sigint_handler);
   signal(SIGALRM, sigint_handler);
@@ -200,20 +244,47 @@ int main(int argc, char **argv)
 
   sem_init(&sem, 0, qdepth);
 
-  for (;;) {
-    sem_wait(&sem);
-
-    if (stop)
-      break;
-
-    aio_state *io = new aio_state;
-    io->c = zlog::Log::aio_create_completion(
-        std::bind(handle_aio_cb, io));
-
-    int ret = log->AioAppend(io->c, zlog::Slice(dgen.sample(), entry_size), &io->pos);
+  if (scan) {
+    uint64_t tail;
+    int ret = log->CheckTail(&tail);
     if (ret) {
-      std::cerr << "aio append failed " << ret << std::endl;
+      std::cerr << "check tail failed" << std::endl;
+      stop = 1;
       exit(1);
+    }
+    for (uint64_t pos = 0; pos < tail; pos++) {
+      sem_wait(&sem);
+
+      if (stop)
+        break;
+
+      aio_state *io = new aio_state;
+      io->c = zlog::Log::aio_create_completion(
+          std::bind(handle_aio_read_cb, io));
+
+      int ret = log->AioRead(pos, io->c, &io->data);
+      if (ret) {
+        std::cerr << "aio read failed " << ret << std::endl;
+        exit(1);
+      }
+    }
+  } else {
+    for (;;) {
+      sem_wait(&sem);
+
+      if (stop)
+        break;
+
+      aio_state *io = new aio_state;
+      io->c = zlog::Log::aio_create_completion(
+          std::bind(handle_aio_append_cb, io));
+
+      int ret = log->AioAppend(io->c,
+          zlog::Slice(dgen.sample(), entry_size), &io->pos);
+      if (ret) {
+        std::cerr << "aio append failed " << ret << std::endl;
+        exit(1);
+      }
     }
   }
 
@@ -226,6 +297,7 @@ int main(int argc, char **argv)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
+  stop = 1;
   cond.notify_all();
   reporter_thread.join();
 
