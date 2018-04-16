@@ -7,6 +7,7 @@ struct Options {
   // a new log, and can be adjusted for a log after it has been created.
   // TODO: create an intelligent default
   // TODO: add reference to width adjustment api/tools
+  // TODO: add option for create vs open (default and force new width)
   int width = 10;
 };
 

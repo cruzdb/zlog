@@ -315,6 +315,7 @@ int main(int argc, char **argv)
   }
 
   zlog::Options options;
+  options.width = width;
   zlog::Log *log;
 
   if (scan) {
