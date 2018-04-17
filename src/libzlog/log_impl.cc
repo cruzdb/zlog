@@ -219,6 +219,7 @@ int LogImpl::CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
   bool out_empty;
   view = striper.LatestView().second; // start with a copy of the current view
   if (extend) {
+    out_empty = false; // squash uninit use warning
     assert(!pempty);
     assert(!pmaxpos);
     uint64_t next_pos = view.position() +

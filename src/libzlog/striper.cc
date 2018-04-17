@@ -74,6 +74,7 @@ int Striper::Add(uint64_t epoch, const std::string& data)
 
     auto latest_view = views_.rbegin();
     assert(latest_view->first <= view.position());
+    (void)latest_view;
 
     epoch_ = epoch;
     uint64_t maxpos = view.position() +
