@@ -237,6 +237,7 @@ int main(int argc, char **argv)
   bool scan;
   std::string prefix;
   double max_gbs;
+  int entries_per_object;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
@@ -245,7 +246,8 @@ int main(int argc, char **argv)
     ("scan", po::bool_switch(&scan)->default_value(false), "scan a log")
     ("runtime,r", po::value<int>(&runtime)->default_value(0), "runtime")
     ("pool,p", po::value<std::string>(&pool)->required(), "Pool name")
-    ("width,w", po::value<int>(&width)->default_value(10), "stripe width")
+    ("width,w", po::value<int>(&width)->default_value(-1), "stripe width")
+    ("epo", po::value<int>(&entries_per_object)->default_value(-1), "entries per object")
     ("size,s", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
     ("qdepth,q", po::value<int>(&qdepth)->default_value(1), "aio queue depth")
     ("ram", po::bool_switch(&ram)->default_value(false), "ram backend")
@@ -315,9 +317,13 @@ int main(int argc, char **argv)
   }
 
   zlog::Options options;
-  options.width = width;
-  zlog::Log *log;
+  if (width > 0)
+    options.width = width;
 
+  if (entries_per_object > 0)
+    options.entries_per_object = entries_per_object;
+
+  zlog::Log *log;
   if (scan) {
     int ret = zlog::Log::OpenWithBackend(options,
         std::move(backend), logname, &log);
