@@ -341,7 +341,9 @@ int main(int argc, char **argv)
   rand_data_gen dgen(1ULL << 22, entry_size);
   dgen.generate();
 
-  hdr_init(1, INT64_C(50000000), 3, &histogram);
+  hdr_init(1,
+      INT64_C(30000000),
+      3, &histogram);
 
   ops_done = 0;
   std::thread reporter_thread(reporter, prefix);
