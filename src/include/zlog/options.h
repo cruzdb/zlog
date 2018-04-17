@@ -11,6 +11,8 @@ struct Options {
   int width = 10;
 
   int entries_per_object = 200;
+
+  int max_entry_size = 1024;
 };
 
 }

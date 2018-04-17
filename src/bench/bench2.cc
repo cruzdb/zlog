@@ -238,6 +238,7 @@ int main(int argc, char **argv)
   std::string prefix;
   double max_gbs;
   int entries_per_object;
+  int max_entry_size;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
@@ -253,6 +254,7 @@ int main(int argc, char **argv)
     ("ram", po::bool_switch(&ram)->default_value(false), "ram backend")
     ("prefix", po::value<std::string>(&prefix)->default_value(""), "name prefix")
     ("verify", po::value<std::string>(&checksum_file)->default_value(""), "verify writes data")
+    ("max_entry_size", po::value<int>(&max_entry_size)->default_value(-1), "max entry size")
     ("max_gbs", po::value<double>(&max_gbs)->default_value(0.0), "max gbs to write")
   ;
 
@@ -322,6 +324,9 @@ int main(int argc, char **argv)
 
   if (entries_per_object > 0)
     options.entries_per_object = entries_per_object;
+
+  if (max_entry_size <= 0)
+    options.max_entry_size = entry_size;
 
   zlog::Log *log;
   if (scan) {

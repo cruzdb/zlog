@@ -26,7 +26,7 @@ class Striper {
   {}
 
   static zlog_proto::View InitViewData(uint32_t width,
-      uint32_t entries_per_object);
+      uint32_t entries_per_object, uint32_t max_entry_size);
 
   std::pair<uint64_t, zlog_proto::View> LatestView() const;
 

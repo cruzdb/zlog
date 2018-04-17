@@ -26,15 +26,17 @@ boost::optional<Striper::Mapping> Striper::MapPosition(uint64_t position) const
   return boost::none;
 }
 
-zlog_proto::View Striper::InitViewData(uint32_t width, uint32_t entries_per_object)
+zlog_proto::View Striper::InitViewData(uint32_t width, uint32_t entries_per_object,
+    uint32_t max_entry_size)
 {
   assert(width > 0);
   assert(entries_per_object > 0);
+  assert(max_entry_size > 0);
 
   zlog_proto::View view;
   view.set_position(0);
   view.set_width(width);
-  view.set_max_entry_size(1024); // TODO
+  view.set_max_entry_size(max_entry_size);
   view.set_entries_per_object(entries_per_object);
 
   return view;
