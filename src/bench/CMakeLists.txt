@@ -13,4 +13,6 @@ target_link_libraries(zlog_bench2
 )
 install(TARGETS zlog_bench2 DESTINATION bin)
 
+add_subdirectory(rados-append)
+
 endif(BUILD_CEPH_BACKEND)
