@@ -380,7 +380,7 @@ int main(int argc, char **argv)
     for (;;) {
       sem_wait(&sem);
       if (stop || (max_bytes > 0 && bytes_written >= max_bytes)) {
-        if (bytes_written >= max_bytes) {
+        if (max_bytes > 0 && bytes_written >= max_bytes) {
           std::cout << "max bytes written reached" << std::endl;
         }
         sem_post(&sem);
