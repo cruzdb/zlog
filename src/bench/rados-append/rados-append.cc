@@ -224,6 +224,12 @@ int main(int argc, char **argv)
     logname = ss.str();
   }
 
+  if (omap) {
+    prefix = prefix + ".omap";
+  } else {
+    prefix = prefix + ".append";
+  }
+
   if (runtime == 0 && max_gbs == 0.0) {
     runtime = 30;
   }
