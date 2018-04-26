@@ -6,3 +6,6 @@
 [submodule "src/HdrHistogram_c"]
 	path = src/HdrHistogram_c
 	url = https://github.com/HdrHistogram/HdrHistogram_c
+[submodule "src/CRoaringUnityBuild"]
+	path = src/CRoaringUnityBuild
+	url = https://github.com/lemire/CRoaringUnityBuild

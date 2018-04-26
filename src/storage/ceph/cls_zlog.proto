@@ -39,7 +39,13 @@ message LogObjectHeader {
   optional uint64 epoch = 1;
   optional uint64 max_pos = 2;
   optional uint32 stride = 3;
+
+  // TODO: change to slot size
   optional uint32 max_size = 4;
+
+  // per-entry state bitmaps
+  optional bytes written = 5;
+  optional bytes invalid = 6;
 }
 
 // log entry metadata
