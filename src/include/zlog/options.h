@@ -1,4 +1,5 @@
 #pragma once
+#include "zlog/monitoring/statistics.h"
 
 namespace zlog {
 
@@ -13,6 +14,8 @@ struct Options {
   int entries_per_object = 200;
 
   int max_entry_size = 1024;
+
+  zlog::Statistics* statistics;
 };
 
 }
