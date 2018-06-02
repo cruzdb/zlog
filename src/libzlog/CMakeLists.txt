@@ -12,6 +12,7 @@ set(libzlog_sources
   ../util/thread_local.cc
   ../monitoring/statistics.cc
   ../monitoring/histogram.cc
+  ../util/mempool.cc
   ../civetweb/src/civetweb.c
   ../civetweb/src/CivetServer.cpp
   )

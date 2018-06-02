@@ -6,6 +6,8 @@ install(FILES
     zlog/stream.h
     zlog/options.h
     zlog/statistics.h
+    zlog/mempool/mempool.h
+    zlog/mempool/demangle.h)
     DESTINATION include/zlog
 )
 
