@@ -23,6 +23,7 @@ static void handle_aio_cb_read(aio_state *ctx)
 }
 
 TEST_P(LibZLogTest, OpenClose) {
+  std::cout << "OpenClose" << std::endl; 
   if (backend() != "lmdb") {
     std::cout << "OpenClose test not enabled for "
       << backend() << " backend" << std::endl;

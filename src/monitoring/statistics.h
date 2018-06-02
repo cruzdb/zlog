@@ -100,7 +100,7 @@ inline void MeasureTime(Statistics* statistics, uint32_t histogram_type,
   }
 }
 
-inline void RecordTick(Statistics* statistics, uint32_t ticker_type,
+inline void RecordTick(std::shared_ptr<Statistics> statistics, uint32_t ticker_type,
                        uint64_t count = 1) {
   if (statistics) {
     statistics->recordTick(ticker_type, count);

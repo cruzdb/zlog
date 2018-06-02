@@ -5,6 +5,7 @@
 #include <iostream>
 #include <dlfcn.h>
 #include "zlog/log.h"
+#include "zlog/cache.h"
 #include "zlog/backend.h"
 #include "log_impl.h"
 
@@ -93,7 +94,10 @@ int Log::Create(const Options& options,
     return -EINVAL;
   }
 
+
   *logpp = impl.release();
+
+
 
   return 0;
 }
@@ -146,6 +150,7 @@ int Log::Open(const Options& options,
   }
 
   *logpp = impl.release();
+
 
   return 0;
 }
@@ -253,6 +258,7 @@ int Log::OpenWithBackend(const Options& options,
   if (ret)
     return ret;
 
+    
   *logptr = impl.release();
 
   return 0;

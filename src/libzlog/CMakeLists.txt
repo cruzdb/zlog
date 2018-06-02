@@ -6,6 +6,9 @@ set(libzlog_sources
   capi.cc
   log.cc
   backend.cc
+  cache.cc
+  ../eviction/lru.cc
+  ../eviction/arc.cc
   ../port/stack_trace.cc
   ../port/port_posix.cc
   ../util/random.cc

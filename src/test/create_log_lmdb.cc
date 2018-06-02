@@ -9,11 +9,17 @@ int main(int argc, char **argv)
   assert(ret == 0);
   (void)ret;
 
-  const std::string input = "oh the input";
+  const std::string input = "random input";
 
-  uint64_t pos;
-  ret = log->Append(zlog::Slice(input), &pos);
-  assert(ret == 0);
+  uint64_t size = 1024 * 32 ;
+
+  for(uint64_t i = 0; i < size; i++)
+  {
+    uint64_t pos = i;
+    ret = log->Append(zlog::Slice(input), &pos);
+    assert(ret == 0);
+  }
+  
 
   delete log;
 

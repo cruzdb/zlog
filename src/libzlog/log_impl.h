@@ -9,6 +9,7 @@
 #include "include/zlog/statistics.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
+#include "include/zlog/cache.h"
 #include "striper.h"
 
 #define DEFAULT_STRIPE_SIZE 100
@@ -40,6 +41,7 @@ class LogImpl : public Log {
     metrics_http_server_(nullptr),
     metrics_handler_(this)
   {
+    cache = new Cache(options); 
     if (!opts.http.empty()) {
       metrics_http_server_ = new CivetServer(opts.http);
       metrics_http_server_->addHandler("/metrics", &metrics_handler_);
@@ -71,7 +73,7 @@ class LogImpl : public Log {
   int CheckTail(uint64_t *pposition, uint64_t *epoch, bool increment);
 
 #ifdef STREAMING_SUPPORT
-  /*
+/*
    * When next == true
    *   - position: new log tail
    *   - stream_backpointers: back pointers for each stream in stream_ids
@@ -176,8 +178,9 @@ class LogImpl : public Log {
   std::thread view_update_thread;
 
   const Options& options;
-  CivetServer *metrics_http_server_;
+  CivetServer* metrics_http_server_ = nullptr;
   MetricsHandler metrics_handler_;
+  Cache* cache;
 };
 
 }

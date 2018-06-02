@@ -62,6 +62,7 @@ class AioCompletionImpl {
    *  - where to put result
    */
   std::string *datap;
+  Cache* cache;
 
   AioCompletionImpl() :
     ref(1), complete(false), callback_complete(false), released(false), retval(0)
@@ -125,6 +126,9 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
     if (impl->datap && !impl->data.empty()) {
       impl->datap->swap(impl->data);
     }
+    
+    impl->cache->put(impl->position, Slice(*(impl->datap)));
+
     ret = 0;
     finish = true;
   } else if (ret == -ESPIPE) {
@@ -204,6 +208,8 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
     if (impl->pposition) {
       *impl->pposition = impl->position;
     }
+    impl->cache->put(*(impl->pposition), impl->data);
+
     ret = 0;
     finish = true;
   } else if (ret == -ESPIPE) {
@@ -387,6 +393,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->pposition = pposition;
   impl->backend = backend;
   impl->type = ZLOG_AIO_APPEND;
+  impl->cache = cache;
 
   // used to identify if state changes have occurred since dispatching the
   // request in order to avoid reconfiguration later (important when lots of
@@ -411,18 +418,41 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 int LogImpl::AioRead(uint64_t position, AioCompletion *c,
     std::string *datap)
 {
+
+
   AioCompletionImplWrapper *wrapper =
     reinterpret_cast<AioCompletionImplWrapper*>(c);
   AioCompletionImpl *impl = wrapper->impl_;
 
+  
   impl->log = this;
   impl->datap = datap;
   impl->position = position;
   impl->backend = backend;
   impl->type = ZLOG_AIO_READ;
+  impl->cache = cache;
 
   impl->get(); // backend now has a reference
 
+  int cache_miss = cache->get(&position, datap);
+  if(!cache_miss){
+
+    int ret = 0;  
+    impl->lock.lock();
+    impl->retval = ret;
+    impl->complete = true;
+    impl->lock.unlock();
+    if (impl->has_callback)
+      impl->callback();
+    impl->callback_complete = true;
+    impl->cond.notify_all();
+    impl->lock.lock();
+    impl->put_unlock();
+
+    return ret;
+  }
+
+  
   auto mapping = striper.MapPosition(position);
   while (!mapping) {
     int ret = ExtendMap();
@@ -441,7 +471,9 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
    */
   assert(ret == 0);
 
+
   return ret;
 }
+
 
 }

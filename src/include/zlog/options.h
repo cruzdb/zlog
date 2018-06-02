@@ -2,6 +2,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "eviction.h"
+#include "statistics.h"
 
 namespace zlog {
 
@@ -20,8 +22,11 @@ struct Options {
   int max_entry_size = 1024;
 
   std::shared_ptr<Statistics> statistics = nullptr;
-
   std::vector<std::string> http;
+  
+  //cache options
+  zlog::Eviction::Eviction_Policy eviction = zlog::Eviction::Eviction_Policy::LRU;
+  size_t cache_size = 1024 * 1024 * 1;
 };
 
 }

@@ -84,10 +84,13 @@ class Log {
   static int OpenWithBackend(const Options& options,
       std::shared_ptr<Backend> backend,
       const std::string& name, Log **logptr);
+  
+
 
  private:
   Log(const Log&);
   void operator=(const Log&);
+
 };
 
 }
