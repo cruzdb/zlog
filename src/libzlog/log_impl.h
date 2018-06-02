@@ -3,7 +3,10 @@
 #include <list>
 #include <mutex>
 #include <thread>
+#include <CivetServer.h>
+
 #include "include/zlog/log.h"
+#include "include/zlog/statistics.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
 #include "striper.h"
@@ -25,14 +28,19 @@ class LogImpl : public Log {
   LogImpl(std::shared_ptr<Backend> backend,
       const std::string& name,
       const std::string& hoid,
-      const std::string& prefix) :
+      const std::string& prefix,
+      const Options& opts) :
     shutdown(false),
     backend(backend),
     sequencer(nullptr),
     name(name),
     hoid(hoid),
-    striper(prefix)
+    striper(prefix),
+    options(opts),
+    metrics_http_server_({"listening_ports", "0.0.0.0:8080", "num_threads", "1"}),
+    metrics_handler_(this)
   {
+    metrics_http_server_.addHandler("/metrics", &metrics_handler_);
     view_update_thread = std::thread(&LogImpl::ViewUpdater, this);
   }
 
@@ -110,6 +118,38 @@ class LogImpl : public Log {
 
   int ExtendMap();
 
+ private:
+  class MetricsHandler : public CivetHandler {
+   public:
+    explicit MetricsHandler(LogImpl* log) : log_(log) {}
+
+    bool handleGet(CivetServer *server, struct mg_connection *conn) {
+
+      auto stats = log_->options.statistics;
+
+      std::stringstream out_stream;
+
+      out_stream << stats->ToString() << std::endl;
+
+      std::string body = out_stream.str();
+      std::string content_type = "text/plain";
+
+      mg_printf(conn,
+          "HTTP/1.1 200 OK\r\n"
+          "Content-Type: %s\r\n",
+          content_type.c_str());
+
+      mg_printf(conn, "Content-Length: %lu\r\n\r\n",
+          static_cast<unsigned long>(body.size()));
+
+      mg_write(conn, body.data(), body.size());
+
+      return true;
+    }
+
+    LogImpl* log_;
+  };
+
  public:
   bool shutdown;
   std::mutex lock;
@@ -131,6 +171,10 @@ class LogImpl : public Log {
   std::condition_variable view_update;
   std::list<std::pair<std::condition_variable*, bool*>> view_update_waiters;
   std::thread view_update_thread;
+
+  const Options& options;
+  CivetServer metrics_http_server_;
+  MetricsHandler metrics_handler_;
 };
 
 }

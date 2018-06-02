@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 
 namespace zlog {
 
@@ -16,7 +17,7 @@ struct Options {
 
   int max_entry_size = 1024;
 
-  zlog::Statistics* statistics;
+  std::shared_ptr<Statistics> statistics = nullptr;
 };
 
 }

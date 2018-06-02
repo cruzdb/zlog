@@ -43,8 +43,10 @@ int LogImpl::Open(const std::string& scheme, const std::string& name,
     return ret;
   }
 
+  Options options;
+
   auto log = std::unique_ptr<zlog::LogImpl>(
-      new zlog::LogImpl(backend, name, hoid, prefix));
+      new zlog::LogImpl(backend, name, hoid, prefix, options));
 
   ret = log->UpdateView();
   if (ret) {
@@ -68,6 +70,10 @@ LogImpl::~LogImpl()
   }
   view_update.notify_one();
   view_update_thread.join();
+
+  metrics_http_server_.removeHandler("/metrics");
+  metrics_http_server_.close();
+
 }
 
 int LogImpl::UpdateView()

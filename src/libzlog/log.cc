@@ -75,7 +75,7 @@ int Log::Create(const Options& options,
   }
 
   auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix));
+      new LogImpl(backend, name, hoid, prefix, options));
 
   // make sure to set before update view
   if (init_view.has_exclusive_cookie()) {
@@ -120,7 +120,7 @@ int Log::Open(const Options& options,
   }
 
   auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix));
+      new LogImpl(backend, name, hoid, prefix, options));
 
   ret = impl->UpdateView();
   if (ret) {
@@ -202,7 +202,7 @@ int Log::CreateWithBackend(const Options& options,
   }
 
   auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix));
+      new LogImpl(backend, name, hoid, prefix, options));
 
   // make sure to set before update view
   impl->exclusive_cookie = init_view.exclusive_cookie();
@@ -238,7 +238,7 @@ int Log::OpenWithBackend(const Options& options,
   }
 
   auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix));
+      new LogImpl(backend, name, hoid, prefix, options));
 
   ret = impl->UpdateView();
   if (ret) {

@@ -9,3 +9,6 @@
 [submodule "src/CRoaringUnityBuild"]
 	path = src/CRoaringUnityBuild
 	url = https://github.com/lemire/CRoaringUnityBuild
+[submodule "src/civetweb"]
+	path = src/civetweb
+	url = https://github.com/civetweb/civetweb.git

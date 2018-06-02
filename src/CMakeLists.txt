@@ -21,6 +21,7 @@ add_subdirectory(HdrHistogram_c)
 include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src/include)
+include_directories(${CMAKE_SOURCE_DIR}/src/civetweb/include)
 
 ################################################################################
 

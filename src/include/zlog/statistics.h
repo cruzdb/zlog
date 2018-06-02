@@ -17,8 +17,8 @@ enum Tickers : uint32_t {
 
 const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
 
-  {CACHE_REQS, "zlog.cache.reqs"},
-  {CACHE_MISSES, "zlog.cache.misses"}
+  {CACHE_REQS, "zlog_cache_reqs"},
+  {CACHE_MISSES, "zlog_cache_misses"}
 };
 
 enum Histograms : uint32_t {
