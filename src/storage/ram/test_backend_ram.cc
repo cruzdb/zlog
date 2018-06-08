@@ -8,7 +8,6 @@ void BackendTest::SetUp() {}
 void BackendTest::TearDown() {}
 
 void LibZLogTest::SetUp() {
-  zlog::Options options;
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
     auto backend = std::unique_ptr<zlog::storage::ram::RAMBackend>(
@@ -48,7 +47,7 @@ void LibZLogCAPITest::SetUp() {
   std::string host = "";
   std::string port = "";
 
-  int ret = zlog_create("ram", "c_mylog",
+  int ret = zlog_create(&options, "ram", "c_mylog",
       NULL, NULL, 0, host.c_str(), port.c_str(), &log);
   ASSERT_EQ(ret, 0);
 }

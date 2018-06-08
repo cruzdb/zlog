@@ -7,8 +7,9 @@ extern "C" {
 
 typedef void *zlog_log_t;
 typedef void *zlog_stream_t;
+typedef void *zlog_options_t;
 
-int zlog_create(const char *scheme, const char *name,
+int zlog_create(zlog_options_t options, const char *scheme, const char *name,
     char const* const* keys, char const* const* vals, size_t num,
     const char *host, const char *port, zlog_log_t *log);
 

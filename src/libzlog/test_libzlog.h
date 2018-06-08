@@ -14,6 +14,7 @@ class LibZLogTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
 
   zlog::Log *log = nullptr;
   Context *context = nullptr;
+  zlog::Options options;
 
   int reopen();
 
@@ -38,6 +39,7 @@ class LibZLogCAPITest : public ::testing::TestWithParam<std::tuple<bool, bool>> 
 
   zlog_log_t log = nullptr;
   Context *context = nullptr;
+  zlog::Options options;
 
   bool lowlevel() {
     return std::get<0>(GetParam());

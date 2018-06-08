@@ -23,7 +23,7 @@ extern "C" int zlog_destroy(zlog_log_t log)
   return 0;
 }
 
-extern "C" int zlog_create(const char *scheme, const char *name,
+extern "C" int zlog_create(zlog_options_t options, const char *scheme, const char *name,
     char const* const* keys, char const* const* vals, size_t num,
     const char *host, const char *port, zlog_log_t *log)
 {
@@ -33,9 +33,8 @@ extern "C" int zlog_create(const char *scheme, const char *name,
   }
 
   zlog_log_ctx *ctx = new zlog_log_ctx;
-
-  Options options;
-  int ret = zlog::Log::Create(options, scheme, name,
+  Options* op = (Options*)options;
+  int ret = zlog::Log::Create(*op, scheme, name,
       opts, host, port, &ctx->log);
   if (ret) {
     delete ctx;
