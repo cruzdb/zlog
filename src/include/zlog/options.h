@@ -1,5 +1,7 @@
 #pragma once
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace zlog {
 
@@ -18,6 +20,8 @@ struct Options {
   int max_entry_size = 1024;
 
   std::shared_ptr<Statistics> statistics = nullptr;
+
+  std::vector<std::string> http;
 };
 
 }

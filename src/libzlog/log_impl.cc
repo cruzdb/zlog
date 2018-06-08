@@ -71,9 +71,11 @@ LogImpl::~LogImpl()
   view_update.notify_one();
   view_update_thread.join();
 
-  metrics_http_server_.removeHandler("/metrics");
-  metrics_http_server_.close();
-
+  if (metrics_http_server_) {
+    metrics_http_server_->removeHandler("/metrics");
+    metrics_http_server_->close();
+    delete metrics_http_server_;
+  }
 }
 
 int LogImpl::UpdateView()

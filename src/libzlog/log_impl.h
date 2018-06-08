@@ -37,10 +37,13 @@ class LogImpl : public Log {
     hoid(hoid),
     striper(prefix),
     options(opts),
-    metrics_http_server_({"listening_ports", "0.0.0.0:8080", "num_threads", "1"}),
+    metrics_http_server_(nullptr),
     metrics_handler_(this)
   {
-    metrics_http_server_.addHandler("/metrics", &metrics_handler_);
+    if (!opts.http.empty()) {
+      metrics_http_server_ = new CivetServer(opts.http);
+      metrics_http_server_->addHandler("/metrics", &metrics_handler_);
+    }
     view_update_thread = std::thread(&LogImpl::ViewUpdater, this);
   }
 
@@ -173,7 +176,7 @@ class LogImpl : public Log {
   std::thread view_update_thread;
 
   const Options& options;
-  CivetServer metrics_http_server_;
+  CivetServer *metrics_http_server_;
   MetricsHandler metrics_handler_;
 };
 
