@@ -10,8 +10,8 @@ set(libzlog_sources
   ../port/port_posix.cc
   ../util/random.cc
   ../util/thread_local.cc
-  ../stats/statistics.cc
-  ../stats/histogram.cc
+  ../monitoring/statistics.cc
+  ../monitoring/histogram.cc
   )
 
 add_definitions("-DZLOG_LIBDIR=\"${CMAKE_INSTALL_FULL_LIBDIR}\"")

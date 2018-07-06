@@ -3,14 +3,14 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 //
-#include "include/zlog/monitoring/statistics.h"
+#include "monitoring/statistics.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
 
 #include <inttypes.h>
-#include "include/zlog/stats/statistics.h"
+#include "include/zlog/statistics.h"
 #include "port/likely.h"
 #include <algorithm>
 #include <cstdio>

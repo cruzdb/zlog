@@ -4,7 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #pragma once
-#include "zlog/stats/statistics.h"
+#include "include/zlog/statistics.h"
 
 #include <vector>
 #include <atomic>
@@ -12,7 +12,7 @@
 
 
 
-#include "zlog/monitoring/histogram.h"
+#include "monitoring/histogram.h"
 #include "port/likely.h"
 #include "port/port_posix.h"
 #include "util/core_local.h"

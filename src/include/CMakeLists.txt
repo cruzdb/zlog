@@ -5,9 +5,7 @@ install(FILES
     zlog/slice.h
     zlog/stream.h
     zlog/options.h
-    zlog/monitoring/statistics.h
-    zlog/monitoring/histogram.h
-    zlog/stats/statistics.h
+    zlog/statistics.h
     DESTINATION include/zlog
 )
 

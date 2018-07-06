@@ -8,7 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include "zlog/stats/statistics.h"
+#include "include/zlog/statistics.h"
 
 #include <atomic>
 #include <cassert>

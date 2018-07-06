@@ -11,7 +11,7 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include "zlog/monitoring/histogram.h"
+#include "monitoring/histogram.h"
 
 #include <inttypes.h>
 #include <cassert>
