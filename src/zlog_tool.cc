@@ -45,8 +45,9 @@ int main(int argc, char **argv)
 
   auto be = std::shared_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&ioctx));
 
+  zlog::Options options;
   zlog::Log *baselog;
-  ret = zlog::Log::OpenWithBackend(be, log_name, &baselog);
+  ret = zlog::Log::OpenWithBackend(options, be, log_name, &baselog);
   assert(ret == 0);
   zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 

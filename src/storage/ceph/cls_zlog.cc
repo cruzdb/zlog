@@ -1,113 +1,168 @@
+// TODO:
+//  - bufferlist encoding
 #include <cerrno>
 #include <sstream>
-#include <boost/lexical_cast.hpp>
-#ifdef __CEPH__
-# include "include/rados/buffer.h"
-# include "include/rados/objclass.h"
-# include "cls_zlog.pb.h"
-# include "protobuf_bufferlist_adapter.h"
-#else
-# include <rados/buffer.h>
-# include <rados/objclass.h>
-# include "storage/ceph/cls_zlog.pb.h"
-# include "storage/ceph/protobuf_bufferlist_adapter.h"
-#endif
+#include <boost/optional.hpp>
+#include <rados/buffer.h>
+#include <rados/objclass.h>
+#include "roaring.c"
+#include "roaring.hh"
+#include "storage/ceph/cls_zlog.pb.h"
+#include "storage/ceph/protobuf_bufferlist_adapter.h"
 
 CLS_VER(1,0)
 CLS_NAME(zlog)
 
-// namespace for head object (sync with backend)
 #define HEAD_HEADER_KEY "zlog.head.header"
 #define HEAD_VIEW_PREFIX "zlog.head.view."
 
-// namespace for log data objects
-#define LOG_ENTRY_PREFIX "zlog.data.entry."
-#define LOG_HEADER_KEY  "zlog.data.header"
+class LogObjectHeader {
+ public:
+  explicit LogObjectHeader(const char *op_name) :
+    op_name_(op_name)
+  {}
 
-static inline std::string u64tostr(uint64_t value,
-    const std::string& prefix)
-{
-  std::stringstream ss;
-  ss << prefix << std::setw(20) << std::setfill('0') << value;
-  return ss.str();
-}
+  int read(cls_method_context_t hctx) {
+    ceph::bufferlist bl;
+    int ret = cls_cxx_getxattr(hctx, key, &bl);
+    if (ret < 0) {
+      // ENOENT is OK, but ENODATA means the object exists without a header. This
+      // would be a violation of our basic protocol assumptions. Return an error
+      // value that we won't catch.
+      if (ret == -ENODATA) {
+        CLS_ERR("ERROR: read_header(): object exists without header");
+        return -EIO;
+      }
+      return ret;
+    }
 
-static inline std::string entry_key(uint64_t pos)
-{
-  return u64tostr(pos, LOG_ENTRY_PREFIX);
-}
+    if (!decode(bl, &hdr_)) {
+      CLS_ERR("ERROR: read_header(): failed to decode header");
+      return -EIO;
+    }
+
+    written_ = Roaring::read(hdr_.written().c_str(), false);
+    invalid_ = Roaring::read(hdr_.invalid().c_str(), false);
+
+    return 0;
+  }
+
+  int write(cls_method_context_t hctx) {
+    size_t w_size = written_.getSizeInBytes();
+    size_t i_size = invalid_.getSizeInBytes();
+    char buf[std::max(w_size, i_size)];
+
+    written_.write(buf, false);
+    hdr_.set_written(buf, w_size);
+
+    invalid_.write(buf, false);
+    hdr_.set_invalid(buf, i_size);
+
+    ceph::bufferlist bl;
+    encode(bl, hdr_);
+    return cls_cxx_setxattr(hctx, key, &bl);
+  }
+
+  int epoch_guard(uint64_t epoch, bool require_exists) {
+    bool stale;
+    if (hdr_.has_epoch()) {
+      if (epoch < hdr_.epoch()) {
+        stale = true;
+      } else {
+        stale = false;
+      }
+    } else if (require_exists) {
+      stale = true;
+    } else {
+      stale = false;
+    }
+    if (stale) {
+      CLS_LOG(10, "%s(): stale epoch", op_name_);
+      return -ESPIPE;
+    }
+    return 0;
+  }
+
+  int check_or_init(uint32_t stride, uint32_t max_size,
+      size_t entry_size)
+  {
+    if (hdr_.has_stride() || hdr_.has_max_size()) {
+      if (!hdr_.has_stride() || !hdr_.has_max_size()) {
+        CLS_ERR("ERROR: %s(): unexpected header state", op_name_);
+        return -EIO;
+      }
+      if (hdr_.stride() != stride || hdr_.max_size() != max_size) {
+        CLS_ERR("ERROR: %s(): op specs do not match header", op_name_);
+        return -EINVAL;
+      }
+    } else {
+      hdr_.set_stride(stride);
+      hdr_.set_max_size(max_size);
+    }
+
+    if (entry_size > hdr_.max_size()) {
+      CLS_ERR("ERROR: %s(): payload exceeds max size", op_name_);
+      return -EINVAL;
+    }
+
+    return 0;
+  }
+
+  boost::optional<uint64_t> epoch() {
+    if (hdr_.has_epoch()) {
+      return hdr_.epoch();
+    }
+    return boost::none;
+  }
+
+  void set_epoch(uint64_t epoch) {
+    hdr_.set_epoch(epoch);
+  }
+
+  boost::optional<uint64_t> max_pos() {
+    if (hdr_.has_max_pos()) {
+      return hdr_.max_pos();
+    }
+    return boost::none;
+  }
+
+  void set_max_pos(uint64_t pos) {
+    if (!hdr_.has_max_pos() || (pos > hdr_.max_pos())) {
+      hdr_.set_max_pos(pos);
+    }
+  }
+
+  bool written(uint32_t bit) {
+    return written_.contains(bit);
+  }
+
+  void set_written(uint32_t bit) {
+    written_.add(bit);
+  }
+
+  bool invalid(uint32_t bit) {
+    return invalid_.contains(bit);
+  }
+
+  void set_invalid(uint32_t bit) {
+    invalid_.add(bit);
+  }
+
+ private:
+  static constexpr const char *key = "zlog.data.header";
+  const char *op_name_;
+  zlog_ceph_proto::LogObjectHeader hdr_;
+  Roaring written_;
+  Roaring invalid_;
+};
 
 static inline std::string view_key(uint64_t epoch)
 {
-  return u64tostr(epoch, HEAD_VIEW_PREFIX);
+  std::stringstream ss;
+  ss << HEAD_VIEW_PREFIX << std::setw(20) << std::setfill('0') << epoch;
+  return ss.str();
 }
  
-static bool epoch_guard(const zlog_ceph_proto::LogObjectHeader& header,
-    uint64_t epoch, bool require_exists)
-{
-  if (header.has_epoch()) {
-    if (epoch < header.epoch())
-      return true;
-    return false;
-  } else if (require_exists) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-static int entry_read_header(cls_method_context_t hctx,
-    zlog_ceph_proto::LogObjectHeader& hdr)
-{
-  ceph::bufferlist bl;
-  int ret = cls_cxx_getxattr(hctx, LOG_HEADER_KEY, &bl);
-  if (ret < 0) {
-    // ENOENT is OK, but ENODATA means the object exists without a header. This
-    // would be a violation of our basic protocol assumptions. Return an error
-    // value that we won't catch.
-    if (ret == -ENODATA) {
-      CLS_ERR("ERROR: read_header(): object exists without header");
-      return -EIO;
-    }
-    return ret;
-  }
-
-  if (!decode(bl, &hdr)) {
-    CLS_ERR("ERROR: read_header(): failed to decode header");
-    return -EIO;
-  }
-
-  return 0;
-}
-
-static int entry_write_header(cls_method_context_t hctx,
-    const zlog_ceph_proto::LogObjectHeader& hdr)
-{
-  ceph::bufferlist bl;
-  encode(bl, hdr);
-  return cls_cxx_setxattr(hctx, LOG_HEADER_KEY, &bl);
-}
-
-static int entry_read_entry(cls_method_context_t hctx, const std::string& key,
-    zlog_ceph_proto::LogEntry *entry)
-{
-  ceph::bufferlist bl;
-  int ret = cls_cxx_map_get_val(hctx, key, &bl);
-  if (ret < 0)
-    return ret;
-  if (entry && !decode(bl, entry))
-    return -EIO;
-  return 0;
-}
-
-static int entry_write_entry(cls_method_context_t hctx, const std::string& key,
-    const zlog_ceph_proto::LogEntry& entry)
-{
-  ceph::bufferlist bl;
-  encode(bl, entry);
-  return cls_cxx_map_set_val(hctx, key, &bl);
-}
-
 static int view_read_header(cls_method_context_t hctx,
     zlog_ceph_proto::HeadObjectHeader& hdr)
 {
@@ -162,38 +217,40 @@ static int entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  zlog_ceph_proto::LogObjectHeader header;
-  int ret = entry_read_header(hctx, header);
+  LogObjectHeader header("entry_read");
+  int ret = header.read(hctx);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: read(): failed to read header");
     return ret;
   }
 
-  if (epoch_guard(header, op.epoch(), false)) {
-    CLS_LOG(10, "read(): stale epoch");
-    return -ESPIPE;
-  }
+  ret = header.epoch_guard(op.epoch(), false);
+  if (ret)
+    return ret;
 
-  zlog_ceph_proto::LogEntry entry;
-  auto key = entry_key(op.pos());
-  ret = entry_read_entry(hctx, key, &entry);
-  if (ret < 0) {
-    if (ret == -ENOENT)
-      CLS_LOG(10, "read(): entry not written");
-    else
-      CLS_ERR("ERROR: read(): failed to read entry");
+  ret = header.check_or_init(op.stride(), op.max_size(), 0);
+  if (ret) {
     return ret;
   }
 
-  if (entry.flags() & zlog_ceph_proto::LogEntry::INVALID) {
-    return -ENODATA;
-
-  } else if (entry.flags() != 0) {
-    CLS_ERR("ERROR: read(): unexpected state");
-    return -EIO;
+  const uint32_t index = op.pos() / op.stride();
+  if (!header.written(index)) {
+    CLS_LOG(10, "read(): entry not written");
+    return -ENOENT;
   }
 
-  out->append(entry.data());
+  if (header.invalid(index)) {
+    CLS_LOG(10, "read(): entry is invalid");
+    return -ENODATA;
+  }
+
+  const uint32_t slot_size = op.max_size();
+  const uint32_t offset = index * slot_size;
+
+  ret = cls_cxx_read(hctx, offset, slot_size, out);
+  if (ret < 0) {
+    CLS_ERR("ERROR: read(): failed to read slot %d", ret);
+  }
 
   return 0;
 }
@@ -206,54 +263,50 @@ static int entry_write(cls_method_context_t hctx, ceph::bufferlist *in, ceph::bu
     return -EINVAL;
   }
 
-  zlog_ceph_proto::LogObjectHeader header;
-  int ret = entry_read_header(hctx, header);
+  LogObjectHeader header("entry_write");
+  int ret = header.read(hctx);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: write(): failed to read header");
     return ret;
   }
 
-  if (epoch_guard(header, op.epoch(), false)) {
-    CLS_LOG(10, "write(): stale epoch");
-    return -ESPIPE;
-  }
+  ret = header.epoch_guard(op.epoch(), false);
+  if (ret)
+    return ret;
 
-  auto key = entry_key(op.pos());
-  ret = entry_read_entry(hctx, key, NULL);
-  if (ret < 0 && ret != -ENOENT) {
-    CLS_ERR("ERROR: write(): failed to read entry");
+  ret = header.check_or_init(op.stride(), op.max_size(),
+      op.data().size());
+  if (ret) {
     return ret;
   }
 
-  if (ret == -ENOENT) {
-    zlog_ceph_proto::LogEntry entry;
-    entry.set_data(op.data());
-
-    ret = entry_write_entry(hctx, key, entry);
-    if (ret < 0) {
-      CLS_ERR("ERROR: write(): failed to write entry");
-      return ret;
-    }
-
-    if (!header.has_max_pos() || (op.pos() > header.max_pos()))
-      header.set_max_pos(op.pos());
-
-    ret = entry_write_header(hctx, header);
-    if (ret < 0) {
-      CLS_ERR("ERROR: write(): failed to write header");
-      return ret;
-    }
-
-    return 0;
-
-  } else if (ret == 0) {
+  const uint32_t index = op.pos() / op.stride();
+  if (header.written(index)) {
     CLS_LOG(10, "write(): entry position non-empty");
     return -EROFS;
-
-  } else {
-    CLS_ERR("ERROR: write(): unexpected return value %d", ret);
-    return -EIO;
   }
+
+  header.set_written(index);
+  header.set_max_pos(op.pos());
+
+  const uint32_t slot_size = op.max_size();
+  const uint32_t offset = index * slot_size;
+
+  ceph::bufferlist data;
+  data.append(op.data());
+  ret = cls_cxx_write(hctx, offset, data.length(), &data);
+  if (ret < 0) {
+    CLS_ERR("ERROR: write(): failed to write entry: %d", ret);
+    return ret;
+  }
+
+  ret = header.write(hctx);
+  if (ret < 0) {
+    CLS_ERR("ERROR: write(): failed to write header %d", ret);
+    return ret;
+  }
+
+  return 0;
 }
 
 static int entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
@@ -265,69 +318,45 @@ static int entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  zlog_ceph_proto::LogObjectHeader header;
-  int ret = entry_read_header(hctx, header);
+  LogObjectHeader header("entry_invalidate");
+  int ret = header.read(hctx);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: invalidate(): failed to read header");
     return ret;
   }
 
-  if (epoch_guard(header, op.epoch(), false)) {
-    CLS_LOG(10, "invalidate(): stale epoch");
-    return -ESPIPE;
-  }
+  ret = header.epoch_guard(op.epoch(), false);
+  if (ret)
+    return ret;
 
-  auto key = entry_key(op.pos());
-  zlog_ceph_proto::LogEntry entry;
-  ret = entry_read_entry(hctx, key, &entry);
-  if (ret < 0 && ret != -ENOENT) {
-    CLS_ERR("ERROR: invalidate(): failed to read entry");
+  ret = header.check_or_init(op.stride(), op.max_size(), 0);
+  if (ret) {
     return ret;
   }
 
-  if (ret == -ENOENT) {
-    // invalidate entry. not forced
-    entry.set_flags(zlog_ceph_proto::LogEntry::INVALID);
-    ret = entry_write_entry(hctx, key, entry);
-    if (ret < 0) {
-      CLS_ERR("ERROR: invalidate(): failed to write entry");
-      return ret;
+  const uint32_t index = op.pos() / op.stride();
+  if (header.written(index)) {
+    if (header.invalid(index)) {
+      CLS_LOG(10, "invalidate(): entry already invalidated");
+      return 0;
     }
-
-    if (!header.has_max_pos() || (op.pos() > header.max_pos()))
-      header.set_max_pos(op.pos());
-
-    ret = entry_write_header(hctx, header);
-    if (ret < 0) {
-      CLS_ERR("ERROR: invalidate(): failed to write header");
-      return ret;
+    if (!op.force()) {
+      CLS_LOG(10, "invalidate(): entry position non-empty");
+      return -EROFS;
     }
+  }
 
-    return 0;
+  header.set_written(index);
+  header.set_invalid(index);
+  header.set_max_pos(op.pos());
 
-  } else if (entry.flags() & zlog_ceph_proto::LogEntry::INVALID) {
-    // already invalid. preserve data and forced flag
-    return 0;
-
-  } else if (entry.flags() != 0) {
-    CLS_ERR("ERROR: invalidate(): unexpected state");
-    return -EIO;
-
-  } else if (!op.force()) {
-    CLS_LOG(10, "invalidate(): entry position non-empty");
-    return -EROFS;
-
-  } else {
-    // force invalidate entry. preserve data. no need to update the max position
-    // in the header because this position would already be reflected in that
-    // value.
-    entry.set_flags(zlog_ceph_proto::LogEntry::INVALID |
-        zlog_ceph_proto::LogEntry::FORCED);
-    ret = entry_write_entry(hctx, key, entry);
-    if (ret < 0)
-      CLS_ERR("ERROR: invalidate(): failed to write entry");
+  ret = header.write(hctx);
+  if (ret < 0) {
+    CLS_ERR("ERROR: invalidate(): failed to write header %d", ret);
     return ret;
   }
+
+  return 0;
 }
 
 static int entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
@@ -339,27 +368,29 @@ static int entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  zlog_ceph_proto::LogObjectHeader header;
-  int ret = entry_read_header(hctx, header);
+  LogObjectHeader header("entry_seal");
+  int ret = header.read(hctx);
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: seal(): read header failed: %d", ret);
     return ret;
   }
 
-  if (header.has_epoch()) {
-    if (op.epoch() <= header.epoch()) {
-      CLS_LOG(10, "seal(): stale op epoch %llu <= %llu (hdr)",
+  auto epoch = header.epoch();
+  if (epoch) {
+    if (op.epoch() <= *epoch) {
+      CLS_LOG(10, "entry_seal(): stale op epoch %llu <= %llu (hdr)",
           (unsigned long long)op.epoch(),
-          (unsigned long long)header.epoch());
+          (unsigned long long)*epoch);
       return -ESPIPE;
     }
   }
 
   header.set_epoch(op.epoch());
 
-  ret = entry_write_header(hctx, header);
-  if (ret < 0)
+  ret = header.write(hctx);
+  if (ret < 0) {
     CLS_ERR("ERROR: seal(): write header failed: %d", ret);
+  }
 
   return 0;
 }
@@ -373,18 +404,19 @@ static int entry_max_position(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  zlog_ceph_proto::LogObjectHeader header;
-  int ret = entry_read_header(hctx, header);
+  LogObjectHeader header("entry_max_position");
+  int ret = header.read(hctx);
   if (ret) {
     CLS_ERR("ERROR: max_position(): failed to read header: %d", ret);
     return ret;
   }
 
-  if (header.has_epoch()) {
-    if (op.epoch() != header.epoch()) {
+  auto epoch = header.epoch();
+  if (epoch) {
+    if (op.epoch() != *epoch) {
       CLS_LOG(10, "max_position(): op epoch %llu != %llu (hdr)",
           (unsigned long long)op.epoch(),
-          (unsigned long long)header.epoch());
+          (unsigned long long)*epoch);
       return -ESPIPE;
     }
   } else {
@@ -393,8 +425,10 @@ static int entry_max_position(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::MaxPos reply;
-  if (header.has_max_pos())
-    reply.set_pos(header.max_pos());
+  auto max_pos = header.max_pos();
+  if (max_pos) {
+    reply.set_pos(*max_pos);
+  }
 
   encode(*out, reply);
 
@@ -509,26 +543,25 @@ void __cls_init()
   cls_register("zlog", &h_class);
 
   cls_register_cxx_method(h_class, "entry_read",
-			  CLS_METHOD_RD,
-			  entry_read, &h_entry_read);
+      CLS_METHOD_RD,
+      entry_read, &h_entry_read);
 
   cls_register_cxx_method(h_class, "entry_write",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  entry_write, &h_entry_write);
+      CLS_METHOD_RD | CLS_METHOD_WR,
+      entry_write, &h_entry_write);
 
   cls_register_cxx_method(h_class, "entry_invalidate",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-        entry_invalidate, &h_entry_invalidate);
+      CLS_METHOD_RD | CLS_METHOD_WR,
+      entry_invalidate, &h_entry_invalidate);
 
   cls_register_cxx_method(h_class, "entry_seal",
       CLS_METHOD_RD | CLS_METHOD_WR,
       entry_seal, &h_entry_seal);
 
   cls_register_cxx_method(h_class, "entry_max_position",
-			  CLS_METHOD_RD,
-			  entry_max_position, &h_entry_max_position);
+      CLS_METHOD_RD,
+      entry_max_position, &h_entry_max_position);
 
-  // view management
   cls_register_cxx_method(h_class, "view_create",
       CLS_METHOD_RD | CLS_METHOD_WR,
       view_create, &h_view_create);

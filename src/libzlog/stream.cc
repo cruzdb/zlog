@@ -332,7 +332,9 @@ int LogImpl::MultiAppend(const Slice& data,
       assert(hdr.IsInitialized());
       uint32_t buf_size = hdr.ByteSize();
       char buf[buf_size];
-      assert(hdr.SerializeToArray(buf, buf_size));
+      if (!hdr.SerializeToArray(buf, buf_size)) {
+        return -EIO;
+      }
       uint32_t be_buf_size = htonl(buf_size);
       out_data.append((char*)&be_buf_size, sizeof(be_buf_size));
       out_data.append(buf, sizeof(buf));

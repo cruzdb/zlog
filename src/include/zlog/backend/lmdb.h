@@ -39,16 +39,18 @@ class LMDBBackend : public Backend {
       uint64_t epoch, const std::string& view) override;
 
   int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data) override;
+      uint64_t position, uint32_t stride, uint32_t max_size,
+      std::string *data) override;
 
   int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position) override;
+      uint64_t epoch, uint64_t position, uint32_t stride,
+      uint32_t max_size) override;
 
   int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position) override;
+      uint64_t position, uint32_t stride, uint32_t max_size) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) override;
+      uint64_t position, uint32_t stride, uint32_t max_size) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;
@@ -57,11 +59,13 @@ class LMDBBackend : public Backend {
       uint64_t *pos, bool *empty) override;
 
   int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, const Slice& data, void *arg,
+      uint64_t position, uint32_t stride, uint32_t max_size,
+      const Slice& data, void *arg,
       std::function<void(void*, int)> callback) override;
 
   int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data, void *arg,
+      uint64_t position, uint32_t stride, uint32_t max_size,
+      std::string *data, void *arg,
       std::function<void(void*, int)> callback) override;
 
  private:

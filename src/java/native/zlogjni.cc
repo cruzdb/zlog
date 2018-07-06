@@ -68,8 +68,9 @@ JNIEXPORT void JNICALL Java_org_cruzdb_zlog_Log_openNative
     return;
   }
 
+  zlog::Options options;
   zlog::Log *log;
-  int ret = zlog::Log::Create(scheme, name, opts, "", "", &log);
+  int ret = zlog::Log::Create(options, scheme, name, opts, "", "", &log);
 
   env->ReleaseStringUTFChars(jscheme, scheme);
   env->ReleaseStringUTFChars(jname, name);

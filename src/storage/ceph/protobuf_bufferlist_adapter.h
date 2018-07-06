@@ -1,13 +1,17 @@
 #pragma once
 #include <google/protobuf/message.h>
 #include <rados/buffer.h>
+#include <iostream>
 
 static inline void encode(ceph::buffer::list& bl,
     const google::protobuf::Message& msg)
 {
   assert(msg.IsInitialized());
   char buf[msg.ByteSize()];
-  assert(msg.SerializeToArray(buf, sizeof(buf)));
+  if (!msg.SerializeToArray(buf, sizeof(buf))) {
+    std::cout << "failed to serialize" << std::endl << std::flush;
+    exit(1);
+  }
   bl.append(buf, sizeof(buf));
 }
 

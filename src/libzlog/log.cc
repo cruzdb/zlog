@@ -12,13 +12,26 @@ namespace zlog {
 
 Log::~Log() {}
 
-int Log::Create(const std::string& scheme, const std::string& name,
+int Log::Create(const Options& options,
+    const std::string& scheme, const std::string& name,
     const std::map<std::string, std::string>& opts,
     const std::string& host, const std::string& port,
     Log **logpp)
 {
-  // FIXME
-  const int stripe_size = 10;
+  if (options.width <= 0) {
+    std::cerr << "width must be great than 0" << std::endl;
+    return -EINVAL;
+  }
+
+  if (options.entries_per_object <= 0) {
+    std::cerr << "entries_per_object must be great than 0" << std::endl;
+    return -EINVAL;
+  }
+
+  if (options.max_entry_size <= 0) {
+    std::cerr << "max_entry_size must be great than 0" << std::endl;
+    return -EINVAL;
+  }
 
   std::shared_ptr<Backend> backend;
   int ret = Backend::Load(scheme, opts, backend);
@@ -27,7 +40,8 @@ int Log::Create(const std::string& scheme, const std::string& name,
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(stripe_size);
+  auto init_view = Striper::InitViewData(options.width, options.entries_per_object,
+      options.max_entry_size);
   if (host.empty()) {
     auto uuid = boost::uuids::random_generator()();
     auto hostname = boost::asio::ip::host_name();
@@ -41,7 +55,10 @@ int Log::Create(const std::string& scheme, const std::string& name,
     init_view.set_host(host);
     init_view.set_port(port);
   }
-  assert(init_view.SerializeToString(&init_view_data));
+  if (!init_view.SerializeToString(&init_view_data)) {
+    std::cerr << "failed to serialize view" << std::endl;
+    return -EIO;
+  }
 
   ret = backend->CreateLog(name, init_view_data);
   if (ret) {
@@ -81,7 +98,8 @@ int Log::Create(const std::string& scheme, const std::string& name,
   return 0;
 }
 
-int Log::Open(const std::string& scheme, const std::string& name,
+int Log::Open(const Options& options,
+    const std::string& scheme, const std::string& name,
     const std::map<std::string, std::string>& opts,
     const std::string& host, const std::string& port,
     Log **logpp)
@@ -132,15 +150,29 @@ int Log::Open(const std::string& scheme, const std::string& name,
   return 0;
 }
 
-int Log::CreateWithBackend(std::shared_ptr<Backend> backend,
+int Log::CreateWithBackend(const Options& options,
+    std::shared_ptr<Backend> backend,
     const std::string& name, Log **logptr)
 {
-  // FIXME
-  const int stripe_size = 10;
+  if (options.width <= 0) {
+    std::cerr << "width must be great than 0" << std::endl;
+    return -EINVAL;
+  }
+
+  if (options.entries_per_object <= 0) {
+    std::cerr << "entries_per_object must be great than 0" << std::endl;
+    return -EINVAL;
+  }
+
+  if (options.max_entry_size <= 0) {
+    std::cerr << "max_entry_size must be great than 0" << std::endl;
+    return -EINVAL;
+  }
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(stripe_size);
+  auto init_view = Striper::InitViewData(options.width, options.entries_per_object,
+      options.max_entry_size);
   auto uuid = boost::uuids::random_generator()();
   auto hostname = boost::asio::ip::host_name();
   std::stringstream exclusive_cookie_ss;
@@ -149,7 +181,11 @@ int Log::CreateWithBackend(std::shared_ptr<Backend> backend,
   const auto cookie = exclusive_cookie_ss.str();
 
   init_view.set_exclusive_cookie(cookie);
-  assert(init_view.SerializeToString(&init_view_data));
+
+  if (!init_view.SerializeToString(&init_view_data)) {
+    std::cerr << "failed to serialize view" << std::endl;
+    return -EIO;
+  }
 
   int ret = backend->CreateLog(name, init_view_data);
   if (ret) {
@@ -187,7 +223,8 @@ int Log::CreateWithBackend(std::shared_ptr<Backend> backend,
   return 0;
 }
 
-int Log::OpenWithBackend(std::shared_ptr<Backend> backend,
+int Log::OpenWithBackend(const Options& options,
+    std::shared_ptr<Backend> backend,
     const std::string& name, Log **logptr)
 {
   if (name.empty())

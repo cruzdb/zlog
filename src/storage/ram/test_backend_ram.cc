@@ -8,18 +8,20 @@ void BackendTest::SetUp() {}
 void BackendTest::TearDown() {}
 
 void LibZLogTest::SetUp() {
+  zlog::Options options;
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
     auto backend = std::unique_ptr<zlog::storage::ram::RAMBackend>(
         new zlog::storage::ram::RAMBackend());
-    int ret = zlog::Log::CreateWithBackend(std::move(backend),
-        "mylog", &log);
+    int ret = zlog::Log::CreateWithBackend(options,
+        std::move(backend), "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
     ASSERT_TRUE(exclusive());
     std::string host = "";
     std::string port = "";
-    int ret = zlog::Log::Create("ram", "mylog", {}, host, port, &log);
+    int ret = zlog::Log::Create(options, "ram", "mylog",
+        {}, host, port, &log);
     ASSERT_EQ(ret, 0);
   }
 }

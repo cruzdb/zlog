@@ -100,7 +100,8 @@ int RAMBackend::ProposeView(const std::string& hoid,
 }
 
 int RAMBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data)
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    std::string *data)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -127,7 +128,7 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position)
+    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -156,7 +157,7 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -187,7 +188,7 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, uint32_t stride, uint32_t max_size)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -261,19 +262,21 @@ int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, const Slice& data, void *arg,
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position);
+  int ret = Write(oid, data, epoch, position, stride, max_size);
   callback(arg, ret);
   return 0;
 }
 
 int RAMBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data, void *arg,
+    uint64_t position, uint32_t stride, uint32_t max_size,
+    std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, data);
+  int ret = Read(oid, epoch, position, stride, max_size, data);
   callback(arg, ret);
   return 0;
 }

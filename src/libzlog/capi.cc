@@ -34,7 +34,8 @@ extern "C" int zlog_create(const char *scheme, const char *name,
 
   zlog_log_ctx *ctx = new zlog_log_ctx;
 
-  int ret = zlog::Log::Create(scheme, name,
+  Options options;
+  int ret = zlog::Log::Create(options, scheme, name,
       opts, host, port, &ctx->log);
   if (ret) {
     delete ctx;

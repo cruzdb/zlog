@@ -2,10 +2,12 @@
 
 int main(int argc, char **argv)
 {
+  zlog::Options options;
   zlog::Log *log;
-  int ret = zlog::Log::Create("lmdb", "mylog",
+  int ret = zlog::Log::Create(options, "lmdb", "mylog",
       {{"path", "/tmp/zlog.tmp.db"}}, "", "", &log);
   assert(ret == 0);
+  (void)ret;
 
   const std::string input = "oh the input";
 
