@@ -51,6 +51,7 @@ compile_commands.json
 *.so
 *.so.*
 install_manifest.txt
+*.cmake
 
 build
 *.dylib
