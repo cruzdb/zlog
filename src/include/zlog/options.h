@@ -1,7 +1,8 @@
 #pragma once
-#include "zlog/monitoring/statistics.h"
 
 namespace zlog {
+
+class Statistics;
 
 struct Options {
   // Number of objects to stripe the log across. This value is used to configure
