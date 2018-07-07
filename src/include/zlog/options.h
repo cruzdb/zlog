@@ -1,6 +1,11 @@
 #pragma once
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace zlog {
+
+class Statistics;
 
 struct Options {
   // Number of objects to stripe the log across. This value is used to configure
@@ -13,6 +18,10 @@ struct Options {
   int entries_per_object = 200;
 
   int max_entry_size = 1024;
+
+  std::shared_ptr<Statistics> statistics = nullptr;
+
+  std::vector<std::string> http;
 };
 
 }

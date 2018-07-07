@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include "zlog/backend.h"
+#include "zlog/options.h"
 #include "gtest/gtest.h"
 
 class BackendTest : public ::testing::Test {
