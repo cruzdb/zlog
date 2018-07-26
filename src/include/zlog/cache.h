@@ -27,7 +27,8 @@ class Cache{
                     eviction = new ARC(options.cache_size, this);
                 break;
                 default:
-                    std::cout << "Eviction policy not implemented" << std::endl;   
+                    eviction = new LRU(options.cache_size, this);
+                    std::cout << "Eviction policy not implemented. Using default: LRU" << std::endl;   
                 break;
             }
 

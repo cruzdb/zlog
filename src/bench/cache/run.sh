@@ -4,11 +4,11 @@ pool="javier"
 
 width=1000
 entries_per_object="1024"
-runtime="12"
-entry_sizes="100 1000"
-queue_depths="2 4"
-cache_size="0 1024 65536"
-cache_eviction="0 1"
+runtime="6"
+entry_sizes="1000"
+queue_depths="4"
+cache_size="1024"
+cache_eviction="0"
 backend="ceph"
 
 #export ZLOG_LMDB_BE_SIZE=20
@@ -16,6 +16,7 @@ backend="ceph"
 scanv=""
 
 if [ "$1" != "scan" ] ; then
+  echo $backend
   #rm -rf /tmp/zlog.tmp.db
   #mkdir /tmp/zlog.tmp.db
   #./bin/create_log_lmdb
