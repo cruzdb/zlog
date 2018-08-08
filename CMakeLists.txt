@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(zlog)
 
+add_definitions(-DWITH_CACHE -DWITH_STATS)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

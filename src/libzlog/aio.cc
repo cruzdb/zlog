@@ -62,7 +62,9 @@ class AioCompletionImpl {
    *  - where to put result
    */
   std::string *datap;
+  #ifdef WITH_CACHE
   Cache* cache;
+  #endif
 
   AioCompletionImpl() :
     ref(1), complete(false), callback_complete(false), released(false), retval(0)
@@ -126,8 +128,10 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
     if (impl->datap && !impl->data.empty()) {
       impl->datap->swap(impl->data);
     }
-    
+
+    #ifdef WITH_CACHE    
     impl->cache->put(impl->position, Slice(*(impl->datap)));
+    #endif
 
     ret = 0;
     finish = true;
@@ -208,7 +212,9 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
     if (impl->pposition) {
       *impl->pposition = impl->position;
     }
+    #ifdef WITH_CACHE
     impl->cache->put(*(impl->pposition), impl->data);
+    #endif
 
     ret = 0;
     finish = true;
@@ -393,8 +399,9 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
   impl->pposition = pposition;
   impl->backend = backend;
   impl->type = ZLOG_AIO_APPEND;
+  #ifdef WITH_CACHE
   impl->cache = cache;
-
+  #endif
   // used to identify if state changes have occurred since dispatching the
   // request in order to avoid reconfiguration later (important when lots of
   // threads or contexts try to do the same thing).
@@ -430,10 +437,12 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
   impl->position = position;
   impl->backend = backend;
   impl->type = ZLOG_AIO_READ;
+  #ifdef WITH_CACHE
   impl->cache = cache;
-
+  #endif
   impl->get(); // backend now has a reference
-
+  
+  #ifdef WITH_CACHE
   int cache_miss = cache->get(&position, datap);
   if(!cache_miss){
 
@@ -451,6 +460,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
 
     return ret;
   }
+  #endif
 
   
   auto mapping = striper.MapPosition(position);

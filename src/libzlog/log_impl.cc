@@ -70,16 +70,20 @@ LogImpl::~LogImpl()
     shutdown = true;
   }
   
+  #ifdef WITH_STATS
   if(metrics_http_server_){
     metrics_http_server_->removeHandler("/metrics");
     metrics_http_server_->close();
     delete metrics_http_server_;
   }
+  #endif
 
   view_update.notify_one();
   view_update_thread.join();
 
+  #ifdef WITH_CACHE
   delete cache;
+  #endif
 }
 
 int LogImpl::UpdateView()
@@ -493,8 +497,10 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
 
 int LogImpl::Read(uint64_t position, std::string *data)
 {
+  #ifdef WITH_CACHE
   int cache_miss = cache->get(&position, data);
   if(!cache_miss) return 0;
+  #endif
 
   while (true) {
     auto mapping = striper.MapPosition(position);
@@ -508,8 +514,9 @@ int LogImpl::Read(uint64_t position, std::string *data)
         mapping->width, mapping->max_size, data);
 
     if (!ret){
-      //std::string data_copy(*data); //make a copy
+      #ifdef WITH_CACHE
       cache->put(position, Slice(*data));
+      #endif
       return 0;
     }
 
@@ -580,10 +587,9 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       if (pposition){
         *pposition = position;
       }
-
-      //std::string cache_str = data.ToString(); //ToString() is a copy
+      #ifdef WITH_CACHE
       cache->put(*pposition, data);
-
+      #endif
       return 0;
     }
 
@@ -665,7 +671,9 @@ int LogImpl::Trim(uint64_t position)
     int ret = backend->Trim(mapping->oid, mapping->epoch, position,
         mapping->width, mapping->max_size);
     if (!ret){
+      #ifdef WITH_CACHE
       cache->remove(&position);
+      #endif
       return 0;
     }
     if (ret == -ESPIPE) {

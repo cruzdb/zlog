@@ -9,8 +9,11 @@
 #include "include/zlog/statistics.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
-#include "include/zlog/cache.h"
 #include "striper.h"
+
+#ifdef WITH_CACHE
+#include "include/zlog/cache.h"
+#endif
 
 #define DEFAULT_STRIPE_SIZE 100
 
@@ -37,15 +40,21 @@ class LogImpl : public Log {
     name(name),
     hoid(hoid),
     striper(prefix),
-    options(opts),
-    metrics_http_server_(nullptr),
+    options(opts)
+#ifdef WITH_STATS
+    ,metrics_http_server_(nullptr),
     metrics_handler_(this)
+#endif
   {
+#ifdef WITH_CACHE
     cache = new Cache(options); 
+#endif
+#ifdef WITH_STATS
     if (!opts.http.empty()) {
       metrics_http_server_ = new CivetServer(opts.http);
       metrics_http_server_->addHandler("/metrics", &metrics_handler_);
     }
+#endif
     view_update_thread = std::thread(&LogImpl::ViewUpdater, this);
   }
 
@@ -123,6 +132,7 @@ class LogImpl : public Log {
 
   int ExtendMap();
 
+#ifdef WITH_STATS
  private:
   class MetricsHandler : public CivetHandler {
    public:
@@ -154,6 +164,7 @@ class LogImpl : public Log {
 
     LogImpl* log_;
   };
+#endif
 
  public:
   bool shutdown;
@@ -178,9 +189,13 @@ class LogImpl : public Log {
   std::thread view_update_thread;
 
   const Options& options;
+#ifdef WITH_STATS
   CivetServer* metrics_http_server_ = nullptr;
   MetricsHandler metrics_handler_;
+#endif
+#ifdef WITH_CACHE
   Cache* cache;
+#endif
 };
 
 }
