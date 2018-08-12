@@ -84,3 +84,4 @@ More Documentation
 
    api/index
    storage/index
+   options/index
