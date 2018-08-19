@@ -30,7 +30,6 @@ case $ID in
 
     wget -q -O- 'https://download.ceph.com/keys/release.asc' | $SUDO apt-key add -
     $SUDO apt-add-repository "deb https://download.ceph.com/debian-${ceph_ver}/ ${ceph_deb_release} main"
-
     
     $SUDO apt-get update
     $SUDO env DEBIAN_FRONTEND=noninteractive \

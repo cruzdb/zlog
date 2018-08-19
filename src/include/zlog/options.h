@@ -21,7 +21,7 @@ struct Options {
 
   int max_entry_size = 1024;
 
-  std::shared_ptr<Statistics> statistics = nullptr;
+  Statistics* statistics = nullptr;
   std::vector<std::string> http;
   
   //cache options

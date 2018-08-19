@@ -352,7 +352,7 @@ int main(int argc, char **argv)
   options.eviction = (zlog::Eviction::Eviction_Policy)cache_eviction;
 
   auto stats = zlog::CreateCacheStatistics();
-  options.statistics = stats;
+  options.statistics = stats.get();
 
   zlog::Log *log;
   if (scan) {

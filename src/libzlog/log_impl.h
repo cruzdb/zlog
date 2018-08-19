@@ -188,7 +188,7 @@ class LogImpl : public Log {
   std::list<std::pair<std::condition_variable*, bool*>> view_update_waiters;
   std::thread view_update_thread;
 
-  const Options& options;
+  const Options options;
 #ifdef WITH_STATS
   CivetServer* metrics_http_server_ = nullptr;
   MetricsHandler metrics_handler_;
