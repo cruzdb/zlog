@@ -17,6 +17,7 @@
 #include "proto/zlog.pb.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend.h"
+#include "include/zlog/cache.h"
 
 #include "fakeseqr.h"
 #include "striper.h"
@@ -63,19 +64,26 @@ int LogImpl::Open(const std::string& scheme, const std::string& name,
 }
 
 LogImpl::~LogImpl()
-{
+{ 
   {
     std::lock_guard<std::mutex> l(lock);
     shutdown = true;
   }
-  view_update.notify_one();
-  view_update_thread.join();
-
-  if (metrics_http_server_) {
+  
+  #ifdef WITH_STATS
+  if(metrics_http_server_){
     metrics_http_server_->removeHandler("/metrics");
     metrics_http_server_->close();
     delete metrics_http_server_;
   }
+  #endif
+
+  view_update.notify_one();
+  view_update_thread.join();
+
+  #ifdef WITH_CACHE
+  delete cache;
+  #endif
 }
 
 int LogImpl::UpdateView()
@@ -489,6 +497,11 @@ int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
 
 int LogImpl::Read(uint64_t position, std::string *data)
 {
+  #ifdef WITH_CACHE
+  int cache_miss = cache->get(&position, data);
+  if(!cache_miss) return 0;
+  #endif
+
   while (true) {
     auto mapping = striper.MapPosition(position);
     if (!mapping) {
@@ -499,8 +512,14 @@ int LogImpl::Read(uint64_t position, std::string *data)
     }
     int ret = backend->Read(mapping->oid, mapping->epoch, position,
         mapping->width, mapping->max_size, data);
-    if (!ret)
+
+    if (!ret){
+      #ifdef WITH_CACHE
+      cache->put(position, Slice(*data));
+      #endif
       return 0;
+    }
+
     if (ret == -ESPIPE) {
       ret = UpdateView();
       if (ret)
@@ -565,8 +584,12 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
     ret = backend->Write(mapping->oid, data, mapping->epoch, position,
         mapping->width, mapping->max_size);
     if (!ret) {
-      if (pposition)
+      if (pposition){
         *pposition = position;
+      }
+      #ifdef WITH_CACHE
+      cache->put(*pposition, data);
+      #endif
       return 0;
     }
 
@@ -647,8 +670,12 @@ int LogImpl::Trim(uint64_t position)
 
     int ret = backend->Trim(mapping->oid, mapping->epoch, position,
         mapping->width, mapping->max_size);
-    if (!ret)
+    if (!ret){
+      #ifdef WITH_CACHE
+      cache->remove(&position);
+      #endif
       return 0;
+    }
     if (ret == -ESPIPE) {
       ret = UpdateView();
       if (ret)

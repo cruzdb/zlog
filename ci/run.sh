@@ -27,9 +27,15 @@ fi
 CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
              -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 
-if [[ "$OSTYPE" != "darwin"* ]]; then
-  CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_CEPH=ON -DWITH_JNI=ON"
+JNI="ON"
+if ! [ -x "$(command -v javah)" ]; then
+  JNI="OFF"
 fi
+
+if [[ "$OSTYPE" != "darwin"* ]]; then
+  CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_CEPH=ON -DWITH_JNI=${JNI}"
+fi
+
 
 pushd ${BUILD_DIR}
 cmake ${CMAKE_FLAGS} ${ZLOG_DIR}
@@ -70,15 +76,14 @@ for test_runner in $tests; do
   fi
 done
 
-if [[ "$OSTYPE" != "darwin"* ]]; then
+if [[ "$OSTYPE" != "darwin"* && "$JNI" == "ON" ]]; then
   pushd ${BUILD_DIR}/src/java
 
   export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:${INSTALL_DIR}/lib64:${INSTALL_DIR}/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
   # i'm giving up for the time being on how to fix a dynamic library loading
   # issue that is only showing up on debian jessie. see issue #143
-  OS_ID=$(lsb_release -si)
-  OS_CODE=$(lsb_release -sc)
+  
   if [[ ${OS_ID} == "Debian" && ${OS_CODE} == "jessie" ]]; then
     export LD_LIBRARY_PATH=/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/amd64/xawt/:$LD_LIBRARY_PATH
   fi

@@ -6,12 +6,16 @@ set(libzlog_sources
   capi.cc
   log.cc
   backend.cc
+  cache.cc
+  ../eviction/lru.cc
+  ../eviction/arc.cc
   ../port/stack_trace.cc
   ../port/port_posix.cc
   ../util/random.cc
   ../util/thread_local.cc
   ../monitoring/statistics.cc
   ../monitoring/histogram.cc
+  ../util/mempool.cc
   ../civetweb/src/civetweb.c
   ../civetweb/src/CivetServer.cpp
   )

@@ -53,6 +53,14 @@ elseif(WITH_CEPH)
   message(FATAL_ERROR "Cannot find librados")
 endif()
 
+option(WITH_CACHING "Enable caching" ON)
+if(WITH_CACHING)
+  message(STATUS "Caching is enabled")
+  add_definitions(-DWITH_CACHE -DWITH_STATS)
+else()
+  message(STATUS "Caching is disabled")
+endif()
+
 find_package(Backtrace)
 
 add_subdirectory(src)

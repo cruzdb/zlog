@@ -1,7 +1,7 @@
 if(BUILD_CEPH_BACKEND)
 
-add_executable(zlog_bench2 bench2.cc)
-target_link_libraries(zlog_bench2
+add_executable(zlog_cache_bench cache_bench.cc)
+target_link_libraries(zlog_cache_bench
     libzlog
     zlog_seqr
     zlog_backend_ceph
@@ -12,9 +12,6 @@ target_link_libraries(zlog_bench2
     atomic
     hdr_histogram_static
 )
-install(TARGETS zlog_bench2 DESTINATION bin)
-
-add_subdirectory(rados-append)
-add_subdirectory(cache)
+install(TARGETS zlog_cache_bench DESTINATION bin)
 
 endif(BUILD_CEPH_BACKEND)

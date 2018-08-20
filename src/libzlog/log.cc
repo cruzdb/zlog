@@ -5,6 +5,7 @@
 #include <iostream>
 #include <dlfcn.h>
 #include "zlog/log.h"
+#include "zlog/cache.h"
 #include "zlog/backend.h"
 #include "log_impl.h"
 

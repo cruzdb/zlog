@@ -11,6 +11,7 @@ void Java_org_cruzdb_zlog_Log_disposeInternal(
   delete reinterpret_cast<zlog::Log*>(jhandle);
 }
 
+
 JNIEXPORT void JNICALL Java_org_cruzdb_zlog_Log_openNative
   (JNIEnv *env, jobject jobj, jstring jscheme,
    jobjectArray jkeys, jobjectArray jvals, jstring jname)
@@ -68,8 +69,9 @@ JNIEXPORT void JNICALL Java_org_cruzdb_zlog_Log_openNative
     return;
   }
 
-  zlog::Options options;
   zlog::Log *log;
+  zlog::Options options;
+
   int ret = zlog::Log::Create(options, scheme, name, opts, "", "", &log);
 
   env->ReleaseStringUTFChars(jscheme, scheme);
