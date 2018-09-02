@@ -13,8 +13,6 @@ void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
   zlog_ceph_proto::ReadEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  call.set_stride(stride);
-  call.set_max_size(max_size);
   encode(bl, call);
   op.exec("zlog", "entry_read", bl);
 }
@@ -27,8 +25,6 @@ void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
   zlog_ceph_proto::WriteEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  call.set_stride(stride);
-  call.set_max_size(max_size);
   call.set_data(data.c_str(), data.length());
   encode(bl, call);
   op.exec("zlog", "entry_write", bl);
@@ -43,8 +39,6 @@ void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
   call.set_epoch(epoch);
   call.set_pos(position);
   call.set_force(force);
-  call.set_stride(stride);
-  call.set_max_size(max_size);
   encode(bl, call);
   op.exec("zlog", "entry_invalidate", bl);
 }
@@ -98,20 +92,30 @@ void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
       new ClsZlogMaxPositionReply(pposition, pempty, pret));
 }
 
+void cls_zlog_init_entry(librados::ObjectWriteOperation& op,
+    const uint64_t epoch)
+{
+  zlog_ceph_proto::InitEntry init;
+  init.set_epoch(epoch);
+
+  ceph::bufferlist bl;
+  encode(bl, init);
+  op.exec("zlog", "entry_init", bl);
+}
+
 void cls_zlog_init_head(librados::ObjectWriteOperation& op,
     const std::string& prefix)
 {
   zlog_ceph_proto::HeadObjectHeader header;
-  header.set_deleted(false);
   header.set_prefix(prefix);
-  // don't set max_epoch...
-  assert(!header.has_max_epoch());
+
+  // ignored in op. set to make protobuf happy
+  header.set_deleted(false);
+  header.set_epoch(0);
 
   ceph::bufferlist bl;
   encode(bl, header);
-
-  op.assert_exists();
-  op.setxattr(HEAD_HEADER_KEY, bl);
+  op.exec("zlog", "view_init", bl);
 }
 
 void cls_zlog_create_view(librados::ObjectWriteOperation& op,

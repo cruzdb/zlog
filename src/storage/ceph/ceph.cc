@@ -131,7 +131,7 @@ int CephBackend::CreateLog(const std::string& name,
     hoid_ss << "zlog.head." << prefix;
     hoid = hoid_ss.str();
 
-    ret = ioctx_->create(hoid, true);
+    ret = InitHeadObject(hoid, prefix);
     if (ret) {
       if (ret == -EEXIST)
         continue;
@@ -150,16 +150,8 @@ int CephBackend::CreateLog(const std::string& name,
     return ret;
   }
 
-  // now the named log exists and points to a head object. a crash at this point
-  // is ok because a client could complete the initialization.
-  ret = InitHeadObject(hoid, prefix);
-  if (ret) {
-    std::cerr << "init head obj ret " << ret << std::endl;
-    return ret;
-  }
-
   // initialize the head object by setting its epoch 0 view
-  ret = ProposeView(hoid, 0, initial_view);
+  ret = ProposeView(hoid, 1, initial_view);
   if (ret) {
     std::cerr << "propose view ret " << ret << std::endl;
     return ret;

@@ -15,6 +15,7 @@ message View {
   // the number of log entries stored in each object.
   required uint32 entries_per_object = 3;
 
+  // this should be storage system specific
   required uint32 max_entry_size = 4;
 
   // single-writer mode. when the exclusive_cookie field is not specified, then
