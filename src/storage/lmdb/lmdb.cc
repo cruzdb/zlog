@@ -202,7 +202,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
 }
 
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t epoch, uint64_t position, uint32_t stride)
 {
   auto txn = NewTransaction();
 
@@ -257,7 +257,7 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data)
 {
   auto txn = NewTransaction(true);
@@ -295,7 +295,7 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   auto txn = NewTransaction();
 
@@ -334,7 +334,7 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   auto txn = NewTransaction();
 
@@ -380,21 +380,21 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position, stride, max_size);
+  int ret = Write(oid, data, epoch, position, stride);
   callback(arg, ret);
   return 0;
 }
 
 int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, stride, max_size, data);
+  int ret = Read(oid, epoch, position, stride, data);
   callback(arg, ret);
   return 0;
 }

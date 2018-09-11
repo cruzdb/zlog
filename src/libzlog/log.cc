@@ -29,11 +29,6 @@ int Log::Create(const Options& options,
     return -EINVAL;
   }
 
-  if (options.max_entry_size <= 0) {
-    std::cerr << "max_entry_size must be great than 0" << std::endl;
-    return -EINVAL;
-  }
-
   std::shared_ptr<Backend> backend;
   int ret = Backend::Load(scheme, opts, backend);
   if (ret)
@@ -41,8 +36,7 @@ int Log::Create(const Options& options,
 
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(options.width, options.entries_per_object,
-      options.max_entry_size);
+  auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
   if (host.empty()) {
     auto uuid = boost::uuids::random_generator()();
     auto hostname = boost::asio::ip::host_name();
@@ -165,15 +159,9 @@ int Log::CreateWithBackend(const Options& options,
     return -EINVAL;
   }
 
-  if (options.max_entry_size <= 0) {
-    std::cerr << "max_entry_size must be great than 0" << std::endl;
-    return -EINVAL;
-  }
-
   // build the initial view
   std::string init_view_data;
-  auto init_view = Striper::InitViewData(options.width, options.entries_per_object,
-      options.max_entry_size);
+  auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
   auto uuid = boost::uuids::random_generator()();
   auto hostname = boost::asio::ip::host_name();
   std::stringstream exclusive_cookie_ss;

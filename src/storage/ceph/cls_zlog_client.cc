@@ -7,7 +7,7 @@
 namespace zlog {
 
 void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::ReadEntry call;
@@ -18,7 +18,7 @@ void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
 }
 
 void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     ceph::bufferlist& data)
 {
   ceph::bufferlist bl;
@@ -31,7 +31,7 @@ void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
 }
 
 void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
-    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t epoch, uint64_t position, uint32_t stride,
     bool force)
 {
   ceph::bufferlist bl;

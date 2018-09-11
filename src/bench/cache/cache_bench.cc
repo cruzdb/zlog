@@ -342,9 +342,6 @@ int main(int argc, char **argv)
   if (entries_per_object > 0)
     options.entries_per_object = entries_per_object;
 
-  if (max_entry_size <= 0)
-    options.max_entry_size = entry_size;
-  
   if (cache_size >= 0){
     options.cache_size = cache_size;
   }

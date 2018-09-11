@@ -100,7 +100,7 @@ int RAMBackend::ProposeView(const std::string& hoid,
 }
 
 int RAMBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data)
 {
   std::lock_guard<std::mutex> lk(lock_);
@@ -128,7 +128,7 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t epoch, uint64_t position, uint32_t stride)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -157,7 +157,7 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -188,7 +188,7 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -262,21 +262,21 @@ int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position, stride, max_size);
+  int ret = Write(oid, data, epoch, position, stride);
   callback(arg, ret);
   return 0;
 }
 
 int RAMBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, stride, max_size, data);
+  int ret = Read(oid, epoch, position, stride, data);
   callback(arg, ret);
   return 0;
 }

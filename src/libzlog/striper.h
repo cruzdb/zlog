@@ -17,7 +17,6 @@ class Striper {
   struct Mapping {
     uint64_t epoch;
     uint32_t width;
-    uint32_t max_size;
     std::string oid;
   };
 
@@ -26,7 +25,7 @@ class Striper {
   {}
 
   static zlog_proto::View InitViewData(uint32_t width,
-      uint32_t entries_per_object, uint32_t max_entry_size);
+      uint32_t entries_per_object);
 
   std::pair<uint64_t, zlog_proto::View> LatestView() const;
 
@@ -60,8 +59,8 @@ class Striper {
   class ViewEntry {
    public:
     ViewEntry(const std::string& prefix, uint64_t epoch, uint32_t width,
-        uint64_t maxpos, uint32_t max_size) :
-      width_(width), maxpos_(maxpos), max_size_(max_size)
+        uint64_t maxpos) :
+      width_(width), maxpos_(maxpos)
     {
       for (auto i = 0u; i < width_; i++) {
         std::stringstream oid;
@@ -88,14 +87,9 @@ class Striper {
       return oids_;
     }
 
-    uint32_t max_size() const {
-      return max_size_;
-    }
-
    private:
     uint32_t width_;
     uint64_t maxpos_;
-    uint32_t max_size_;
     std::vector<std::string> oids_;
   };
 
