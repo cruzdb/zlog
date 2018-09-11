@@ -62,10 +62,10 @@ int Striper::Add(uint64_t epoch, const std::string& data)
   std::lock_guard<std::mutex> l(lock_);
 
   if (views_.empty()) {
-    assert(epoch == 0);
+    assert(epoch == 1);
     assert(view.position() == 0);
     uint64_t maxpos = (view.width() * view.entries_per_object()) - 1;
-    epoch_ = 0;
+    epoch_ = 1;
     views_.emplace(0, ViewEntry(prefix_, epoch_, view.width(), maxpos));
   } else {
     assert(epoch == (epoch_ + 1));

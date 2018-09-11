@@ -112,8 +112,8 @@ void LogImpl::ViewUpdater()
         break;
     }
 
-    // striper initialized from epoch 0
-    uint64_t epoch = striper.Empty() ? 0 : striper.Epoch() + 1;
+    // striper initialized from epoch 1
+    uint64_t epoch = striper.Empty() ? 1 : striper.Epoch() + 1;
 
     // query for new views since epoch
     std::map<uint64_t, std::string> views;

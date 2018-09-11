@@ -99,5 +99,5 @@ class Striper {
   // min-pos(inclusive) -> entry
   std::map<uint64_t, ViewEntry> views_;
   zlog_proto::View latest_view_;
-  uint64_t epoch_;
+  uint64_t epoch_; // TODO: initialize to something? Add initializes..
 };
