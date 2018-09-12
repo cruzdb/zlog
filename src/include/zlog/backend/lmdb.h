@@ -73,7 +73,7 @@ class LMDBBackend : public Backend {
   MDB_dbi db_obj;
 
   struct ProjectionObject {
-    ProjectionObject() : latest_epoch(0) {}
+    ProjectionObject() : latest_epoch(1) {}
     uint64_t latest_epoch;
   };
 

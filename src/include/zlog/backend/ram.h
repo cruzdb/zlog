@@ -67,7 +67,7 @@ class RAMBackend : public Backend {
 
  private:
   struct ProjectionObject {
-    ProjectionObject() : latest_epoch(0) {}
+    ProjectionObject() : latest_epoch(1) {}
     uint64_t latest_epoch;
     std::unordered_map<uint64_t, std::string> projections;
   };
