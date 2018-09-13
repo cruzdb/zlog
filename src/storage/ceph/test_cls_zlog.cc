@@ -941,6 +941,37 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
   ASSERT_EQ(pos, (unsigned)170);
 }
 
+TEST_F(ClsZlogTest, InitView_BadInput) {
+  ceph::bufferlist inbl, outbl;
+  inbl.append("foo", strlen("foo"));
+  int ret = exec("head_init", inbl, outbl);
+  ASSERT_EQ(ret, -EINVAL);
+}
+
+TEST_F(ClsZlogTest, InitView_EmptyPrefix) {
+  librados::ObjectWriteOperation op;
+  zlog::cls_zlog_init_head(op, "");
+  int ret = ioctx.operate("obj", &op);
+  ASSERT_EQ(ret, -EINVAL);
+}
+
+TEST_F(ClsZlogTest, InitView_Exists) {
+  int ret = ioctx.create("obj", true);
+  ASSERT_EQ(ret, 0);
+
+  librados::ObjectWriteOperation op;
+  zlog::cls_zlog_init_head(op, "prefix");
+  ret = ioctx.operate("obj", &op);
+  ASSERT_EQ(ret, -EEXIST);
+}
+
+TEST_F(ClsZlogTest, InitView_Success) {
+  librados::ObjectWriteOperation op;
+  zlog::cls_zlog_init_head(op, "prefix");
+  int ret = ioctx.operate("obj", &op);
+  ASSERT_EQ(ret, 0);
+}
+
 TEST_F(ClsZlogTest, CreateView_BadInput) {
   ceph::bufferlist inbl, outbl;
   inbl.append("foo", strlen("foo"));

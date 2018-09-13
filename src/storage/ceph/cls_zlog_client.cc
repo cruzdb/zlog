@@ -95,16 +95,12 @@ void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
 void cls_zlog_init_head(librados::ObjectWriteOperation& op,
     const std::string& prefix)
 {
-  zlog_ceph_proto::HeadObjectHeader header;
-  header.set_prefix(prefix);
-
-  // ignored in op. set to make protobuf happy
-  header.set_deleted(false);
-  header.set_epoch(0);
+  zlog_ceph_proto::InitHead call;
+  call.set_prefix(prefix);
 
   ceph::bufferlist bl;
-  encode(bl, header);
-  op.exec("zlog", "view_init", bl);
+  encode(bl, call);
+  op.exec("zlog", "head_init", bl);
 }
 
 void cls_zlog_create_view(librados::ObjectWriteOperation& op,

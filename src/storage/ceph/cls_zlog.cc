@@ -238,17 +238,17 @@ static int log_entry_max_position(cls_method_context_t hctx,
   return 0;
 }
 
-static int view_init(cls_method_context_t hctx, ceph::bufferlist *in,
+static int head_init(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::HeadObjectHeader op;
+  zlog_ceph_proto::InitHead op;
   if (!decode(*in, &op)) {
-    CLS_ERR("ERROR: view_init(): decoding input");
+    CLS_ERR("ERROR: head_init(): decoding input");
     return -EINVAL;
   }
 
   if (op.prefix().empty()) {
-    CLS_ERR("ERROR: view_init(): zero-length prefix");
+    CLS_ERR("ERROR: head_init(): zero-length prefix");
     return -EINVAL;
   }
 
@@ -256,7 +256,7 @@ static int view_init(cls_method_context_t hctx, ceph::bufferlist *in,
   if (ret != -ENOENT) {
     if (ret >= 0)
       ret = -EEXIST;
-    CLS_ERR("ERROR: view_init(): stat check ret %d", ret);
+    CLS_ERR("ERROR: head_init(): stat check ret %d", ret);
     return ret;
   }
 
@@ -268,7 +268,7 @@ static int view_init(cls_method_context_t hctx, ceph::bufferlist *in,
   cls_zlog::HeadObject head(hctx, hdr);
   ret = head.finalize();
   if (ret < 0) {
-    CLS_ERR("ERROR: view_init(): finalizing ret %d", ret);
+    CLS_ERR("ERROR: head_init(): finalizing ret %d", ret);
     return ret;
   }
 
@@ -373,7 +373,7 @@ void __cls_init()
   cls_method_handle_t h_log_entry_max_position;
 
   // head object methods
-  cls_method_handle_t h_view_init;
+  cls_method_handle_t h_head_init;
   cls_method_handle_t h_view_create;
   cls_method_handle_t h_view_read;
 
@@ -400,9 +400,9 @@ void __cls_init()
       CLS_METHOD_RD,
       log_entry_max_position, &h_log_entry_max_position);
 
-  cls_register_cxx_method(h_class, "view_init",
+  cls_register_cxx_method(h_class, "head_init",
       CLS_METHOD_RD | CLS_METHOD_WR,
-      view_init, &h_view_init);
+      head_init, &h_head_init);
 
   cls_register_cxx_method(h_class, "view_create",
       CLS_METHOD_RD | CLS_METHOD_WR,
