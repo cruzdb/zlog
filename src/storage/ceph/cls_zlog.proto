@@ -42,14 +42,9 @@ message Views {
 // metadata for objects storing log entries
 //#########################################
 
-// TODO: remove some of these old params
 message LogObjectHeader {
   required uint64 epoch = 1;
   optional uint64 max_pos = 2;
-  optional uint32 stride = 3;
-
-  // TODO: change to slot size
-  optional uint32 max_size = 4;
 }
 
 message LogEntry {

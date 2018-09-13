@@ -79,12 +79,6 @@ class ClsZlogTest : public ::testing::Test {
     return ret ? ret : rv;
   }
 
-  int entry_init(uint64_t epoch, const std::string& oid = "obj") {
-    librados::ObjectWriteOperation op;
-    zlog::cls_zlog_init_entry(op, epoch);
-    return ioctx.operate(oid, &op);
-  }
-
   int view_create(uint64_t epoch, ceph::bufferlist& bl,
       const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
@@ -165,7 +159,7 @@ TEST_F(ClsZlogTest, ReadEntry_CorruptHeader) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_InvalidEpoch) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -174,7 +168,7 @@ TEST_F(ClsZlogTest, ReadEntry_InvalidEpoch) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_StaleEpoch) {
-  int ret = entry_init(2);
+  int ret = entry_seal(2);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -206,7 +200,7 @@ TEST_F(ClsZlogTest, ReadEntry_StaleEpoch) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_EntryDne) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -221,7 +215,7 @@ TEST_F(ClsZlogTest, ReadEntry_EntryDne) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_EntryCorrupt) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -238,7 +232,7 @@ TEST_F(ClsZlogTest, ReadEntry_EntryCorrupt) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_InvalidEntry) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -253,7 +247,7 @@ TEST_F(ClsZlogTest, ReadEntry_InvalidEntry) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_InvalidEntryForced) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -285,7 +279,7 @@ TEST_F(ClsZlogTest, ReadEntry_InvalidEntryForced) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_SuccessUnsealed) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -302,7 +296,7 @@ TEST_F(ClsZlogTest, ReadEntry_SuccessUnsealed) {
 }
 
 TEST_F(ClsZlogTest, ReadEntry_SuccessSealed) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ret = entry_seal(10);
@@ -360,7 +354,7 @@ TEST_F(ClsZlogTest, WriteEntry_CorruptHeader) {
 }
 
 TEST_F(ClsZlogTest, WriteEntry_InvalidEpoch) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -369,7 +363,7 @@ TEST_F(ClsZlogTest, WriteEntry_InvalidEpoch) {
 }
 
 TEST_F(ClsZlogTest, WriteEntry_StaleEpoch) {
-  int ret = entry_init(2);
+  int ret = entry_seal(2);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -403,7 +397,7 @@ TEST_F(ClsZlogTest, WriteEntry_StaleEpoch) {
 }
 
 TEST_F(ClsZlogTest, WriteEntry_EntryCorrupt) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -420,7 +414,7 @@ TEST_F(ClsZlogTest, WriteEntry_EntryCorrupt) {
 }
 
 TEST_F(ClsZlogTest, WriteEntry_SuccessUnsealed) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -430,7 +424,7 @@ TEST_F(ClsZlogTest, WriteEntry_SuccessUnsealed) {
 }
 
 TEST_F(ClsZlogTest, WriteEntry_SuccessSealed) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ret = entry_seal(10);
@@ -446,7 +440,7 @@ TEST_F(ClsZlogTest, WriteEntry_SuccessSealed) {
 }
 
 TEST_F(ClsZlogTest, WriteEntry_Exists) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -494,7 +488,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_Dne) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_InvalidEpoch) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -503,7 +497,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_InvalidEpoch) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_StaleEpoch) {
-  int ret = entry_init(2);
+  int ret = entry_seal(2);
   ASSERT_EQ(ret, 0);
 
   ret = entry_inval(1, 0, false);
@@ -534,7 +528,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_StaleEpoch) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_EntryCorrupt) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -553,7 +547,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_EntryCorrupt) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_NoForceSuccessUnsealed) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ret = entry_inval(1, 160, false);
@@ -561,7 +555,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_NoForceSuccessUnsealed) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_NoForceSuccessSealed) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ret = entry_seal(10);
@@ -574,7 +568,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_NoForceSuccessSealed) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_Idempotent) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ret = entry_inval(1, 160, false);
@@ -593,7 +587,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_Idempotent) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_NoForceExists) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -606,7 +600,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_NoForceExists) {
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_Force) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   ceph::bufferlist bl;
@@ -634,6 +628,13 @@ TEST_F(ClsZlogTest, SealEntry_BadInput) {
   ASSERT_EQ(ret, -EINVAL);
 }
 
+TEST_F(ClsZlogTest, SealEntry_BadEpoch) {
+  int ret = entry_seal(0);
+  ASSERT_EQ(ret, -EINVAL);
+  ret = entry_seal(11);
+  ASSERT_EQ(ret, 0);
+}
+
 TEST_F(ClsZlogTest, SealEntry_MissingHeader) {
   int ret = ioctx.create("obj", true);
   ASSERT_EQ(ret, 0);
@@ -656,25 +657,17 @@ TEST_F(ClsZlogTest, SealEntry_CorruptHeader) {
 }
 
 TEST_F(ClsZlogTest, SealEntry_Dne) {
-  int ret = entry_seal(1);
-  ASSERT_EQ(ret, -ENOENT);
-}
-
-TEST_F(ClsZlogTest, SealEntry_BadEpoch) {
-  int ret = entry_init(10);
+  int ret = entry_seal(11);
   ASSERT_EQ(ret, 0);
 
-  ret = entry_seal(0);
-  ASSERT_EQ(ret, -EINVAL);
   ret = entry_seal(11);
+  ASSERT_EQ(ret, -ESPIPE);
+  ret = entry_seal(12);
   ASSERT_EQ(ret, 0);
 }
 
 TEST_F(ClsZlogTest, SealEntry_StaleEpoch1) {
-  int ret = entry_init(1);
-  ASSERT_EQ(ret, 0);
-
-  ret = entry_seal(10);
+  int ret = entry_seal(10);
   ASSERT_EQ(ret, 0);
 
   ret = entry_seal(0);
@@ -693,11 +686,8 @@ TEST_F(ClsZlogTest, SealEntry_StaleEpoch1) {
 }
 
 TEST_F(ClsZlogTest, SealEntry_StaleEpoch2) {
-  int ret = entry_init(10);
+  int ret = entry_seal(10);
   ASSERT_EQ(ret, 0);
-
-  ret = entry_seal(0);
-  ASSERT_EQ(ret, -EINVAL);
   for (int e = 1; e <= 10; e++) {
     ret = entry_seal(e);
     ASSERT_EQ(ret, -ESPIPE);
@@ -712,11 +702,8 @@ TEST_F(ClsZlogTest, SealEntry_StaleEpoch2) {
 }
 
 TEST_F(ClsZlogTest, SealEntry_Basic) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
-
-  ret = entry_seal(0);
-  ASSERT_EQ(ret, -EINVAL);
   ret = entry_seal(1);
   ASSERT_EQ(ret, -ESPIPE);
   for (int e = 2; e <= 10; e++) {
@@ -729,6 +716,12 @@ TEST_F(ClsZlogTest, SealEntry_Basic) {
   ret = entry_seal(12);
   ASSERT_EQ(ret, 0);
   ret = entry_seal(12);
+  ASSERT_EQ(ret, -ESPIPE);
+  ret = entry_seal(1);
+  ASSERT_EQ(ret, -ESPIPE);
+  ret = entry_seal(2);
+  ASSERT_EQ(ret, -ESPIPE);
+  ret = entry_seal(3);
   ASSERT_EQ(ret, -ESPIPE);
 }
 
@@ -775,7 +768,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_CorruptHeader) {
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_InvalidEpoch) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -785,7 +778,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidEpoch) {
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_StaleEpoch) {
-  int ret = entry_init(2);
+  int ret = entry_seal(2);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -815,7 +808,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_StaleEpoch) {
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_Empty) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -827,7 +820,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Empty) {
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_Write) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -871,7 +864,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write) {
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_Write2) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -895,7 +888,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write2) {
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
-  int ret = entry_init(1);
+  int ret = entry_seal(1);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
@@ -946,78 +939,6 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)170);
-}
-
-TEST_F(ClsZlogTest, InitEntry_BadInput) {
-  ceph::bufferlist inbl, outbl;
-  inbl.append("foo", strlen("foo"));
-  int ret = exec("entry_init", inbl, outbl);
-  ASSERT_EQ(ret, -EINVAL);
-}
-
-TEST_F(ClsZlogTest, InitEntry_BadEpoch) {
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_entry(op, 0);
-  int ret = ioctx.operate("obj", &op);
-  ASSERT_EQ(ret, -EINVAL);
-}
-
-TEST_F(ClsZlogTest, InitEntry_Exists) {
-  int ret = ioctx.create("obj", true);
-  ASSERT_EQ(ret, 0);
-
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_entry(op, 10);
-  ret = ioctx.operate("obj", &op);
-  ASSERT_EQ(ret, -EEXIST);
-}
-
-TEST_F(ClsZlogTest, InitEntry_Success) {
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_entry(op, 1);
-  int ret = ioctx.operate("obj", &op);
-  ASSERT_EQ(ret, 0);
-
-  librados::ObjectWriteOperation op2;
-  zlog::cls_zlog_init_entry(op2, 1);
-  ret = ioctx.operate("obj", &op2);
-  ASSERT_EQ(ret, -EEXIST);
-}
-
-TEST_F(ClsZlogTest, InitView_BadInput) {
-  ceph::bufferlist inbl, outbl;
-  inbl.append("foo", strlen("foo"));
-  int ret = exec("view_init", inbl, outbl);
-  ASSERT_EQ(ret, -EINVAL);
-}
-
-TEST_F(ClsZlogTest, InitView_NoPrefix) {
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "");
-  int ret = ioctx.operate("obj", &op);
-  ASSERT_EQ(ret, -EINVAL);
-}
-
-TEST_F(ClsZlogTest, InitView_Exists) {
-  int ret = ioctx.create("obj", true);
-  ASSERT_EQ(ret, 0);
-
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
-  ret = ioctx.operate("obj", &op);
-  ASSERT_EQ(ret, -EEXIST);
-}
-
-TEST_F(ClsZlogTest, InitView_Success) {
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
-  int ret = ioctx.operate("obj", &op);
-  ASSERT_EQ(ret, 0);
-
-  librados::ObjectWriteOperation op2;
-  zlog::cls_zlog_init_head(op2, "prefix");
-  ret = ioctx.operate("obj", &op2);
-  ASSERT_EQ(ret, -EEXIST);
 }
 
 TEST_F(ClsZlogTest, CreateView_BadInput) {

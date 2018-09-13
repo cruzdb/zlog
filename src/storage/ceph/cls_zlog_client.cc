@@ -92,17 +92,6 @@ void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
       new ClsZlogMaxPositionReply(pposition, pempty, pret));
 }
 
-void cls_zlog_init_entry(librados::ObjectWriteOperation& op,
-    const uint64_t epoch)
-{
-  zlog_ceph_proto::InitEntry init;
-  init.set_epoch(epoch);
-
-  ceph::bufferlist bl;
-  encode(bl, init);
-  op.exec("zlog", "entry_init", bl);
-}
-
 void cls_zlog_init_head(librados::ObjectWriteOperation& op,
     const std::string& prefix)
 {

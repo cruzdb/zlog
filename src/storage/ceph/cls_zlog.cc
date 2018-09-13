@@ -3,42 +3,6 @@
 CLS_VER(1,0)
 CLS_NAME(zlog)
 
-static int log_entry_init(cls_method_context_t hctx, ceph::bufferlist *in,
-    ceph::bufferlist *out)
-{
-  zlog_ceph_proto::InitEntry op;
-  if (!decode(*in, &op)) {
-    CLS_ERR("ERROR: log_entry_init(): decoding input");
-    return -EINVAL;
-  }
-
-  if (op.epoch() < 1) {
-    CLS_ERR("ERROR: log_entry_init(): invalid init epoch %llu",
-        op.epoch());
-    return -EINVAL;
-  }
-
-  int ret = cls_cxx_stat(hctx, NULL, NULL);
-  if (ret != -ENOENT) {
-    if (ret >= 0)
-      ret = -EEXIST;
-    CLS_ERR("ERROR: log_entry_init(): stat check ret %d", ret);
-    return ret;
-  }
-
-  zlog_ceph_proto::LogObjectHeader hdr;
-  hdr.set_epoch(op.epoch());
-
-  cls_zlog::LogObjectHeader head(hctx, hdr);
-  ret = head.save();
-  if (ret < 0) {
-    CLS_ERR("ERROR: log_entry_init(): finalizing ret %d", ret);
-    return ret;
-  }
-
-  return 0;
-}
-
 static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
@@ -203,23 +167,28 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   if (op.epoch() < 1) {
-    CLS_ERR("ERROR: log_entry_seal(): invalid epoch number");
+    CLS_ERR("ERROR: log_entry_seal(): invalid epoch %llu",
+        op.epoch());
     return -EINVAL;
   }
 
   cls_zlog::LogObjectHeader header(hctx);
   int ret = header.load();
-  if (ret < 0) {
+  if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: log_entry_seal(): failed to read header %d", ret);
     return ret;
   }
 
-  auto epoch = header.epoch();
-  if (op.epoch() <= epoch) {
-    CLS_LOG(10, "log_entry_seal(): stale op epoch %llu <= %llu (hdr)",
-        (unsigned long long)op.epoch(),
-        (unsigned long long)epoch);
-    return -ESPIPE;
+  if (ret == 0) {
+    if (op.epoch() <= header.epoch()) {
+      CLS_LOG(10, "log_entry_seal(): stale op epoch %llu <= %llu (hdr)",
+          (unsigned long long)op.epoch(),
+          (unsigned long long)header.epoch());
+      return -ESPIPE;
+    }
+  } else if (ret != -ENOENT) {
+    CLS_ERR("ERROR: unexpected return value %d", ret);
+    return -EIO;
   }
 
   header.set_epoch(op.epoch());
@@ -396,7 +365,6 @@ void __cls_init()
   CLS_LOG(0, "loading cls_zlog");
 
   // log entry object methods
-  cls_method_handle_t h_log_entry_init;
   cls_method_handle_t h_log_entry_read;
   cls_method_handle_t h_log_entry_write;
   cls_method_handle_t h_log_entry_invalidate;
@@ -422,10 +390,6 @@ void __cls_init()
   cls_register_cxx_method(h_class, "entry_invalidate",
       CLS_METHOD_RD | CLS_METHOD_WR,
       log_entry_invalidate, &h_log_entry_invalidate);
-
-  cls_register_cxx_method(h_class, "entry_init",
-      CLS_METHOD_RD | CLS_METHOD_WR,
-      log_entry_init, &h_log_entry_init);
 
   cls_register_cxx_method(h_class, "entry_seal",
       CLS_METHOD_RD | CLS_METHOD_WR,

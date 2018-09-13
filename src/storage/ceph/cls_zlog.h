@@ -25,12 +25,6 @@ class LogObjectHeader {
     hctx_(hctx)
   {}
 
-  LogObjectHeader(cls_method_context_t hctx,
-      const zlog_ceph_proto::LogObjectHeader& hdr) :
-    hctx_(hctx),
-    hdr_(hdr)
-  {}
-
   int load() {
     ceph::bufferlist bl;
     int ret = cls_cxx_getxattr(hctx_, log_hdr_key_, &bl);
