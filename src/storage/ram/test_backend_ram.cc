@@ -12,15 +12,21 @@ void LibZLogTest::SetUp() {
     ASSERT_TRUE(exclusive());
     auto backend = std::unique_ptr<zlog::storage::ram::RAMBackend>(
         new zlog::storage::ram::RAMBackend());
-    int ret = zlog::Log::CreateWithBackend(options,
-        std::move(backend), "mylog", &log);
+    options.backend = std::move(backend);
+    options.create_if_missing = true;
+    options.error_if_exists = true;
+    int ret = zlog::Log::Open(options, "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
     ASSERT_TRUE(exclusive());
     std::string host = "";
     std::string port = "";
-    int ret = zlog::Log::Create(options, "ram", "mylog",
-        {}, host, port, &log);
+    options.create_if_missing = true;
+    options.error_if_exists = true;
+    options.backend_name = "ram";
+    options.seq_host = host;
+    options.seq_port = port;
+    int ret = zlog::Log::Open(options, "mylog", &log);
     ASSERT_EQ(ret, 0);
   }
 }
@@ -62,9 +68,9 @@ INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
       std::make_tuple(true, true),
       std::make_tuple(false, true)));
 
-INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-    ::testing::Values(
-      std::make_tuple(false, true)));
+//INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
+//    ::testing::Values(
+//      std::make_tuple(false, true)));
 
 int main(int argc, char **argv)
 {

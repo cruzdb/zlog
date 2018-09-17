@@ -50,8 +50,11 @@ int main(int argc, char** argv){
     options.http = std::vector<std::string>({"listening_ports", "0.0.0.0:8081", "num_threads", "1"});
 
     zlog::Log *log;
-    int ret = zlog::Log::Open(options, "lmdb", "mylog",
-        {{"path", "/tmp/zlog.tmp.db"}}, "", "", &log);
+    options.backend_name = "lmdb";
+    options.backend_options = {
+      {"path", "/tmp/zlog.tmp.db"}
+    };
+    int ret = zlog::Log::Open(options, "mylog", &log);
     assert(ret == 0);
 
     assert(ret == 0);

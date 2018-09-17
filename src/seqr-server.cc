@@ -223,21 +223,24 @@ class LogManager {
       return ret;
     }
 
-    uint64_t epoch;
-    uint64_t position;
-    bool empty;
-    ret = log->CreateCut(&epoch, &position, &empty);
-    if (ret) {
-      delete log;
-      std::cerr << "failed to create cut ret " << ret << std::endl;
-      return ret;
-    }
+    // TODO
+    //  - call propose_sequencer(...)
+    //  - wait for new view to be read from log
+    //  - check cookie
+    //  - start serving
 
-    *pepoch = epoch;
-    if (empty)
-      *pposition = 0;
-    else
-      *pposition = position + 1;
+    // uint64_t epoch;
+    // uint64_t position;
+    // bool empty;
+    // TODO: this is where we seal and get a new max pos.
+    // delete log if errors
+    assert(0);
+
+    //*pepoch = epoch;
+    //if (empty)
+    //  *pposition = 0;
+    //else
+    //  *pposition = position + 1;
 
     delete log;
 

@@ -105,7 +105,8 @@ int CephBackend::Initialize(
 }
 
 int CephBackend::CreateLog(const std::string& name,
-    const std::string& initial_view)
+    const std::string& initial_view,
+    std::string& hoid_out, std::string& prefix)
 {
   if (name.empty())
     return -EINVAL;
@@ -122,16 +123,20 @@ int CephBackend::CreateLog(const std::string& name,
   // after creating a link to the head (see below), then two names may point to
   // the same log.
   std::string hoid;
-  std::string prefix;
+  std::string log_prefix;
   while (true) {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    prefix = boost::uuids::to_string(uuid);
+    const auto log_handle = boost::uuids::to_string(uuid);
 
     std::stringstream hoid_ss;
-    hoid_ss << "zlog.head." << prefix;
+    hoid_ss << "zlog.head." << log_handle;
     hoid = hoid_ss.str();
 
-    ret = InitHeadObject(hoid, prefix);
+    std::stringstream log_prefix_ss;
+    log_prefix_ss << "zlog.entries." << log_handle;
+    log_prefix = log_prefix_ss.str();
+
+    ret = InitHeadObject(hoid, log_prefix);
     if (ret) {
       if (ret == -EEXIST)
         continue;
@@ -150,12 +155,17 @@ int CephBackend::CreateLog(const std::string& name,
     return ret;
   }
 
+  // TODO: this could be combined into init of the head object
   // initialize the head object by setting its epoch 0 view
   ret = ProposeView(hoid, 1, initial_view);
   if (ret) {
     std::cerr << "propose view ret " << ret << std::endl;
     return ret;
   }
+
+  // TODO: make sure no other success paths
+  hoid_out = hoid;
+  prefix = log_prefix;
 
   return ret;
 }

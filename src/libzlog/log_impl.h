@@ -32,10 +32,10 @@ class LogImpl : public Log {
       const Options& opts) :
     shutdown(false),
     backend(backend),
-    sequencer(nullptr),
     name(name),
     hoid(hoid),
-    striper(prefix),
+    prefix(prefix),
+    striper(this),
     options(opts)
 #ifdef WITH_STATS
     ,metrics_http_server_(nullptr),
@@ -48,41 +48,26 @@ class LogImpl : public Log {
       metrics_http_server_->addHandler("/metrics", &metrics_handler_);
     }
 #endif
-    view_update_thread = std::thread(&LogImpl::ViewUpdater, this);
+    assert(!name.empty());
+    assert(!hoid.empty());
+    assert(!prefix.empty());
   }
 
   ~LogImpl();
 
  public:
-  void ViewUpdater();
-  int UpdateView();
-
-  int CreateNextView(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty,
-      zlog_proto::View& view, bool extend = false);
-  int ProposeNextView(uint64_t next_epoch, const zlog_proto::View& view);
-  int CreateCut(uint64_t *pepoch, uint64_t *pmaxpos, bool *pempty, bool extend = false);
-  int Seal(const std::vector<std::string>& objects,
-      uint64_t epoch, uint64_t *pmaxpos, bool *pempty);
-  int ProposeSharedMode();
-  int ProposeExclusiveMode();
-
   static int Open(const std::string& scheme, const std::string& name,
       const std::map<std::string, std::string>& opts, LogImpl **logpp,
       std::shared_ptr<Backend> *out_backend);
 
  public:
   int CheckTail(uint64_t *pposition) override;
-  int CheckTail(uint64_t *pposition, uint64_t *epoch, bool increment);
+  int CheckTail(uint64_t *pposition, bool increment);
 
  public:
   int Read(uint64_t position, std::string *data) override;
-  int Read(uint64_t epoch, uint64_t position, std::string *data);
-
-  int Append(const Slice& data, uint64_t *pposition = NULL) override;
-
+  int Append(const Slice& data, uint64_t *pposition) override;
   int Fill(uint64_t position) override;
-  int Fill(uint64_t epoch, uint64_t position);
-
   int Trim(uint64_t position) override;
 
  public:
@@ -90,14 +75,14 @@ class LogImpl : public Log {
       std::string *datap) override;
 
   int AioAppend(zlog::AioCompletion *c, const Slice& data,
-      uint64_t *pposition = NULL) override;
+      uint64_t *pposition) override;
 
  public:
   int StripeWidth() override {
-    return striper.GetCurrent().width;
+    assert(0);
+    // FIXME
+    return -EINVAL;
   }
-
-  int ExtendMap();
 
 #ifdef WITH_STATS
  private:
@@ -138,22 +123,17 @@ class LogImpl : public Log {
   std::mutex lock;
 
   // thread-safe
-  std::shared_ptr<Backend> backend;
+  const std::shared_ptr<Backend> backend;
 
-  std::shared_ptr<SeqrClient> sequencer;
   const std::string name;
   const std::string hoid;
+  const std::string prefix;
 
-  // thread-safe
   Striper striper;
 
   std::string exclusive_cookie;
   uint64_t exclusive_position;
   bool exclusive_empty;
-
-  std::condition_variable view_update;
-  std::list<std::pair<std::condition_variable*, bool*>> view_update_waiters;
-  std::thread view_update_thread;
 
   const Options options;
 #ifdef WITH_STATS

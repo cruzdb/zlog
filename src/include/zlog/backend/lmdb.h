@@ -27,7 +27,8 @@ class LMDBBackend : public Backend {
   std::map<std::string, std::string> meta() override;
 
   int CreateLog(const std::string& name,
-      const std::string& initial_view) override;
+      const std::string& initial_view,
+      std::string& hoid, std::string& prefix) override;
 
   int OpenLog(const std::string& name,
       std::string& hoid, std::string& prefix) override;
@@ -73,8 +74,7 @@ class LMDBBackend : public Backend {
   MDB_dbi db_obj;
 
   struct ProjectionObject {
-    ProjectionObject() : latest_epoch(1) {}
-    uint64_t latest_epoch;
+    uint64_t epoch;
   };
 
   struct LogObject {

@@ -13,236 +13,137 @@ namespace zlog {
 
 Log::~Log() {}
 
-int Log::Create(const Options& options,
-    const std::string& scheme, const std::string& name,
-    const std::map<std::string, std::string>& opts,
-    const std::string& host, const std::string& port,
-    Log **logpp)
+int Log::Open(const Options& options,
+    const std::string& name, Log **logpp)
 {
-  if (options.width <= 0) {
-    std::cerr << "width must be great than 0" << std::endl;
+  // TODO: validate options
+
+  if (name.empty()) {
     return -EINVAL;
   }
 
-  if (options.entries_per_object <= 0) {
-    std::cerr << "entries_per_object must be great than 0" << std::endl;
-    return -EINVAL;
+  std::shared_ptr<Backend> backend = options.backend;
+
+  if (!backend) {
+    int ret = Backend::Load(options.backend_name,
+        options.backend_options, backend);
+    if (ret) {
+      return ret;
+    }
   }
 
-  std::shared_ptr<Backend> backend;
-  int ret = Backend::Load(scheme, opts, backend);
-  if (ret)
-    return ret;
+  bool created = false;
+  std::unique_ptr<LogImpl> impl;
+  while (!impl) {
+    // try to open the log
+    std::string hoid;
+    std::string prefix;
+    int ret = backend->OpenLog(name, hoid, prefix);
+    if (ret && ret != -ENOENT) {
+      return ret;
+    }
 
+    // if the log exists, build an instance
+    if (ret == 0) {
+      if (options.error_if_exists) {
+        return -EEXIST;
+      }
+
+      // TODO: make_unique
+      impl = std::unique_ptr<LogImpl>(
+          new LogImpl(backend, name, hoid, prefix, options));
+
+    // otherwise, try to create the log
+    } else {
+      if (!options.create_if_missing) {
+        return -ENOENT;
+      }
+
+      // TODO: create an option that controls how much state is stuffed into the
+      // initial view, versus configured after creation, either in this method
+      // or later by users of the log. this is an optimization that should be
+      // added later after lots of testing without it. Currently the initial
+      // view has no settings at all (no stripes, or sequencer info).
+      const auto init_view = View::create_initial();
+
+      // TODO: document that CreateLog is exclusive
+      // TODO: return hoid if creation is successful
+      ret = backend->CreateLog(name, init_view, hoid, prefix);
+      if (ret) {
+        if (ret == -EEXIST) {
+          if (options.error_if_exists) {
+            return -EEXIST;
+          }
+          // retry the open
+          continue;
+        } else {
+          return ret;
+        }
+      } else {
+        // TODO: hoid here comes from CreateLog
+        // TODO: actually... look at OpenLog. we may want to do OpenLog and then
+        // verify that the log we opened has the same hoid.
+        created = true;
+        impl = std::unique_ptr<LogImpl>(
+            new LogImpl(backend, name, hoid, prefix, options));
+      }
+    }
+  }
+
+  // ensure the log has storage mappings up to the prefault position. when a
+  // prefault position is not defined and the log has no mappings (e.g. it was
+  // just newly created) then the first mapping will be created in response to a
+  // write operation. this is only useful for setting up test scenarios.
+  if (options.prefault_position) {
+    // call something like ensure mapping
+  }
+
+  (void)created;
+
+#if 0
   // build the initial view
-  std::string init_view_data;
-  auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
+  std::string seq_cookie;
+  std::string seq_host;
+  std::string seq_port;
+
   if (host.empty()) {
     auto uuid = boost::uuids::random_generator()();
     auto hostname = boost::asio::ip::host_name();
     std::stringstream exclusive_cookie_ss;
     exclusive_cookie_ss << uuid << "." << hostname
       << "." << 0;
-    const auto cookie = exclusive_cookie_ss.str();
-
-    init_view.set_exclusive_cookie(cookie);
+    seq_cookie = exclusive_cookie_ss.str();
   } else {
-    init_view.set_host(host);
-    init_view.set_port(port);
-  }
-  if (!init_view.SerializeToString(&init_view_data)) {
-    std::cerr << "failed to serialize view" << std::endl;
-    return -EIO;
+    seq_host = host;
+    seq_port = port;
   }
 
-  ret = backend->CreateLog(name, init_view_data);
-  if (ret) {
-    std::cerr << "Failed to create log " << name << " ret "
-      << ret << " (" << strerror(-ret) << ")" << std::endl;
-    return ret;
-  }
+  // TODO: striper::create_initial(...);
+  //auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
+  auto init_view = View::create_initial(
+      options.width, options.entries_per_object,
+      seq_cookie, seq_host, seq_port);
 
-  std::string hoid;
-  std::string prefix;
-  ret = backend->OpenLog(name, hoid, prefix);
-  if (ret) {
-    return ret;
-  }
-
-  auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix, options));
-
-  // make sure to set before update view
-  if (init_view.has_exclusive_cookie()) {
-    impl->exclusive_cookie = init_view.exclusive_cookie();
+  // make sure to set before update view. TODO: this is probably a bug since we
+  // don't really know that the initial view is the one that is active. almost
+  // certainly a bug.
+  if (host.empty()) {
+    impl->exclusive_cookie = seq_cookie;
     impl->exclusive_empty = true;
     impl->exclusive_position = 0;
   }
+#endif
 
-  ret = impl->UpdateView();
-  if (ret) {
-    return ret;
-  }
+  // if we created the log then we can set the sequencer here based on options
+  // that we have available. we can also NOT set the sequencer info, and it can
+  // be created later in response to the client invoking log operations. like
+  // prefault position being unspecified above, this is just for testing.
 
-  if (impl->striper.Empty()) {
-    return -EINVAL;
-  }
-
-  *logpp = impl.release();
-
-  return 0;
-}
-
-int Log::Open(const Options& options,
-    const std::string& scheme, const std::string& name,
-    const std::map<std::string, std::string>& opts,
-    const std::string& host, const std::string& port,
-    Log **logpp)
-{
-  if (name.empty())
-    return -EINVAL;
-
-  std::shared_ptr<Backend> backend;
-  int ret = Backend::Load(scheme, opts, backend);
-  if (ret)
-    return ret;
-
-  std::string hoid;
-  std::string prefix;
-  ret = backend->OpenLog(name, hoid, prefix);
-  if (ret) {
-    return ret;
-  }
-
-  auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix, options));
-
-  ret = impl->UpdateView();
-  if (ret) {
-    return ret;
-  }
-
-  if (impl->striper.Empty()) {
-    return -EINVAL;
-  }
-
-  // FIXME: these semantics are WEIRD. Also, we don't actually do anything with
-  // host and port /)
-  if (host.empty()) {
-    ret = impl->ProposeExclusiveMode();
-    if (ret) {
-      return ret;
-    }
-  } else {
-    ret = impl->ProposeSharedMode();
-    if (ret) {
-      return ret;
-    }
-  }
+  // if the log already existed, then we want to give priority to whatever
+  // sequencer is specified in the log, if any. if none is specified (no view or
+  // its just empty), then fall back to options or defaults.
 
   *logpp = impl.release();
-
-  return 0;
-}
-
-int Log::CreateWithBackend(const Options& options,
-    std::shared_ptr<Backend> backend,
-    const std::string& name, Log **logptr)
-{
-  if (options.width <= 0) {
-    std::cerr << "width must be great than 0" << std::endl;
-    return -EINVAL;
-  }
-
-  if (options.entries_per_object <= 0) {
-    std::cerr << "entries_per_object must be great than 0" << std::endl;
-    return -EINVAL;
-  }
-
-  // build the initial view
-  std::string init_view_data;
-  auto init_view = Striper::InitViewData(options.width, options.entries_per_object);
-  auto uuid = boost::uuids::random_generator()();
-  auto hostname = boost::asio::ip::host_name();
-  std::stringstream exclusive_cookie_ss;
-  exclusive_cookie_ss << uuid << "." << hostname
-    << "." << 0;
-  const auto cookie = exclusive_cookie_ss.str();
-
-  init_view.set_exclusive_cookie(cookie);
-
-  if (!init_view.SerializeToString(&init_view_data)) {
-    std::cerr << "failed to serialize view" << std::endl;
-    return -EIO;
-  }
-
-  int ret = backend->CreateLog(name, init_view_data);
-  if (ret) {
-    std::cerr << "Failed to create log " << name << " ret "
-      << ret << " (" << strerror(-ret) << ")" << std::endl;
-    return ret;
-  }
-
-  std::string hoid;
-  std::string prefix;
-  ret = backend->OpenLog(name, hoid, prefix);
-  if (ret) {
-    return ret;
-  }
-
-  auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix, options));
-
-  // make sure to set before update view
-  impl->exclusive_cookie = init_view.exclusive_cookie();
-  impl->exclusive_empty = true;
-  impl->exclusive_position = 0;
-
-  ret = impl->UpdateView();
-  if (ret) {
-    return ret;
-  }
-
-  if (impl->striper.Empty()) {
-    return -EINVAL;
-  }
-
-  *logptr = impl.release();
-
-  return 0;
-}
-
-int Log::OpenWithBackend(const Options& options,
-    std::shared_ptr<Backend> backend,
-    const std::string& name, Log **logptr)
-{
-  if (name.empty())
-    return -EINVAL;
-
-  std::string hoid;
-  std::string prefix;
-  int ret = backend->OpenLog(name, hoid, prefix);
-  if (ret) {
-    return ret;
-  }
-
-  auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix, options));
-
-  ret = impl->UpdateView();
-  if (ret) {
-    return ret;
-  }
-
-  if (impl->striper.Empty()) {
-    return -EINVAL;
-  }
-
-  ret = impl->ProposeExclusiveMode();
-  if (ret)
-    return ret;
-
-  *logptr = impl.release();
 
   return 0;
 }

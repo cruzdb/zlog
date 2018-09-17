@@ -22,16 +22,22 @@ std::map<std::string, std::string> RAMBackend::meta()
 }
 
 int RAMBackend::CreateLog(const std::string& name,
-    const std::string& initial_view)
+    const std::string& initial_view,
+    std::string& hoid_out, std::string& prefix)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
   ProjectionObject proj_obj;
-  proj_obj.projections.emplace(proj_obj.latest_epoch, initial_view);
+  proj_obj.epoch = 1;
+  proj_obj.projections.emplace(proj_obj.epoch, initial_view);
   auto ret = objects_.emplace(name, proj_obj);
   if (!ret.second) {
     return -EEXIST;
   }
+
+  // TODO: also make unique hoids like in ceph
+  hoid_out = name;
+  prefix = name;
 
   return 0;
 }
@@ -63,7 +69,7 @@ int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   }
 
   auto& proj_obj = boost::get<ProjectionObject>(it->second);
-  if (epoch > proj_obj.latest_epoch) {
+  if (epoch > proj_obj.epoch) {
     return 0;
   }
 
@@ -83,18 +89,21 @@ int RAMBackend::ProposeView(const std::string& hoid,
 
   auto it = objects_.find(hoid);
   if (it == objects_.end()) {
-    assert(epoch == 0);
+    return -ENOENT;
   }
 
   ProjectionObject& proj_obj = boost::get<ProjectionObject>(it->second);
-  assert(epoch == (proj_obj.latest_epoch + 1));
+  const auto required_epoch = proj_obj.epoch + 1;
+  if (epoch != required_epoch) {
+    return -ESPIPE;
+  }
 
   auto ret = proj_obj.projections.emplace(epoch, view);
   if (!ret.second) {
     return -EEXIST;
   }
 
-  proj_obj.latest_epoch = epoch;
+  proj_obj.epoch = epoch;
 
   return 0;
 }

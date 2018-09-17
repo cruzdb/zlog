@@ -27,6 +27,7 @@ extern "C" int zlog_create(zlog_options_t options, const char *scheme, const cha
     char const* const* keys, char const* const* vals, size_t num,
     const char *host, const char *port, zlog_log_t *log)
 {
+#if 0
   std::map<std::string, std::string> opts;
   for (size_t i = 0; i < num; i++) {
     opts.emplace(keys[i], vals[i]);
@@ -43,6 +44,10 @@ extern "C" int zlog_create(zlog_options_t options, const char *scheme, const cha
   }
 
   return ret;
+#endif
+  // FIXME: uh, options here are annyoing
+  assert(0);
+  return -1;
 }
 
 extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition)

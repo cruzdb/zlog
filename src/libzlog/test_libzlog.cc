@@ -23,7 +23,7 @@ static void handle_aio_cb_read(aio_state *ctx)
 }
 
 TEST_P(LibZLogTest, OpenClose) {
-  std::cout << "OpenClose" << std::endl; 
+  // TODO: we should... reverify this is true for at least ceph
   if (backend() != "lmdb") {
     std::cout << "OpenClose test not enabled for "
       << backend() << " backend" << std::endl;
@@ -35,6 +35,7 @@ TEST_P(LibZLogTest, OpenClose) {
   uint64_t pos;
   int ret = log->Append(zlog::Slice(input), &pos);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(pos, (uint64_t)0);
 
   // destroy log client and reopen
   ret = reopen();
@@ -43,6 +44,7 @@ TEST_P(LibZLogTest, OpenClose) {
   uint64_t tail;
   ret = log->CheckTail(&tail);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(tail, (uint64_t)1);
 
   std::string output;
   ret = log->Read(tail - 1, &output);

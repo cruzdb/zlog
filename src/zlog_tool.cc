@@ -46,10 +46,10 @@ int main(int argc, char **argv)
   auto be = std::shared_ptr<zlog::Backend>(new zlog::storage::ceph::CephBackend(&ioctx));
 
   zlog::Options options;
+  options.backend = be;
   zlog::Log *baselog;
-  ret = zlog::Log::OpenWithBackend(options, be, log_name, &baselog);
+  ret = zlog::Log::Open(options, log_name, &baselog);
   assert(ret == 0);
-  zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
 
   if (width != -1) {
     if (width > 0) {
@@ -63,6 +63,9 @@ int main(int argc, char **argv)
     } else
       std::cerr << "set-width: invalid stripe width " << width << std::endl;
   } else if (vm["create-cut"].as<bool>()) {
+    //zlog::LogImpl *log = reinterpret_cast<zlog::LogImpl*>(baselog);
+    assert(0);
+#if 0
     uint64_t epoch, maxpos;
     bool empty;
     ret = log->CreateCut(&epoch, &maxpos, &empty);
@@ -71,6 +74,7 @@ int main(int argc, char **argv)
     else
       std::cout << "create-cut: log " << log_name << " e" << epoch
         << " max_pos " << maxpos << std::endl;
+#endif
   }
 
   ioctx.close();

@@ -8,15 +8,14 @@
 // differentiator, the pool name, is fixed. we should simply the design...
 class FakeSeqrClient : public zlog::SeqrClient {
  public:
+  // TODO: wow this api sucks
   FakeSeqrClient(const std::map<std::string, std::string>& meta,
-      const std::string& name, bool empty, uint64_t position,
-      uint64_t epoch) : SeqrClient("", "", epoch), pool("0xdeadbeef")
+      const std::string& name, uint64_t init_position, uint64_t epoch) :
+    SeqrClient("", "", epoch),
+    pool("0xdeadbeef")
   {
     entry *e = &entries_[std::make_pair(pool, name)];
-    if (empty)
-      e->seq = 0;
-    else
-      e->seq = position + 1;
+    e->seq = init_position;
   }
 
   void Connect() {}
@@ -28,6 +27,8 @@ class FakeSeqrClient : public zlog::SeqrClient {
     entry *e;
     auto it = entries_.find(std::make_pair(pool, name));
     if (it == entries_.end()) {
+      // TODO
+      assert(0);
       e = &entries_[std::make_pair(pool, name)];
       e->seq = 0;
     } else
