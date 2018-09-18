@@ -10,10 +10,6 @@
 namespace zlog {
 
 class Backend;
-#if STREAMING_SUPPORT
-class Stream;
-#endif
-
 class AioCompletion {
  public:
   virtual ~AioCompletion();
@@ -45,16 +41,6 @@ class Log {
   static AioCompletion *aio_create_completion();
   static AioCompletion *aio_create_completion(
       std::function<void()> callback);
-
-  /*
-   * Stream API
-   */
-#if STREAMING_SUPPORT
-  virtual int OpenStream(uint64_t stream_id, Stream **streamptr) = 0;
-  virtual int MultiAppend(const Slice& data,
-      const std::set<uint64_t>& stream_ids, uint64_t *pposition = NULL) = 0;
-  virtual int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) = 0;
-#endif
 
   /*
    * Log Management

@@ -38,13 +38,7 @@ message MSeqRequest {
     required string name = 2;
     required bool next = 3;
     required uint32 count = 4;
-    repeated uint64 stream_ids = 5 [packed = true];
     repeated StringPair meta = 6;
-}
-
-message StreamBackPointer {
-    required uint64 id = 1;
-    repeated uint64 backpointer = 2 [packed = true];
 }
 
 message MSeqReply {
@@ -55,9 +49,4 @@ message MSeqReply {
     }
     repeated uint64 position = 1 [packed = true];
     optional Status status = 2 [default = OK];
-    repeated StreamBackPointer stream_backpointers = 3;
 }
-
-message EntryHeader {
-  repeated StreamBackPointer stream_backpointers = 1;
-};

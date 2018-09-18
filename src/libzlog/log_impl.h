@@ -81,21 +81,6 @@ class LogImpl : public Log {
   int CheckTail(uint64_t *pposition) override;
   int CheckTail(uint64_t *pposition, uint64_t *epoch, bool increment);
 
-#ifdef STREAMING_SUPPORT
-/*
-   * When next == true
-   *   - position: new log tail
-   *   - stream_backpointers: back pointers for each stream in stream_ids
-   *
-   * When next == false
-   *   - position: current log tail
-   *   - stream_backpointers: back pointers for each stream in stream_ids
-   */
-  int CheckTail(const std::set<uint64_t>& stream_ids,
-      std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
-      uint64_t *position, bool next);
-#endif
-
  public:
   int Read(uint64_t position, std::string *data) override;
   int Read(uint64_t epoch, uint64_t position, std::string *data);
@@ -113,17 +98,6 @@ class LogImpl : public Log {
 
   int AioAppend(zlog::AioCompletion *c, const Slice& data,
       uint64_t *pposition = NULL) override;
-
-#ifdef STREAMING_SUPPORT
- public:
-  int OpenStream(uint64_t stream_id, zlog::Stream **streamptr) override;
-  int StreamMembership(std::set<uint64_t>& stream_ids, uint64_t position) override;
-  int StreamMembership(uint64_t epoch, std::set<uint64_t>& stream_ids, uint64_t position);
-  int StreamHeader(const std::string& data, std::set<uint64_t>& stream_ids,
-      size_t *header_size = NULL);
-  int MultiAppend(const Slice& data, const std::set<uint64_t>& stream_ids,
-      uint64_t *pposition = NULL) override;
-#endif
 
  public:
   int StripeWidth() override {

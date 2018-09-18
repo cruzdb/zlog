@@ -462,39 +462,6 @@ int LogImpl::CheckTail(uint64_t *pposition, uint64_t *epoch,
   return -EIO;
 }
 
-#ifdef STREAMING_SUPPORT
-int LogImpl::CheckTail(const std::set<uint64_t>& stream_ids,
-    std::map<uint64_t, std::vector<uint64_t>>& stream_backpointers,
-    uint64_t *pposition, bool increment)
-{
-  for (;;) {
-    std::unique_lock<std::mutex> l(lock);
-    auto seq = sequencer;
-    l.unlock();
-
-    if (!seq) {
-      std::cerr << "no active sequencer" << std::endl;
-      return -EINVAL;
-    }
-
-    int ret = seq->CheckTail(striper.Epoch(), backend->meta(),
-        name, stream_ids, stream_backpointers, pposition, increment);
-    if (ret == -EAGAIN) {
-      sleep(1);
-      continue;
-    } else if (ret == -ERANGE) {
-      ret = UpdateView();
-      if (ret)
-        return ret;
-      continue;
-    }
-    return ret;
-  }
-  assert(0);
-  return -EIO;
-}
-#endif
-
 int LogImpl::Read(uint64_t position, std::string *data)
 {
   #ifdef WITH_CACHE
@@ -531,27 +498,6 @@ int LogImpl::Read(uint64_t position, std::string *data)
   assert(0);
   return -EIO;
 }
-
-#ifdef STREAMING_SUPPORT
-int LogImpl::Read(uint64_t epoch, uint64_t position, std::string *data)
-{
-  while (true) {
-    auto mapping = striper.MapPosition(position);
-    int ret = backend->Read(mapping.oid, epoch, position, data);
-    if (!ret)
-      return 0;
-    if (ret == -ESPIPE) {
-      ret = UpdateView();
-      if (ret)
-        return ret;
-      continue;
-    }
-    return ret;
-  }
-  assert(0);
-  return -EIO;
-}
-#endif
 
 int LogImpl::Append(const Slice& data, uint64_t *pposition)
 {
@@ -635,27 +581,6 @@ int LogImpl::Fill(uint64_t position)
   assert(0);
   return -EIO;
 }
-
-#ifdef STREAMING_SUPPORT
-int LogImpl::Fill(uint64_t epoch, uint64_t position)
-{
-  while (true) {
-    auto mapping = striper.MapPosition(position);
-    int ret = backend->Fill(mapping.oid, epoch, position);
-    if (!ret)
-      return 0;
-    if (ret == -ESPIPE) {
-      ret = UpdateView();
-      if (ret)
-        return ret;
-      continue;
-    }
-    return ret;
-  }
-  assert(0);
-  return -EIO;
-}
-#endif
 
 int LogImpl::Trim(uint64_t position)
 {
