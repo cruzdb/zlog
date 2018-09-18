@@ -11,10 +11,6 @@
 #include "include/zlog/backend.h"
 #include "striper.h"
 
-#ifdef WITH_CACHE
-#include "include/zlog/cache.h"
-#endif
-
 #define DEFAULT_STRIPE_SIZE 100
 
 namespace zlog {
@@ -46,9 +42,6 @@ class LogImpl : public Log {
     metrics_handler_(this)
 #endif
   {
-#ifdef WITH_CACHE
-    cache = new Cache(options); 
-#endif
 #ifdef WITH_STATS
     if (!opts.http.empty()) {
       metrics_http_server_ = new CivetServer(opts.http);
@@ -166,9 +159,6 @@ class LogImpl : public Log {
 #ifdef WITH_STATS
   CivetServer* metrics_http_server_ = nullptr;
   MetricsHandler metrics_handler_;
-#endif
-#ifdef WITH_CACHE
-  Cache* cache;
 #endif
 };
 
