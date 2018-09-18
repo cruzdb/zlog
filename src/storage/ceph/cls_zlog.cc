@@ -195,6 +195,7 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
   ret = header.save();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_seal(): write header failed %d", ret);
+    return ret;
   }
 
   return 0;
