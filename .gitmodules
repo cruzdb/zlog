@@ -12,3 +12,6 @@
 [submodule "src/civetweb"]
 	path = src/civetweb
 	url = https://github.com/civetweb/civetweb.git
+[submodule "src/spdlog"]
+	path = src/spdlog
+	url = https://github.com/gabime/spdlog
