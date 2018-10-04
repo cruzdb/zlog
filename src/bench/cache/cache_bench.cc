@@ -342,9 +342,6 @@ int main(int argc, char **argv)
   if (entries_per_object > 0)
     options.entries_per_object = entries_per_object;
 
-  if (max_entry_size <= 0)
-    options.max_entry_size = entry_size;
-  
   if (cache_size >= 0){
     options.cache_size = cache_size;
   }
@@ -356,15 +353,19 @@ int main(int argc, char **argv)
 
   zlog::Log *log;
   if (scan) {
-    int ret = zlog::Log::OpenWithBackend(options,
-        std::move(backend), logname, &log);
+    // TODO: need to evaluate the use of the new options/open interface in
+    // tools, benchmarks, and unit tests
+    options.backend = std::move(backend);
+    int ret = zlog::Log::Open(options, logname, &log);
     if (ret) {
       std::cerr << "failed to open log " << ret << std::endl;
       exit(1);
     }
   } else {
-    int ret = zlog::Log::CreateWithBackend(options,
-        std::move(backend), logname, &log);
+    options.backend = std::move(backend);
+    options.create_if_missing = true;
+    options.error_if_exists = true;
+    int ret = zlog::Log::Open(options, logname, &log);
     if (ret) {
       std::cerr << "failed to create log " << ret << std::endl;
       exit(1);

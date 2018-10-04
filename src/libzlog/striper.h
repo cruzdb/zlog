@@ -1,109 +1,220 @@
 #pragma once
 #include <map>
 #include <mutex>
+#include <thread>
 #include <sstream>
+#include <list>
+#include <condition_variable>
 #include <boost/optional.hpp>
 #include "proto/zlog.pb.h"
 
-class Striper {
+  // don't want to expand mappings on an empty object map (like the zero state)
+  // need to figure that out. as it stands map would send caller to
+  // ensure_mapping which woudl expand a objectmap with no stripes. it's a weird
+  // edge case we should consider.
+  //
+  // maybe having view allowed to be null is ok?
+  // wrap calls to view and check for epoch = 0?
+  //
+  //
+  // the zero value of these structures might make initialization eassy too.
+  // like stripe id starting at 0 makes sense. for ensure mapping it would just
+  // add using default width, then correctly propose epoch 1.
+  //
+  // i like that zero value version. we could say ok if you don't want some
+  // default width to be used then don't call append or whatever right after
+  // making the log / log instance. instead, call something like wait_for_init.
+  //
+  // i think the other really good option is to just define object map to always
+  // be initialized from a proto view from the log.
+
+
+namespace zlog_proto {
+  class View;
+}
+
+namespace zlog {
+
+class LogImpl;
+class SeqrClient;
+class Options;
+
+class Stripe {
  public:
-  struct StripeInfo {
-    uint64_t epoch;
-    uint64_t minpos;
-    uint32_t width;
-    std::vector<std::string> oids;
-  };
+  Stripe(const std::string& prefix, uint64_t id,
+      uint32_t width, uint64_t max_position) :
+    id_(id),
+    max_position_(max_position),
+    oids_(make_oids(prefix, id_, width))
+  {
+    assert(!oids_.empty());
+  }
 
-  struct Mapping {
-    uint64_t epoch;
-    uint32_t width;
-    uint32_t max_size;
-    std::string oid;
-  };
+  std::string map(uint64_t position) const {
+    const auto index = position % oids_.size();
+    return oids_[index];
+  }
 
-  Striper(const std::string& prefix) :
-    prefix_(prefix)
+  uint64_t id() const {
+    return id_;
+  }
+
+  uint64_t max_position() const {
+    return max_position_;
+  }
+
+  uint32_t width() const {
+    return oids_.size();
+  }
+
+  const std::vector<std::string>& oids() const {
+    return oids_;
+  }
+
+ private:
+  static std::vector<std::string> make_oids(
+      const std::string& prefix, uint64_t id, uint32_t width);
+
+  const uint64_t id_;
+  uint64_t max_position_;
+  const std::vector<std::string> oids_;
+};
+
+class ObjectMap {
+ public:
+  ObjectMap() :
+    next_stripe_id_(0)
   {}
 
-  static zlog_proto::View InitViewData(uint32_t width,
-      uint32_t entries_per_object, uint32_t max_entry_size);
+  ObjectMap(uint64_t next_stripe_id,
+      std::map<uint64_t, Stripe>& stripes) :
+    next_stripe_id_(next_stripe_id),
+    stripes_(stripes)
+  {}
 
-  std::pair<uint64_t, zlog_proto::View> LatestView() const;
+ public:
+  boost::optional<std::string> map(uint64_t position) const;
+  bool ensure_mapping(const std::string& prefix, uint64_t position);
 
-  // Add the serialized view data for an epoch
-  int Add(uint64_t epoch, const std::string& data);
-
-  bool Empty() const {
-    std::lock_guard<std::mutex> l(lock_);
-    return views_.empty();
+  const std::map<uint64_t, Stripe>& stripes() const {
+    return stripes_;
   }
 
-  StripeInfo GetCurrent() const {
-    std::lock_guard<std::mutex> l(lock_);
-    assert(!views_.empty());
-    auto latest = views_.rbegin();
-    return StripeInfo{epoch_,
-      latest->first,
-      latest->second.width(),
-      latest->second.oids()};
+  uint64_t next_stripe_id() const {
+    return next_stripe_id_;
   }
 
-  uint64_t Epoch() const {
-    std::lock_guard<std::mutex> l(lock_);
-    assert(!views_.empty());
+ private:
+  uint64_t next_stripe_id_;
+  std::map<uint64_t, Stripe> stripes_;
+};
+
+struct SequencerConfig {
+  std::string host;
+  std::string port;
+  std::string cookie;
+  uint64_t init_position;
+  uint64_t epoch;
+};
+
+// separate configuration from initialization. for instance, after deserializing
+// a protobuf into its view, don't immediately create and connect the sequencer.
+class View {
+ public:
+  View() :
+    epoch_(0)
+  {}
+
+  View(const std::string& prefix, uint64_t epoch,
+      const zlog_proto::View& view);
+
+  static std::string create_initial();
+
+  uint64_t epoch() const {
     return epoch_;
   }
 
-  boost::optional<Mapping> MapPosition(uint64_t position) const;
+  std::string serialize() const;
+
+  ObjectMap object_map;
+  SequencerConfig seq_config;
+
+  // TODO: this doesn't need to be a shared ptr. The only reason it is is
+  // because if we used unique_ptr we'd need to define our own copy constructor.
+  // we'll take care of that later.
+  //
+  // the assumption here is that seq is created when the view is created. so we
+  // don't need to (At this point) worry about it changing and needing to hold a
+  // mutex when reading it. that might change later, so it's something to keep
+  // in mind.
+  std::shared_ptr<SeqrClient> seq;
 
  private:
-  class ViewEntry {
-   public:
-    ViewEntry(const std::string& prefix, uint64_t epoch, uint32_t width,
-        uint64_t maxpos, uint32_t max_size) :
-      width_(width), maxpos_(maxpos), max_size_(max_size)
-    {
-      for (auto i = 0u; i < width_; i++) {
-        std::stringstream oid;
-        oid << prefix << "." << epoch << "." << i;
-        oids_.push_back(oid.str());
-      }
-    }
+  // TODO: I think that epoch needs to be removed from here. It's really
+  // unnatural to make a copy of the view, change it in some way, and then have
+  // the epoch still be for soem other epoch.
+  const uint64_t epoch_;
+};
 
-    uint32_t width() const {
-      return width_;
-    }
+class Striper {
+ public:
+  Striper(LogImpl *log) :
+    shutdown_(false),
+    log_(log),
+    view_(std::make_shared<const View>()),
+    cookie_(make_cookie()),
+    refresh_thread_(std::thread(&Striper::refresh_entry_, this))
+  {}
 
-    uint64_t maxpos() const {
-      return maxpos_;
-    }
+  // TODO: i think all the callers of this need locking
+  std::shared_ptr<const View> view() const {
+    assert(view_);
+    return view_;
+  }
 
-    std::string map(uint64_t position) const {
-      auto index = position % width_;
-      assert(index < oids_.size());
-      return oids_[index];
-    }
+  int ensure_mapping(uint64_t position);
 
-    std::vector<std::string> oids() const {
-      return oids_;
-    }
+  // FIXME: remove default value
+  // TODO: make sure: epoch means, wait for something larger. so its just
+  // usually whatever the current epoch is that didn't satisfy
+  void refresh(uint64_t epoch = 0);
 
-    uint32_t max_size() const {
-      return max_size_;
-    }
+  int propose_sequencer(const std::shared_ptr<const View>& view,
+      const Options& options);
 
-   private:
-    uint32_t width_;
-    uint64_t maxpos_;
-    uint32_t max_size_;
-    std::vector<std::string> oids_;
-  };
+  void shutdown();
+
+ private:
+  // seals the stripe at the given epoch. *pempty will be set to true if the
+  // stripe is empty. *pposition is set to the maximum position written in the
+  // stripe, and is only defined when the stripe is non-empty.
+  int seal_stripe(const Stripe& stripe, uint64_t epoch,
+      uint64_t *pposition, bool *pempty) const;
+
+  static std::string make_cookie();
 
   mutable std::mutex lock_;
-  const std::string prefix_;
+  bool shutdown_;
+  LogImpl *log_;
+  std::shared_ptr<const View> view_;
 
-  // min-pos(inclusive) -> entry
-  std::map<uint64_t, ViewEntry> views_;
-  zlog_proto::View latest_view_;
-  uint64_t epoch_;
+  const std::string cookie_;
+
+  struct RefreshWaiter {
+    explicit RefreshWaiter(uint64_t epoch) :
+      done(false),
+      epoch(epoch)
+    {}
+
+    bool done;
+    const uint64_t epoch;
+    std::condition_variable cond;
+  };
+
+  void refresh_entry_();
+  std::list<RefreshWaiter*> waiters_;
+  std::condition_variable cond_;
+  std::thread refresh_thread_;
 };
+
+}

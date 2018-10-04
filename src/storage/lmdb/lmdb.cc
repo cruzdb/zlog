@@ -55,7 +55,8 @@ int LMDBBackend::Initialize(
 }
 
 int LMDBBackend::CreateLog(const std::string& name,
-    const std::string& initial_view)
+    const std::string& initial_view,
+    std::string& hoid_out, std::string& prefix)
 {
   auto txn = NewTransaction();
 
@@ -68,6 +69,7 @@ int LMDBBackend::CreateLog(const std::string& name,
   }
 
   ProjectionObject proj_obj;
+  proj_obj.epoch = 1;
   val.mv_data = &proj_obj;
   val.mv_size = sizeof(proj_obj);
   ret = txn.Put(oid_key, val, true);
@@ -76,8 +78,7 @@ int LMDBBackend::CreateLog(const std::string& name,
     return ret;
   }
 
-  std::string proj_key = ProjectionKey(name,
-      proj_obj.latest_epoch);
+  std::string proj_key = ProjectionKey(name, proj_obj.epoch);
   val.mv_data = (void*)initial_view.data();
   val.mv_size = initial_view.size();
   ret = txn.Put(proj_key, val, true);
@@ -89,6 +90,10 @@ int LMDBBackend::CreateLog(const std::string& name,
   ret = txn.Commit();
   if (ret)
     return ret;
+
+  // TODO: we should really generate unique names here
+  hoid_out = name;
+  prefix = name;
 
   return 0;
 }
@@ -130,7 +135,7 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
   assert(val.mv_size == sizeof(*proj_obj));
 
-  if (epoch > proj_obj->latest_epoch) {
+  if (epoch > proj_obj->epoch) {
     txn.Abort();
     return 0;
   }
@@ -175,7 +180,12 @@ int LMDBBackend::ProposeView(const std::string& hoid,
 
   ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
   assert(val.mv_size == sizeof(*proj_obj));
-  assert(epoch == (proj_obj->latest_epoch + 1));
+
+  const auto required_epoch = proj_obj->epoch + 1;
+  if (epoch != required_epoch) {
+    txn.Abort();
+    return -ESPIPE;
+  }
 
   // write new projection
   MDB_val proj_val;
@@ -188,7 +198,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
     return ret;
   }
 
-  proj_obj->latest_epoch = epoch;
+  proj_obj->epoch = epoch;
   val.mv_data = proj_obj;
   val.mv_size = sizeof(*proj_obj);
   ret = txn.Put(oid_key, val, false);
@@ -202,7 +212,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
 }
 
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t epoch, uint64_t position, uint32_t stride)
 {
   auto txn = NewTransaction();
 
@@ -257,7 +267,7 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data)
 {
   auto txn = NewTransaction(true);
@@ -295,7 +305,7 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   auto txn = NewTransaction();
 
@@ -334,7 +344,7 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   auto txn = NewTransaction();
 
@@ -380,21 +390,21 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position, stride, max_size);
+  int ret = Write(oid, data, epoch, position, stride);
   callback(arg, ret);
   return 0;
 }
 
 int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, stride, max_size, data);
+  int ret = Read(oid, epoch, position, stride, data);
   callback(arg, ret);
   return 0;
 }

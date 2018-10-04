@@ -105,7 +105,8 @@ int CephBackend::Initialize(
 }
 
 int CephBackend::CreateLog(const std::string& name,
-    const std::string& initial_view)
+    const std::string& initial_view,
+    std::string& hoid_out, std::string& prefix)
 {
   if (name.empty())
     return -EINVAL;
@@ -122,16 +123,20 @@ int CephBackend::CreateLog(const std::string& name,
   // after creating a link to the head (see below), then two names may point to
   // the same log.
   std::string hoid;
-  std::string prefix;
+  std::string log_prefix;
   while (true) {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    prefix = boost::uuids::to_string(uuid);
+    const auto log_handle = boost::uuids::to_string(uuid);
 
     std::stringstream hoid_ss;
-    hoid_ss << "zlog.head." << prefix;
+    hoid_ss << "zlog.head." << log_handle;
     hoid = hoid_ss.str();
 
-    ret = ioctx_->create(hoid, true);
+    std::stringstream log_prefix_ss;
+    log_prefix_ss << "zlog.entries." << log_handle;
+    log_prefix = log_prefix_ss.str();
+
+    ret = InitHeadObject(hoid, log_prefix);
     if (ret) {
       if (ret == -EEXIST)
         continue;
@@ -150,20 +155,17 @@ int CephBackend::CreateLog(const std::string& name,
     return ret;
   }
 
-  // now the named log exists and points to a head object. a crash at this point
-  // is ok because a client could complete the initialization.
-  ret = InitHeadObject(hoid, prefix);
-  if (ret) {
-    std::cerr << "init head obj ret " << ret << std::endl;
-    return ret;
-  }
-
+  // TODO: this could be combined into init of the head object
   // initialize the head object by setting its epoch 0 view
-  ret = ProposeView(hoid, 0, initial_view);
+  ret = ProposeView(hoid, 1, initial_view);
   if (ret) {
     std::cerr << "propose view ret " << ret << std::endl;
     return ret;
   }
+
+  // TODO: make sure no other success paths
+  hoid_out = hoid;
+  prefix = log_prefix;
 
   return ret;
 }
@@ -250,10 +252,10 @@ int CephBackend::ProposeView(const std::string& hoid,
 }
 
 int CephBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size, std::string *data)
+    uint64_t position, uint32_t stride, std::string *data)
 {
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position, stride, max_size);
+  zlog::cls_zlog_read(op, epoch, position, stride);
 
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
@@ -266,31 +268,31 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int CephBackend::Write(const std::string& oid, const Slice& data,
-          uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size)
+          uint64_t epoch, uint64_t position, uint32_t stride)
 {
   ::ceph::bufferlist data_bl;
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, stride, max_size, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, stride, data_bl);
 
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, stride, max_size, false);
+  zlog::cls_zlog_invalidate(op, epoch, position, stride, false);
 
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, stride, max_size, true);
+  zlog::cls_zlog_invalidate(op, epoch, position, stride, true);
 
   return ioctx_->operate(oid, &op);
 }
@@ -320,7 +322,7 @@ int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
 }
 
 int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
@@ -333,13 +335,13 @@ int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
   assert(c->c);
 
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position, stride, max_size);
+  zlog::cls_zlog_read(op, epoch, position, stride);
 
   return ioctx_->aio_operate(oid, c->c, &op, &c->bl);
 }
 
 int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
@@ -355,7 +357,7 @@ int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, stride, max_size, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, stride, data_bl);
 
   return ioctx_->aio_operate(oid, c->c, &op);
 }

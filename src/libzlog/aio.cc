@@ -1,3 +1,7 @@
+// TODO:
+//  - Review backend return codes (espipe vs erange...)
+//  - Asserts that survive -DNDEBUG
+//  - Return values zero vs < 0
 #include "log_impl.h"
 
 #include <condition_variable>
@@ -5,11 +9,6 @@
 #include "zlog/backend.h"
 
 namespace zlog {
-
-enum AioType {
-  ZLOG_AIO_APPEND,
-  ZLOG_AIO_READ,
-};
 
 class AioCompletionImpl {
  public:
@@ -40,11 +39,9 @@ class AioCompletionImpl {
    *  - temp storage for read (read)
    */
   int retval;
-  bool has_callback;
   std::function<void()> callback;
   uint64_t position;
   std::string data;
-  AioType type;
 
   /*
    * AioAppend
@@ -53,7 +50,6 @@ class AioCompletionImpl {
    *  - final append position
    */
   uint64_t *pposition;
-  uint64_t epoch;
 
   /*
    * AioRead
@@ -62,9 +58,6 @@ class AioCompletionImpl {
    *  - where to put result
    */
   std::string *datap;
-  #ifdef WITH_CACHE
-  Cache* cache;
-  #endif
 
   AioCompletionImpl() :
     ref(1), complete(false), callback_complete(false), released(false), retval(0)
@@ -103,7 +96,6 @@ class AioCompletionImpl {
 
   void SetCallback(std::function<void()> callback) {
     std::lock_guard<std::mutex> l(lock);
-    has_callback = true;
     callback_complete = false;
     this->callback = callback;
   }
@@ -115,76 +107,65 @@ class AioCompletionImpl {
 void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
-  bool finish = false;
+  bool finish;
 
   impl->lock.lock();
 
-  assert(impl->type == ZLOG_AIO_READ);
-
   if (ret == 0) {
-    /*
-     * Read was successful. We're done.
-     */
+    // success. return data to caller
+    finish = true;
     if (impl->datap && !impl->data.empty()) {
       impl->datap->swap(impl->data);
     }
-
-    #ifdef WITH_CACHE    
-    impl->cache->put(impl->position, Slice(*(impl->datap)));
-    #endif
-
-    ret = 0;
-    finish = true;
   } else if (ret == -ESPIPE) {
-    /*
-     * We'll need to try again with a new epoch.
-     */
-    ret = impl->log->UpdateView();
-    if (ret)
-      finish = true;
+    // try again after refreshing view
+    finish = false;
+    impl->log->striper.refresh();
   } else if (ret < 0) {
+    // return error to caller
     // -ENOENT  // not-written
     // -ENODATA // invalidated
     // other: rados error
     finish = true;
+  } else if (ret == -ENOENT) {
+    // TODO: well, fixing this crap AIO impl will need to happen soon. Here we'd
+    // want to seal, but we aren't. It's not gonna fit in easily to this model
+    // of aio handling.
+    assert(0);
   } else {
+    // unexpected return code
     assert(0);
     ret = -EIO;
     finish = true;
   }
 
-  /*
-   * Try append again with a new position. This can happen if above there is a
-   * stale epoch that we refresh, or if the position was marked read-only.
-   */
   if (!finish) {
-    auto mapping = impl->log->striper.MapPosition(impl->position);
-    while (!mapping) {
-      ret = impl->log->ExtendMap();
-      if (ret)
-        break;
-      mapping = impl->log->striper.MapPosition(impl->position);
-    }
+    while (true) {
+      const auto view = impl->log->striper.view();
+      const auto oid = view->object_map.map(impl->position);
+      if (!oid) {
+        ret = impl->log->striper.ensure_mapping(impl->position);
+        if (ret < 0) {
+          break;
+        }
+        continue;
+      }
 
-    // don't need impl->get(): reuse reference
-
-    if (mapping) {
-      // submit new aio op
-      ret = impl->backend->AioRead(mapping->oid, mapping->epoch, impl->position,
-          mapping->width, mapping->max_size, &impl->data,
-          impl, AioCompletionImpl::aio_safe_cb_read);
+      // don't need impl->get(): reuse reference
+      ret = impl->backend->AioRead(*oid, view->epoch(), impl->position, 0,
+          &impl->data, impl, AioCompletionImpl::aio_safe_cb_read);
+      break;
     }
 
     if (ret)
       finish = true;
   }
 
-  // complete aio if append success, or any error
   if (finish) {
     impl->retval = ret;
     impl->complete = true;
     impl->lock.unlock();
-    if (impl->has_callback)
+    if (impl->callback)
       impl->callback();
     impl->callback_complete = true;
     impl->cond.notify_all();
@@ -199,102 +180,68 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
 void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
 {
   AioCompletionImpl *impl = (AioCompletionImpl*)arg;
-  bool finish = false;
+  bool finish;
 
   impl->lock.lock();
 
-  assert(impl->type == ZLOG_AIO_APPEND);
-
   if (ret == 0) {
-    /*
-     * Append was successful. We're done.
-     */
+    // success. return position to caller.
+    finish = true;
     if (impl->pposition) {
       *impl->pposition = impl->position;
     }
-    #ifdef WITH_CACHE
-    impl->cache->put(*(impl->pposition), impl->data);
-    #endif
-
-    ret = 0;
-    finish = true;
   } else if (ret == -ESPIPE) {
-    /*
-     * We'll need to try again with a new epoch.
-     */
-    ret = impl->log->UpdateView();
-    if (ret)
-      finish = true;
+    // try again with a new log view
+    finish = false;
+    impl->log->striper.refresh();
   } else if (ret < 0 && ret != -EROFS) {
-    /*
-     * Encountered a RADOS error.
-     */
+    // an error occured that should be returned to the user. for -EROFS the
+    // append is retried at a new position.
     finish = true;
+  } else if (ret == -ENOENT) {
+    // TODO: well, fixing this crap AIO impl will need to happen soon. Here we'd
+    // want to seal, but we aren't. It's not gonna fit in easily to this model
+    // of aio handling.
+    assert(0);
   } else {
     assert(0);
     ret = -EIO;
     finish = true;
   }
 
-  /*
-   * Try append again with a new position. This can happen if above there is a
-   * stale epoch that we refresh, or if the position was marked read-only.
-   */
   if (!finish) {
-    // if we are appending, get a new position
-    uint64_t position;
-    uint64_t seq_epoch;
-    boost::optional<Striper::Mapping> mapping;
     while (true) {
-      ret = impl->log->CheckTail(&position, &seq_epoch, true);
-      if (ret) {
-        finish = true;
-        break;
-      }
-      mapping = impl->log->striper.MapPosition(position);
-      while (!mapping) {
-        ret = impl->log->ExtendMap();
-        if (ret)
+      const auto view = impl->log->striper.view();
+
+      uint64_t position = 0;
+      assert(0);
+      // TODO: well, we need to fix the aio stuff...
+
+      const auto oid = view->object_map.map(position);
+      if (!oid) {
+        ret = impl->log->striper.ensure_mapping(position);
+        if (ret < 0) {
           break;
-        mapping = impl->log->striper.MapPosition(position);
-      }
-      if (ret) {
-        finish = true;
-        break;
-      }
-      if (seq_epoch != mapping->epoch) {
-        std::cerr << "trying new seq" << std::endl;
+        }
         continue;
       }
 
-      break;
-    }
-
-    // we are still good. build a new aio
-    if (!finish) {
-      impl->position = position;
-
-      // refresh
-      impl->epoch = mapping->epoch;
-
       // don't need impl->get(): reuse reference
-
-      // submit new aio op
-      ret = impl->backend->AioWrite(mapping->oid, mapping->epoch, impl->position,
-          mapping->width, mapping->max_size,
-          Slice(impl->data.data(), impl->data.size()),
-          impl, AioCompletionImpl::aio_safe_cb_write);
-      if (ret)
-        finish = true;
+      impl->position = position;
+      ret = impl->backend->AioWrite(*oid, view->epoch(), impl->position, 0,
+          Slice(impl->data.data(), impl->data.size()), impl,
+          AioCompletionImpl::aio_safe_cb_write);
     }
+
+    if (ret)
+      finish = true;
   }
 
-  // complete aio if append success, or any error
   if (finish) {
     impl->retval = ret;
     impl->complete = true;
     impl->lock.unlock();
-    if (impl->has_callback)
+    if (impl->callback)
       impl->callback();
     impl->callback_complete = true;
     impl->cond.notify_all();
@@ -311,7 +258,7 @@ AioCompletion::~AioCompletion() {}
 /*
  * This is a wrapper around AioCompletion that lets users of the public API
  * delete its AioCompletion without deleting the underlying AioCompletionImpl
- * which is referece counted.
+ * which is reference counted.
  */
 class AioCompletionImplWrapper : public zlog::AioCompletion {
  public:
@@ -342,7 +289,6 @@ zlog::AioCompletion *Log::aio_create_completion(
     std::function<void()> callback)
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
-  impl->has_callback = true;
   impl->callback_complete = false;
   impl->callback = callback;
   return new AioCompletionImplWrapper(impl);
@@ -351,139 +297,100 @@ zlog::AioCompletion *Log::aio_create_completion(
 zlog::AioCompletion *Log::aio_create_completion()
 {
   AioCompletionImpl *impl = new AioCompletionImpl;
-  impl->has_callback = false;
   impl->callback_complete = true;
   return new AioCompletionImplWrapper(impl);
 }
 
-/*
- * The retry for AioAppend is coordinated through the aio_safe_cb callback
- * which will dispatch a new rados operation.
- */
 int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
     uint64_t *pposition)
 {
-  // initial guess. see #194 about moving sequencer call into the callback for
-  // full async behavior.
-  uint64_t position;
-  uint64_t seq_epoch;
-  boost::optional<Striper::Mapping> mapping;
   while (true) {
-    int ret = CheckTail(&position, &seq_epoch, true);
-    if (ret)
-      return ret;
+    const auto view = striper.view();
 
-    mapping = striper.MapPosition(position);
-    while (!mapping) {
-      ret = ExtendMap();
-      if (ret)
+    uint64_t position;
+    if (view->seq) {
+      // TODO: unify with LogImpl::CheckTail
+      // TODO: obviously this is horable and awful.
+      int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
+          name, &position, true);
+      if (ret) {
+        if (ret == -EAGAIN) {
+          sleep(1);
+          continue;
+        } else if (ret == -ERANGE) {
+          striper.refresh(view->epoch());
+          continue;
+        }
         return ret;
-      mapping = striper.MapPosition(position);
-    }
-
-    if (seq_epoch != mapping->epoch) {
-      std::cerr << "retry with new seq" << std::endl;
+      }
+    } else {
+      int ret = striper.propose_sequencer(view, options);
+      if (ret && ret != -ESPIPE) {
+        return ret;
+      }
+      striper.refresh(view->epoch());
       continue;
     }
 
-    break;
+    // TODO: int64_t for position?
+    const auto oid = view->object_map.map(position);
+    if (!oid) {
+      int ret = striper.ensure_mapping(position);
+      if (ret < 0) {
+        return ret;
+      }
+      continue;
+    }
+
+    AioCompletionImplWrapper *wrapper =
+      reinterpret_cast<AioCompletionImplWrapper*>(c);
+    AioCompletionImpl *impl = wrapper->impl_;
+
+    impl->log = this;
+    impl->data.assign(data.data(), data.size());
+    impl->position = position;
+    impl->pposition = pposition;
+    impl->backend = backend;
+    impl->get(); // backend now has a reference
+
+    int ret = backend->AioWrite(*oid, view->epoch(), position, 0, data,
+        impl, AioCompletionImpl::aio_safe_cb_write);
+    assert(ret == 0);
+
+    return ret;
   }
-
-  AioCompletionImplWrapper *wrapper =
-    reinterpret_cast<AioCompletionImplWrapper*>(c);
-  AioCompletionImpl *impl = wrapper->impl_;
-
-  impl->log = this;
-  impl->data.assign(data.data(), data.size());
-  impl->position = position;
-  impl->pposition = pposition;
-  impl->backend = backend;
-  impl->type = ZLOG_AIO_APPEND;
-  #ifdef WITH_CACHE
-  impl->cache = cache;
-  #endif
-  // used to identify if state changes have occurred since dispatching the
-  // request in order to avoid reconfiguration later (important when lots of
-  // threads or contexts try to do the same thing).
-  impl->epoch = mapping->epoch;
-
-  impl->get(); // backend now has a reference
-
-  int ret = backend->AioWrite(mapping->oid, mapping->epoch, position,
-      mapping->width, mapping->max_size, data,
-      impl, AioCompletionImpl::aio_safe_cb_write);
-  /*
-   * Currently aio_operate never fails. If in the future that changes then we
-   * need to make sure that references to impl and the rados completion are
-   * cleaned up correctly.
-   */
-  assert(ret == 0);
-
-  return ret;
 }
 
 int LogImpl::AioRead(uint64_t position, AioCompletion *c,
     std::string *datap)
 {
+  while (true) {
+    const auto view = striper.view();
+    const auto oid = view->object_map.map(position);
+    if (!oid) {
+      int ret = striper.ensure_mapping(position);
+      if (ret < 0) {
+        return ret;
+      }
+      continue;
+    }
 
-
-  AioCompletionImplWrapper *wrapper =
-    reinterpret_cast<AioCompletionImplWrapper*>(c);
-  AioCompletionImpl *impl = wrapper->impl_;
-
+    AioCompletionImplWrapper *wrapper =
+      reinterpret_cast<AioCompletionImplWrapper*>(c);
+    AioCompletionImpl *impl = wrapper->impl_;
   
-  impl->log = this;
-  impl->datap = datap;
-  impl->position = position;
-  impl->backend = backend;
-  impl->type = ZLOG_AIO_READ;
-  #ifdef WITH_CACHE
-  impl->cache = cache;
-  #endif
-  impl->get(); // backend now has a reference
+    impl->log = this;
+    impl->datap = datap;
+    impl->position = position;
+    impl->backend = backend;
+    impl->get(); // backend now has a reference
   
-  #ifdef WITH_CACHE
-  int cache_miss = cache->get(&position, datap);
-  if(!cache_miss){
-
-    int ret = 0;  
-    impl->lock.lock();
-    impl->retval = ret;
-    impl->complete = true;
-    impl->lock.unlock();
-    if (impl->has_callback)
-      impl->callback();
-    impl->callback_complete = true;
-    impl->cond.notify_all();
-    impl->lock.lock();
-    impl->put_unlock();
+    int ret = backend->AioRead(*oid, view->epoch(), position, 0, &impl->data,
+        impl, AioCompletionImpl::aio_safe_cb_read);
+    assert(ret == 0);
 
     return ret;
   }
-  #endif
-
-  
-  auto mapping = striper.MapPosition(position);
-  while (!mapping) {
-    int ret = ExtendMap();
-    if (ret)
-      return ret;
-    mapping = striper.MapPosition(position);
-  }
-
-  int ret = backend->AioRead(mapping->oid, mapping->epoch, position,
-      mapping->width, mapping->max_size, &impl->data,
-      impl, AioCompletionImpl::aio_safe_cb_read);
-  /*
-   * Currently aio_operate never fails. If in the future that changes then we
-   * need to make sure that references to impl and the rados completion are
-   * cleaned up correctly.
-   */
-  assert(ret == 0);
-
-
-  return ret;
 }
-
 
 }

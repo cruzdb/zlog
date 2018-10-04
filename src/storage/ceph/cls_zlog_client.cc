@@ -7,35 +7,31 @@
 namespace zlog {
 
 void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size)
+    uint64_t position, uint32_t stride)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::ReadEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  call.set_stride(stride);
-  call.set_max_size(max_size);
   encode(bl, call);
   op.exec("zlog", "entry_read", bl);
 }
 
 void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
-    uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t position, uint32_t stride,
     ceph::bufferlist& data)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::WriteEntry call;
   call.set_epoch(epoch);
   call.set_pos(position);
-  call.set_stride(stride);
-  call.set_max_size(max_size);
   call.set_data(data.c_str(), data.length());
   encode(bl, call);
   op.exec("zlog", "entry_write", bl);
 }
 
 void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
-    uint64_t epoch, uint64_t position, uint32_t stride, uint32_t max_size,
+    uint64_t epoch, uint64_t position, uint32_t stride,
     bool force)
 {
   ceph::bufferlist bl;
@@ -43,8 +39,6 @@ void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
   call.set_epoch(epoch);
   call.set_pos(position);
   call.set_force(force);
-  call.set_stride(stride);
-  call.set_max_size(max_size);
   encode(bl, call);
   op.exec("zlog", "entry_invalidate", bl);
 }
@@ -101,17 +95,12 @@ void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
 void cls_zlog_init_head(librados::ObjectWriteOperation& op,
     const std::string& prefix)
 {
-  zlog_ceph_proto::HeadObjectHeader header;
-  header.set_deleted(false);
-  header.set_prefix(prefix);
-  // don't set max_epoch...
-  assert(!header.has_max_epoch());
+  zlog_ceph_proto::InitHead call;
+  call.set_prefix(prefix);
 
   ceph::bufferlist bl;
-  encode(bl, header);
-
-  op.assert_exists();
-  op.setxattr(HEAD_HEADER_KEY, bl);
+  encode(bl, call);
+  op.exec("zlog", "head_init", bl);
 }
 
 void cls_zlog_create_view(librados::ObjectWriteOperation& op,

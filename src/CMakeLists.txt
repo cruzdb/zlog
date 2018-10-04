@@ -21,6 +21,7 @@ add_subdirectory(HdrHistogram_c)
 include_directories(${CMAKE_BINARY_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/src/include)
+include_directories(${CMAKE_SOURCE_DIR}/src/spdlog/include)
 include_directories(${CMAKE_SOURCE_DIR}/src/civetweb/include)
 
 ################################################################################
@@ -31,7 +32,6 @@ add_subdirectory(proto)
 add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(storage)
-add_subdirectory(zstate)
 add_subdirectory(bench)
 add_subdirectory(test)
 

@@ -25,6 +25,10 @@ target_link_libraries(zlog_backend_ceph
 target_include_directories(zlog_backend_ceph
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
 )
+set_target_properties(zlog_backend_ceph PROPERTIES
+  OUTPUT_NAME zlog_backend_ceph
+  VERSION 1.0.0
+  SOVERSION 1)
 install(TARGETS zlog_backend_ceph DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 add_executable(zlog_test_cls_zlog

@@ -1,6 +1,5 @@
 set(libzlog_sources
   log_impl.cc
-  stream.cc
   striper.cc
   aio.cc
   capi.cc

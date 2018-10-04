@@ -14,8 +14,6 @@
 
 namespace po = boost::program_options;
 
-static bool stream_support;
-
 static std::string iops_logfile;
 
 static int report_sec;
@@ -117,100 +115,6 @@ class Sequence {
     }
   }
 
-  /*
-   * the lock used limits concurrent queries and updates related to the
-   * streaming interface. the actual next position is still atomic with
-   * respect to other log users which can operate concurrently. one potential
-   * optimization would be a lock per stream.
-   */
-  int stream_next(const std::vector<uint64_t>& stream_ids,
-      std::vector<std::vector<uint64_t>>& stream_backpointers,
-      uint64_t *pposition)
-  {
-    std::lock_guard<std::mutex> l(lock_);
-
-    std::vector<std::vector<uint64_t>> result;
-
-    // make a copy of the current backpointers
-    for (std::vector<uint64_t>::const_iterator it = stream_ids.begin();
-         it != stream_ids.end(); it++) {
-
-      uint64_t stream_id = *it;
-      stream_index_t::const_iterator stream_it = streams_.find(stream_id);
-      if (stream_it == streams_.end()) {
-        /*
-         * If a stream doesn't exist initialize an empty set of backpointers.
-         * How do we know a stream doesn't exist? During log initialization we
-         * setup all existing logs...
-         */
-        streams_[stream_id] = stream_backpointers_t();
-
-        std::vector<uint64_t> ptrs;
-        result.push_back(ptrs);
-        continue;
-      }
-
-      std::vector<uint64_t> ptrs(stream_it->second.begin(),
-          stream_it->second.end());
-      result.push_back(ptrs);
-    }
-
-    uint64_t next_pos = next();
-
-    // add new position to each stream
-    for (std::vector<uint64_t>::const_iterator it = stream_ids.begin();
-         it != stream_ids.end(); it++) {
-      uint64_t stream_id = *it;
-      stream_backpointers_t& backpointers = streams_.at(stream_id);
-      backpointers.push_back(next_pos);
-      if (backpointers.size() > 10)
-        backpointers.pop_front();
-    }
-
-    *pposition = next_pos;
-    stream_backpointers.swap(result);
-
-    return 0;
-  }
-
-  int stream_read(const std::vector<uint64_t>& stream_ids,
-      std::vector<std::vector<uint64_t>>& stream_backpointers,
-      uint64_t *pposition)
-  {
-    std::lock_guard<std::mutex> l(lock_);
-
-    std::vector<std::vector<uint64_t>> result;
-
-    // make a copy of the current backpointers
-    for (std::vector<uint64_t>::const_iterator it = stream_ids.begin();
-         it != stream_ids.end(); it++) {
-
-      uint64_t stream_id = *it;
-      stream_index_t::const_iterator stream_it = streams_.find(stream_id);
-      if (stream_it == streams_.end()) {
-        /*
-         * If a stream doesn't exist initialize an empty set of backpointers.
-         * How do we know a stream doesn't exist? During log initialization we
-         * setup all existing logs...
-         */
-        streams_[stream_id] = stream_backpointers_t();
-
-        std::vector<uint64_t> ptrs;
-        result.push_back(ptrs);
-        continue;
-      }
-
-      std::vector<uint64_t> ptrs(stream_it->second.begin(),
-          stream_it->second.end());
-      result.push_back(ptrs);
-    }
-
-    *pposition = read();
-    stream_backpointers.swap(result);
-
-    return 0;
-  }
-
   inline int match(const meta_t& meta,
       const std::string& name,
       const uint64_t epoch) const {
@@ -221,21 +125,12 @@ class Sequence {
     return 0;
   }
 
-  void set_streams(std::map<uint64_t, std::deque<uint64_t>>& ptrs) {
-    streams_.swap(ptrs);
-  }
-
  private:
-  typedef std::deque<uint64_t> stream_backpointers_t;
-  typedef std::map<uint64_t, stream_backpointers_t> stream_index_t;
-
   std::mutex lock_;
   std::atomic<uint64_t> seq_;
   meta_t meta_;
   std::string name_;
   uint64_t epoch_;
-
-  stream_index_t streams_;
 };
 
 class LogManager {
@@ -251,9 +146,7 @@ class LogManager {
    */
   int ReadSequence(const meta_t& meta, const std::string& name,
       uint64_t epoch, bool increment, std::vector<uint64_t>& positions,
-      int count, const std::vector<uint64_t>& stream_ids,
-      std::vector<std::vector<uint64_t>>& stream_backpointers,
-      Sequence **cached_seq)
+      int count, Sequence **cached_seq)
   {
     std::unique_lock<std::mutex> g(lock_);
 
@@ -267,24 +160,11 @@ class LogManager {
     if (epoch < it->second.epoch)
       return -ERANGE;
 
-    if (stream_ids.size() == 0) {
-      if (increment)
-        it->second.seq->next(positions, count);
-      else {
-        assert(count == 1);
-        uint64_t seq = it->second.seq->read();
-        positions.push_back(seq);
-      }
-    } else {
-      int ret = 0;
-      uint64_t seq;
+    if (increment)
+      it->second.seq->next(positions, count);
+    else {
       assert(count == 1);
-      if (increment)
-        ret = it->second.seq->stream_next(stream_ids, stream_backpointers, &seq);
-      else
-        ret = it->second.seq->stream_read(stream_ids, stream_backpointers, &seq);
-      if (ret)
-        return ret;
+      uint64_t seq = it->second.seq->read();
       positions.push_back(seq);
     }
 
@@ -297,12 +177,9 @@ class LogManager {
   struct Log {
     Log() {}
     Log(uint64_t pos, uint64_t epoch,
-        meta_t meta, std::string name,
-        std::map<uint64_t, std::deque<uint64_t>>& ptrs) :
+        meta_t meta, std::string name) :
       seq(new Sequence(pos, meta, name, epoch)), epoch(epoch)
-    {
-      seq->set_streams(ptrs);
-    }
+    {}
 
     Sequence *seq;
     uint64_t epoch;
@@ -318,8 +195,7 @@ class LogManager {
    * these steps are completed successfully.
    */
   int InitLog(const meta_t& meta, const std::string& name,
-      uint64_t *pepoch, uint64_t *pposition,
-      std::map<uint64_t, std::deque<uint64_t>>& ptrs) {
+      uint64_t *pepoch, uint64_t *pposition) {
 
     // which backend?
     if (meta.count("scheme") == 0) {
@@ -347,78 +223,24 @@ class LogManager {
       return ret;
     }
 
-    uint64_t epoch;
-    uint64_t position;
-    bool empty;
-    ret = log->CreateCut(&epoch, &position, &empty);
-    if (ret) {
-      delete log;
-      std::cerr << "failed to create cut ret " << ret << std::endl;
-      return ret;
-    }
+    // TODO
+    //  - call propose_sequencer(...)
+    //  - wait for new view to be read from log
+    //  - check cookie
+    //  - start serving
 
-    /*
-     * This is very inefficient. Basically during log initialization we just
-     * scan the entire thing to initialize the streams. Right now we need
-     * something working and can bite the initialization cost and make things
-     * more dynamic and efficient during a later rewrite of the streaming
-     * interface.
-     */
-#ifdef STREAMING_SUPPORT
-    if (stream_support && !empty) {
-      uint64_t tail = position;
-      std::map<uint64_t, std::deque<uint64_t>> ptrs_out;
-      for (;;) {
-        for (;;) {
-          std::set<uint64_t> stream_ids;
-          ret = log->StreamMembership(epoch, stream_ids, tail);
-          if (ret == 0) {
-            for (auto it = stream_ids.begin(); it != stream_ids.end(); it++) {
-              auto it2 = ptrs_out.find(*it);
-              if (it2 == ptrs_out.end() || it2->second.size() < 10)
-                ptrs_out[*it].push_back(tail);
-            }
-            break;
-          } else if (ret == -EINVAL) {
-            // skip non-stream entries
-            break;
-          } else if (ret == -ENODATA) {
-            // skip invalidated entries
-            break;
-          } else if (ret == -ENOENT) {
-            // fill entries unwritten entries
-            ret = log->Fill(epoch, tail);
-            if (ret == 0) {
-              // skip invalidated entries
-              break;
-            } else if (ret == -EROFS) {
-              // retry
-              continue;
-            } else {
-              std::cerr << "error initialing log stream: fill: " << ret << std::endl;
-              delete log;
-              return ret;
-            }
-          } else {
-            std::cerr << "error initialing log stream: stream membership: " << ret << std::endl;
-            delete log;
-            return ret;
-          }
-        }
-        if (tail)
-          tail--;
-        else
-          break;
-      }
-      ptrs.swap(ptrs_out);
-    }
-#endif
+    // uint64_t epoch;
+    // uint64_t position;
+    // bool empty;
+    // TODO: this is where we seal and get a new max pos.
+    // delete log if errors
+    assert(0);
 
-    *pepoch = epoch;
-    if (empty)
-      *pposition = 0;
-    else
-      *pposition = position + 1;
+    //*pepoch = epoch;
+    //if (empty)
+    //  *pposition = 0;
+    //else
+    //  *pposition = position + 1;
 
     delete log;
 
@@ -535,8 +357,7 @@ class LogManager {
       // epoch when it returns zero, so epoch use below in the next block is
       // safe.
       uint64_t epoch = 0;
-      std::map<uint64_t, std::deque<uint64_t>> ptrs;
-      int ret = InitLog(meta, name, &epoch, &position, ptrs);
+      int ret = InitLog(meta, name, &epoch, &position);
       if (ret) {
         std::unique_lock<std::mutex> g(lock_);
         pending_logs_.erase(std::make_pair(meta, name));
@@ -550,7 +371,7 @@ class LogManager {
         assert(pending_logs_.count(key) == 1);
         pending_logs_.erase(key);
         assert(logs_.count(key) == 0);
-        Log log(position, epoch, meta, name, ptrs);
+        Log log(position, epoch, meta, name);
         logs_[key] = log;
       }
     }
@@ -656,68 +477,28 @@ class Session {
     std::vector<uint64_t> positions;
     assert(req_.count() > 0 && req_.count() < 100);
 
-    // per-stream backpointers
-    std::vector<std::vector<uint64_t>> stream_backpointers;
-    const std::vector<uint64_t> stream_ids(req_.stream_ids().begin(),
-        req_.stream_ids().end());
-
     if (cached_seq) {
       auto meta = get_meta(req_);
       ret = cached_seq->match(meta, req_.name(), req_.epoch());
       if (!ret) {
         /*
-         * If this request doesn't contain any stream ids then we are only
-         * interacting with the log tail (i.e. query or increment).
+         * If only one position is being requested then it might be a query
+         * or an increment request.
          */
-        if (req_.stream_ids_size() == 0) {
-          /*
-           * If only one position is being requested then it might be a query
-           * or an increment request.
-           */
-          if (req_.count() == 1) {
-            uint64_t seq;
-            if (req_.next())
-              seq = cached_seq->next();
-            else
-              seq = cached_seq->read();
-            positions.push_back(seq);
-          } else {
-            /*
-             * When the count is larger than 1 then it must be a request for
-             * multiple new positions.
-             */
-            assert(req_.next());
-            cached_seq->next(positions, req_.count());
-          }
-        } else { // req_.stream_ids_size() > 0
-          /*
-           * This is a request involving streams, and might be a query or a
-           * request for incrementing the log tail.
-           */
-
-          /*
-           * this is very rude... well, the current support for streams
-           * contains some cases that cause major delays while processing log
-           * entries and stream support is pre-alpha stage, so we've added a
-           * mode that assumes no clients with use the stream api.
-           *
-           * consider yourself warned.
-           */
-          assert(stream_support);
-
-          // batch stream requests not yet supported
-          assert(req_.count() == 1);
-
-          /*
-           * If a stream hasn't been initialized then we may return -EAGAIN
-           * and instruct the client to try again later.
-           */
+        if (req_.count() == 1) {
           uint64_t seq;
           if (req_.next())
-            ret = cached_seq->stream_next(stream_ids, stream_backpointers, &seq);
+            seq = cached_seq->next();
           else
-            ret = cached_seq->stream_read(stream_ids, stream_backpointers, &seq);
+            seq = cached_seq->read();
           positions.push_back(seq);
+        } else {
+          /*
+           * When the count is larger than 1 then it must be a request for
+           * multiple new positions.
+           */
+          assert(req_.next());
+          cached_seq->next(positions, req_.count());
         }
       } else {
         if (req_.count() > 1)
@@ -725,7 +506,7 @@ class Session {
         auto meta = get_meta(req_);
         ret = log_mgr->ReadSequence(meta, req_.name(),
             req_.epoch(), req_.next(), positions, req_.count(),
-            stream_ids, stream_backpointers, &cached_seq);
+            &cached_seq);
       }
     } else {
       if (req_.count() > 1)
@@ -733,7 +514,7 @@ class Session {
       auto meta = get_meta(req_);
       ret = log_mgr->ReadSequence(meta, req_.name(),
           req_.epoch(), req_.next(), positions, req_.count(),
-          stream_ids, stream_backpointers, &cached_seq);
+          &cached_seq);
     }
 
     if (ret == -EAGAIN)
@@ -748,20 +529,6 @@ class Session {
       uint64_t pos = *it;
       reply_.add_position(pos);
     }
-
-#ifdef STREAMING_SUPPORT
-    size_t stream_index = 0;
-    for (std::vector<std::vector<uint64_t>>::const_iterator it =
-         stream_backpointers.begin(); it != stream_backpointers.end(); it++) {
-      zlog_proto::StreamBackPointer *ptrs = reply_.add_stream_backpointers();
-      ptrs->set_id(req_.stream_ids(stream_index++));
-      for (std::vector<uint64_t>::const_iterator it2 = it->begin();
-          it2 != it->end(); it2++) {
-        uint64_t pos = *it2;
-        ptrs->add_backpointer(pos);
-      }
-    }
-#endif
 
     assert(reply_.IsInitialized());
 
@@ -861,7 +628,6 @@ int main(int argc, char* argv[])
     ("nthreads", po::value<int>(&nthreads)->default_value(1), "Num threads")
     ("report-sec", po::value<int>(&report_sec)->default_value(0), "Time between rate reports")
     ("daemon,d", "Run in background")
-    ("streams", po::bool_switch(&stream_support)->default_value(false), "support streams")
     ("iops-logfile", po::value<std::string>(&iops_logfile)->default_value(""), "iops log file")
   ;
 

@@ -7,14 +7,20 @@ message LinkObjectHeader {
   required string hoid = 1;
 }
 
+//##########################
 // metadata for head objects
+//##########################
+
 message HeadObjectHeader {
   required bool deleted = 1;
   required string prefix = 2;
-  optional uint64 max_epoch = 3;
+  required uint64 epoch = 3;
 }
 
-// head object methods and replies
+message InitHead {
+  required string prefix = 1;
+}
+
 message CreateView {
   required uint64 epoch = 1;
   required bytes data = 2;
@@ -25,6 +31,7 @@ message ReadView {
   optional uint32 max_views = 2 [default = 100];
 }
 
+// store data in this
 message View {
   required uint64 epoch = 1;
   required bytes data = 2;
@@ -34,33 +41,29 @@ message Views {
   repeated View views = 1;
 }
 
+//#########################################
 // metadata for objects storing log entries
+//#########################################
+
 message LogObjectHeader {
-  optional uint64 epoch = 1;
+  required uint64 epoch = 1;
   optional uint64 max_pos = 2;
-  optional uint32 stride = 3;
-
-  // TODO: change to slot size
-  optional uint32 max_size = 4;
-
-  // per-entry state bitmaps
-  optional bytes written = 5;
-  optional bytes invalid = 6;
 }
-
-// log entry metadata
 
 message LogEntry {
-  enum Flags {
-    INVALID = 1;
-    FORCED  = 2;
-  }
-  optional uint32 flags = 1 [default = 0];
-  optional uint32 offset = 2;
-  optional uint32 length = 3;
+// TODO: required?
+  optional bool invalid = 1 [default = false];
+
+  // log entry data is stored in exactly one of two places: inline with this log
+  // entry metadata (the data field) or in the object (offset/length fields).
+  optional bytes data = 2;
+  optional uint32 offset = 3;
+  optional uint32 length = 4;
 }
 
-// log object methods and replies
+//##########################################
+// operations on objects storing log entries
+//##########################################
 
 message ReadMaxPos {
   required uint64 epoch = 1;
@@ -70,30 +73,28 @@ message MaxPos {
   optional uint64 pos = 1;
 }
 
+// TODO: come up with better names for these things
+message InitEntry {
+  required uint64 epoch = 1;
+}
+
 message Seal {
   required uint64 epoch = 1;
 }
 
-// TODO: split out data, and also move to flatbuffer
 message WriteEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
-  required uint32 stride = 3;
-  required uint32 max_size = 4;
   required bytes data = 5;
 }
 
 message ReadEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
-  required uint32 stride = 3;
-  required uint32 max_size = 4;
 }
 
 message InvalidateEntry {
   required uint64 epoch = 1;
   required uint64 pos = 2;
   required bool force = 3;
-  required uint32 stride = 4;
-  required uint32 max_size = 5;
 }

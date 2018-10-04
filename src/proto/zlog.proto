@@ -4,30 +4,26 @@ package zlog_proto;
 
 option optimize_for = SPEED;
 
-message View {
-  // the minimum (inclusive) log position that maps to this view. the highest
-  // numbered position in this view is position + width * entries_per_object - 1.
-  required uint64 position = 1;
-
-  // the number of objects that the log is striped across.
+message Stripe {
+  required uint64 id = 1;
   required uint32 width = 2;
+  required uint64 min_position = 3;
+  required uint64 max_position = 4;
+}
 
-  // the number of log entries stored in each object.
-  required uint32 entries_per_object = 3;
+message Sequencer {
+  required string host = 1;
+  required string port = 2;
+  required string cookie = 3;
+  required uint64 init_position = 4;
+  // TODO: remove host/port for excl only version
+  required uint64 epoch = 5;
+}
 
-  required uint32 max_entry_size = 4;
-
-  // single-writer mode. when the exclusive_cookie field is not specified, then
-  // clients rely on a external sequencer service. when a value for the
-  // exclusive_cookie field is specified, the client whose proposed change was
-  // accepted is allowed to enter into a single-writer mode in which it becomes
-  // its own sequencer. it is critical that this value be unique. one way to do
-  // this is to encode the next_epoch in the string which is guaranteed to be
-  // unique if it is accepted.
-  optional string exclusive_cookie = 5;
-
-  optional string host = 6;
-  optional string port = 7;
+message View {
+  optional uint64 next_stripe_id = 1 [default = 0];
+  repeated Stripe stripes = 2;
+  optional Sequencer seq = 3;
 }
 
 message StringPair {
@@ -40,13 +36,7 @@ message MSeqRequest {
     required string name = 2;
     required bool next = 3;
     required uint32 count = 4;
-    repeated uint64 stream_ids = 5 [packed = true];
     repeated StringPair meta = 6;
-}
-
-message StreamBackPointer {
-    required uint64 id = 1;
-    repeated uint64 backpointer = 2 [packed = true];
 }
 
 message MSeqReply {
@@ -57,9 +47,4 @@ message MSeqReply {
     }
     repeated uint64 position = 1 [packed = true];
     optional Status status = 2 [default = OK];
-    repeated StreamBackPointer stream_backpointers = 3;
 }
-
-message EntryHeader {
-  repeated StreamBackPointer stream_backpointers = 1;
-};

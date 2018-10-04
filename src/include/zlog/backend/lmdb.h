@@ -27,7 +27,8 @@ class LMDBBackend : public Backend {
   std::map<std::string, std::string> meta() override;
 
   int CreateLog(const std::string& name,
-      const std::string& initial_view) override;
+      const std::string& initial_view,
+      std::string& hoid, std::string& prefix) override;
 
   int OpenLog(const std::string& name,
       std::string& hoid, std::string& prefix) override;
@@ -39,18 +40,17 @@ class LMDBBackend : public Backend {
       uint64_t epoch, const std::string& view) override;
 
   int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, uint32_t max_size,
+      uint64_t position, uint32_t stride,
       std::string *data) override;
 
   int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position, uint32_t stride,
-      uint32_t max_size) override;
+      uint64_t epoch, uint64_t position, uint32_t stride) override;
 
   int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, uint32_t max_size) override;
+      uint64_t position, uint32_t stride) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, uint32_t max_size) override;
+      uint64_t position, uint32_t stride) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;
@@ -59,12 +59,12 @@ class LMDBBackend : public Backend {
       uint64_t *pos, bool *empty) override;
 
   int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, uint32_t max_size,
+      uint64_t position, uint32_t stride,
       const Slice& data, void *arg,
       std::function<void(void*, int)> callback) override;
 
   int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, uint32_t max_size,
+      uint64_t position, uint32_t stride,
       std::string *data, void *arg,
       std::function<void(void*, int)> callback) override;
 
@@ -74,8 +74,7 @@ class LMDBBackend : public Backend {
   MDB_dbi db_obj;
 
   struct ProjectionObject {
-    ProjectionObject() : latest_epoch(0) {}
-    uint64_t latest_epoch;
+    uint64_t epoch;
   };
 
   struct LogObject {
