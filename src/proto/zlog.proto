@@ -16,7 +16,6 @@ message Sequencer {
   required string port = 2;
   required string cookie = 3;
   required uint64 init_position = 4;
-  // TODO: remove host/port for excl only version
   required uint64 epoch = 5;
 }
 

@@ -1,7 +1,3 @@
-// TODO:
-//  - Review backend return codes (espipe vs erange...)
-//  - Asserts that survive -DNDEBUG
-//  - Return values zero vs < 0
 #include "log_impl.h"
 
 #include <condition_variable>
@@ -128,7 +124,7 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
     // other: rados error
     finish = true;
   } else if (ret == -ENOENT) {
-    // TODO: well, fixing this crap AIO impl will need to happen soon. Here we'd
+    // well, fixing this crap AIO impl will need to happen soon. Here we'd
     // want to seal, but we aren't. It's not gonna fit in easily to this model
     // of aio handling.
     assert(0);
@@ -199,7 +195,7 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
     // append is retried at a new position.
     finish = true;
   } else if (ret == -ENOENT) {
-    // TODO: well, fixing this crap AIO impl will need to happen soon. Here we'd
+    // well, fixing this crap AIO impl will need to happen soon. Here we'd
     // want to seal, but we aren't. It's not gonna fit in easily to this model
     // of aio handling.
     assert(0);
@@ -215,7 +211,7 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
 
       uint64_t position = 0;
       assert(0);
-      // TODO: well, we need to fix the aio stuff...
+      // well, we need to fix the aio stuff...
 
       const auto oid = view->object_map.map(position);
       if (!oid) {
@@ -309,8 +305,6 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
     uint64_t position;
     if (view->seq) {
-      // TODO: unify with LogImpl::CheckTail
-      // TODO: obviously this is horable and awful.
       int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
           name, &position, true);
       if (ret) {
@@ -332,7 +326,6 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
       continue;
     }
 
-    // TODO: int64_t for position?
     const auto oid = view->object_map.map(position);
     if (!oid) {
       int ret = striper.ensure_mapping(position);

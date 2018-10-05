@@ -51,7 +51,6 @@ message LogObjectHeader {
 }
 
 message LogEntry {
-// TODO: required?
   optional bool invalid = 1 [default = false];
 
   // log entry data is stored in exactly one of two places: inline with this log
@@ -73,7 +72,6 @@ message MaxPos {
   optional uint64 pos = 1;
 }
 
-// TODO: come up with better names for these things
 message InitEntry {
   required uint64 epoch = 1;
 }

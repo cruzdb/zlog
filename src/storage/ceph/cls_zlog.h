@@ -47,7 +47,6 @@ class LogObjectHeader {
     return 0;
   }
 
-  // TODO: switch to finalize?
   int save() {
     ceph::bufferlist bl;
     encode(bl, hdr_);
@@ -242,7 +241,6 @@ class HeadObject {
   }
 
  private:
-  // TODO: make all these static (and check other classes)
   const char *view_hdr_key_ = "zlog.head.header";
   const char *view_key_prefix_ = "zlog.head.view.";
   inline std::string view_key(uint64_t epoch) const {

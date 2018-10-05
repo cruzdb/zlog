@@ -28,8 +28,6 @@ LMDBBackend::Transaction LMDBBackend::NewTransaction(bool read_only)
   return Transaction(txn, this);
 }
 
-// TODO: backend needs to be OK with being deleted before having been
-// initialized...
 LMDBBackend::~LMDBBackend()
 {
   if (!closed) {
@@ -91,7 +89,6 @@ int LMDBBackend::CreateLog(const std::string& name,
   if (ret)
     return ret;
 
-  // TODO: we should really generate unique names here
   hoid_out = name;
   prefix = name;
 
@@ -498,8 +495,6 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
 
 void LMDBBackend::Init(const std::string& path)
 {
-  // TODO: even when a backend is created explicitly, it needs to fill in enough
-  // options so that a sequencer can open an instance. Or not. In our case def.
   options["path"] = path;
 
   int ret = mdb_env_create(&env);
@@ -549,7 +544,6 @@ extern "C" Backend *__backend_allocate(void)
 
 extern "C" void __backend_release(Backend *p)
 {
-  // TODO: whats the correct type of cast here
   LMDBBackend *backend = (LMDBBackend*)p;
   delete backend;
 }

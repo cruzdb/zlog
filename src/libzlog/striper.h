@@ -139,20 +139,9 @@ class View {
   ObjectMap object_map;
   SequencerConfig seq_config;
 
-  // TODO: this doesn't need to be a shared ptr. The only reason it is is
-  // because if we used unique_ptr we'd need to define our own copy constructor.
-  // we'll take care of that later.
-  //
-  // the assumption here is that seq is created when the view is created. so we
-  // don't need to (At this point) worry about it changing and needing to hold a
-  // mutex when reading it. that might change later, so it's something to keep
-  // in mind.
   std::shared_ptr<SeqrClient> seq;
 
  private:
-  // TODO: I think that epoch needs to be removed from here. It's really
-  // unnatural to make a copy of the view, change it in some way, and then have
-  // the epoch still be for soem other epoch.
   const uint64_t epoch_;
 };
 
@@ -166,7 +155,6 @@ class Striper {
     refresh_thread_(std::thread(&Striper::refresh_entry_, this))
   {}
 
-  // TODO: i think all the callers of this need locking
   std::shared_ptr<const View> view() const {
     assert(view_);
     return view_;
@@ -174,9 +162,6 @@ class Striper {
 
   int ensure_mapping(uint64_t position);
 
-  // FIXME: remove default value
-  // TODO: make sure: epoch means, wait for something larger. so its just
-  // usually whatever the current epoch is that didn't satisfy
   void refresh(uint64_t epoch = 0);
 
   int propose_sequencer(const std::shared_ptr<const View>& view,

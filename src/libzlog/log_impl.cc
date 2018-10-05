@@ -48,12 +48,6 @@ int LogImpl::Open(const std::string& scheme, const std::string& name,
 
   log->striper.refresh();
 
-  // TODO: assert that a view has been established, or is that handled on demand
-  // in the case that something happened during initialization?
-  // if (log->striper.Empty()) {
-  //   return -EINVAL;
-  // }
-
   *logpp = log.release();
 
   return 0;
@@ -87,8 +81,6 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
   while (true) {
     const auto view = striper.view();
     if (view->seq) {
-      // TODO: obviously this is horable and awful.
-      // TODO: we should rethink the checktail api too
       int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
           name, pposition, increment);
       if (!ret) {
@@ -158,8 +150,6 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
 
     uint64_t position;
     if (view->seq) {
-      // TODO: unify with LogImpl::CheckTail
-      // TODO: obviously this is horable and awful.
       int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
           name, &position, true);
       if (ret) {
@@ -198,7 +188,6 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       return 0;
     }
 
-    // TODO: return values on backend changed with ceph-ng
     if (ret == -ESPIPE) {
       striper.refresh();
       continue;
@@ -206,11 +195,6 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
 
     if (ret == -ENOENT) {
       backend->Seal(*oid, view->epoch());
-      // TODO: we shouldn't ignore the return value here, but there isn't much
-      // to do. if it succeeds, cool. if it shows that it's already been sealed
-      // that's fine too since we reuse seal for object init and we want to init
-      // here. maybe if there is a connection issue we should not spin... but we
-      // can add that later.
       continue;
     }
 
@@ -242,11 +226,6 @@ int LogImpl::Fill(const uint64_t position)
       continue;
     } else if (ret == -ENOENT) {
       backend->Seal(*oid, view->epoch());
-      // TODO: we shouldn't ignore the return value here, but there isn't much
-      // to do. if it succeeds, cool. if it shows that it's already been sealed
-      // that's fine too since we reuse seal for object init and we want to init
-      // here. maybe if there is a connection issue we should not spin... but we
-      // can add that later.
       continue;
     }
     return ret;
@@ -266,23 +245,15 @@ int LogImpl::Trim(const uint64_t position)
       continue;
     }
 
-    // TODO: trim should be renamed to invalidate?
     int ret = backend->Trim(*oid, view->epoch(), position, 0);
     if (!ret){
       return 0;
     }
-    // TODO: get some sort of unified / less fragile way of commnicating these
-    // return vlaues.
     if (ret == -ESPIPE) {
       striper.refresh();
       continue;
     } else if (ret == -ENOENT) {
       backend->Seal(*oid, view->epoch());
-      // TODO: we shouldn't ignore the return value here, but there isn't much
-      // to do. if it succeeds, cool. if it shows that it's already been sealed
-      // that's fine too since we reuse seal for object init and we want to init
-      // here. maybe if there is a connection issue we should not spin... but we
-      // can add that later.
       continue;
     }
     return ret;

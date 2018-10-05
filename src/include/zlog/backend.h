@@ -53,8 +53,6 @@ class Backend {
   // Create a new, empty log with the given name. On success, @hoid will be set
   // to contain the name of the head object.
   //
-  // TODO: fix explanation for prefix
-  //
   // -EEXIST
   //   - log with name already exists
   virtual int CreateLog(const std::string& name,
@@ -79,11 +77,6 @@ class Backend {
       uint64_t epoch, std::map<uint64_t, std::string>& views) = 0;
 
   // Create a new view.
-  //
-  // TODO: add unit tests for the backend interface. Plus... Ceph backend may
-  // not be updated to handle these new return values in addition to other
-  // backends and other interfaces. This is a catch-all todo to make sure
-  // everyone is consistent.
   //
   // - ESPIPE: bad epoch; probably need a refresh
   //

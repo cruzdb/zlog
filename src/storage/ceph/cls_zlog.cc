@@ -335,8 +335,6 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  // TODO: add a cap on the maximum number of views to return
-
   uint32_t count = 0;
   zlog_ceph_proto::Views views;
   while (epoch <= head.epoch() && count < op.max_views()) {

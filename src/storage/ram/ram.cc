@@ -35,7 +35,6 @@ int RAMBackend::CreateLog(const std::string& name,
     return -EEXIST;
   }
 
-  // TODO: also make unique hoids like in ceph
   hoid_out = name;
   prefix = name;
 
@@ -154,7 +153,6 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
 
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {
-    // TODO: more efficent!
     LogEntry entry;
     entry.data = data.ToString();
     lobj->entries.emplace(position, entry);
@@ -319,7 +317,6 @@ extern "C" Backend *__backend_allocate(void)
 
 extern "C" void __backend_release(Backend *p)
 {
-  // TODO: whats the correct type of cast here
   RAMBackend *backend = (RAMBackend*)p;
   delete backend;
 }
