@@ -11,8 +11,6 @@ namespace zlog {
 namespace storage {
 namespace ceph {
 
-// TODO: make this constructor private and used by the plugin-based allocator
-// interface. Same for the destructor.
 CephBackend::CephBackend() :
   cluster_(nullptr),
   ioctx_(nullptr)
@@ -24,8 +22,6 @@ CephBackend::CephBackend(librados::IoCtx *ioctx) :
   ioctx_(ioctx),
   pool_(ioctx_->get_pool_name())
 {
-  // TODO: even when a backend is created explicitly, it needs to fill in enough
-  // options so that a sequencer can open an instance. Or not. In our case def.
   options["scheme"] = "ceph";
   options["conf_file"] = "";
   options["pool"] = pool_;
@@ -43,8 +39,6 @@ CephBackend::~CephBackend()
   }
 }
 
-// TODO: even when a backend is created explicitly, it needs to fill in enough
-// options so that a sequencer can open an instance. Or not. In our case def.
 std::map<std::string, std::string> CephBackend::meta()
 {
   return options;
@@ -155,15 +149,12 @@ int CephBackend::CreateLog(const std::string& name,
     return ret;
   }
 
-  // TODO: this could be combined into init of the head object
-  // initialize the head object by setting its epoch 0 view
   ret = ProposeView(hoid, 1, initial_view);
   if (ret) {
     std::cerr << "propose view ret " << ret << std::endl;
     return ret;
   }
 
-  // TODO: make sure no other success paths
   hoid_out = hoid;
   prefix = log_prefix;
 
@@ -426,7 +417,6 @@ extern "C" Backend *__backend_allocate(void)
 
 extern "C" void __backend_release(Backend *p)
 {
-  // TODO: whats the correct type of cast here
   CephBackend *backend = (CephBackend*)p;
   delete backend;
 }

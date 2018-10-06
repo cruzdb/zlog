@@ -104,16 +104,12 @@ boost::optional<std::string> ObjectMap::map(const uint64_t position) const
   return boost::none;
 }
 
-// TODO: use int64_t for position so we can more easily check for negative
-// values. we hit one in here in testing with position being very large...
 bool ObjectMap::ensure_mapping(const std::string& prefix,
     const uint64_t position)
 {
   if (map(position))
     return false;
 
-  // TODO: these need to come from some where
-  // TODO: options entires_per_object
   uint32_t width = 10;
   uint32_t object_slots = 5;
 
@@ -164,14 +160,6 @@ int Striper::ensure_mapping(const uint64_t position)
   }
 
   return ret;
-
-  // TODO:
-  //  - create an issue to add the optimized case of initializing the new stripe
-  //  here. but right now, we'd like to exercise the code paths where clients
-  //  drive that initialization in response to an error from writing to the
-  //  object. this could definitely happen in normal operation if the entity
-  //  initializing the stripe crashes before initialization completes.
-  //  - maybe change the name of this method
 }
 
 int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
@@ -203,7 +191,6 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
 
     stripe_empty = false;
     stripe_max_pos = std::max(stripe_max_pos, max_pos);
-    // TODO: sanity check against expected stripe bounds
   }
 
   if (pempty)
@@ -227,10 +214,6 @@ std::string Striper::make_cookie()
   return ss.str();
 }
 
-// COOKIE is part of the striper?
-// TODO: locking coming in from the libzlog needs to be checked carefull. as in,
-// i don't think we are doing any locking right now.
-// TODO: combine host and port into a single type
 int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
     const Options& options)
 {
@@ -264,11 +247,8 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
   }
 
   // now seal all of the other stripes. this is not so the max remains valid,
-  // but so that clients speaking with other sequencers are forced to grab a new
-  // view and see the new sequencer.  this can be optimized by only sealing the
-  // stripes that could be changed based on the latest sequencer init position.
-  // for now we just seal everything. also, make sure to remove the it++ above.
-  // TODO: make this optimization a github issue.
+  // but so that clients speaking with other sequencers that might still be
+  // active are forced to grab a new view and see the new sequencer.
   for (; it != stripes.crend(); it++) {
     auto& stripe = it->second;
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
@@ -277,19 +257,12 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
     }
   }
 
-  // TODO: currently we are only developing for the exclusive sequencer case.
   assert(options.seq_host.empty());
   assert(options.seq_port.empty());
 
   SequencerConfig seq_config;
   seq_config.init_position = empty ? 0 : (max_pos + 1);
 
-  // TODO: ensure a unique cookie. we could use next_epoch which is unique
-  // assuming that the proposal returns zero and other clients discard their
-  // cookie. this would also require "plugging" the log replay due the race of
-  // replaying it and setting up the watch following successfl proposal. using a
-  // unique cookie from the start is ideal, but how to generate the cookie? we
-  // could add an interface to the backend that can give us an assist with that.
   seq_config.cookie = cookie_;
 
   // this is the epoch at which the new seq takes affect. this controls the
@@ -324,12 +297,9 @@ void Striper::refresh_entry_()
       std::unique_lock<std::mutex> lk(lock_);
       cond_.wait(lk, [&] { return !waiters_.empty() || shutdown_; });
 
-      // TODO: shutdown should handle waking up any waiters...
       if (shutdown_)
         break;
 
-      // TODO: ensure view_ is never null. also fixup the init state for it
-      //uint64_t epoch = view_ ? view_->epoch() + 1 : 1; // view->epoch() is NOT safe
       current_epoch = view_->epoch();
     }
 
@@ -395,21 +365,6 @@ void Striper::refresh_entry_()
 
     auto new_view = std::make_shared<View>(log_->prefix, it->first, view_src);
 
-    // TODO:
-    //  - name? no i don't think that's good. hoid?
-    //  - epoch? not sure what that is for...
-    //
-    //  - Don't recreate the sequencer if it didn't change. for starters... we
-    //  don't want to overwrite the init_position. we should include maybe some
-    //  sort of versioning for this
-    //
-    //  ==> maybe a flag in the serailized view: this is new in this epoch. we
-    //  can probably just add the epoch it was first created, and make sure we
-    //  never override the init position.
-    //
-    //  note that its fine to create seq instances of old views... correctness
-    //  is handled by epoch guards. but we can't be using old init positions. we
-    //  need to make this more robust as its currently WRONG and a bug.
     if (new_view->seq_config.cookie == cookie_) {
       if (new_view->seq_config.epoch == it->first) {
         new_view->seq = std::make_shared<FakeSeqrClient>(log_->backend->meta(),
@@ -421,41 +376,10 @@ void Striper::refresh_entry_()
       new_view->seq = nullptr;
     }
 
-    // TODO: switch to rocksdb logging solution
     console->info("activate view {}", it->first);
 
     std::lock_guard<std::mutex> lk(lock_);
     view_ = std::move(new_view);
-
-#if 0
-    /*
-     * build a sequencer based on the latest view. the semantics of creating and
-     * opening logs, with and without sequencers or in exclusive mode, combined
-     * with the behavior when the log is already opened by other clients... is
-     * confusing. right now the approach is to always try to keep the log open.
-     * the only time we can't keep the log open is when transitioning to an
-     * exclusive mode without the proper token.
-     */
-    std::shared_ptr<SeqrClient> client;
-    auto view = striper.LatestView();
-    if (view.second.has_exclusive_cookie()) {
-      assert(!view.second.exclusive_cookie().empty());
-      if (view.second.exclusive_cookie() == exclusive_cookie) {
-        client = std::make_shared<FakeSeqrClient>(backend->meta(), name,
-            exclusive_empty, exclusive_position, view.first);
-      }
-    } else {
-      if (view.second.has_host() && view.second.has_port()) {
-        client = std::make_shared<zlog::SeqrClient>(view.second.host().c_str(),
-            view.second.port().c_str(), view.first);
-      } else {
-        std::cerr << "no host and port found" << std::endl;
-      }
-    }
-
-    if (client)
-      client->Connect();
-#endif
   }
 }
 
@@ -471,7 +395,6 @@ void Striper::refresh(const uint64_t epoch)
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 
-// TODO: better error handling here.
 std::string View::create_initial()
 {
   std::string blob;
@@ -503,7 +426,6 @@ std::string View::serialize() const
   seq->set_init_position(seq_config.init_position);
   seq->set_epoch(seq_config.epoch);
 
-  // TODO: more efficient encoding?
   std::string blob;
   if (!view.SerializeToString(&blob)) {
     std::cerr << "invalid proto" << std::endl << std::flush;
@@ -533,8 +455,6 @@ View::View(const std::string& prefix, uint64_t epoch,
   seq_config.cookie = view.seq().cookie();
   seq_config.init_position = view.seq().init_position();
   seq_config.epoch = view.seq().epoch();
-
-  // TODO: validate
 }
 
 }

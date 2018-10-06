@@ -158,7 +158,6 @@ INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
       std::make_tuple(false, true)));
       //std::make_tuple(false, false)));
 
-// TODO: well, we need to reenable this
 //INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
 //    ::testing::Values(
 //      std::make_tuple(false, true),
