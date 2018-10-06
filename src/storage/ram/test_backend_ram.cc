@@ -24,8 +24,8 @@ void LibZLogTest::SetUp() {
     options.create_if_missing = true;
     options.error_if_exists = true;
     options.backend_name = "ram";
-    options.seq_host = host;
-    options.seq_port = port;
+    //options.seq_host = host;
+    //options.seq_port = port;
     int ret = zlog::Log::Open(options, "mylog", &log);
     ASSERT_EQ(ret, 0);
   }

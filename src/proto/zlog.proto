@@ -12,38 +12,13 @@ message Stripe {
 }
 
 message Sequencer {
-  required string host = 1;
-  required string port = 2;
-  required string cookie = 3;
-  required uint64 init_position = 4;
-  required uint64 epoch = 5;
+  required string cookie = 1;
+  required uint64 init_position = 2;
+  required uint64 epoch = 3;
 }
 
 message View {
   optional uint64 next_stripe_id = 1 [default = 0];
   repeated Stripe stripes = 2;
   optional Sequencer seq = 3;
-}
-
-message StringPair {
-  required string key = 1;
-  required string val = 2;
-}
-
-message MSeqRequest {
-    required uint64 epoch = 1;
-    required string name = 2;
-    required bool next = 3;
-    required uint32 count = 4;
-    repeated StringPair meta = 6;
-}
-
-message MSeqReply {
-    enum Status {
-        OK = 0;
-        INIT_LOG = 1;
-        STALE_EPOCH = 2;
-    }
-    repeated uint64 position = 1 [packed = true];
-    optional Status status = 2 [default = OK];
 }
