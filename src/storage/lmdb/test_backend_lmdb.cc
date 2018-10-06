@@ -51,6 +51,7 @@ void LibZLogTest::SetUp() {
     std::string port = "";
     if (exclusive()) {
     } else {
+      assert(0);
       host = "localhost";
       port = "5678";
     }
@@ -60,8 +61,8 @@ void LibZLogTest::SetUp() {
     };
     options.create_if_missing = true;
     options.error_if_exists= true;
-    options.seq_host = host;
-    options.seq_port = port;
+    //options.seq_host = host;
+    //options.seq_port = port;
     int ret = zlog::Log::Open(options, "mylog", &log);
     ASSERT_EQ(ret, 0);
   }
@@ -98,6 +99,7 @@ int LibZLogTest::reopen()
     std::string port = "";
     if (exclusive()) {
     } else {
+      assert(0);
       host = "localhost";
       port = "5678";
     }
@@ -107,8 +109,8 @@ int LibZLogTest::reopen()
     };
     options.create_if_missing = false;
     options.error_if_exists = false;
-    options.seq_host = host;
-    options.seq_port = port;
+    //options.seq_host = host;
+    //options.seq_port = port;
     int ret = zlog::Log::Open(options, "mylog", &new_log);
     if (ret)
       return ret;

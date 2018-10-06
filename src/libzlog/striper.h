@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -36,8 +37,25 @@ namespace zlog_proto {
 namespace zlog {
 
 class LogImpl;
-class SeqrClient;
 class Options;
+
+class Sequencer {
+ public:
+  explicit Sequencer(uint64_t position) :
+    position_(position)
+  {}
+
+  uint64_t check_tail(bool next) {
+    if (next) {
+      return position_.fetch_add(1);
+    } else {
+      return position_.load();
+    }
+  }
+
+ private:
+  std::atomic<uint64_t> position_;
+};
 
 class Stripe {
  public:
@@ -110,8 +128,6 @@ class ObjectMap {
 };
 
 struct SequencerConfig {
-  std::string host;
-  std::string port;
   std::string cookie;
   uint64_t init_position;
   uint64_t epoch;
@@ -139,7 +155,7 @@ class View {
   ObjectMap object_map;
   SequencerConfig seq_config;
 
-  std::shared_ptr<SeqrClient> seq;
+  std::shared_ptr<Sequencer> seq;
 
  private:
   const uint64_t epoch_;

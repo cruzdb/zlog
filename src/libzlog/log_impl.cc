@@ -16,7 +16,6 @@
 #include "include/zlog/backend.h"
 #include "include/zlog/cache.h"
 
-#include "fakeseqr.h"
 #include "striper.h"
 
 namespace zlog {
@@ -81,18 +80,9 @@ int LogImpl::CheckTail(uint64_t *pposition, bool increment)
   while (true) {
     const auto view = striper.view();
     if (view->seq) {
-      int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
-          name, pposition, increment);
-      if (!ret) {
-        return 0;
-      } else if (ret == -EAGAIN) {
-        sleep(1);
-        continue;
-      } else if (ret == -ERANGE) {
-        striper.refresh(view->epoch());
-        continue;
-      }
-      return ret;
+      auto tail = view->seq->check_tail(increment);
+      *pposition = tail;
+      return 0;
     } else {
       int ret = striper.propose_sequencer(view, options);
       if (ret && ret != -ESPIPE) {
@@ -150,18 +140,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
 
     uint64_t position;
     if (view->seq) {
-      int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
-          name, &position, true);
-      if (ret) {
-        if (ret == -EAGAIN) {
-          sleep(1);
-          continue;
-        } else if (ret == -ERANGE) {
-          striper.refresh(view->epoch());
-          continue;
-        }
-        return ret;
-      }
+      position = view->seq->check_tail(true);
     } else {
       int ret = striper.propose_sequencer(view, options);
       if (ret && ret != -ESPIPE) {

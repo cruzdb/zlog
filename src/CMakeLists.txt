@@ -29,7 +29,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src/civetweb/include)
 add_subdirectory(googletest/googlemock)
 add_subdirectory(include)
 add_subdirectory(proto)
-add_subdirectory(libseq)
+#add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(storage)
 add_subdirectory(bench)
@@ -43,13 +43,13 @@ else()
   message(STATUS "JNI library is disabled")
 endif(WITH_JNI)
 
-add_executable(zlog-seqr seqr-server.cc)
-target_link_libraries(zlog-seqr
-    libzlog
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-install(TARGETS zlog-seqr DESTINATION bin)
+# add_executable(zlog-seqr seqr-server.cc)
+# target_link_libraries(zlog-seqr
+#     libzlog
+#     ${Boost_PROGRAM_OPTIONS_LIBRARY}
+#     ${Boost_SYSTEM_LIBRARY}
+# )
+# install(TARGETS zlog-seqr DESTINATION bin)
 
 if(BUILD_CEPH_BACKEND)
 

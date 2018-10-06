@@ -23,11 +23,6 @@ struct Options {
   // Backend-specific configuration options.
   std::map<std::string, std::string> backend_options;
 
-  // TODO: i don't like these naked strings and the heurstic of them being empty
-  // implying exclusive mode.
-  std::string seq_host;
-  std::string seq_port;
-
   bool create_if_missing = false;
   bool error_if_exists = false;
 

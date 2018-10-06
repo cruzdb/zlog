@@ -5,7 +5,6 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "libzlog/fakeseqr.h"
 
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -257,9 +256,6 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
     }
   }
 
-  assert(options.seq_host.empty());
-  assert(options.seq_port.empty());
-
   SequencerConfig seq_config;
   seq_config.init_position = empty ? 0 : (max_pos + 1);
 
@@ -367,8 +363,7 @@ void Striper::refresh_entry_()
 
     if (new_view->seq_config.cookie == cookie_) {
       if (new_view->seq_config.epoch == it->first) {
-        new_view->seq = std::make_shared<FakeSeqrClient>(log_->backend->meta(),
-            log_->name, new_view->seq_config.init_position, 0);
+        new_view->seq = std::make_shared<Sequencer>(new_view->seq_config.init_position);
       } else {
         std::cout << "skipping new seq creation" << std::endl;
       }
@@ -420,8 +415,6 @@ std::string View::serialize() const
   view.set_next_stripe_id(object_map.next_stripe_id());
 
   auto seq = view.mutable_seq();
-  seq->set_host(seq_config.host);
-  seq->set_port(seq_config.port);
   seq->set_cookie(seq_config.cookie);
   seq->set_init_position(seq_config.init_position);
   seq->set_epoch(seq_config.epoch);
@@ -450,8 +443,6 @@ View::View(const std::string& prefix, uint64_t epoch,
 
   object_map = ObjectMap(view.next_stripe_id(), stripes);
 
-  seq_config.host = view.seq().host();
-  seq_config.port = view.seq().port();
   seq_config.cookie = view.seq().cookie();
   seq_config.init_position = view.seq().init_position();
   seq_config.epoch = view.seq().epoch();

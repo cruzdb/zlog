@@ -305,18 +305,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
 
     uint64_t position;
     if (view->seq) {
-      int ret = view->seq->CheckTail(view->epoch(), backend->meta(),
-          name, &position, true);
-      if (ret) {
-        if (ret == -EAGAIN) {
-          sleep(1);
-          continue;
-        } else if (ret == -ERANGE) {
-          striper.refresh(view->epoch());
-          continue;
-        }
-        return ret;
-      }
+      position = view->seq->check_tail(true);
     } else {
       int ret = striper.propose_sequencer(view, options);
       if (ret && ret != -ESPIPE) {

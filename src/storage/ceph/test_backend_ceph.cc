@@ -88,6 +88,7 @@ void LibZLogTest::SetUp() {
     std::string port = "";
     if (exclusive()) {
     } else {
+      assert(0);
       host = "localhost";
       port = "5678";
     }
@@ -98,8 +99,8 @@ void LibZLogTest::SetUp() {
       {"conf_file", ""},
       {"pool", context->pool_name}
     };
-    options.seq_host = host;
-    options.seq_port = port;
+    //options.seq_host = host;
+    //options.seq_port = port;
     int ret = zlog::Log::Open(options, "mylog", &log);
     ASSERT_EQ(ret, 0);
   }
