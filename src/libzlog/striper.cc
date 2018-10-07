@@ -203,16 +203,6 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   return 0;
 }
 
-std::string Striper::make_cookie()
-{
-  auto uuid = boost::uuids::random_generator()();
-  auto hostname = boost::asio::ip::host_name();
-
-  std::stringstream ss;
-  ss << uuid << "." << hostname;
-  return ss.str();
-}
-
 int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
     const Options& options)
 {
@@ -257,9 +247,8 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
   }
 
   SequencerConfig seq_config;
-  seq_config.init_position = empty ? 0 : (max_pos + 1);
-
-  seq_config.cookie = cookie_;
+  seq_config.secret = secret_;
+  seq_config.position = empty ? 0 : (max_pos + 1);
 
   // this is the epoch at which the new seq takes affect. this controls the
   // validitiy of init_position since the seq info is copied into new views.
@@ -284,8 +273,6 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
 
 void Striper::refresh_entry_()
 {
-  console->info("starting view refresh thread");
-
   while (true) {
     uint64_t current_epoch;
 
@@ -327,7 +314,6 @@ void Striper::refresh_entry_()
         if (current_epoch > waiter->epoch) {
           waiter->done = true;
           waiter->cond.notify_one();
-          console->info("waking up waiter {}", waiter->epoch);
           it = waiters.erase(it);
         } else {
           it++;
@@ -361,17 +347,25 @@ void Striper::refresh_entry_()
 
     auto new_view = std::make_shared<View>(log_->prefix, it->first, view_src);
 
-    if (new_view->seq_config.cookie == cookie_) {
-      if (new_view->seq_config.epoch == it->first) {
-        new_view->seq = std::make_shared<Sequencer>(new_view->seq_config.init_position);
+    if (new_view->seq_config) {
+      if (new_view->seq_config->secret == secret_) { // we should be the active seq
+        if (new_view->seq_config->epoch == it->first) {
+          new_view->seq = std::make_shared<Sequencer>(
+              new_view->seq_config->position);
+        } else {
+          assert(new_view->seq_config->epoch < it->first);
+          std::lock_guard<std::mutex> lk(lock_);
+          assert(view_->seq);
+          assert(view_->seq_config);
+          assert(view_->seq_config->epoch == new_view->seq_config->epoch);
+          new_view->seq = view_->seq;
+        }
       } else {
-        std::cout << "skipping new seq creation" << std::endl;
+        new_view->seq = nullptr;
       }
     } else {
       new_view->seq = nullptr;
     }
-
-    console->info("activate view {}", it->first);
 
     std::lock_guard<std::mutex> lk(lock_);
     view_ = std::move(new_view);
@@ -414,10 +408,12 @@ std::string View::serialize() const
   }
   view.set_next_stripe_id(object_map.next_stripe_id());
 
-  auto seq = view.mutable_seq();
-  seq->set_cookie(seq_config.cookie);
-  seq->set_init_position(seq_config.init_position);
-  seq->set_epoch(seq_config.epoch);
+  if (seq_config) {
+    auto seq = view.mutable_seq();
+    seq->set_epoch(seq_config->epoch);
+    seq->set_secret(seq_config->secret);
+    seq->set_position(seq_config->position);
+  }
 
   std::string blob;
   if (!view.SerializeToString(&blob)) {
@@ -443,9 +439,14 @@ View::View(const std::string& prefix, uint64_t epoch,
 
   object_map = ObjectMap(view.next_stripe_id(), stripes);
 
-  seq_config.cookie = view.seq().cookie();
-  seq_config.init_position = view.seq().init_position();
-  seq_config.epoch = view.seq().epoch();
+  if (view.has_seq()) {
+    auto seq = view.seq();
+    SequencerConfig conf;
+    conf.epoch = seq.epoch();
+    conf.secret = seq.secret();
+    conf.position = seq.position();
+    seq_config = conf;
+  }
 }
 
 }

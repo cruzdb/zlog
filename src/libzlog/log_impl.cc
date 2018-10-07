@@ -20,38 +20,6 @@
 
 namespace zlog {
 
-int LogImpl::Open(const std::string& scheme, const std::string& name,
-    const std::map<std::string, std::string>& opts, LogImpl **logpp,
-    std::shared_ptr<Backend> *out_backend)
-{
-  std::shared_ptr<Backend> backend;
-  int ret = Backend::Load(scheme, opts, backend);
-  if (ret)
-    return ret;
-
-  if (out_backend)
-    *out_backend = backend;
-
-  std::string hoid;
-  std::string prefix;
-  ret = backend->OpenLog(name, hoid, prefix);
-  if (ret) {
-    std::cerr << "failed to open log backend " << ret << std::endl;
-    return ret;
-  }
-
-  Options options;
-
-  auto log = std::unique_ptr<zlog::LogImpl>(
-      new zlog::LogImpl(backend, name, hoid, prefix, options));
-
-  log->striper.refresh();
-
-  *logpp = log.release();
-
-  return 0;
-}
-
 LogImpl::~LogImpl()
 { 
   {

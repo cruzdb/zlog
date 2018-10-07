@@ -11,6 +11,10 @@ message LinkObjectHeader {
 // metadata for head objects
 //##########################
 
+message UniqueId {
+  required uint64 id = 1;
+}
+
 message HeadObjectHeader {
   required bool deleted = 1;
   required string prefix = 2;

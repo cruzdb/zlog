@@ -126,4 +126,19 @@ void cls_zlog_read_view(librados::ObjectReadOperation& op,
   op.exec("zlog", "view_read", bl);
 }
 
+void cls_zlog_read_unique_id(librados::ObjectReadOperation& op)
+{
+  ceph::bufferlist bl;
+  op.exec("zlog", "unique_id_read", bl);
+}
+
+void cls_zlog_write_unique_id(librados::ObjectWriteOperation& op, uint64_t id)
+{
+  ceph::bufferlist bl;
+  zlog_ceph_proto::UniqueId call;
+  call.set_id(id);
+  encode(bl, call);
+  op.exec("zlog", "unique_id_write", bl);
+}
+
 }

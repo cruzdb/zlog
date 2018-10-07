@@ -83,6 +83,12 @@ class Backend {
   virtual int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) = 0;
 
+  // Generate a unique id.
+  //
+  // The generated id must be unique to the @hoid log, but implementations may
+  // ignore @hoid and generated a globally unique id.
+  virtual int uniqueId(const std::string& hoid, uint64_t *id) = 0;
+
   // log data interfaces
  public:
 

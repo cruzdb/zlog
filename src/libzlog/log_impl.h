@@ -29,13 +29,14 @@ class LogImpl : public Log {
       const std::string& name,
       const std::string& hoid,
       const std::string& prefix,
+      const std::string& secret,
       const Options& opts) :
     shutdown(false),
     backend(backend),
     name(name),
     hoid(hoid),
     prefix(prefix),
-    striper(this),
+    striper(this, secret),
     options(opts)
 #ifdef WITH_STATS
     ,metrics_http_server_(nullptr),
@@ -54,11 +55,6 @@ class LogImpl : public Log {
   }
 
   ~LogImpl();
-
- public:
-  static int Open(const std::string& scheme, const std::string& name,
-      const std::map<std::string, std::string>& opts, LogImpl **logpp,
-      std::shared_ptr<Backend> *out_backend);
 
  public:
   int CheckTail(uint64_t *pposition) override;

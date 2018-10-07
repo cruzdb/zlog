@@ -12,9 +12,9 @@ message Stripe {
 }
 
 message Sequencer {
-  required string cookie = 1;
-  required uint64 init_position = 2;
-  required uint64 epoch = 3;
+  required uint64 epoch = 1;
+  required string secret = 2;
+  required uint64 position = 3;
 }
 
 message View {

@@ -22,6 +22,8 @@ class CephBackend : public Backend {
       const std::string& initial_view,
       std::string& hoid, std::string& prefix) override;
 
+  int uniqueId(const std::string& hoid, uint64_t *id) override;
+
   int OpenLog(const std::string& name,
       std::string& hoid, std::string& prefix) override;
 
