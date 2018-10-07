@@ -98,6 +98,48 @@ int CephBackend::Initialize(
   return 0;
 }
 
+int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
+{
+  while (true) {
+    // read the stored id.
+    uint64_t unique_id;
+    {
+      ::ceph::bufferlist bl;
+      librados::ObjectReadOperation op;
+      zlog::cls_zlog_read_unique_id(op);
+      int ret = ioctx_->operate(hoid, &op, &bl);
+      if (ret < 0) {
+        if (ret == -ENOENT || ret == -ENODATA) {
+          unique_id = 0;
+        } else {
+          return ret;
+        }
+      } else {
+        zlog_ceph_proto::UniqueId msg;
+        if (!decode(bl, &msg)) {
+          return -EIO;
+        }
+        unique_id = msg.id();
+      }
+    }
+
+    unique_id++;
+
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_write_unique_id(op, unique_id);
+    int ret = ioctx_->operate(hoid, &op);
+    if (ret < 0) {
+      if (ret == -ESTALE) {
+        continue;
+      }
+      return ret;
+    }
+
+    *id = unique_id;
+    return 0;
+  }
+}
+
 int CephBackend::CreateLog(const std::string& name,
     const std::string& initial_view,
     std::string& hoid_out, std::string& prefix)

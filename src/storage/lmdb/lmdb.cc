@@ -1,4 +1,5 @@
 #include <vector>
+#include <atomic>
 #include <lmdb.h>
 #include "zlog/backend.h"
 #include "zlog/backend/lmdb.h"
@@ -49,6 +50,13 @@ int LMDBBackend::Initialize(
 
   Init(it->second);
 
+  return 0;
+}
+
+int LMDBBackend::uniqueId(const std::string& hoid, uint64_t *id)
+{
+  static std::atomic<uint64_t> __unique_id(0);
+  *id = __unique_id++;
   return 0;
 }
 

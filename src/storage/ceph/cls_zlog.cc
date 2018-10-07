@@ -359,6 +359,86 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
   return 0;
 }
 
+static int __unique_id_read(cls_method_context_t hctx, uint64_t *pid)
+{
+  ceph::bufferlist bl;
+  int ret = cls_cxx_getxattr(hctx, "zlog.unique_id", &bl);
+  if (ret < 0) {
+    return ret;
+  } else {
+    zlog_ceph_proto::UniqueId stored_id;
+    if (!decode(bl, &stored_id)) {
+      CLS_ERR("ERROR: __unique_id_read(): decoding stored id");
+      return -EIO;
+    }
+    *pid = stored_id.id();
+    return 0;
+  }
+}
+
+static int unique_id_read(cls_method_context_t hctx,
+    ceph::bufferlist *in, ceph::bufferlist *out)
+{
+  uint64_t id = 0;
+  int ret = __unique_id_read(hctx, &id);
+  if (ret < 0) {
+    CLS_ERR("ERROR: unique_id_read(): read stored id ret %d", ret);
+    return ret;
+  }
+
+  if (id == 0) {
+    CLS_ERR("ERROR: unique_id_read(): unexpected id");
+    return -EIO;
+  }
+
+  zlog_ceph_proto::UniqueId msg;
+  msg.set_id(id);
+  encode(*out, msg);
+
+  return 0;
+}
+
+static int unique_id_write(cls_method_context_t hctx,
+    ceph::bufferlist *in, ceph::bufferlist *out)
+{
+  zlog_ceph_proto::UniqueId op;
+  if (!decode(*in, &op)) {
+    CLS_ERR("ERROR: unique_id_write(): decoding input");
+    return -EINVAL;
+  }
+
+  uint64_t id = 0; // default if not found
+  int ret = __unique_id_read(hctx, &id);
+  if (ret < 0) {
+    if (ret == -ENOENT || ret == -ENODATA) {
+      CLS_LOG(10, "unique_id_write(): no stored id found");
+    } else {
+      CLS_ERR("ERROR: unique_id_write(): read stored id ret %d", ret);
+      return ret;
+    }
+  } else if (id == 0) {
+    CLS_ERR("ERROR: unique_id_write(): unexpected id");
+    return -EIO;
+  }
+
+  const uint64_t expected_id = id + 1;
+  if (op.id() != expected_id) {
+    CLS_ERR("ERROR: unique_id_write(): unexpected id %llu != %llu",
+        op.id(), expected_id);
+    return -ESTALE;
+  }
+
+  ceph::bufferlist bl;
+  encode(bl, op);
+  ret = cls_cxx_setxattr(hctx, "zlog.unique_id", &bl);
+  if (ret < 0) {
+    CLS_ERR("ERROR: unique_id_write(): setting new id ret %d", ret);
+    return ret;
+  }
+
+  return 0;
+}
+
 void __cls_init()
 {
   CLS_LOG(0, "loading cls_zlog");
@@ -374,6 +454,8 @@ void __cls_init()
   cls_method_handle_t h_head_init;
   cls_method_handle_t h_view_create;
   cls_method_handle_t h_view_read;
+  cls_method_handle_t h_unique_id_read;
+  cls_method_handle_t h_unique_id_write;
 
   cls_handle_t h_class;
   cls_register("zlog", &h_class);
@@ -409,4 +491,12 @@ void __cls_init()
   cls_register_cxx_method(h_class, "view_read",
       CLS_METHOD_RD,
       view_read, &h_view_read);
+
+  cls_register_cxx_method(h_class, "unique_id_read",
+      CLS_METHOD_RD,
+      unique_id_read, &h_unique_id_read);
+
+  cls_register_cxx_method(h_class, "unique_id_write",
+      CLS_METHOD_RD | CLS_METHOD_WR,
+      unique_id_write, &h_unique_id_write);
 }

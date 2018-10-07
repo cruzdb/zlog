@@ -93,6 +93,30 @@ class ClsZlogTest : public ::testing::Test {
     return ioctx.operate(oid, &op, &bl);
   }
 
+  int unique_id_read(uint64_t *id, const std::string& oid = "obj") {
+    ceph::bufferlist bl;
+    librados::ObjectReadOperation op;
+    zlog::cls_zlog_read_unique_id(op);
+    int ret = ioctx.operate(oid, &op, &bl);
+    if (ret < 0) {
+      return ret;
+    }
+    if (id) {
+      zlog_ceph_proto::UniqueId msg;
+      if (!decode(bl, &msg)) {
+        return -EBADMSG;
+      }
+      *id = msg.id();
+    }
+    return ret;
+  }
+
+  int unique_id_write(uint64_t id, const std::string& oid = "obj") {
+    librados::ObjectWriteOperation op;
+    zlog::cls_zlog_write_unique_id(op, id);
+    return ioctx.operate(oid, &op);
+  }
+
   void decode_views(ceph::bufferlist& bl,
       std::map<uint64_t, std::string>& out) {
 
@@ -1285,6 +1309,166 @@ TEST_F(ClsZlogTest, ReadView_NonEmpty) {
   ASSERT_EQ(ret, 0);
   decode_views(bl, views);
   ASSERT_TRUE(views.empty());
+}
+
+TEST_F(ClsZlogTest, UniqueIdRead_Dne) {
+  int ret = unique_id_read(nullptr);
+  ASSERT_EQ(ret, -ENOENT);
+}
+
+TEST_F(ClsZlogTest, UniqueIdRead_MissingId) {
+  int ret = ioctx.create("obj", true);
+  ASSERT_EQ(ret, 0);
+
+  ret = unique_id_read(nullptr);
+  ASSERT_EQ(ret, -ENODATA);
+}
+
+TEST_F(ClsZlogTest, UniqueIdRead_CorruptId) {
+  int ret = ioctx.create("obj", true);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  bl.append("foo", strlen("foo"));
+  ret = ioctx.setxattr("obj", "zlog.unique_id", bl);
+  ASSERT_EQ(ret, 0);
+
+  ret = unique_id_read(nullptr);
+  ASSERT_EQ(ret, -EIO);
+}
+
+TEST_F(ClsZlogTest, UniqueIdRead_InvalidStored) {
+  zlog_ceph_proto::UniqueId msg;
+  msg.set_id(0);
+  ceph::bufferlist bl;
+  encode(bl, msg);
+  int ret = ioctx.setxattr("obj", "zlog.unique_id", bl);
+  ASSERT_EQ(ret, 0);
+
+  ret = unique_id_read(nullptr);
+  ASSERT_EQ(ret, -EIO);
+}
+
+TEST_F(ClsZlogTest, UniqueIdWrite_Dne) {
+  uint64_t id;
+
+  int ret = unique_id_write(0);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(0);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(2);
+  ASSERT_EQ(ret, -ESTALE);
+
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, 0);
+  ret = unique_id_read(&id);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(id, 1ULL);
+
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(3);
+  ASSERT_EQ(ret, -ESTALE);
+
+  ret = unique_id_write(2);
+  ASSERT_EQ(ret, 0);
+  ret = unique_id_read(&id);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(id, 2ULL);
+
+  ret = unique_id_write(0);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(2);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(20);
+  ASSERT_EQ(ret, -ESTALE);
+
+  ret = unique_id_write(3);
+  ASSERT_EQ(ret, 0);
+  ret = unique_id_read(&id);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(id, 3ULL);
+}
+
+TEST_F(ClsZlogTest, UniqueIdWrite_MissingId) {
+  int ret = ioctx.create("obj", true);
+  ASSERT_EQ(ret, 0);
+
+  uint64_t id;
+
+  ret = unique_id_write(0);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(0);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(2);
+  ASSERT_EQ(ret, -ESTALE);
+
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, 0);
+  ret = unique_id_read(&id);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(id, 1ULL);
+
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(3);
+  ASSERT_EQ(ret, -ESTALE);
+
+  ret = unique_id_write(2);
+  ASSERT_EQ(ret, 0);
+  ret = unique_id_read(&id);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(id, 2ULL);
+
+  ret = unique_id_write(0);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(2);
+  ASSERT_EQ(ret, -ESTALE);
+  ret = unique_id_write(20);
+  ASSERT_EQ(ret, -ESTALE);
+
+  ret = unique_id_write(3);
+  ASSERT_EQ(ret, 0);
+  ret = unique_id_read(&id);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(id, 3ULL);
+}
+
+TEST_F(ClsZlogTest, UniqueIdWrite_InvalidStored) {
+  zlog_ceph_proto::UniqueId msg;
+  msg.set_id(0);
+  ceph::bufferlist bl;
+  encode(bl, msg);
+  int ret = ioctx.setxattr("obj", "zlog.unique_id", bl);
+  ASSERT_EQ(ret, 0);
+
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, -EIO);
+}
+
+TEST_F(ClsZlogTest, UniqueIdWrite_CorruptId) {
+  int ret = ioctx.create("obj", true);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  bl.append("foo", strlen("foo"));
+  ret = ioctx.setxattr("obj", "zlog.unique_id", bl);
+  ASSERT_EQ(ret, 0);
+
+  bl.clear();
+  ret = unique_id_write(1);
+  ASSERT_EQ(ret, -EIO);
+}
+
+TEST_F(ClsZlogTest, UniqueIdWrite_BadInput) {
+  ceph::bufferlist inbl, outbl;
+  inbl.append("foo", strlen("foo"));
+  int ret = exec("unique_id_write", inbl, outbl);
+  ASSERT_EQ(ret, -EINVAL);
 }
 
 int main(int argc, char **argv)

@@ -1,4 +1,5 @@
 #include <vector>
+#include <atomic>
 #include "zlog/backend.h"
 #include "zlog/backend/ram.h"
 
@@ -19,6 +20,13 @@ int RAMBackend::Initialize(
 std::map<std::string, std::string> RAMBackend::meta()
 {
   return options_;
+}
+
+int RAMBackend::uniqueId(const std::string& hoid, uint64_t *id)
+{
+  static std::atomic<uint64_t> __unique_id(0);
+  *id = __unique_id++;
+  return 0;
 }
 
 int RAMBackend::CreateLog(const std::string& name,

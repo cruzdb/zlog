@@ -24,6 +24,8 @@ class RAMBackend : public Backend {
 
   std::map<std::string, std::string> meta() override;
 
+  int uniqueId(const std::string& hoid, uint64_t *id) override;
+
   int CreateLog(const std::string& name,
       const std::string& initial_view,
       std::string& hoid, std::string& prefix) override;

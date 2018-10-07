@@ -29,4 +29,8 @@ namespace zlog {
 
   void cls_zlog_create_view(librados::ObjectWriteOperation& op,
       uint64_t epoch, ceph::bufferlist& bl);
+
+  void cls_zlog_read_unique_id(librados::ObjectReadOperation& op);
+
+  void cls_zlog_write_unique_id(librados::ObjectWriteOperation& op, uint64_t id);
 }
