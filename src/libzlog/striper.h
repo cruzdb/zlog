@@ -128,9 +128,9 @@ class ObjectMap {
 };
 
 struct SequencerConfig {
-  std::string cookie;
-  uint64_t init_position;
   uint64_t epoch;
+  std::string secret;
+  uint64_t position;
 };
 
 // separate configuration from initialization. for instance, after deserializing
@@ -153,7 +153,7 @@ class View {
   std::string serialize() const;
 
   ObjectMap object_map;
-  SequencerConfig seq_config;
+  boost::optional<SequencerConfig> seq_config;
 
   std::shared_ptr<Sequencer> seq;
 
@@ -163,11 +163,11 @@ class View {
 
 class Striper {
  public:
-  Striper(LogImpl *log) :
+  Striper(LogImpl *log, const std::string& secret) :
     shutdown_(false),
     log_(log),
     view_(std::make_shared<const View>()),
-    cookie_(make_cookie()),
+    secret_(secret),
     refresh_thread_(std::thread(&Striper::refresh_entry_, this))
   {}
 
@@ -192,14 +192,12 @@ class Striper {
   int seal_stripe(const Stripe& stripe, uint64_t epoch,
       uint64_t *pposition, bool *pempty) const;
 
-  static std::string make_cookie();
-
   mutable std::mutex lock_;
   bool shutdown_;
   LogImpl *log_;
   std::shared_ptr<const View> view_;
 
-  const std::string cookie_;
+  const std::string secret_;
 
   struct RefreshWaiter {
     explicit RefreshWaiter(uint64_t epoch) :

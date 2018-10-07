@@ -13,45 +13,29 @@ namespace zlog {
 
 Log::~Log() {}
 
-int Log::Open(const Options& options,
-    const std::string& name, Log **logpp)
+static int create_or_open(const Options& options,
+    Backend *backend, const std::string& name,
+    std::string& hoid, std::string& prefix)
 {
-  if (name.empty()) {
-    return -EINVAL;
-  }
-
-  std::shared_ptr<Backend> backend = options.backend;
-
-  if (!backend) {
-    int ret = Backend::Load(options.backend_name,
-        options.backend_options, backend);
-    if (ret) {
-      return ret;
-    }
-  }
-
-  bool created = false;
-  std::unique_ptr<LogImpl> impl;
-  while (!impl) {
+  while (true) {
     // try to open the log
-    std::string hoid;
-    std::string prefix;
     int ret = backend->OpenLog(name, hoid, prefix);
     if (ret && ret != -ENOENT) {
       return ret;
     }
 
-    // if the log exists, build an instance
     if (ret == 0) {
+      // if the log exists, build an instance
+
       if (options.error_if_exists) {
         return -EEXIST;
       }
 
-      impl = std::unique_ptr<LogImpl>(
-          new LogImpl(backend, name, hoid, prefix, options));
+      return 0;
 
-    // otherwise, try to create the log
     } else {
+      // otherwise, try to create the log
+
       if (!options.create_if_missing) {
         return -ENOENT;
       }
@@ -70,18 +54,55 @@ int Log::Open(const Options& options,
           return ret;
         }
       } else {
-        created = true;
-        impl = std::unique_ptr<LogImpl>(
-            new LogImpl(backend, name, hoid, prefix, options));
+        return 0;
       }
     }
   }
+}
+
+int Log::Open(const Options& options,
+    const std::string& name, Log **logpp)
+{
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
+  std::shared_ptr<Backend> backend = options.backend;
+
+  if (!backend) {
+    int ret = Backend::Load(options.backend_name,
+        options.backend_options, backend);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  std::string hoid;
+  std::string prefix;
+  int ret = create_or_open(options, backend.get(),
+      name, hoid, prefix);
+  if (ret) {
+    return ret;
+  }
+
+  uint64_t unique_id;
+  ret = backend->uniqueId(hoid, &unique_id);
+  if (ret) {
+    return ret;
+  }
+
+  std::stringstream secret;
+  secret << "zlog.secret."
+         << name << "." << hoid << "."
+         << boost::asio::ip::host_name() << "."
+         << unique_id;
+
+  auto impl = std::unique_ptr<LogImpl>(
+      new LogImpl(backend, name, hoid, prefix, secret.str(), options));
 
   if (options.prefault_position) {
     // call something like ensure mapping
   }
-
-  (void)created;
 
   *logpp = impl.release();
 

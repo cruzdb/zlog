@@ -35,7 +35,13 @@ TEST_P(LibZLogTest, OpenClose) {
   uint64_t pos;
   int ret = log->Append(zlog::Slice(input), &pos);
   ASSERT_EQ(ret, 0);
-  ASSERT_EQ(pos, (uint64_t)0);
+
+  // TODO: after the append, if a position was faulted into a new view it means
+  // we would contact the sequencer again during the retry. we could optimize
+  // this by reusing the first sequence, assuming the seq didn't change. but
+  // that can be future work. in the general case we probably need to also make
+  // these tests more robust.
+  ASSERT_GE(pos, (uint64_t)0);
 
   // destroy log client and reopen
   ret = reopen();
@@ -44,7 +50,7 @@ TEST_P(LibZLogTest, OpenClose) {
   uint64_t tail;
   ret = log->CheckTail(&tail);
   ASSERT_EQ(ret, 0);
-  ASSERT_EQ(tail, (uint64_t)1);
+  ASSERT_EQ(tail, pos+1);
 
   std::string output;
   ret = log->Read(tail - 1, &output);
@@ -167,12 +173,27 @@ TEST_P(LibZLogTest, CheckTail) {
 }
 
 TEST_P(LibZLogTest, Append) {
-  uint64_t tail;
-  int ret = log->CheckTail(&tail);
+  // this basic test does a series and also checks if checktail is returning an
+  // updated tail. we do an append here first because it may be that internally
+  // on a new log instance there is no initial mapping for the first position.
+  // this means that we propose a new view that maps the position, resulting in
+  // two tail increments. originally we assumed that checktail would initially
+  // return zero and the first append would return zero.
+  //
+  // one way to make this test cleaner is to add a log interface that does like
+  // like "wait_for_active(positino)" or something like that.
+  //
+  // actually while the appends are occuring any time a stripe fills up this can
+  // occur. so really the test needs to be a bit more robust.
+  uint64_t pos;
+  int ret = log->Append(zlog::Slice(), &pos);
   ASSERT_EQ(ret, 0);
 
-  for (int i = 0; i < 100; i++) {
-    uint64_t pos;
+  uint64_t tail;
+  ret = log->CheckTail(&tail);
+  ASSERT_EQ(ret, 0);
+
+  for (int i = 0; i < 30; i++) {
     ret = log->Append(zlog::Slice(), &pos);
     ASSERT_EQ(ret, 0);
 
@@ -182,7 +203,7 @@ TEST_P(LibZLogTest, Append) {
     ASSERT_EQ(ret, 0);
   }
 
-  uint64_t pos, pos2;
+  uint64_t pos2;
   ret = log->CheckTail(&pos);
   ASSERT_EQ(ret, 0);
 
