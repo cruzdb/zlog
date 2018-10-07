@@ -57,11 +57,6 @@ class LogImpl : public Log {
   ~LogImpl();
 
  public:
-  static int Open(const std::string& scheme, const std::string& name,
-      const std::map<std::string, std::string>& opts, LogImpl **logpp,
-      std::shared_ptr<Backend> *out_backend);
-
- public:
   int CheckTail(uint64_t *pposition) override;
   int CheckTail(uint64_t *pposition, bool increment);
 
