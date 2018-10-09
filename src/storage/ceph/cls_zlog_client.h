@@ -7,14 +7,13 @@
 namespace zlog {
 
   void cls_zlog_read(librados::ObjectReadOperation& op, uint64_t epoch,
-      uint64_t position, uint32_t stride);
+      uint64_t position);
 
   void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position, uint32_t stride,
-      ceph::bufferlist& data);
+      uint64_t position, ceph::bufferlist& data);
 
   void cls_zlog_invalidate(librados::ObjectWriteOperation& op, uint64_t epoch,
-      uint64_t position, uint32_t stride, bool force);
+      uint64_t position, bool force);
 
   void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch);
 
@@ -25,7 +24,7 @@ namespace zlog {
       const std::string& prefix);
 
   void cls_zlog_read_view(librados::ObjectReadOperation& op,
-      uint64_t epoch, uint32_t max_views = 100);
+      uint64_t epoch, uint32_t max_views);
 
   void cls_zlog_create_view(librados::ObjectWriteOperation& op,
       uint64_t epoch, ceph::bufferlist& bl);

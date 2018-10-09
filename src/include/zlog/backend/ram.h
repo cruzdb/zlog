@@ -32,24 +32,24 @@ class RAMBackend : public Backend {
   int OpenLog(const std::string& name, std::string *hoid,
       std::string *prefix_out) override;
 
-  int ReadViews(const std::string& hoid, uint64_t epoch,
-      std::map<uint64_t, std::string>& views) override;
+  int ReadViews(const std::string& hoid,
+      uint64_t epoch, uint32_t max_views,
+      std::map<uint64_t, std::string> *views_out) override;
 
   int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) override;
 
   int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride,
-      std::string *data) override;
+      uint64_t position, std::string *data) override;
 
   int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position, uint32_t stride) override;
+      uint64_t epoch, uint64_t position) override;
 
   int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride) override;
+      uint64_t position) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride) override;
+      uint64_t position) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;
@@ -58,19 +58,17 @@ class RAMBackend : public Backend {
       uint64_t *pos, bool *empty) override;
 
   int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride,
-      const Slice& data, void *arg,
+      uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback) override;
 
   int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride,
-      std::string *data, void *arg,
+      uint64_t position, std::string *data, void *arg,
       std::function<void(void*, int)> callback) override;
 
  private:
   struct ProjectionObject {
     uint64_t epoch;
-    std::unordered_map<uint64_t, std::string> projections;
+    std::map<uint64_t, std::string> projections;
   };
 
   struct LogEntry {

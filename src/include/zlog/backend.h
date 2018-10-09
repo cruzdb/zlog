@@ -8,26 +8,12 @@
 
 namespace zlog {
 
-// All methods return 0 on success, or a negative error code on failure. The
-// following error codes are common for all methods, unless otherwise specified
-// in a method comment. Each method comment also lists any return codes with
-// special meaning.
-//
-// -EINVAL
-//   - Failed to decode an input message
-//   - Invalid parameter
-// -EIO
-//   - Corrupted data or invalid states
-// -ESPIPE
-//   - Stale epoch
-// -ENOENT
-//   - object doesn't exist
-//
-// All methods should be thread-safe.
 class Backend {
  public:
   virtual ~Backend() {}
 
+  // TBD. Load, Initialize, and meta will be examined when working on
+  // backend-specific options support.
   static int Load(const std::string& scheme,
       const std::map<std::string, std::string>& opts,
       std::shared_ptr<Backend>& backend);
@@ -47,20 +33,22 @@ class Backend {
 
   virtual std::map<std::string, std::string> meta() = 0;
 
-  // log management
  public:
-
   /**
    * Create a new log.
    *
-   * TODO:
-   *   - exclusive creation semantics
-   *   - prefix is for creating log entries
+   * The name of the head object, and a prefix that should be used when
+   * constructing data objects, are returned through @hoid_out and @prefix_out,
+   * respectively.
    *
    * @param name       name of the log
    * @param view       initial log view
    * @param hoid_out   name of the head object
    * @param prefix_out log entry object prefix
+   *
+   * @return 0 or non-zero
+   * -EEXIST log name already exists
+   * -EINVAL invalid input
    */
   virtual int CreateLog(const std::string& name, const std::string& view,
       std::string *hoid_out, std::string *prefix_out) = 0;
@@ -68,89 +56,185 @@ class Backend {
   /**
    * Open a log.
    *
+   * The name of the head object, and a prefix that should be used when
+   * constructing data objects, are returned through @hoid_out and @prefix_out,
+   * respectively. When a log is created, the view for epoch 1 is written, so
+   * clients should start with epoch 2 when using this interface.
+   *
    * @param name       name of the log
    * @param hoid_out   name of the head object
    * @param prefix_out log entry object prefix
+   *
+   * @return 0 or non-zero
+   * -ENOENT log name doesn't exist
+   * -EINVAL invalid input
    */
   virtual int OpenLog(const std::string& name, std::string *hoid_out,
       std::string *prefix_out) = 0;
 
-  // view management
  public:
-
-  // Read log views.
-  //
-  // -ENOENT
-  //   - object not initialized (or doens't exist)
+  /**
+   * Read views.
+   *
+   * Returns the sequence of views associated with the head object starting from
+   * the given epoch (inclusive). The maximum number of views returned per call
+   * is controlled by the backend implementation.
+   *
+   * The staring epoch should be > 0.
+   *
+   * @param hoid      name of the head object
+   * @param epoch     starting epoch (inclusive)
+   * @param max_views max views to return
+   * @param views     the { epoch: view } results
+   *
+   * @return 0 or non-zero
+   * -EINVAL invalid input
+   * -ENOENT hoid doesn't exist / needs initialized
+   */
   virtual int ReadViews(const std::string& hoid,
-      uint64_t epoch, std::map<uint64_t, std::string>& views) = 0;
+      uint64_t epoch, uint32_t max_views,
+      std::map<uint64_t, std::string> *views_out) = 0;
 
-  // Create a new view.
-  //
-  // - ESPIPE: bad epoch; probably need a refresh
-  //
+  /**
+   * Propose a new view.
+   *
+   * Views are tagged with a numeric epoch starting at one. New views are
+   * rejected if the proposed epoch is not the next epoch in sequence (that is,
+   * if the proposed epoch != current+1). This permits clients to implement a
+   * simple compare-and-exchange transaction to change views.
+   *
+   * @param hoid  name of the head object
+   * @param epoch proposed next epoch
+   * @param view  proposed view
+   *
+   * @return 0 or non-zero
+   * -EINVAL invalid input params
+   * -ENOENT head object doesn't exist / is not intialized
+   * -ESPIPE invalid epoch (try again)
+   */
   virtual int ProposeView(const std::string& hoid,
       uint64_t epoch, const std::string& view) = 0;
 
-  // Generate a unique id.
-  //
-  // The generated id must be unique to the @hoid log, but implementations may
-  // ignore @hoid and generated a globally unique id.
-  virtual int uniqueId(const std::string& hoid, uint64_t *id) = 0;
+  /**
+   * Generate a unique id.
+   *
+   * The generated id must be unique to the @hoid log, but implementations may
+   * ignore @hoid and generated a globally unique id.
+   *
+   * @param hoid
+   * @param id_out
+   *
+   * @return 0 or non-zero
+   * -EINVAL bad input params
+   */
+  virtual int uniqueId(const std::string& hoid, uint64_t *id_out) = 0;
 
-  // log data interfaces
  public:
-
-  // Read a log entry.
-  //
-  // -ENOENT
-  //   - position not written (nor invalidated)
-  // -ENODATA
-  //   - position has been invalidated (fill or trim)
+  /**
+   * Read a log position.
+   *
+   * @param oid
+   * @param epoch
+   * @param position
+   * @param data
+   *
+   * @return 0 or non-zero
+   * -EINVAL bad input params, bad input message, bad epoch
+   * -ENOENT object doesn't exist / needs init
+   * -ESPIPE stale epoch
+   * -ERANGE position hasn't been written
+   * -ENODATA entry position has been invalidated
+   */
   virtual int Read(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, std::string *data) = 0;
+      uint64_t position, std::string *data_out) = 0;
 
-  // Write a log entry.
-  //
-  // -EROFS
-  //   - position is read-only (written or invalid)
+  /**
+   * Write a log position.
+   *
+   * @param oid
+   * @param data
+   * @param epoch
+   * @param position
+   *
+   * @return 0 or non-zero
+   * -EINVAL bad input params
+   * -ENOENT object doesn't exist / needs init
+   * -ESPIPE stale epoch
+   * -EROFS position exists
+   */
   virtual int Write(const std::string& oid, const Slice& data,
-      uint64_t epoch, uint64_t position, uint32_t stride) = 0;
+      uint64_t epoch, uint64_t position) = 0;
 
-  // Invalidate a log entry.
-  //
-  // -EROFS
-  //   - position is read-only (written or invalid)
+  /**
+   * Fill a log position.
+   *
+   * @param oid
+   * @param epoch
+   * @param position
+   *
+   * @return 0 (idempotent) or non-zero
+   * -EINVAL bad input params
+   * -ENOENT object doesn't exist / needs init
+   * -ESPIPE stale epoch
+   * -EROFS position exists (and is not invalid)
+   */
   virtual int Fill(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride) = 0;
+      uint64_t position) = 0;
 
-  // Force invalidate a log entry.
+  /**
+   * Mark a log position as unused.
+   *
+   * @param oid
+   * @param epoch
+   * @param position
+   *
+   * @return 0 (idempotent) or non-zero
+   * -EINVAL bad input params
+   * -ENOENT object doesn't exist / needs init
+   * -ESPIPE stale epoch
+   */
   virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride) = 0;
+      uint64_t position) = 0;
 
-  // Set a new log data object epoch.
+  /**
+   * Seal / initialize a log entries object.
+   *
+   * @oid
+   * @epoch
+   *
+   * @return 0 or non-zero
+   * -EVINAL invalid input params
+   * -ESPIPE epoch <= stored epoch
+   */
   virtual int Seal(const std::string& oid, uint64_t epoch) = 0;
 
-  // Return the maximum position written to a log data object.
-  //
-  // -ENOENT
-  //   - object doesn't exist. seal first.
-  // -ESPIPE
-  //   - epoch equality failed
+  /**
+   * Return the maximum position (if any) written to an object.
+   *
+   * @param oid
+   * @param epoch
+   * @param pos_out
+   * @param empty_out
+   *
+   * @return 0 or non-zero
+   * -EINVAL bad input params
+   * -ENOENT object doesn't exist / needs init
+   * -ESPIPE epoch equality failed
+   */
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos, bool *empty) = 0;
+      uint64_t *pos_out, bool *empty_out) = 0;
 
-  // asynchronous variants
  public:
-
-  // See Read()
+  // TBD. not sure these will make the cut for the initial version. Building AIO
+  // with threads on top of sync interfaces isn't ideal, but its simpler and
+  // we'll want run-to-completion for fast backends anyway. Can put backend AIO
+  // support off for optimization phase of project.
   virtual int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, std::string *data, void *arg,
+      uint64_t position, std::string *data, void *arg,
       std::function<void(void*, int)> callback) = 0;
 
-  // See Write()
   virtual int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, uint32_t stride, const Slice& data, void *arg,
+      uint64_t position, const Slice& data, void *arg,
       std::function<void(void*, int)> callback) = 0;
 };
 

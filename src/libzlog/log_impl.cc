@@ -75,7 +75,7 @@ int LogImpl::Read(const uint64_t position, std::string *data)
       continue;
     }
 
-    int ret = backend->Read(*oid, view->epoch(), position, 0, data);
+    int ret = backend->Read(*oid, view->epoch(), position, data);
     if (!ret) {
       return 0;
     }
@@ -127,7 +127,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
       continue;
     }
 
-    int ret = backend->Write(*oid, data, view->epoch(), position, 0);
+    int ret = backend->Write(*oid, data, view->epoch(), position);
     if (!ret) {
       if (pposition){
         *pposition = position;
@@ -165,7 +165,7 @@ int LogImpl::Fill(const uint64_t position)
       continue;
     }
 
-    int ret = backend->Fill(*oid, view->epoch(), position, 0);
+    int ret = backend->Fill(*oid, view->epoch(), position);
     if (!ret)
       return 0;
     if (ret == -ESPIPE) {
@@ -192,7 +192,7 @@ int LogImpl::Trim(const uint64_t position)
       continue;
     }
 
-    int ret = backend->Trim(*oid, view->epoch(), position, 0);
+    int ret = backend->Trim(*oid, view->epoch(), position);
     if (!ret){
       return 0;
     }

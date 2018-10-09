@@ -55,14 +55,23 @@ int LMDBBackend::Initialize(
 
 int LMDBBackend::uniqueId(const std::string& hoid, uint64_t *id)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   static std::atomic<uint64_t> __unique_id(0);
   *id = __unique_id++;
+
   return 0;
 }
 
 int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
     std::string *hoid_out, std::string *prefix_out)
 {
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   MDB_val val;
@@ -96,8 +105,13 @@ int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
   if (ret)
     return ret;
 
-  *hoid_out = name;
-  *prefix_out = name;
+  if (hoid_out) {
+    *hoid_out = name;
+  }
+
+  if (prefix_out) {
+    *prefix_out = name;
+  }
 
   return 0;
 }
@@ -105,6 +119,10 @@ int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
 int LMDBBackend::OpenLog(const std::string& name, std::string *hoid_out,
     std::string *prefix_out)
 {
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   MDB_val val;
@@ -117,15 +135,28 @@ int LMDBBackend::OpenLog(const std::string& name, std::string *hoid_out,
 
   txn.Abort();
 
-  *hoid_out = name;
-  *prefix_out = name;
+  if (hoid_out) {
+    *hoid_out = name;
+  }
+
+  if (prefix_out) {
+    *prefix_out = name;
+  }
 
   return 0;
 }
 
 int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
-    std::map<uint64_t, std::string>& views)
+    uint32_t max_views, std::map<uint64_t, std::string> *views_out)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction(true);
 
   MDB_val val;
@@ -139,24 +170,41 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
   assert(val.mv_size == sizeof(*proj_obj));
 
+  std::map<uint64_t, std::string> views;
   if (epoch > proj_obj->epoch) {
+    views_out->swap(views);
     txn.Abort();
     return 0;
   }
 
-  std::string proj_key = ProjectionKey(hoid, epoch);
-  ret = txn.Get(proj_key, val);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
+  uint32_t count = 0;
+  while (true) {
+    if (count == max_views) {
+      break;
+    }
 
-  views.emplace(epoch,
-      std::string((const char *)val.mv_data, val.mv_size));
+    std::string proj_key = ProjectionKey(hoid, epoch);
+    ret = txn.Get(proj_key, val);
+    if (ret) {
+      if (ret == -ENOENT) {
+        break;
+      }
+      txn.Abort();
+      return ret;
+    }
+
+    views.emplace(epoch,
+        std::string((const char *)val.mv_data, val.mv_size));
+
+    count++;
+    epoch++;
+  }
 
   ret = txn.Commit();
   if (ret)
     return ret;
+
+  views_out->swap(views);
 
   return 0;
 }
@@ -164,6 +212,10 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
 int LMDBBackend::ProposeView(const std::string& hoid,
     uint64_t epoch, const std::string& view)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   MDB_val val;
@@ -171,16 +223,13 @@ int LMDBBackend::ProposeView(const std::string& hoid,
   int ret = txn.Get(oid_key, val);
   if (ret) {
     if (ret == -ENOENT) {
-      assert(epoch == 0);
+      txn.Abort();
+      return ret;
     } else {
       txn.Abort();
       return ret;
     }
   }
-
-  // there is a case for handling enoent in the distributed version, but it
-  // seems we do not need that case for the lmdb backend, yet.
-  assert(ret == 0);
 
   ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
   assert(val.mv_size == sizeof(*proj_obj));
@@ -216,8 +265,16 @@ int LMDBBackend::ProposeView(const std::string& hoid,
 }
 
 int LMDBBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position, uint32_t stride)
+    uint64_t epoch, uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   int ret = CheckEpoch(txn, epoch, oid);
@@ -231,6 +288,7 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
   MDB_val maxval;
   auto maxkey = MaxPosKey(oid);
   ret = txn.Get(maxkey, maxval);
+  // TODO: enoent here?
   if (ret < 0 && ret != -ENOENT) {
     txn.Abort();
     return ret;
@@ -271,9 +329,16 @@ int LMDBBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    std::string *data)
+    uint64_t position, std::string *data)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction(true);
 
   int ret = CheckEpoch(txn, epoch, oid);
@@ -287,7 +352,7 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
   ret = txn.Get(key, val);
   if (ret == -ENOENT) {
     txn.Abort();
-    return ret;
+    return -ERANGE;
   }
 
   LogEntry *entry = (LogEntry*)val.mv_data;
@@ -309,8 +374,16 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride)
+    uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   int ret = CheckEpoch(txn, epoch, oid);
@@ -328,6 +401,27 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
     assert(val.mv_size >= sizeof(entry));
     entry = *((LogEntry*)val.mv_data);
   }
+
+  // read max position
+  uint64_t pos = 0;
+  MDB_val maxval;
+  auto maxkey = MaxPosKey(oid);
+  ret = txn.Get(maxkey, maxval);
+  if (ret < 0 && ret != -ENOENT) {
+    txn.Abort();
+    return ret;
+  } else if (ret == 0) {
+    LogMaxPos *maxpos = (LogMaxPos*)maxval.mv_data;
+    assert(maxval.mv_size == sizeof(*maxpos));
+    pos = maxpos->maxpos;
+  }
+
+  // update max pos
+  LogMaxPos new_maxpos;
+  new_maxpos.maxpos = std::max(pos, position);
+  maxval.mv_data = &new_maxpos;
+  maxval.mv_size = sizeof(new_maxpos);
+  txn.Put(maxkey, maxval, false);
 
   entry.trimmed = true;
 
@@ -348,8 +442,16 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride)
+    uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   int ret = CheckEpoch(txn, epoch, oid);
@@ -374,6 +476,27 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
     return -EROFS;
   }
 
+  // read max position
+  uint64_t pos = 0;
+  MDB_val maxval;
+  auto maxkey = MaxPosKey(oid);
+  ret = txn.Get(maxkey, maxval);
+  if (ret < 0 && ret != -ENOENT) {
+    txn.Abort();
+    return ret;
+  } else if (ret == 0) {
+    LogMaxPos *maxpos = (LogMaxPos*)maxval.mv_data;
+    assert(maxval.mv_size == sizeof(*maxpos));
+    pos = maxpos->maxpos;
+  }
+
+  // update max pos
+  LogMaxPos new_maxpos;
+  new_maxpos.maxpos = std::max(pos, position);
+  maxval.mv_data = &new_maxpos;
+  maxval.mv_size = sizeof(new_maxpos);
+  txn.Put(maxkey, maxval, false);
+
   entry.trimmed = true;
   entry.invalidated = true;
 
@@ -394,21 +517,19 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    const Slice& data, void *arg,
+    uint64_t position, const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position, stride);
+  int ret = Write(oid, data, epoch, position);
   callback(arg, ret);
   return 0;
 }
 
 int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    std::string *data, void *arg,
+    uint64_t position, std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, stride, data);
+  int ret = Read(oid, epoch, position, data);
   callback(arg, ret);
   return 0;
 }
@@ -420,12 +541,12 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
   auto key = ObjectKey(oid);
   int ret = txn.Get(key, val);
   if (ret == -ENOENT)
-    return 0;
+    return ret;
   LogObject *obj = (LogObject*)val.mv_data;
   assert(val.mv_size == sizeof(*obj));
   if (eq) { 
     if (epoch != obj->epoch) {
-      return -EINVAL;
+      return -ESPIPE;
     }
   } else if (epoch < obj->epoch) {
     return -ESPIPE;
@@ -436,6 +557,14 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
 int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
     uint64_t *pos, bool *empty)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction(true);
 
   int ret = CheckEpoch(txn, epoch, oid, true);
@@ -468,6 +597,14 @@ int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
 
 int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   // read current epoch value (if its been set yet)

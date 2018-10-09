@@ -8,9 +8,6 @@
 #include "zlog/backend/ceph.h"
 #include "port/stack_trace.h"
 
-void BackendTest::SetUp() {}
-void BackendTest::TearDown() {}
-
 struct UniquePoolContext {
   rados_t cluster = nullptr;
   rados_ioctx_t ioctx = nullptr;
@@ -51,6 +48,7 @@ struct UniquePoolContext {
   }
 };
 
+
 struct LibZLogTest::Context : public UniquePoolContext {
   librados::IoCtx ioctxpp;
   bool close_ioctxpp = false;
@@ -69,6 +67,32 @@ struct LibZLogTest::Context : public UniquePoolContext {
     }
   }
 };
+
+struct BackendTest::Context : public UniquePoolContext {
+  librados::IoCtx ioctxpp;
+
+  void Init() {
+    ASSERT_NO_FATAL_FAILURE(UniquePoolContext::Init());
+    librados::IoCtx::from_rados_ioctx_t(ioctx, ioctxpp);
+  }
+
+  ~Context() {
+    ioctxpp.close();
+  }
+};
+
+void BackendTest::SetUp() {
+  context = new Context;
+  ASSERT_NO_FATAL_FAILURE(context->Init());
+
+  backend = std::unique_ptr<zlog::Backend>(
+      new zlog::storage::ceph::CephBackend(&context->ioctxpp));
+}
+
+void BackendTest::TearDown() {
+  if (context)
+    delete context;
+}
 
 void LibZLogTest::SetUp() {
   context = new Context;

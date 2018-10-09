@@ -24,14 +24,23 @@ std::map<std::string, std::string> RAMBackend::meta()
 
 int RAMBackend::uniqueId(const std::string& hoid, uint64_t *id)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   static std::atomic<uint64_t> __unique_id(0);
   *id = __unique_id++;
+
   return 0;
 }
 
 int RAMBackend::CreateLog(const std::string& name, const std::string& view,
     std::string *hoid_out, std::string *prefix_out)
 {
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   ProjectionObject proj_obj;
@@ -42,8 +51,13 @@ int RAMBackend::CreateLog(const std::string& name, const std::string& view,
     return -EEXIST;
   }
 
-  *hoid_out = name;
-  *prefix_out = name;
+  if (hoid_out) {
+    *hoid_out = name;
+  }
+
+  if (prefix_out) {
+    *prefix_out = name;
+  }
 
   return 0;
 }
@@ -51,6 +65,10 @@ int RAMBackend::CreateLog(const std::string& name, const std::string& view,
 int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
     std::string *prefix_out)
 {
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   auto it = objects_.find(name);
@@ -58,15 +76,29 @@ int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
     return -ENOENT;
   }
 
-  *hoid_out = name;
-  *prefix_out = name;
+  if (hoid_out) {
+    *hoid_out = name;
+  }
+
+  if (prefix_out) {
+    *prefix_out = name;
+  }
 
   return 0;
 }
 
 int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
-    std::map<uint64_t, std::string>& views)
+    uint32_t max_views, std::map<uint64_t, std::string> *views_out)
 {
+  if (hoid.empty())
+    return -EINVAL;
+
+  if (max_views == 0)
+    max_views = 1;
+
+  if (epoch == 0)
+    return -EINVAL;
+
   std::lock_guard<std::mutex> lk(lock_);
 
   auto it = objects_.find(hoid);
@@ -74,16 +106,38 @@ int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
     return -ENOENT;
   }
 
+  std::map<uint64_t, std::string> views;
   auto& proj_obj = boost::get<ProjectionObject>(it->second);
   if (epoch > proj_obj.epoch) {
+    views_out->swap(views);
     return 0;
   }
 
+  // TODO shouldn't this just return empty views?
   auto it2 = proj_obj.projections.find(epoch);
-  if (it2 == proj_obj.projections.end())
-    return -ENOENT;
+  if (it2 == proj_obj.projections.end()) {
+    return -EIO;
+  }
 
-  views.emplace(epoch, it2->second);
+  uint32_t count = 0;
+  while (true) {
+    if (count == max_views) {
+      break;
+    }
+
+    if (it2 == proj_obj.projections.end()) {
+      break;
+    }
+
+    assert(it2->first == epoch);
+    views.emplace(epoch, it2->second);
+
+    it2++;
+    epoch++;
+    count++;
+  }
+
+  views_out->swap(views);
 
   return 0;
 }
@@ -91,6 +145,10 @@ int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
 int RAMBackend::ProposeView(const std::string& hoid,
     uint64_t epoch, const std::string& view)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   auto it = objects_.find(hoid);
@@ -115,9 +173,16 @@ int RAMBackend::ProposeView(const std::string& hoid,
 }
 
 int RAMBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    std::string *data)
+    uint64_t position, std::string *data)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   LogObject *lobj = nullptr;
@@ -129,7 +194,7 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
   if (lobj) {
     const auto it = lobj->entries.find(position);
     if (it == lobj->entries.end())
-      return -ENOENT;
+      return -ERANGE;
 
     const LogEntry& entry = it->second;
     if (entry.trimmed || entry.invalidated)
@@ -143,8 +208,16 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::Write(const std::string& oid, const Slice& data,
-    uint64_t epoch, uint64_t position, uint32_t stride)
+    uint64_t epoch, uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   LogObject *lobj = nullptr;
@@ -153,7 +226,8 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
     return ret;
   }
 
-  if (!lobj) {
+  assert(lobj);
+  {
     auto ret = objects_.emplace(oid, LogObject());
     lobj = &boost::get<LogObject>(ret.first->second);
   }
@@ -171,8 +245,16 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
 }
 
 int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride)
+    uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   LogObject *lobj = nullptr;
@@ -192,18 +274,28 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
     entry.trimmed = true;
     entry.invalidated = true;
     lobj->entries.emplace(position, entry);
+    lobj->maxpos = std::max(lobj->maxpos, position);
   } else {
     auto& entry = it->second;
     entry.trimmed = true;
     entry.data.clear();
+    lobj->maxpos = std::max(lobj->maxpos, position);
   }
 
   return 0;
 }
 
 int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride)
+    uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   LogObject *lobj = nullptr;
@@ -223,6 +315,7 @@ int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
     entry.trimmed = true;
     entry.invalidated = true;
     lobj->entries.emplace(position, entry);
+    lobj->maxpos = std::max(lobj->maxpos, position);
     return 0;
   } else {
     auto& entry = it->second;
@@ -235,6 +328,14 @@ int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
 
 int RAMBackend::Seal(const std::string& oid, uint64_t epoch)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   auto ret = objects_.emplace(oid, LogObject());
@@ -255,6 +356,14 @@ int RAMBackend::Seal(const std::string& oid, uint64_t epoch)
 int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
     uint64_t *pos, bool *empty)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   std::lock_guard<std::mutex> lk(lock_);
 
   LogObject *lobj = nullptr;
@@ -276,21 +385,19 @@ int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
 }
 
 int RAMBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    const Slice& data, void *arg,
+    uint64_t position, const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Write(oid, data, epoch, position, stride);
+  int ret = Write(oid, data, epoch, position);
   callback(arg, ret);
   return 0;
 }
 
 int RAMBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    std::string *data, void *arg,
+    uint64_t position, std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
-  int ret = Read(oid, epoch, position, stride, data);
+  int ret = Read(oid, epoch, position, data);
   callback(arg, ret);
   return 0;
 }
@@ -301,14 +408,14 @@ int RAMBackend::CheckEpoch(uint64_t epoch, const std::string& oid,
 {
   auto it = objects_.find(oid);
   if (it == objects_.end()) {
-    return 0;
+    return -ENOENT;
   }
 
   lobj = &boost::get<LogObject>(it->second);
 
   if (eq) { 
     if (epoch != lobj->epoch) {
-      return -EINVAL;
+      return -ESPIPE;
     }
   } else if (epoch < lobj->epoch) {
     return -ESPIPE;

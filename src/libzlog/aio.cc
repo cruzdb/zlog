@@ -148,7 +148,7 @@ void AioCompletionImpl::aio_safe_cb_read(void *arg, int ret)
       }
 
       // don't need impl->get(): reuse reference
-      ret = impl->backend->AioRead(*oid, view->epoch(), impl->position, 0,
+      ret = impl->backend->AioRead(*oid, view->epoch(), impl->position,
           &impl->data, impl, AioCompletionImpl::aio_safe_cb_read);
       break;
     }
@@ -224,7 +224,7 @@ void AioCompletionImpl::aio_safe_cb_write(void *arg, int ret)
 
       // don't need impl->get(): reuse reference
       impl->position = position;
-      ret = impl->backend->AioWrite(*oid, view->epoch(), impl->position, 0,
+      ret = impl->backend->AioWrite(*oid, view->epoch(), impl->position,
           Slice(impl->data.data(), impl->data.size()), impl,
           AioCompletionImpl::aio_safe_cb_write);
     }
@@ -335,7 +335,7 @@ int LogImpl::AioAppend(AioCompletion *c, const Slice& data,
     impl->backend = backend;
     impl->get(); // backend now has a reference
 
-    int ret = backend->AioWrite(*oid, view->epoch(), position, 0, data,
+    int ret = backend->AioWrite(*oid, view->epoch(), position, data,
         impl, AioCompletionImpl::aio_safe_cb_write);
     assert(ret == 0);
 
@@ -367,7 +367,7 @@ int LogImpl::AioRead(uint64_t position, AioCompletion *c,
     impl->backend = backend;
     impl->get(); // backend now has a reference
   
-    int ret = backend->AioRead(*oid, view->epoch(), position, 0, &impl->data,
+    int ret = backend->AioRead(*oid, view->epoch(), position, &impl->data,
         impl, AioCompletionImpl::aio_safe_cb_read);
     assert(ret == 0);
 
