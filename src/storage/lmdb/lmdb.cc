@@ -60,9 +60,8 @@ int LMDBBackend::uniqueId(const std::string& hoid, uint64_t *id)
   return 0;
 }
 
-int LMDBBackend::CreateLog(const std::string& name,
-    const std::string& initial_view,
-    std::string& hoid_out, std::string& prefix)
+int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
+    std::string *hoid_out, std::string *prefix_out)
 {
   auto txn = NewTransaction();
 
@@ -85,8 +84,8 @@ int LMDBBackend::CreateLog(const std::string& name,
   }
 
   std::string proj_key = ProjectionKey(name, proj_obj.epoch);
-  val.mv_data = (void*)initial_view.data();
-  val.mv_size = initial_view.size();
+  val.mv_data = (void*)view.data();
+  val.mv_size = view.size();
   ret = txn.Put(proj_key, val, true);
   if (ret) {
     txn.Abort();
@@ -97,14 +96,14 @@ int LMDBBackend::CreateLog(const std::string& name,
   if (ret)
     return ret;
 
-  hoid_out = name;
-  prefix = name;
+  *hoid_out = name;
+  *prefix_out = name;
 
   return 0;
 }
 
-int LMDBBackend::OpenLog(const std::string& name,
-    std::string& hoid, std::string& prefix)
+int LMDBBackend::OpenLog(const std::string& name, std::string *hoid_out,
+    std::string *prefix_out)
 {
   auto txn = NewTransaction();
 
@@ -118,8 +117,8 @@ int LMDBBackend::OpenLog(const std::string& name,
 
   txn.Abort();
 
-  hoid = name;
-  prefix = name;
+  *hoid_out = name;
+  *prefix_out = name;
 
   return 0;
 }

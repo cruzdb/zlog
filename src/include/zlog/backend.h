@@ -50,21 +50,30 @@ class Backend {
   // log management
  public:
 
-  // Create a new, empty log with the given name. On success, @hoid will be set
-  // to contain the name of the head object.
-  //
-  // -EEXIST
-  //   - log with name already exists
-  virtual int CreateLog(const std::string& name,
-      const std::string& initial_view,
-      std::string& hoid, std::string& prefix) = 0;
+  /**
+   * Create a new log.
+   *
+   * TODO:
+   *   - exclusive creation semantics
+   *   - prefix is for creating log entries
+   *
+   * @param name       name of the log
+   * @param view       initial log view
+   * @param hoid_out   name of the head object
+   * @param prefix_out log entry object prefix
+   */
+  virtual int CreateLog(const std::string& name, const std::string& view,
+      std::string *hoid_out, std::string *prefix_out) = 0;
 
-  // Return a context for constructing object names.
-  //
-  // -ENOENT
-  //   - log doesn't exist (or has been deleted)
-  virtual int OpenLog(const std::string& name,
-      std::string& hoid, std::string& prefix) = 0;
+  /**
+   * Open a log.
+   *
+   * @param name       name of the log
+   * @param hoid_out   name of the head object
+   * @param prefix_out log entry object prefix
+   */
+  virtual int OpenLog(const std::string& name, std::string *hoid_out,
+      std::string *prefix_out) = 0;
 
   // view management
  public:

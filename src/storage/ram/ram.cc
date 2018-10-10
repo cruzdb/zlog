@@ -29,28 +29,27 @@ int RAMBackend::uniqueId(const std::string& hoid, uint64_t *id)
   return 0;
 }
 
-int RAMBackend::CreateLog(const std::string& name,
-    const std::string& initial_view,
-    std::string& hoid_out, std::string& prefix)
+int RAMBackend::CreateLog(const std::string& name, const std::string& view,
+    std::string *hoid_out, std::string *prefix_out)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
   ProjectionObject proj_obj;
   proj_obj.epoch = 1;
-  proj_obj.projections.emplace(proj_obj.epoch, initial_view);
+  proj_obj.projections.emplace(proj_obj.epoch, view);
   auto ret = objects_.emplace(name, proj_obj);
   if (!ret.second) {
     return -EEXIST;
   }
 
-  hoid_out = name;
-  prefix = name;
+  *hoid_out = name;
+  *prefix_out = name;
 
   return 0;
 }
 
-int RAMBackend::OpenLog(const std::string& name,
-    std::string& hoid, std::string& prefix)
+int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
+    std::string *prefix_out)
 {
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -59,8 +58,8 @@ int RAMBackend::OpenLog(const std::string& name,
     return -ENOENT;
   }
 
-  hoid = name;
-  prefix = name;
+  *hoid_out = name;
+  *prefix_out = name;
 
   return 0;
 }

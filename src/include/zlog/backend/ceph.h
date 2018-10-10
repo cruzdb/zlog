@@ -18,14 +18,13 @@ class CephBackend : public Backend {
 
   int Initialize(const std::map<std::string, std::string>& opts) override;
 
-  int CreateLog(const std::string& name,
-      const std::string& initial_view,
-      std::string& hoid, std::string& prefix) override;
-
   int uniqueId(const std::string& hoid, uint64_t *id) override;
 
-  int OpenLog(const std::string& name,
-      std::string& hoid, std::string& prefix) override;
+  int CreateLog(const std::string& name, const std::string& view,
+      std::string *hoid_out, std::string *prefix_out) override;
+
+  int OpenLog(const std::string& name, std::string *hoid_out,
+      std::string *prefix_out) override;
 
   int ReadViews(const std::string& hoid, uint64_t epoch,
       std::map<uint64_t, std::string>& views) override;

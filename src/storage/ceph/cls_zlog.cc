@@ -261,9 +261,8 @@ static int head_init(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   zlog_ceph_proto::HeadObjectHeader hdr;
-  hdr.set_prefix(op.prefix());
-  hdr.set_deleted(false);
   hdr.set_epoch(0);
+  hdr.set_prefix(op.prefix());
 
   cls_zlog::HeadObject head(hctx, hdr);
   ret = head.finalize();

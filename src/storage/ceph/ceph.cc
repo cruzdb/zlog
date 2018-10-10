@@ -140,42 +140,40 @@ int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
   }
 }
 
-int CephBackend::CreateLog(const std::string& name,
-    const std::string& initial_view,
-    std::string& hoid_out, std::string& prefix)
+int CephBackend::CreateLog(const std::string& name, const std::string& view,
+    std::string *hoid_out, std::string *prefix_out)
 {
-  if (name.empty())
+  if (name.empty()) {
     return -EINVAL;
+  }
 
-  struct timeval tv;
-  int ret = gettimeofday(&tv, NULL);
-  if (ret)
-    return ret;
+  if (view.empty()) {
+    return -EINVAL;
+  }
 
-  // create the head object. ensure a unique name, and that it is initialized to
-  // a state that could be used to later identify it as orphaned (e.g. use rados
-  // mtime and/or unitialized state). it's important that the head object be
-  // uniquely named, because if it is not unique then if we crash immediately
-  // after creating a link to the head (see below), then two names may point to
-  // the same log.
+  if (!hoid_out) {
+    return -EINVAL;
+  }
+
+  if (!prefix_out) {
+    return -EINVAL;
+  }
+
   std::string hoid;
-  std::string log_prefix;
+  std::string prefix;
+
   while (true) {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    const auto log_handle = boost::uuids::to_string(uuid);
+    const auto key = boost::uuids::to_string(uuid);
 
-    std::stringstream hoid_ss;
-    hoid_ss << "zlog.head." << log_handle;
-    hoid = hoid_ss.str();
+    hoid = std::string("zlog.head.").append(key);
+    prefix = std::string("zlog.data.").append(key);
 
-    std::stringstream log_prefix_ss;
-    log_prefix_ss << "zlog.entries." << log_handle;
-    log_prefix = log_prefix_ss.str();
-
-    ret = InitHeadObject(hoid, log_prefix);
+    int ret = InitHeadObject(hoid, prefix);
     if (ret) {
-      if (ret == -EEXIST)
+      if (ret == -EEXIST) {
         continue;
+      }
       return ret;
     }
 
@@ -185,59 +183,76 @@ int CephBackend::CreateLog(const std::string& name,
   // the head object now exists, but is orphaned. a crash at this point is ok
   // because a gc process could later remove it. now we'll build a link from the
   // log name requested to the head object we just created.
-  ret = CreateLinkObject(name, hoid);
+  int ret = CreateLinkObject(name, hoid);
   if (ret) {
     std::cerr << "create link obj ret " << ret << std::endl;
     return ret;
   }
 
-  ret = ProposeView(hoid, 1, initial_view);
+  ret = ProposeView(hoid, 1, view);
   if (ret) {
     std::cerr << "propose view ret " << ret << std::endl;
     return ret;
   }
 
-  hoid_out = hoid;
-  prefix = log_prefix;
+  hoid_out->swap(hoid);
+  prefix_out->swap(prefix);
 
-  return ret;
+  return 0;
 }
 
-int CephBackend::OpenLog(const std::string& name,
-    std::string& hoid, std::string& prefix)
+int CephBackend::OpenLog(const std::string& name, std::string *hoid_out,
+    std::string *prefix_out)
 {
-  zlog_ceph_proto::LinkObjectHeader link;
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
+  if (!hoid_out) {
+    return -EINVAL;
+  }
+
+  if (!prefix_out) {
+    return -EINVAL;
+  }
+
+  // read the hoid from the link object
+  std::string hoid;
   {
     ::ceph::bufferlist bl;
-    auto loid = LinkObjectName(name);
-    int ret = ioctx_->read(loid, bl, 0, 0);
+    const auto link_oid = LinkObjectName(name);
+    int ret = ioctx_->read(link_oid, bl, 0, 0);
     if (ret < 0) {
       return ret;
     }
 
-    if (!decode(bl, &link))
+    zlog_ceph_proto::LinkObjectHeader link;
+    if (!decode(bl, &link)) {
       return -EIO;
+    }
+
+    hoid = link.hoid();
   }
 
-  hoid = link.hoid();
+  // load log metadata from the head object
+  ::ceph::bufferlist bl;
+  int ret = ioctx_->getxattr(hoid, HEAD_HEADER_KEY, bl);
+  if (ret < 0) {
+    return ret;
+  }
 
   zlog_ceph_proto::HeadObjectHeader head;
-  {
-    ::ceph::bufferlist bl;
-    int ret = ioctx_->getxattr(hoid, HEAD_HEADER_KEY, bl);
-    if (ret < 0) {
-      return ret;
-    }
-    if (!decode(bl, &head))
-      return -EIO;
+  if (!decode(bl, &head)) {
+    return -EIO;
   }
 
-  if (head.deleted())
-    return -ENOENT;
-
-  prefix = head.prefix();
-  if (prefix.empty())
+  auto prefix = head.prefix();
+  if (prefix.empty()) {
     return -EIO;
+  }
+
+  hoid_out->swap(hoid);
+  prefix_out->swap(prefix);
 
   return 0;
 }
