@@ -1193,6 +1193,49 @@ TEST_F(ClsZlogTest, ReadView_EmptyRange) {
   }
 }
 
+TEST_F(ClsZlogTest, ReadView_MinMaxRet) {
+  librados::ObjectWriteOperation op;
+  zlog::cls_zlog_init_head(op, "prefix");
+  int ret = ioctx.operate("obj", &op);
+  ASSERT_EQ(ret, 0);
+
+  // create some views 1..10
+  uint64_t epoch = 1;
+  std::map<uint64_t, std::string> blobs;
+  for (; epoch <= 110; epoch++) {
+    std::stringstream ss;
+    ss << "foo" << epoch;
+    std::string data = ss.str();
+    ceph::bufferlist bl;
+    bl.append(data.c_str(), data.size());
+
+    blobs.emplace(epoch, data);
+    ret = view_create(epoch, bl);
+    ASSERT_EQ(ret, 0);
+  }
+
+  // min one
+  ceph::bufferlist bl;
+  std::map<uint64_t, std::string> views;
+  ret = view_read(1, bl, 0);
+  ASSERT_EQ(ret, 0);
+  decode_views(bl, views);
+  ASSERT_EQ(views.size(), 1u);
+  ASSERT_EQ(views.begin()->second, blobs[1]);
+
+  // max cap 100
+  views.clear();
+  ret = view_read(1, bl, 110);
+  ASSERT_EQ(ret, 0);
+  decode_views(bl, views);
+  ASSERT_EQ(views.size(), 100u);
+  std::map<uint64_t, std::string> views2;
+  for (uint64_t e = 1; e <= 100; e++) {
+    views2.emplace(e, blobs[e]);
+  }
+  ASSERT_EQ(views, views2);
+}
+
 TEST_F(ClsZlogTest, ReadView_NonEmpty) {
   librados::ObjectWriteOperation op;
   zlog::cls_zlog_init_head(op, "prefix");
