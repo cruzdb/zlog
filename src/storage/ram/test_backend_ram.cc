@@ -4,8 +4,14 @@
 #include "port/stack_trace.h"
 #include <google/protobuf/stubs/common.h>
 
-void BackendTest::SetUp() {}
-void BackendTest::TearDown() {}
+void BackendTest::SetUp() {
+  backend = std::unique_ptr<zlog::storage::ram::RAMBackend>(
+      new zlog::storage::ram::RAMBackend());
+}
+
+void BackendTest::TearDown() {
+  backend.reset();
+}
 
 void LibZLogTest::SetUp() {
   if (lowlevel()) {

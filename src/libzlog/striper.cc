@@ -296,7 +296,8 @@ void Striper::refresh_entry_()
 
     // read views at or after epoch
     std::map<uint64_t, std::string> views;
-    int ret = log_->backend->ReadViews(log_->hoid, epoch, views);
+    // TODO: 100 is an option
+    int ret = log_->backend->ReadViews(log_->hoid, epoch, 100, &views);
     if (ret) {
       std::cerr << "read views error " << ret << std::endl;
       continue;

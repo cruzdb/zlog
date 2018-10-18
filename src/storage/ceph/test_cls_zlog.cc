@@ -46,21 +46,21 @@ class ClsZlogTest : public ::testing::Test {
   int entry_read(uint64_t epoch, uint64_t pos,
       ceph::bufferlist& bl, const std::string& oid = "obj") {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read(op, epoch, pos, 10);
+    zlog::cls_zlog_read(op, epoch, pos);
     return ioctx.operate(oid, &op, &bl);
   }
 
   int entry_write(uint64_t epoch, uint64_t pos,
       ceph::bufferlist& bl, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write(op, epoch, pos, 10, bl);
+    zlog::cls_zlog_write(op, epoch, pos, bl);
     return ioctx.operate(oid, &op);
   }
 
   int entry_inval(uint64_t epoch, uint64_t pos,
       bool force, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_invalidate(op, epoch, pos, 10, force);
+    zlog::cls_zlog_invalidate(op, epoch, pos, force);
     return ioctx.operate(oid, &op);
   }
 

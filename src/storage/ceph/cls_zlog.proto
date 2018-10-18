@@ -16,9 +16,8 @@ message UniqueId {
 }
 
 message HeadObjectHeader {
-  required bool deleted = 1;
+  required uint64 epoch = 1;
   required string prefix = 2;
-  required uint64 epoch = 3;
 }
 
 message InitHead {

@@ -15,49 +15,53 @@ Log::~Log() {}
 
 static int create_or_open(const Options& options,
     Backend *backend, const std::string& name,
-    std::string& hoid, std::string& prefix)
+    std::string *hoid_out, std::string *prefix_out)
 {
+  std::string hoid;
+  std::string prefix;
+  boost::optional<std::string> view;
+
   while (true) {
-    // try to open the log
-    int ret = backend->OpenLog(name, hoid, prefix);
+    int ret = backend->OpenLog(name, &hoid, &prefix);
     if (ret && ret != -ENOENT) {
       return ret;
     }
 
     if (ret == 0) {
-      // if the log exists, build an instance
-
       if (options.error_if_exists) {
         return -EEXIST;
       }
 
-      return 0;
+      break;
+    }
 
-    } else {
-      // otherwise, try to create the log
+    if (!options.create_if_missing) {
+      return -ENOENT;
+    }
 
-      if (!options.create_if_missing) {
-        return -ENOENT;
-      }
+    if (!view) {
+      view = View::create_initial();
+    }
 
-      const auto init_view = View::create_initial();
-
-      ret = backend->CreateLog(name, init_view, hoid, prefix);
-      if (ret) {
-        if (ret == -EEXIST) {
-          if (options.error_if_exists) {
-            return -EEXIST;
-          }
-          // retry the open
-          continue;
-        } else {
-          return ret;
+    ret = backend->CreateLog(name, *view, &hoid, &prefix);
+    if (ret) {
+      if (ret == -EEXIST) {
+        if (options.error_if_exists) {
+          return -EEXIST;
         }
+        continue;
       } else {
-        return 0;
+        return ret;
       }
     }
+
+    break;
   }
+
+  hoid_out->swap(hoid);
+  prefix_out->swap(prefix);
+
+  return 0;
 }
 
 int Log::Open(const Options& options,
@@ -80,7 +84,7 @@ int Log::Open(const Options& options,
   std::string hoid;
   std::string prefix;
   int ret = create_or_open(options, backend.get(),
-      name, hoid, prefix);
+      name, &hoid, &prefix);
   if (ret) {
     return ret;
   }

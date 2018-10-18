@@ -254,16 +254,18 @@ static int head_init(cls_method_context_t hctx, ceph::bufferlist *in,
 
   int ret = cls_cxx_stat(hctx, NULL, NULL);
   if (ret != -ENOENT) {
-    if (ret >= 0)
+    if (ret >= 0) {
+      CLS_ERR("ERROR: head_init(): already init ret %d/-EEXIST", ret);
       ret = -EEXIST;
-    CLS_ERR("ERROR: head_init(): stat check ret %d", ret);
+    } else {
+      CLS_ERR("ERROR: head_init(): could not stat ret %d", ret);
+    }
     return ret;
   }
 
   zlog_ceph_proto::HeadObjectHeader hdr;
-  hdr.set_prefix(op.prefix());
-  hdr.set_deleted(false);
   hdr.set_epoch(0);
+  hdr.set_prefix(op.prefix());
 
   cls_zlog::HeadObject head(hctx, hdr);
   ret = head.finalize();
@@ -341,8 +343,16 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist bl;
     ret = head.read_view(epoch, &bl);
     if (ret < 0) {
-      CLS_ERR("ERROR: view_read(): reading view %llu ret %d",
-          epoch, ret);
+      if (ret == -ENOENT) {
+        // ENOENT may also be returned if the object doesn't exist, which
+        // indicates to the caller that the object should be initialized. Here
+        // the ENOENT case is transformed into EIO to avoid confusion, but more
+        // accurately, because a missing epoch would indicate a critical error.
+        CLS_ERR("ERROR: view_read(): missing epoch %llu", epoch);
+        ret = -EIO;
+      } else {
+        CLS_ERR("ERROR: view_read(): reading view %llu ret %d", epoch, ret);
+      }
       return ret;
     }
 

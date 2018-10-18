@@ -100,6 +100,10 @@ int CephBackend::Initialize(
 
 int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   while (true) {
     // read the stored id.
     uint64_t unique_id;
@@ -140,42 +144,28 @@ int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
   }
 }
 
-int CephBackend::CreateLog(const std::string& name,
-    const std::string& initial_view,
-    std::string& hoid_out, std::string& prefix)
+int CephBackend::CreateLog(const std::string& name, const std::string& view,
+    std::string *hoid_out, std::string *prefix_out)
 {
-  if (name.empty())
+  if (name.empty()) {
     return -EINVAL;
+  }
 
-  struct timeval tv;
-  int ret = gettimeofday(&tv, NULL);
-  if (ret)
-    return ret;
-
-  // create the head object. ensure a unique name, and that it is initialized to
-  // a state that could be used to later identify it as orphaned (e.g. use rados
-  // mtime and/or unitialized state). it's important that the head object be
-  // uniquely named, because if it is not unique then if we crash immediately
-  // after creating a link to the head (see below), then two names may point to
-  // the same log.
   std::string hoid;
-  std::string log_prefix;
+  std::string prefix;
+
   while (true) {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    const auto log_handle = boost::uuids::to_string(uuid);
+    const auto key = boost::uuids::to_string(uuid);
 
-    std::stringstream hoid_ss;
-    hoid_ss << "zlog.head." << log_handle;
-    hoid = hoid_ss.str();
+    hoid = std::string("zlog.head.").append(key);
+    prefix = std::string("zlog.data.").append(key);
 
-    std::stringstream log_prefix_ss;
-    log_prefix_ss << "zlog.entries." << log_handle;
-    log_prefix = log_prefix_ss.str();
-
-    ret = InitHeadObject(hoid, log_prefix);
+    int ret = InitHeadObject(hoid, prefix);
     if (ret) {
-      if (ret == -EEXIST)
+      if (ret == -EEXIST) {
         continue;
+      }
       return ret;
     }
 
@@ -185,79 +175,110 @@ int CephBackend::CreateLog(const std::string& name,
   // the head object now exists, but is orphaned. a crash at this point is ok
   // because a gc process could later remove it. now we'll build a link from the
   // log name requested to the head object we just created.
-  ret = CreateLinkObject(name, hoid);
+  int ret = CreateLinkObject(name, hoid);
   if (ret) {
-    std::cerr << "create link obj ret " << ret << std::endl;
     return ret;
   }
 
-  ret = ProposeView(hoid, 1, initial_view);
+  ret = ProposeView(hoid, 1, view);
   if (ret) {
-    std::cerr << "propose view ret " << ret << std::endl;
     return ret;
   }
 
-  hoid_out = hoid;
-  prefix = log_prefix;
-
-  return ret;
-}
-
-int CephBackend::OpenLog(const std::string& name,
-    std::string& hoid, std::string& prefix)
-{
-  zlog_ceph_proto::LinkObjectHeader link;
-  {
-    ::ceph::bufferlist bl;
-    auto loid = LinkObjectName(name);
-    int ret = ioctx_->read(loid, bl, 0, 0);
-    if (ret < 0) {
-      return ret;
-    }
-
-    if (!decode(bl, &link))
-      return -EIO;
+  if (hoid_out) {
+    hoid_out->swap(hoid);
   }
 
-  hoid = link.hoid();
-
-  zlog_ceph_proto::HeadObjectHeader head;
-  {
-    ::ceph::bufferlist bl;
-    int ret = ioctx_->getxattr(hoid, HEAD_HEADER_KEY, bl);
-    if (ret < 0) {
-      return ret;
-    }
-    if (!decode(bl, &head))
-      return -EIO;
+  if (prefix_out) {
+    prefix_out->swap(prefix);
   }
-
-  if (head.deleted())
-    return -ENOENT;
-
-  prefix = head.prefix();
-  if (prefix.empty())
-    return -EIO;
 
   return 0;
 }
 
-int CephBackend::ReadViews(const std::string& hoid,
-    uint64_t epoch, std::map<uint64_t, std::string>& out)
+int CephBackend::OpenLog(const std::string& name, std::string *hoid_out,
+    std::string *prefix_out)
 {
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
+  // read the hoid from the link object
+  std::string hoid;
+  {
+    ::ceph::bufferlist bl;
+    const auto link_oid = LinkObjectName(name);
+    int ret = ioctx_->read(link_oid, bl, 0, 0);
+    if (ret < 0) {
+      return ret;
+    }
+
+    zlog_ceph_proto::LinkObjectHeader link;
+    if (!decode(bl, &link)) {
+      return -EIO;
+    }
+
+    hoid = link.hoid();
+  }
+
+  // load log metadata from the head object
+  ::ceph::bufferlist bl;
+  int ret = ioctx_->getxattr(hoid, HEAD_HEADER_KEY, bl);
+  if (ret < 0) {
+    if (ret == -ENOENT) {
+      // ENOENT is returned when the log link object doesn't exist. The head
+      // object may also not exist, but that would be a basic violation of
+      // assumptions, so we convert this into an error that clients won't
+      // confuse with a log not existing.
+      return -EIO;
+    }
+    return ret;
+  }
+
+  zlog_ceph_proto::HeadObjectHeader head;
+  if (!decode(bl, &head)) {
+    return -EIO;
+  }
+
+  auto prefix = head.prefix();
+  if (prefix.empty()) {
+    return -EIO;
+  }
+
+
+  if (hoid_out) {
+    hoid_out->swap(hoid);
+  }
+
+  if (prefix_out) {
+    prefix_out->swap(prefix);
+  }
+
+  return 0;
+}
+
+int CephBackend::ReadViews(const std::string& hoid, uint64_t epoch,
+    uint32_t max_views, std::map<uint64_t, std::string> *views_out)
+{
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   std::map<uint64_t, std::string> tmp;
 
   // read views starting with specified epoch
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read_view(op, epoch);
+  zlog::cls_zlog_read_view(op, epoch, max_views);
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(hoid, &op, &bl);
-  if (ret)
+  if (ret) {
     return ret;
+  }
 
   zlog_ceph_proto::Views views;
-  if (!decode(bl, &views))
+  if (!decode(bl, &views)) {
     return -EIO;
+  }
 
   // unpack into return map
   for (int i = 0; i < views.views_size(); i++) {
@@ -268,7 +289,7 @@ int CephBackend::ReadViews(const std::string& hoid,
     (void)res;
   }
 
-  out.swap(tmp);
+  views_out->swap(tmp);
 
   return 0;
 }
@@ -276,6 +297,10 @@ int CephBackend::ReadViews(const std::string& hoid,
 int CephBackend::ProposeView(const std::string& hoid,
     uint64_t epoch, const std::string& view)
 {
+  if (hoid.empty()) {
+    return -EINVAL;
+  }
+
   ::ceph::bufferlist bl;
   bl.append(view.c_str(), view.size());
   librados::ObjectWriteOperation op;
@@ -285,15 +310,20 @@ int CephBackend::ProposeView(const std::string& hoid,
 }
 
 int CephBackend::Read(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride, std::string *data)
+    uint64_t position, std::string *data)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position, stride);
+  zlog::cls_zlog_read(op, epoch, position);
 
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
-  if (ret)
+  if (ret) {
     return ret;
+  }
 
   data->assign(bl.c_str(), bl.length());
 
@@ -301,46 +331,63 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int CephBackend::Write(const std::string& oid, const Slice& data,
-          uint64_t epoch, uint64_t position, uint32_t stride)
+    uint64_t epoch, uint64_t position)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
   ::ceph::bufferlist data_bl;
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, stride, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, data_bl);
 
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Fill(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride)
+    uint64_t position)
 {
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, stride, false);
+  if (oid.empty()) {
+    return -EINVAL;
+  }
 
+  librados::ObjectWriteOperation op;
+  zlog::cls_zlog_invalidate(op, epoch, position, false);
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride)
+    uint64_t position)
 {
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, stride, true);
+  if (oid.empty()) {
+    return -EINVAL;
+  }
 
+  librados::ObjectWriteOperation op;
+  zlog::cls_zlog_invalidate(op, epoch, position, true);
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Seal(const std::string& oid, uint64_t epoch)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
   librados::ObjectWriteOperation op;
   zlog::cls_zlog_seal(op, epoch);
-
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
            uint64_t *pos, bool *empty)
 {
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
   int rv;
   librados::ObjectReadOperation op;
   zlog::cls_zlog_max_position(op, epoch, pos, empty, &rv);
@@ -355,8 +402,7 @@ int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
 }
 
 int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    std::string *data, void *arg,
+    uint64_t position, std::string *data, void *arg,
     std::function<void(void*, int)> callback)
 {
   AioContext *c = new AioContext;
@@ -368,14 +414,13 @@ int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
   assert(c->c);
 
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position, stride);
+  zlog::cls_zlog_read(op, epoch, position);
 
   return ioctx_->aio_operate(oid, c->c, &op, &c->bl);
 }
 
 int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, uint32_t stride,
-    const Slice& data, void *arg,
+    uint64_t position, const Slice& data, void *arg,
     std::function<void(void*, int)> callback)
 {
   AioContext *c = new AioContext;
@@ -390,7 +435,7 @@ int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, stride, data_bl);
+  zlog::cls_zlog_write(op, epoch, position, data_bl);
 
   return ioctx_->aio_operate(oid, c->c, &op);
 }
@@ -405,6 +450,9 @@ std::string CephBackend::LinkObjectName(const std::string& name)
 int CephBackend::CreateLinkObject(const std::string& name,
     const std::string& hoid)
 {
+  assert(!name.empty());
+  assert(!hoid.empty());
+
   zlog_ceph_proto::LinkObjectHeader meta;
   meta.set_hoid(hoid);
 

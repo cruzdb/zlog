@@ -8,9 +8,6 @@
 #include <limits.h>
 #include <google/protobuf/stubs/common.h>
 
-void BackendTest::SetUp() {}
-void BackendTest::TearDown() {}
-
 struct DBPathContext {
   char *dbpath = nullptr;
   virtual ~DBPathContext() {
@@ -25,6 +22,28 @@ struct DBPathContext {
     }
   }
 };
+
+struct BackendTest::Context : public DBPathContext {
+};
+
+void BackendTest::SetUp() {
+  context = new Context;
+
+  context->dbpath = strdup("/tmp/zlog.db.XXXXXX");
+  ASSERT_NE(mkdtemp(context->dbpath), nullptr);
+  ASSERT_GT(strlen(context->dbpath), (unsigned)0);
+
+  auto be = std::unique_ptr<zlog::storage::lmdb::LMDBBackend>(
+      new zlog::storage::lmdb::LMDBBackend());
+  be->Init(context->dbpath);
+  backend = std::move(be);
+}
+
+void BackendTest::TearDown() {
+  backend.reset();
+  if (context)
+    delete context;
+}
 
 struct LibZLogTest::Context : public DBPathContext {
 };
