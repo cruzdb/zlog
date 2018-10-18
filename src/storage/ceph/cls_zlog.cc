@@ -3,6 +3,8 @@
 CLS_VER(1,0)
 CLS_NAME(zlog)
 
+#define MAX_VIEW_READS ((uint32_t)100)
+
 static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
@@ -337,9 +339,12 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
+  uint32_t max_views = std::max(((uint32_t)1), op.max_views());
+  max_views = std::min(max_views, MAX_VIEW_READS);
+
   uint32_t count = 0;
   zlog_ceph_proto::Views views;
-  while (epoch <= head.epoch() && count < op.max_views()) {
+  while (epoch <= head.epoch() && count < max_views) {
     ceph::bufferlist bl;
     ret = head.read_view(epoch, &bl);
     if (ret < 0) {
