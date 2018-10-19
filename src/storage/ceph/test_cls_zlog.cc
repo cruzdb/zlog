@@ -1005,7 +1005,9 @@ TEST_F(ClsZlogTest, CreateView_BadInput) {
 
 TEST_F(ClsZlogTest, CreateView_Dne) {
   ceph::bufferlist bl;
-  int ret = view_create(0, bl);
+  int ret = view_create(0, bl); // check for 0 is first
+  ASSERT_EQ(ret, -EINVAL);
+  ret = view_create(1, bl);
   ASSERT_EQ(ret, -ENOENT);
 }
 
@@ -1013,7 +1015,7 @@ TEST_F(ClsZlogTest, CreateView_MissingHeader) {
   int ret = ioctx.create("obj", true);
   ASSERT_EQ(ret, 0);
   ceph::bufferlist bl;
-  ret = view_create(0, bl);
+  ret = view_create(1, bl);
   ASSERT_EQ(ret, -EIO);
 }
 
@@ -1026,7 +1028,7 @@ TEST_F(ClsZlogTest, CreateView_CorruptHeader) {
   ret = ioctx.setxattr("obj", "zlog.head.header", bl);
   ASSERT_EQ(ret, 0);
 
-  ret = view_create(0, bl);
+  ret = view_create(1, bl);
   ASSERT_EQ(ret, -EIO);
 }
 
@@ -1040,7 +1042,7 @@ TEST_F(ClsZlogTest, CreateView_InitWithEpochOne) {
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
   ret = view_create(2, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
 
   // first epoch = 1
   ret = view_create(1, bl);
@@ -1057,7 +1059,7 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
   ret = view_create(2, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
 
   // first epoch = 1
   ret = view_create(1, bl);
@@ -1066,11 +1068,11 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ASSERT_EQ(ret, 0);
 
   ret = view_create(1, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(4, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(5, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
 
@@ -1080,9 +1082,9 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ASSERT_EQ(ret, 0);
 
   ret = view_create(1, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(4, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
 
   ret = view_create(5, bl);
   ASSERT_EQ(ret, 0);
@@ -1090,9 +1092,9 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
   ret = view_create(3, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(4, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -ESPIPE);
 }
 
 TEST_F(ClsZlogTest, ReadView_BadInput) {
@@ -1214,14 +1216,13 @@ TEST_F(ClsZlogTest, ReadView_MinMaxRet) {
     ASSERT_EQ(ret, 0);
   }
 
-  // min one
+  // zero returns empty set of views
   ceph::bufferlist bl;
   std::map<uint64_t, std::string> views;
   ret = view_read(1, bl, 0);
   ASSERT_EQ(ret, 0);
   decode_views(bl, views);
-  ASSERT_EQ(views.size(), 1u);
-  ASSERT_EQ(views.begin()->second, blobs[1]);
+  ASSERT_EQ(views.size(), 0u);
 
   // max cap 100
   views.clear();

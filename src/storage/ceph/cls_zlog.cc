@@ -288,6 +288,11 @@ static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
+  if (op.epoch() < 1) {
+    CLS_ERR("ERROR: view_create(): invalid epoch %llu", op.epoch());
+    return -EINVAL;
+  }
+
   cls_zlog::HeadObject head(hctx);
   int ret = head.initialize();
   if (ret < 0) {
@@ -339,8 +344,8 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
-  uint32_t max_views = std::max(((uint32_t)1), op.max_views());
-  max_views = std::min(max_views, MAX_VIEW_READS);
+  uint32_t max_views = std::min(((uint32_t)op.max_views()),
+      ((uint32_t)MAX_VIEW_READS));
 
   uint32_t count = 0;
   zlog_ceph_proto::Views views;
