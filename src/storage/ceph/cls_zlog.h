@@ -18,14 +18,13 @@ static inline std::string u64tostr(uint64_t value,
   return ss.str();
 }
 
-// combine with LogEntry
 class LogObjectHeader {
  public:
   explicit LogObjectHeader(cls_method_context_t hctx) :
     hctx_(hctx)
   {}
 
-  int load() {
+  int read() {
     ceph::bufferlist bl;
     int ret = cls_cxx_getxattr(hctx_, log_hdr_key_, &bl);
     if (ret < 0) {
@@ -47,7 +46,7 @@ class LogObjectHeader {
     return 0;
   }
 
-  int save() {
+  int write() {
     ceph::bufferlist bl;
     encode(bl, hdr_);
     return cls_cxx_setxattr(hctx_, log_hdr_key_, &bl);
@@ -78,13 +77,13 @@ class LogObjectHeader {
     return boost::none;
   }
 
-  int update_max_pos(uint64_t pos) {
+  bool update_max_pos(uint64_t pos) {
     auto m = max_pos();
     if (!m || pos > *m) {
       hdr_.set_max_pos(pos);
-      return save();
+      return true;
     }
-    return 0;
+    return false;
   }
 
  private:
@@ -101,7 +100,7 @@ class LogEntry {
     hctx_(hctx)
   {}
 
-  int init() {
+  int read() {
     assert(!initialized());
     ceph::bufferlist bl;
     int ret = cls_cxx_map_get_val(hctx_, entry_key_, &bl);
@@ -118,6 +117,12 @@ class LogEntry {
     }
     exists_ = true;
     return 0;
+  }
+
+  int write() {
+    ceph::bufferlist bl;
+    encode(bl, entry_);
+    return cls_cxx_map_set_val(hctx_, entry_key_, &bl);
   }
 
   bool exists() const {
@@ -153,12 +158,6 @@ class LogEntry {
       }
       return cls_cxx_read(hctx_, entry_.offset(), entry_.length(), out);
     }
-  }
-
-  int write() {
-    ceph::bufferlist bl;
-    encode(bl, entry_);
-    return cls_cxx_map_set_val(hctx_, entry_key_, &bl);
   }
 
  private:

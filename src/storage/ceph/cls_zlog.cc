@@ -15,7 +15,7 @@ static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogObjectHeader header(hctx);
-  int ret = header.load();
+  int ret = header.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_read(): failed to read header %d", ret);
     return ret;
@@ -28,7 +28,7 @@ static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogEntry entry(hctx, op.pos());
-  ret = entry.init();
+  ret = entry.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_read(): error reading entry %d", ret);
     return ret;
@@ -63,7 +63,7 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogObjectHeader header(hctx);
-  int ret = header.load();
+  int ret = header.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_write(): failed to read header %d", ret);
     return ret;
@@ -76,7 +76,7 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogEntry entry(hctx, op.pos());
-  ret = entry.init();
+  ret = entry.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_write(): init failed %d", ret);
     return ret;
@@ -94,10 +94,12 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  ret = header.update_max_pos(op.pos());
-  if (ret < 0) {
-    CLS_ERR("ERROR: log_entry_write(): header update failed %d", ret);
-    return ret;
+  if (header.update_max_pos(op.pos())) {
+    ret = header.write();
+    if (ret < 0) {
+      CLS_ERR("ERROR: log_entry_write(): header update failed %d", ret);
+      return ret;
+    }
   }
 
   return 0;
@@ -113,7 +115,7 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogObjectHeader header(hctx);
-  int ret = header.load();
+  int ret = header.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_invalidate(): failed to read header %d", ret);
     return ret;
@@ -126,7 +128,7 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogEntry entry(hctx, op.pos());
-  ret = entry.init();
+  ret = entry.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_invalidate(): init failed %d", ret);
     return ret;
@@ -150,10 +152,12 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  ret = header.update_max_pos(op.pos());
-  if (ret < 0) {
-    CLS_ERR("ERROR: log_entry_invalidate(): header update failed %d", ret);
-    return ret;
+  if (header.update_max_pos(op.pos())) {
+    ret = header.write();
+    if (ret < 0) {
+      CLS_ERR("ERROR: log_entry_invalidate(): header update failed %d", ret);
+      return ret;
+    }
   }
 
   return 0;
@@ -175,7 +179,7 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   cls_zlog::LogObjectHeader header(hctx);
-  int ret = header.load();
+  int ret = header.read();
   if (ret < 0 && ret != -ENOENT) {
     CLS_ERR("ERROR: log_entry_seal(): failed to read header %d", ret);
     return ret;
@@ -194,7 +198,7 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   header.set_epoch(op.epoch());
-  ret = header.save();
+  ret = header.write();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_seal(): write header failed %d", ret);
     return ret;
@@ -213,7 +217,7 @@ static int log_entry_max_position(cls_method_context_t hctx,
   }
 
   cls_zlog::LogObjectHeader header(hctx);
-  int ret = header.load();
+  int ret = header.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_max_position(): failed to load header %d", ret);
     return ret;
