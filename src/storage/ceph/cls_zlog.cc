@@ -3,8 +3,6 @@
 CLS_VER(1,0)
 CLS_NAME(zlog)
 
-#define MAX_VIEW_READS ((uint32_t)100)
-
 static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
@@ -349,7 +347,7 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   uint32_t max_views = std::min(((uint32_t)op.max_views()),
-      ((uint32_t)MAX_VIEW_READS));
+      ((uint32_t)ZLOG_MAX_VIEW_READS));
 
   uint32_t count = 0;
   zlog_ceph_proto::Views views;
