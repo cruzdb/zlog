@@ -102,12 +102,12 @@ TEST_F(BackendTest, ProposeView_Args) {
   ASSERT_EQ(backend->CreateLog("a", "", &hoid, &prefix), 0);
 
   ASSERT_EQ(backend->ProposeView(hoid, 2, "b"), 0);
-  ASSERT_EQ(backend->ProposeView(hoid, 0, "b"), -ESPIPE);
+  ASSERT_EQ(backend->ProposeView(hoid, 0, "b"), -EINVAL);
   ASSERT_EQ(backend->ProposeView(hoid, 3, ""), 0);
 }
 
 TEST_F(BackendTest, ProposeView_NoInit) {
-  ASSERT_EQ(backend->ProposeView("a", 0, ""), -ENOENT);
+  ASSERT_EQ(backend->ProposeView("a", 0, ""), -EINVAL);
   ASSERT_EQ(backend->ProposeView("a", 2, ""), -ENOENT);
   ASSERT_EQ(backend->ProposeView("a", 1, ""), -ENOENT);
   ASSERT_EQ(backend->ProposeView("a", 3, ""), -ENOENT);
@@ -148,6 +148,19 @@ TEST_F(BackendTest, ReadViews_Args) {
 TEST_F(BackendTest, ReadViews_NoInit) {
   std::map<uint64_t, std::string> views;
   ASSERT_EQ(backend->ReadViews("a", 1, 1, &views), -ENOENT);
+}
+
+TEST_F(BackendTest, ReadViews_ZeroMax) {
+  std::string hoid, prefix;
+  ASSERT_EQ(backend->CreateLog("a", "", &hoid, &prefix), 0);
+
+  std::map<uint64_t, std::string> views;
+  ASSERT_EQ(backend->ReadViews(hoid, 1, 1, &views), 0);
+  ASSERT_EQ(views.size(), 1u);
+
+  views.clear();
+  ASSERT_EQ(backend->ReadViews(hoid, 1, 0, &views), 0);
+  ASSERT_EQ(views.size(), 0u);
 }
 
 TEST_F(BackendTest, ReadViews) {

@@ -8,6 +8,12 @@
 #include "storage/ceph/cls_zlog.pb.h"
 #include "storage/ceph/protobuf_bufferlist_adapter.h"
 
+#define ZLOG_MAX_VIEW_READS ((uint32_t)100)
+#define ZLOG_HEAD_HDR_KEY "zlog.head.header"
+#define ZLOG_VIEW_KEY_PREFIX "zlog.head.view."
+#define ZLOG_DATA_HDR_KEY "zlog.data.header"
+#define ZLOG_ENTRY_KEY_PREFIX "zlog.data.entry."
+
 namespace cls_zlog {
 
 static inline std::string u64tostr(uint64_t value,
@@ -18,16 +24,15 @@ static inline std::string u64tostr(uint64_t value,
   return ss.str();
 }
 
-// combine with LogEntry
 class LogObjectHeader {
  public:
   explicit LogObjectHeader(cls_method_context_t hctx) :
     hctx_(hctx)
   {}
 
-  int load() {
+  int read() {
     ceph::bufferlist bl;
-    int ret = cls_cxx_getxattr(hctx_, log_hdr_key_, &bl);
+    int ret = cls_cxx_getxattr(hctx_, ZLOG_DATA_HDR_KEY, &bl);
     if (ret < 0) {
       // ENODATA means the object exists without a header. This would be a
       // violation of our basic protocol assumptions. Return an error value that
@@ -47,10 +52,10 @@ class LogObjectHeader {
     return 0;
   }
 
-  int save() {
+  int write() {
     ceph::bufferlist bl;
     encode(bl, hdr_);
-    return cls_cxx_setxattr(hctx_, log_hdr_key_, &bl);
+    return cls_cxx_setxattr(hctx_, ZLOG_DATA_HDR_KEY, &bl);
   }
 
   int epoch_guard(uint64_t epoch) {
@@ -78,17 +83,16 @@ class LogObjectHeader {
     return boost::none;
   }
 
-  int update_max_pos(uint64_t pos) {
+  bool update_max_pos(uint64_t pos) {
     auto m = max_pos();
     if (!m || pos > *m) {
       hdr_.set_max_pos(pos);
-      return save();
+      return true;
     }
-    return 0;
+    return false;
   }
 
  private:
-  const char *log_hdr_key_ = "zlog.data.header";
   cls_method_context_t hctx_;
   zlog_ceph_proto::LogObjectHeader hdr_;
 };
@@ -96,12 +100,12 @@ class LogObjectHeader {
 class LogEntry {
  public:
   LogEntry(cls_method_context_t hctx, uint64_t pos) :
-    entry_key_(u64tostr(pos, entry_prefix_)),
+    entry_key_(u64tostr(pos, ZLOG_ENTRY_KEY_PREFIX)),
     exists_(boost::none),
     hctx_(hctx)
   {}
 
-  int init() {
+  int read() {
     assert(!initialized());
     ceph::bufferlist bl;
     int ret = cls_cxx_map_get_val(hctx_, entry_key_, &bl);
@@ -118,6 +122,12 @@ class LogEntry {
     }
     exists_ = true;
     return 0;
+  }
+
+  int write() {
+    ceph::bufferlist bl;
+    encode(bl, entry_);
+    return cls_cxx_map_set_val(hctx_, entry_key_, &bl);
   }
 
   bool exists() const {
@@ -155,14 +165,7 @@ class LogEntry {
     }
   }
 
-  int write() {
-    ceph::bufferlist bl;
-    encode(bl, entry_);
-    return cls_cxx_map_set_val(hctx_, entry_key_, &bl);
-  }
-
  private:
-  const char *entry_prefix_ = "zlog.data.entry.";
   const std::string entry_key_;
 
   boost::optional<bool> exists_;
@@ -192,7 +195,7 @@ class HeadObject {
 
   int initialize() {
     ceph::bufferlist bl;
-    int ret = cls_cxx_getxattr(hctx_, view_hdr_key_, &bl);
+    int ret = cls_cxx_getxattr(hctx_, ZLOG_HEAD_HDR_KEY, &bl);
     if (ret < 0) {
       // ENODATA means the object exists, but the key doesn't exist. This is
       // reported as EIO to indicate a protocol violation: the head object
@@ -213,7 +216,7 @@ class HeadObject {
   int finalize() {
     ceph::bufferlist bl;
     encode(bl, hdr_);
-    return cls_cxx_setxattr(hctx_, view_hdr_key_, &bl);
+    return cls_cxx_setxattr(hctx_, ZLOG_HEAD_HDR_KEY, &bl);
   }
 
   uint64_t epoch() const {
@@ -241,10 +244,8 @@ class HeadObject {
   }
 
  private:
-  const char *view_hdr_key_ = "zlog.head.header";
-  const char *view_key_prefix_ = "zlog.head.view.";
   inline std::string view_key(uint64_t epoch) const {
-    return u64tostr(epoch, view_key_prefix_);
+    return u64tostr(epoch, ZLOG_VIEW_KEY_PREFIX);
   }
 
   cls_method_context_t hctx_;
