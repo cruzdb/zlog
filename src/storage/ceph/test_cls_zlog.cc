@@ -70,13 +70,28 @@ class ClsZlogTest : public ::testing::Test {
     return ioctx.operate(oid, &op);
   }
 
-  int entry_maxpos(uint64_t epoch, uint64_t *pos, bool *empty,
-      const std::string& oid = "obj") {
-    int rv;
+  int entry_maxpos(uint64_t epoch, uint64_t *position_out,
+      bool *empty_out, const std::string& oid = "obj") {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_max_position(op, epoch, pos, empty, &rv);
-    int ret = ioctx.operate(oid, &op, NULL);
-    return ret ? ret : rv;
+    zlog::cls_zlog_max_position(op, epoch);
+
+    ceph::bufferlist bl;
+    int ret = ioctx.operate(oid, &op, &bl);
+    if (ret) {
+      return ret;
+    }
+
+    zlog_ceph_proto::MaxPos reply;
+    if (!decode(bl, &reply)) {
+      return -EIO;
+    }
+
+    *empty_out = !reply.has_pos();
+    if (reply.has_pos()) {
+      *position_out = reply.pos();
+    }
+
+    return 0;
   }
 
   int view_create(uint64_t epoch, ceph::bufferlist& bl,

@@ -93,11 +93,9 @@ int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   if (hoid.empty())
     return -EINVAL;
 
-  if (max_views == 0)
-    max_views = 1;
-
-  if (epoch == 0)
+  if (epoch == 0) {
     return -EINVAL;
+  }
 
   std::lock_guard<std::mutex> lk(lock_);
 
@@ -146,6 +144,10 @@ int RAMBackend::ProposeView(const std::string& hoid,
     uint64_t epoch, const std::string& view)
 {
   if (hoid.empty()) {
+    return -EINVAL;
+  }
+
+  if (epoch == 0) {
     return -EINVAL;
   }
 
@@ -383,25 +385,6 @@ int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
 
   return 0;
 }
-
-int RAMBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, const Slice& data, void *arg,
-    std::function<void(void*, int)> callback)
-{
-  int ret = Write(oid, data, epoch, position);
-  callback(arg, ret);
-  return 0;
-}
-
-int RAMBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data, void *arg,
-    std::function<void(void*, int)> callback)
-{
-  int ret = Read(oid, epoch, position, data);
-  callback(arg, ret);
-  return 0;
-}
-
 
 int RAMBackend::CheckEpoch(uint64_t epoch, const std::string& oid,
     bool eq, LogObject*& lobj)

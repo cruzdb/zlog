@@ -1,7 +1,6 @@
 set(libzlog_sources
   log_impl.cc
   striper.cc
-  aio.cc
   capi.cc
   log.cc
   backend.cc

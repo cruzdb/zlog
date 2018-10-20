@@ -57,14 +57,6 @@ class RAMBackend : public Backend {
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
 
-  int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, const Slice& data, void *arg,
-      std::function<void(void*, int)> callback) override;
-
-  int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data, void *arg,
-      std::function<void(void*, int)> callback) override;
-
  private:
   struct ProjectionObject {
     uint64_t epoch;

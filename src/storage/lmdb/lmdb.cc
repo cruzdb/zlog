@@ -216,6 +216,10 @@ int LMDBBackend::ProposeView(const std::string& hoid,
     return -EINVAL;
   }
 
+  if (epoch == 0) {
+    return -EINVAL;
+  }
+
   auto txn = NewTransaction();
 
   MDB_val val;
@@ -513,24 +517,6 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
   if (ret)
     return ret;
 
-  return 0;
-}
-
-int LMDBBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, const Slice& data, void *arg,
-    std::function<void(void*, int)> callback)
-{
-  int ret = Write(oid, data, epoch, position);
-  callback(arg, ret);
-  return 0;
-}
-
-int LMDBBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data, void *arg,
-    std::function<void(void*, int)> callback)
-{
-  int ret = Read(oid, epoch, position, data);
-  callback(arg, ret);
   return 0;
 }
 

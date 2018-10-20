@@ -50,44 +50,13 @@ void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch)
   op.exec("zlog", "entry_seal", bl);
 }
 
-class ClsZlogMaxPositionReply : public librados::ObjectOperationCompletion {
- public:
-  ClsZlogMaxPositionReply(uint64_t *pposition, bool *pempty, int *pret) :
-    pposition_(pposition), pempty_(pempty), pret_(pret)
-  {}
-
-  void handle_completion(int ret, ceph::bufferlist& bl) {
-    if (ret == 0) {
-      zlog_ceph_proto::MaxPos reply;
-      if (decode(bl, &reply)) {
-        *pempty_ = !reply.has_pos();
-        if (reply.has_pos())
-          *pposition_ = reply.pos();
-      } else {
-        ret = -EIO;
-      }
-    } if (ret > 0) {
-      std::cerr << "unexpected positive rv" << std::endl;
-      ret = -EIO;
-    }
-    *pret_ = ret;
-  }
-
- private:
-  uint64_t *pposition_;
-  bool *pempty_;
-  int *pret_;
-};
-
-void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch,
-    uint64_t *pposition, bool *pempty, int *pret)
+void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::ReadMaxPos call;
   call.set_epoch(epoch);
   encode(bl, call);
-  op.exec("zlog", "entry_max_position", bl,
-      new ClsZlogMaxPositionReply(pposition, pempty, pret));
+  op.exec("zlog", "entry_max_position", bl);
 }
 
 void cls_zlog_init_head(librados::ObjectWriteOperation& op,

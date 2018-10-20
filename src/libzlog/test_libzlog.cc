@@ -3,24 +3,9 @@
 #include "test_libzlog.h"
 #include "zlog/stream.h"
 
-struct aio_state {
-  zlog::AioCompletion *c;
-  uint64_t position;
-  int retval;
-
-  std::string in_data;
-  std::string out_data;
-};
-
-static void handle_aio_cb(aio_state *ctx)
-{
-  ctx->retval = ctx->c->ReturnValue();
-}
-
-static void handle_aio_cb_read(aio_state *ctx)
-{
-  ctx->retval = ctx->c->ReturnValue();
-}
+// TODO
+//  - add async tests. though currently all of the synchronous apis are built on
+//  top of the async versions.
 
 TEST_P(LibZLogTest, OpenClose) {
   // TODO: we should... reverify this is true for at least ceph
@@ -63,52 +48,6 @@ TEST_P(LibZLogTest, OpenClose) {
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(input, output);
-}
-
-TEST_P(LibZLogTest, Aio) {
-  // issue some appends
-  std::vector<aio_state*> aios;
-  for (int i = 0; i < 1; i++) {
-    auto ctx = new aio_state;
-    ctx->position = (uint64_t)-1;
-    ctx->retval = -1;
-    std::stringstream ss;
-    ss << "data." << i;
-    ctx->in_data = ss.str();
-    ASSERT_NE(ctx->in_data, ctx->out_data);
-    ctx->c = zlog::Log::aio_create_completion(
-        std::bind(handle_aio_cb, ctx));
-    int ret = log->AioAppend(ctx->c, zlog::Slice(ctx->in_data), &ctx->position);
-    ASSERT_EQ(ret, 0);
-    aios.push_back(ctx);
-  }
-
-  // wait for them to complete
-  for (auto ctx : aios) {
-    ctx->c->WaitForComplete();
-    ASSERT_GE(ctx->position, (uint64_t)0);
-    ASSERT_EQ(ctx->retval, 0);
-    delete ctx->c;
-    ctx->c = NULL;
-  }
-
-  // re-read and verify
-  for (auto ctx : aios) {
-    ctx->c = zlog::Log::aio_create_completion(
-        std::bind(handle_aio_cb_read, ctx));
-    int ret = log->AioRead(ctx->position, ctx->c, &ctx->out_data);
-    ASSERT_EQ(ret, 0);
-  }
-
-  // wait for them to complete
-  for (auto ctx : aios) {
-    ctx->c->WaitForComplete();
-    ASSERT_GE(ctx->position, (uint64_t)0);
-    ASSERT_EQ(ctx->retval, 0);
-    ASSERT_EQ(ctx->in_data, ctx->out_data);
-    delete ctx->c;
-    delete ctx;
-  }
 }
 
 /*

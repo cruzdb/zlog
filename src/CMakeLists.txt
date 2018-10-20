@@ -32,7 +32,6 @@ add_subdirectory(proto)
 #add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(storage)
-add_subdirectory(bench)
 add_subdirectory(test)
 
 option(WITH_JNI "build with JNI" OFF)

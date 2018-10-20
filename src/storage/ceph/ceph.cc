@@ -382,62 +382,32 @@ int CephBackend::Seal(const std::string& oid, uint64_t epoch)
 }
 
 int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
-           uint64_t *pos, bool *empty)
+    uint64_t *position_out, bool *empty_out)
 {
   if (oid.empty()) {
     return -EINVAL;
   }
 
-  int rv;
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_max_position(op, epoch, pos, empty, &rv);
+  zlog::cls_zlog_max_position(op, epoch);
 
-  int ret = ioctx_->operate(oid, &op, NULL);
-  if (ret < 0)
+  ::ceph::bufferlist bl;
+  int ret = ioctx_->operate(oid, &op, &bl);
+  if (ret) {
     return ret;
-  if (rv < 0)
-    return rv;
+  }
+
+  zlog_ceph_proto::MaxPos reply;
+  if (!decode(bl, &reply)) {
+    return -EIO;
+  }
+
+  *empty_out = !reply.has_pos();
+  if (reply.has_pos()) {
+    *position_out = reply.pos();
+  }
 
   return 0;
-}
-
-int CephBackend::AioRead(const std::string& oid, uint64_t epoch,
-    uint64_t position, std::string *data, void *arg,
-    std::function<void(void*, int)> callback)
-{
-  AioContext *c = new AioContext;
-  c->arg = arg;
-  c->cb = callback;
-  c->data = data;
-  c->c = librados::Rados::aio_create_completion(c,
-      NULL, CephBackend::aio_safe_cb_read);
-  assert(c->c);
-
-  librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position);
-
-  return ioctx_->aio_operate(oid, c->c, &op, &c->bl);
-}
-
-int CephBackend::AioWrite(const std::string& oid, uint64_t epoch,
-    uint64_t position, const Slice& data, void *arg,
-    std::function<void(void*, int)> callback)
-{
-  AioContext *c = new AioContext;
-  c->arg = arg;
-  c->cb = callback;
-  c->data = NULL;
-  c->c = librados::Rados::aio_create_completion(c,
-      NULL, CephBackend::aio_safe_cb_append);
-  assert(c->c);
-
-  ::ceph::bufferlist data_bl;
-  data_bl.append(data.data(), data.size());
-
-  librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, data_bl);
-
-  return ioctx_->aio_operate(oid, c->c, &op);
 }
 
 std::string CephBackend::LinkObjectName(const std::string& name)
@@ -475,28 +445,6 @@ int CephBackend::InitHeadObject(const std::string& hoid,
   librados::ObjectWriteOperation op;
   zlog::cls_zlog_init_head(op, prefix);
   return ioctx_->operate(hoid, &op);
-}
-
-void CephBackend::aio_safe_cb_append(librados::completion_t cb, void *arg)
-{
-  AioContext *c = (AioContext*)arg;
-  librados::AioCompletion *rc = c->c;
-  int ret = rc->get_return_value();
-  rc->release();
-  c->cb(c->arg, ret);
-  delete c;
-}
-
-void CephBackend::aio_safe_cb_read(librados::completion_t cb, void *arg)
-{
-  AioContext *c = (AioContext*)arg;
-  librados::AioCompletion *rc = c->c;
-  int ret = rc->get_return_value();
-  rc->release();
-  if (ret == 0 && c->bl.length() > 0)
-    c->data->assign(c->bl.c_str(), c->bl.length());
-  c->cb(c->arg, ret);
-  delete c;
 }
 
 extern "C" Backend *__backend_allocate(void)

@@ -51,31 +51,12 @@ class CephBackend : public Backend {
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
 
-  int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, const Slice& data, void *arg,
-      std::function<void(void*, int)> callback) override;
-
-  int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data, void *arg,
-      std::function<void(void*, int)> callback) override;
-
  private:
-  struct AioContext {
-    librados::AioCompletion *c;
-    void *arg;
-    std::function<void(void*, int)> cb;
-    ::ceph::bufferlist bl;
-    std::string *data;
-  };
-
   std::map<std::string, std::string> options;
 
   librados::Rados *cluster_;
   librados::IoCtx *ioctx_;
   std::string pool_;
-
-  static void aio_safe_cb_append(librados::completion_t cb, void *arg);
-  static void aio_safe_cb_read(librados::completion_t cb, void *arg);
 
   static std::string LinkObjectName(const std::string& name);
 

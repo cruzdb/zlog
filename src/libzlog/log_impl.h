@@ -18,6 +18,131 @@ namespace zlog {
 typedef Backend *(*backend_allocate_t)(void);
 typedef void (*backend_release_t)(Backend*);
 
+class LogOp {
+ public:
+  LogOp(LogImpl *log) :
+    log_(log)
+  {}
+
+  virtual ~LogOp() {}
+  virtual int run() = 0;
+  virtual void callback(int ret) = 0;
+
+ protected:
+  LogImpl *log_;
+};
+
+class TailOp : public LogOp {
+ public:
+  TailOp(LogImpl *log, bool increment, std::function<void(int, uint64_t)> cb) :
+    LogOp(log),
+    increment_(increment),
+    cb_(cb)
+  {}
+
+  int run() override;
+
+  void callback(int ret) override {
+    if (cb_) {
+      cb_(ret, position_);
+    }
+  }
+
+ private:
+  bool increment_;
+  uint64_t position_;
+  std::function<void(int, uint64_t)> cb_;
+};
+
+class TrimOp : public LogOp {
+ public:
+  TrimOp(LogImpl *log, uint64_t position, std::function<void(int)> cb) :
+    LogOp(log),
+    position_(position),
+    cb_(cb)
+  {}
+
+  int run() override;
+
+  void callback(int ret) override {
+    if (cb_) {
+      cb_(ret);
+    }
+  }
+
+ private:
+  uint64_t position_;
+  std::function<void(int)> cb_;
+};
+
+class FillOp : public LogOp {
+ public:
+  FillOp(LogImpl *log, uint64_t position, std::function<void(int)> cb) :
+    LogOp(log),
+    position_(position),
+    cb_(cb)
+  {}
+
+  int run() override;
+
+  void callback(int ret) override {
+    if (cb_) {
+      cb_(ret);
+    }
+  }
+
+ private:
+  uint64_t position_;
+  std::function<void(int)> cb_;
+};
+
+class ReadOp : public LogOp {
+ public:
+  ReadOp(LogImpl *log, uint64_t position,
+      std::function<void(int, std::string&)> cb) :
+    LogOp(log),
+    position_(position),
+    cb_(cb)
+  {}
+
+  int run() override;
+
+  void callback(int ret) override {
+    if (cb_) {
+      cb_(ret, data_);
+    }
+  }
+
+ private:
+  uint64_t position_;
+  std::string data_;
+  std::function<void(int, std::string&)> cb_;
+};
+
+// TODO: move or copy or reference for the data
+class AppendOp : public LogOp {
+ public:
+  AppendOp(LogImpl *log, const Slice& data,
+      std::function<void(int, uint64_t)> cb) :
+    LogOp(log),
+    data_(data.data(), data.size()),
+    cb_(cb)
+  {}
+
+  int run() override;
+
+  void callback(int ret) override {
+    if (cb_) {
+      cb_(ret, position_);
+    }
+  }
+
+ private:
+  std::string data_;
+  uint64_t position_;
+  std::function<void(int, uint64_t)> cb_;
+};
+
 class LogImpl : public Log {
  public:
   LogImpl(const LogImpl&) = delete;
@@ -52,6 +177,11 @@ class LogImpl : public Log {
     assert(!name.empty());
     assert(!hoid.empty());
     assert(!prefix.empty());
+
+    // TODO: parameterize. ensure >=1
+    for (int i = 0; i < 10; i++) {
+      finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
+    }
   }
 
   ~LogImpl();
@@ -67,11 +197,22 @@ class LogImpl : public Log {
   int Trim(uint64_t position) override;
 
  public:
-  int AioRead(uint64_t position, zlog::AioCompletion *c,
-      std::string *datap) override;
+  void finisher_entry_();
+  std::vector<std::thread> finishers_;
+  std::condition_variable finishers_cond_;
+  std::list<std::unique_ptr<LogOp>> pending_ops_;
+  void queue_op(std::unique_ptr<LogOp> op);
 
-  int AioAppend(zlog::AioCompletion *c, const Slice& data,
-      uint64_t *pposition) override;
+  int tailAsync(bool increment, std::function<void(int, uint64_t)> cb);
+  int tailAsync(std::function<void(int, uint64_t)> cb) override {
+    return tailAsync(false, cb);
+  }
+  int appendAsync(const Slice& data,
+      std::function<void(int, uint64_t position)> cb) override;
+  int readAsync(uint64_t position,
+      std::function<void(int, std::string&)> cb) override;
+  int fillAsync(uint64_t position, std::function<void(int)> cb) override;
+  int trimAsync(uint64_t position, std::function<void(int)> cb) override;
 
  public:
   int StripeWidth() override {
