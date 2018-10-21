@@ -155,34 +155,7 @@ class LogImpl : public Log {
       const std::string& hoid,
       const std::string& prefix,
       const std::string& secret,
-      const Options& opts) :
-    shutdown(false),
-    backend(backend),
-    name(name),
-    hoid(hoid),
-    prefix(prefix),
-    striper(this, secret),
-    options(opts)
-#ifdef WITH_STATS
-    ,metrics_http_server_(nullptr),
-    metrics_handler_(this)
-#endif
-  {
-#ifdef WITH_STATS
-    if (!opts.http.empty()) {
-      metrics_http_server_ = new CivetServer(opts.http);
-      metrics_http_server_->addHandler("/metrics", &metrics_handler_);
-    }
-#endif
-    assert(!name.empty());
-    assert(!hoid.empty());
-    assert(!prefix.empty());
-
-    // TODO: parameterize. ensure >=1
-    for (int i = 0; i < 10; i++) {
-      finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
-    }
-  }
+      const Options& opts);
 
   ~LogImpl();
 
