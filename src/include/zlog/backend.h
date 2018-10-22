@@ -223,19 +223,6 @@ class Backend {
    */
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos_out, bool *empty_out) = 0;
-
- public:
-  // TBD. not sure these will make the cut for the initial version. Building AIO
-  // with threads on top of sync interfaces isn't ideal, but its simpler and
-  // we'll want run-to-completion for fast backends anyway. Can put backend AIO
-  // support off for optimization phase of project.
-  virtual int AioRead(const std::string& oid, uint64_t epoch,
-      uint64_t position, std::string *data, void *arg,
-      std::function<void(void*, int)> callback) = 0;
-
-  virtual int AioWrite(const std::string& oid, uint64_t epoch,
-      uint64_t position, const Slice& data, void *arg,
-      std::function<void(void*, int)> callback) = 0;
 };
 
 }

@@ -178,7 +178,7 @@ class Striper {
 
   int ensure_mapping(uint64_t position);
 
-  void refresh(uint64_t epoch = 0);
+  void refresh(uint64_t epoch);
 
   int propose_sequencer(const std::shared_ptr<const View>& view,
       const Options& options);

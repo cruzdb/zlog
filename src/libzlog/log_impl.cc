@@ -20,6 +20,40 @@
 
 namespace zlog {
 
+LogImpl::LogImpl(std::shared_ptr<Backend> backend,
+    const std::string& name,
+    const std::string& hoid,
+    const std::string& prefix,
+    const std::string& secret,
+    const Options& opts) :
+  shutdown(false),
+  backend(backend),
+  name(name),
+  hoid(hoid),
+  prefix(prefix),
+  striper(this, secret),
+  options(opts)
+#ifdef WITH_STATS
+  ,metrics_http_server_(nullptr),
+  metrics_handler_(this)
+#endif
+{
+#ifdef WITH_STATS
+  if (!opts.http.empty()) {
+    metrics_http_server_ = new CivetServer(opts.http);
+    metrics_http_server_->addHandler("/metrics", &metrics_handler_);
+  }
+#endif
+  assert(!name.empty());
+  assert(!hoid.empty());
+  assert(!prefix.empty());
+
+  // TODO: parameterize. ensure >=1
+  for (int i = 0; i < 10; i++) {
+    finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
+  }
+}
+
 LogImpl::~LogImpl()
 { 
   {
@@ -35,67 +69,206 @@ LogImpl::~LogImpl()
   }
   #endif
 
+  finishers_cond_.notify_all();
+  for (auto& finisher : finishers_) {
+    finisher.join();
+  }
+
   striper.shutdown();
 }
 
-int LogImpl::CheckTail(uint64_t *pposition)
-{
-  return CheckTail(pposition, false);
-}
-
-int LogImpl::CheckTail(uint64_t *pposition, bool increment)
+int TailOp::run()
 {
   while (true) {
-    const auto view = striper.view();
+    const auto view = log_->striper.view();
     if (view->seq) {
-      auto tail = view->seq->check_tail(increment);
-      *pposition = tail;
+      position_ = view->seq->check_tail(increment_);
       return 0;
     } else {
-      int ret = striper.propose_sequencer(view, options);
+      int ret = log_->striper.propose_sequencer(view, log_->options);
       if (ret && ret != -ESPIPE) {
         return ret;
       }
-      striper.refresh(view->epoch());
+      log_->striper.refresh(view->epoch());
       continue;
     }
   }
 }
 
-int LogImpl::Read(const uint64_t position, std::string *data)
+int LogImpl::tailAsync(bool increment, std::function<void(int, uint64_t)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new TailOp(this, increment, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
+int LogImpl::CheckTail(uint64_t *position_out)
+{
+  struct {
+    int ret;
+    bool done = false;
+    uint64_t position;
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
+
+  int ret = tailAsync([&](int ret, uint64_t position) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+      if (!ctx.ret) {
+        ctx.position = position;
+      }
+    }
+    ctx.cond.notify_one();
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  if (!ctx.ret) {
+    *position_out = ctx.position;
+  }
+
+  return ctx.ret;
+}
+
+int ReadOp::run()
 {
   while (true) {
-    const auto view = striper.view();
-    const auto oid = view->object_map.map(position);
+    const auto view = log_->striper.view();
+    const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = striper.ensure_mapping(position);
-      if (ret < 0) {
+      int ret = log_->striper.ensure_mapping(position_);
+      if (ret) {
         return ret;
       }
       continue;
     }
 
-    int ret = backend->Read(*oid, view->epoch(), position, data);
-    if (!ret) {
-      return 0;
-    }
+    int ret = log_->backend->Read(*oid, view->epoch(), position_, &data_);
 
     if (ret == -ESPIPE) {
-      striper.refresh();
+      log_->striper.refresh(view->epoch());
       continue;
     }
 
-    // the mapping exists, but the object does. therefore, the entry doesn't
-    // exist. just return enoent.
-    //if (ret == -ENOENT) {
-    //  backend->Seal(*oid, view->epoch());
-    //  // TODO: we shouldn't ignore the return value here, but there isn't much
-    //  // to do. if it succeeds, cool. if it shows that it's already been sealed
-    //  // that's fine too since we reuse seal for object init and we want to init
-    //  // here. maybe if there is a connection issue we should not spin... but we
-    //  // can add that later.
-    //  continue;
-    //}
+    if (ret == -ERANGE) {
+      return -ENOENT;
+    }
+
+    // the position is mapped, but the target object doesn't exist / hasn't been
+    // initialized. in this case we _could_ choose to not initialize it and
+    // report that the position hasn't been written. initializing here means we
+    // can avoid explaining how the behavior is correct, and unifies handling
+    // with the other operations which will make future restructing of the async
+    // handling easier. in the end, this is unlikely to be an optimization that
+    // matters at all since newly created stripes are initialized in the
+    // background (future work).
+    if (ret == -ENOENT) {
+      int ret = log_->backend->Seal(*oid, view->epoch());
+      if (ret && ret != -ESPIPE) {
+        return ret;
+      }
+      continue;
+    }
+
+    return ret;
+  }
+}
+
+int LogImpl::Read(const uint64_t position, std::string *data_out)
+{
+  struct {
+    int ret;
+    bool done = false;
+    std::string data;
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
+
+  int ret = readAsync(position, [&](int ret, std::string& data) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+      if (!ctx.ret) {
+        ctx.data.assign(std::move(data));
+      }
+    }
+    ctx.cond.notify_one();
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  if (!ctx.ret) {
+    data_out->assign(std::move(ctx.data));
+  }
+
+  return ctx.ret;
+}
+
+int LogImpl::readAsync(uint64_t position,
+    std::function<void(int, std::string&)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new ReadOp(this, position, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
+int AppendOp::run()
+{
+  while (true) {
+    const auto view = log_->striper.view();
+
+    if (view->seq) {
+      position_ = view->seq->check_tail(true);
+    } else {
+      int ret = log_->striper.propose_sequencer(view, log_->options);
+      if (ret && ret != -ESPIPE) {
+        return ret;
+      }
+      log_->striper.refresh(view->epoch());
+      continue;
+    }
+
+    const auto oid = view->object_map.map(position_);
+    if (!oid) {
+      int ret = log_->striper.ensure_mapping(position_);
+      if (ret) {
+        return ret;
+      }
+      continue;
+    }
+
+    int ret = log_->backend->Write(*oid, data_, view->epoch(), position_);
+
+    if (ret == -ESPIPE) {
+      log_->striper.refresh(view->epoch());
+      continue;
+    }
+
+    if (ret == -ENOENT) {
+      int ret = log_->backend->Seal(*oid, view->epoch());
+      if (ret && ret != -ESPIPE) {
+        return ret;
+      }
+      continue;
+    }
+
+    if (ret == -EROFS) {
+      continue;
+    }
 
     return ret;
   }
@@ -103,50 +276,75 @@ int LogImpl::Read(const uint64_t position, std::string *data)
 
 int LogImpl::Append(const Slice& data, uint64_t *pposition)
 {
-  while (true) {
-    const auto view = striper.view();
-
+  struct {
+    int ret;
+    bool done = false;
     uint64_t position;
-    if (view->seq) {
-      position = view->seq->check_tail(true);
-    } else {
-      int ret = striper.propose_sequencer(view, options);
-      if (ret && ret != -ESPIPE) {
-        return ret;
-      }
-      striper.refresh(view->epoch());
-      continue;
-    }
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
 
-    const auto oid = view->object_map.map(position);
+  int ret = appendAsync(data, [&](int ret, uint64_t position) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+      if (!ctx.ret) {
+        ctx.position = position;
+      }
+    }
+    ctx.cond.notify_one();
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  if (!ctx.ret && pposition) {
+    *pposition = ctx.position;
+  }
+
+  return ctx.ret;
+}
+
+int LogImpl::appendAsync(const Slice& data,
+    std::function<void(int, uint64_t)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new AppendOp(this, data, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
+int FillOp::run()
+{
+  while (true) {
+    const auto view = log_->striper.view();
+    const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = striper.ensure_mapping(position);
-      if (ret < 0) {
+      int ret = log_->striper.ensure_mapping(position_);
+      if (ret) {
         return ret;
       }
       continue;
     }
 
-    int ret = backend->Write(*oid, data, view->epoch(), position);
-    if (!ret) {
-      if (pposition){
-        *pposition = position;
-      }
-      return 0;
-    }
+    int ret = log_->backend->Fill(*oid, view->epoch(), position_);
 
     if (ret == -ESPIPE) {
-      striper.refresh();
+      log_->striper.refresh(view->epoch());
       continue;
     }
 
     if (ret == -ENOENT) {
-      backend->Seal(*oid, view->epoch());
+      int ret = log_->backend->Seal(*oid, view->epoch());
+      if (ret && ret != -ESPIPE) {
+        return ret;
+      }
       continue;
     }
-
-    if (ret == -EROFS)
-      continue;
 
     return ret;
   }
@@ -154,56 +352,142 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
 
 int LogImpl::Fill(const uint64_t position)
 {
+  struct {
+    int ret;
+    bool done = false;
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
+
+  int ret = fillAsync(position, [&](int ret) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+    }
+    ctx.cond.notify_one();
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  return ctx.ret;
+}
+
+int LogImpl::fillAsync(uint64_t position, std::function<void(int)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new FillOp(this, position, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
+int TrimOp::run()
+{
   while (true) {
-    const auto view = striper.view();
-    const auto oid = view->object_map.map(position);
+    const auto view = log_->striper.view();
+    const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = striper.ensure_mapping(position);
-      if (ret < 0) {
+      int ret = log_->striper.ensure_mapping(position_);
+      if (ret) {
         return ret;
       }
       continue;
     }
 
-    int ret = backend->Fill(*oid, view->epoch(), position);
-    if (!ret)
-      return 0;
+    int ret = log_->backend->Trim(*oid, view->epoch(), position_);
+
     if (ret == -ESPIPE) {
-      striper.refresh();
-      continue;
-    } else if (ret == -ENOENT) {
-      backend->Seal(*oid, view->epoch());
+      log_->striper.refresh(view->epoch());
       continue;
     }
+
+    if (ret == -ENOENT) {
+      int ret = log_->backend->Seal(*oid, view->epoch());
+      if (ret && ret != -ESPIPE) {
+        return ret;
+      }
+      continue;
+    }
+
     return ret;
   }
 }
 
 int LogImpl::Trim(const uint64_t position)
 {
+  struct {
+    int ret;
+    bool done = false;
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
+
+  int ret = trimAsync(position, [&](int ret) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+    }
+    ctx.cond.notify_one();
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  return ctx.ret;
+}
+
+int LogImpl::trimAsync(uint64_t position, std::function<void(int)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new TrimOp(this, position, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
+void LogImpl::queue_op(std::unique_ptr<LogOp> op)
+{
+  std::lock_guard<std::mutex> lk(lock);
+  pending_ops_.emplace_back(std::move(op));
+  finishers_cond_.notify_all();
+}
+
+void LogImpl::finisher_entry_()
+{
   while (true) {
-    const auto view = striper.view();
-    const auto oid = view->object_map.map(position);
-    if (!oid) {
-      int ret = striper.ensure_mapping(position);
-      if (ret < 0) {
-        return ret;
+    int do_shutdown = false;
+    std::unique_ptr<LogOp> op;
+    {
+      std::unique_lock<std::mutex> lk(lock);
+      finishers_cond_.wait(lk, [&] {
+        return !pending_ops_.empty() || shutdown;
+      });
+
+      if (shutdown) {
+        if (pending_ops_.empty()) {
+          break;
+        }
+        do_shutdown = true;
       }
-      continue;
+
+      assert(!pending_ops_.empty());
+      op = std::move(pending_ops_.front());
+      pending_ops_.pop_front();
     }
 
-    int ret = backend->Trim(*oid, view->epoch(), position);
-    if (!ret){
-      return 0;
+    if (do_shutdown) {
+      op->callback(-ESHUTDOWN);
+    } else {
+      int ret = op->run();
+      op->callback(ret);
     }
-    if (ret == -ESPIPE) {
-      striper.refresh();
-      continue;
-    } else if (ret == -ENOENT) {
-      backend->Seal(*oid, view->epoch());
-      continue;
-    }
-    return ret;
   }
 }
 

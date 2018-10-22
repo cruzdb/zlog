@@ -10,41 +10,44 @@
 namespace zlog {
 
 class Backend;
-class AioCompletion {
- public:
-  virtual ~AioCompletion();
-  virtual void SetCallback(std::function<void()> callback) = 0;
-  virtual void WaitForComplete() = 0;
-  virtual int ReturnValue() = 0;
-};
 
 class Log {
  public:
   Log() {}
   virtual ~Log();
 
-  /*
-   * Synchronous API
+  /**
+   *
+   */
+  virtual int CheckTail(uint64_t *pposition) = 0;
+  virtual int tailAsync(std::function<void(int, uint64_t)> cb) = 0;
+
+  /**
+   *
    */
   virtual int Append(const Slice& data, uint64_t *pposition) = 0;
+  virtual int appendAsync(const Slice& data,
+      std::function<void(int, uint64_t)> cb) = 0;
+
+  /**
+   *
+   */
   virtual int Read(uint64_t position, std::string *data) = 0;
+  virtual int readAsync(uint64_t position,
+      std::function<void(int, std::string&)> cb) = 0;
+
+  /**
+   *
+   */
   virtual int Fill(uint64_t position) = 0;
-  virtual int CheckTail(uint64_t *pposition) = 0;
+  virtual int fillAsync(uint64_t position, std::function<void(int)> cb) = 0;
+
+  /**
+   *
+   */
   virtual int Trim(uint64_t position) = 0;
+  virtual int trimAsync(uint64_t position, std::function<void(int)> cb) = 0;
 
-  /*
-   * Asynchronous API
-   */
-  virtual int AioAppend(AioCompletion *c, const Slice& data, uint64_t *pposition) = 0;
-  virtual int AioRead(uint64_t position, AioCompletion *c, std::string *datap) = 0;
-
-  static AioCompletion *aio_create_completion();
-  static AioCompletion *aio_create_completion(
-      std::function<void()> callback);
-
-  /*
-   * Log Management
-   */
  public:
   virtual int StripeWidth() = 0;
 

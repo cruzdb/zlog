@@ -138,6 +138,7 @@ void Striper::shutdown()
   refresh_thread_.join();
 }
 
+// TODO: rename this. we aren't really ensuring... we might need to try again
 int Striper::ensure_mapping(const uint64_t position)
 {
   // read / copy
@@ -152,11 +153,15 @@ int Striper::ensure_mapping(const uint64_t position)
   // write
   auto data = v.serialize();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+
   if (!ret || ret == -ESPIPE) {
-    //  - if success or bad-epoch, refresh, return success
     refresh(v.epoch());
     return 0;
   }
+
+  // ret == -ENOENT: this would imply that the hoid doesn't exist or isn't
+  // initialized, which should have occurred when the log was created. this is
+  // an error that should not be caught or handled.
 
   return ret;
 }
