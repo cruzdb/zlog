@@ -1,5 +1,6 @@
 #include <vector>
 #include <atomic>
+#include <cassert>
 #include <lmdb.h>
 #include "zlog/backend.h"
 #include "zlog/backend/lmdb.h"
@@ -268,7 +269,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
   return 0;
 }
 
-int LMDBBackend::Write(const std::string& oid, const Slice& data,
+int LMDBBackend::Write(const std::string& oid, const std::string& data,
     uint64_t epoch, uint64_t position)
 {
   if (oid.empty()) {

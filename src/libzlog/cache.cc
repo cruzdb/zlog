@@ -10,7 +10,7 @@ namespace zlog{
 
 Cache::~Cache(){}
 
-int Cache::put(uint64_t pos, const Slice& data){
+int Cache::put(uint64_t pos, const std::string& data){
   int ret = 0;
   mut.lock();
   if(options.cache_size > 0 && data.size() < options.cache_size && cache_map.find(pos) == cache_map.end()){ 

@@ -274,7 +274,7 @@ int AppendOp::run()
   }
 }
 
-int LogImpl::Append(const Slice& data, uint64_t *pposition)
+int LogImpl::Append(const std::string& data, uint64_t *pposition)
 {
   struct {
     int ret;
@@ -310,7 +310,7 @@ int LogImpl::Append(const Slice& data, uint64_t *pposition)
   return ctx.ret;
 }
 
-int LogImpl::appendAsync(const Slice& data,
+int LogImpl::appendAsync(const std::string& data,
     std::function<void(int, uint64_t)> cb)
 {
   auto op = std::unique_ptr<LogOp>(new AppendOp(this, data, cb));

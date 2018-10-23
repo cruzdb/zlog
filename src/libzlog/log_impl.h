@@ -122,7 +122,7 @@ class ReadOp : public LogOp {
 // TODO: move or copy or reference for the data
 class AppendOp : public LogOp {
  public:
-  AppendOp(LogImpl *log, const Slice& data,
+  AppendOp(LogImpl *log, const std::string& data,
       std::function<void(int, uint64_t)> cb) :
     LogOp(log),
     data_(data.data(), data.size()),
@@ -165,7 +165,7 @@ class LogImpl : public Log {
 
  public:
   int Read(uint64_t position, std::string *data) override;
-  int Append(const Slice& data, uint64_t *pposition) override;
+  int Append(const std::string& data, uint64_t *pposition) override;
   int Fill(uint64_t position) override;
   int Trim(uint64_t position) override;
 
@@ -180,7 +180,7 @@ class LogImpl : public Log {
   int tailAsync(std::function<void(int, uint64_t)> cb) override {
     return tailAsync(false, cb);
   }
-  int appendAsync(const Slice& data,
+  int appendAsync(const std::string& data,
       std::function<void(int, uint64_t position)> cb) override;
   int readAsync(uint64_t position,
       std::function<void(int, std::string&)> cb) override;

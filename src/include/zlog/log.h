@@ -4,7 +4,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include "slice.h"
 #include "options.h"
 
 namespace zlog {
@@ -25,8 +24,8 @@ class Log {
   /**
    *
    */
-  virtual int Append(const Slice& data, uint64_t *pposition) = 0;
-  virtual int appendAsync(const Slice& data,
+  virtual int Append(const std::string& data, uint64_t *pposition) = 0;
+  virtual int appendAsync(const std::string& data,
       std::function<void(int, uint64_t)> cb) = 0;
 
   /**
