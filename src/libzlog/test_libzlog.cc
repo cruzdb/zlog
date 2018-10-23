@@ -1,7 +1,6 @@
 #include <numeric>
 #include <deque>
 #include "test_libzlog.h"
-#include "zlog/stream.h"
 
 // TODO
 //  - add async tests. though currently all of the synchronous apis are built on
@@ -18,7 +17,7 @@ TEST_P(LibZLogTest, OpenClose) {
   const std::string input = "oh the input";
 
   uint64_t pos;
-  int ret = log->Append(zlog::Slice(input), &pos);
+  int ret = log->Append(input, &pos);
   ASSERT_EQ(ret, 0);
 
   // TODO: after the append, if a position was faulted into a new view it means
@@ -125,7 +124,7 @@ TEST_P(LibZLogTest, Append) {
   // actually while the appends are occuring any time a stripe fills up this can
   // occur. so really the test needs to be a bit more robust.
   uint64_t pos;
-  int ret = log->Append(zlog::Slice(), &pos);
+  int ret = log->Append(std::string(), &pos);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
@@ -133,7 +132,7 @@ TEST_P(LibZLogTest, Append) {
   ASSERT_EQ(ret, 0);
 
   for (int i = 0; i < 30; i++) {
-    ret = log->Append(zlog::Slice(), &pos);
+    ret = log->Append(std::string(), &pos);
     ASSERT_EQ(ret, 0);
 
     ASSERT_EQ(pos, tail);
@@ -149,7 +148,7 @@ TEST_P(LibZLogTest, Append) {
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Append(zlog::Slice(), &pos2);
+  ret = log->Append(std::string(), &pos2);
   ASSERT_EQ(ret, 0);
   ASSERT_GT(pos2, pos);
 }
@@ -165,7 +164,7 @@ TEST_P(LibZLogTest, Fill) {
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ret = log->Append(zlog::Slice(), &pos);
+  ret = log->Append(std::string(), &pos);
   ASSERT_EQ(ret, 0);
 
   ret = log->Fill(pos);
@@ -201,13 +200,13 @@ TEST_P(LibZLogTest, Read) {
 
   const char *input = "asdfasdfasdf";
   uint64_t pos;
-  ret = log->Append(zlog::Slice(input), &pos);
+  ret = log->Append(input, &pos);
   ASSERT_EQ(ret, 0);
 
   ret = log->Read(pos, &entry);
   ASSERT_EQ(ret, 0);
 
-  ASSERT_TRUE(zlog::Slice(input) == zlog::Slice(entry));
+  ASSERT_TRUE(input == entry);
 
   // trim a written position
   ret = log->Trim(pos);
@@ -236,7 +235,7 @@ TEST_P(LibZLogTest, Trim) {
 
   // can trim written spot
   uint64_t pos;
-  ret = log->Append(zlog::Slice(), &pos);
+  ret = log->Append(std::string(), &pos);
   ASSERT_EQ(ret, 0);
   ret = log->Trim(pos);
   ASSERT_EQ(ret, 0);

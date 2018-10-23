@@ -209,7 +209,7 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
   }
 }
 
-int RAMBackend::Write(const std::string& oid, const Slice& data,
+int RAMBackend::Write(const std::string& oid, const std::string& data,
     uint64_t epoch, uint64_t position)
 {
   if (oid.empty()) {
@@ -237,7 +237,7 @@ int RAMBackend::Write(const std::string& oid, const Slice& data,
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {
     LogEntry entry;
-    entry.data = data.ToString();
+    entry.data = data;
     lobj->entries.emplace(position, entry);
     lobj->maxpos = std::max(lobj->maxpos, position);
     return 0;

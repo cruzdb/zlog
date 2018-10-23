@@ -1,6 +1,5 @@
 #include <cerrno>
-#include "include/zlog/slice.h"
-#include "include/zlog/stream.h"
+#include <cstring>
 #include "include/zlog/log.h"
 #include "include/zlog/capi.h"
 
@@ -11,7 +10,7 @@ struct zlog_log_ctx {
 };
 
 struct zlog_stream_ctx {
-  zlog::Stream *stream;
+  //zlog::Stream *stream;
   zlog_log_ctx *log_ctx;
 };
 
@@ -60,7 +59,8 @@ extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
     uint64_t *pposition)
 {
   zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->Append(Slice((char*)data, len), pposition);
+  std::string tmp((char*)data, len);
+  return ctx->log->Append(tmp, pposition);
 }
 
 extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
@@ -72,7 +72,7 @@ extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
   if (ret >= 0) {
     if (entry.size() > len)
       return -ERANGE;
-    memcpy(data, entry.data(), entry.size());
+    std::memcpy(data, entry.data(), entry.size());
     ret = entry.size();
   }
   return ret;

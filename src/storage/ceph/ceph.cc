@@ -330,7 +330,7 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
   return 0;
 }
 
-int CephBackend::Write(const std::string& oid, const Slice& data,
+int CephBackend::Write(const std::string& oid, const std::string& data,
     uint64_t epoch, uint64_t position)
 {
   if (oid.empty()) {

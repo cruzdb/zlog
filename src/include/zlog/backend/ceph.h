@@ -36,7 +36,7 @@ class CephBackend : public Backend {
   int Read(const std::string& oid, uint64_t epoch,
       uint64_t position, std::string *data) override;
 
-  int Write(const std::string& oid, const Slice& data,
+  int Write(const std::string& oid, const std::string& data,
       uint64_t epoch, uint64_t position) override;
 
   int Fill(const std::string& oid, uint64_t epoch,

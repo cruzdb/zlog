@@ -4,7 +4,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include "zlog/slice.h"
 
 namespace zlog {
 
@@ -162,7 +161,7 @@ class Backend {
    * -ESPIPE stale epoch
    * -EROFS position exists
    */
-  virtual int Write(const std::string& oid, const Slice& data,
+  virtual int Write(const std::string& oid, const std::string& data,
       uint64_t epoch, uint64_t position) = 0;
 
   /**
