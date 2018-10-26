@@ -32,7 +32,7 @@ LMDBBackend::Transaction LMDBBackend::NewTransaction(bool read_only)
 
 LMDBBackend::~LMDBBackend()
 {
-  if (!closed) {
+  if (need_close) {
     Close();
   }
 }
@@ -632,6 +632,8 @@ void LMDBBackend::Init(const std::string& path)
   assert(ret == 0);
   (void)ret;
 
+  need_close = true;
+
   ret = mdb_env_set_maxdbs(env, 2);
   assert(ret == 0);
 
@@ -662,7 +664,7 @@ void LMDBBackend::Init(const std::string& path)
 
 void LMDBBackend::Close()
 {
-  closed = true;
+  need_close = false;
   mdb_env_sync(env, 1);
   mdb_env_close(env);
 }

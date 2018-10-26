@@ -176,7 +176,7 @@ class LMDBBackend : public Backend {
       bool eq = false);
 
  private:
-  bool closed = false;
+  bool need_close = false;
 };
 
 }
