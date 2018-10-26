@@ -58,8 +58,14 @@ class RAMBackend : public Backend {
       uint64_t *pos, bool *empty) override;
 
  private:
+  struct LinkObject {
+    std::string hoid;
+  };
+
+  // this is head object / hoid
   struct ProjectionObject {
     uint64_t epoch;
+    std::string prefix;
     std::map<uint64_t, std::string> projections;
   };
 
@@ -85,7 +91,7 @@ class RAMBackend : public Backend {
   mutable std::mutex lock_;
   std::map<std::string, std::string> options_;
   std::map<std::string,
-    boost::variant<ProjectionObject, LogObject>> objects_;
+    boost::variant<LinkObject, ProjectionObject, LogObject>> objects_;
 };
 
 }
