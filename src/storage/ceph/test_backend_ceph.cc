@@ -68,6 +68,12 @@ struct LibZLogTest::Context : public UniquePoolContext {
   }
 };
 
+std::unique_ptr<zlog::Backend> BackendTest::create_minimal_backend()
+{
+  return std::unique_ptr<zlog::Backend>(
+      new zlog::storage::ceph::CephBackend());
+}
+
 struct BackendTest::Context : public UniquePoolContext {
   librados::IoCtx ioctxpp;
 
@@ -90,6 +96,7 @@ void BackendTest::SetUp() {
 }
 
 void BackendTest::TearDown() {
+  backend.reset();
   if (context)
     delete context;
 }

@@ -11,6 +11,8 @@ class BackendTest : public ::testing::Test {
   void SetUp() override;
   void TearDown() override;
 
+  std::unique_ptr<zlog::Backend> create_minimal_backend();
+
   std::unique_ptr<zlog::Backend> backend;
   Context *context = nullptr;
 };

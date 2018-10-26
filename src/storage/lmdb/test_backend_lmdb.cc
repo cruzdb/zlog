@@ -26,6 +26,12 @@ struct DBPathContext {
 struct BackendTest::Context : public DBPathContext {
 };
 
+std::unique_ptr<zlog::Backend> BackendTest::create_minimal_backend()
+{
+  return std::unique_ptr<zlog::storage::lmdb::LMDBBackend>(
+      new zlog::storage::lmdb::LMDBBackend());
+}
+
 void BackendTest::SetUp() {
   context = new Context;
 

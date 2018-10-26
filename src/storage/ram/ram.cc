@@ -1,5 +1,8 @@
 #include <vector>
 #include <atomic>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "zlog/backend.h"
 #include "zlog/backend/ram.h"
 
@@ -41,22 +44,44 @@ int RAMBackend::CreateLog(const std::string& name, const std::string& view,
     return -EINVAL;
   }
 
-  std::lock_guard<std::mutex> lk(lock_);
+  boost::uuids::uuid uuid = boost::uuids::random_generator()();
+  const auto key = boost::uuids::to_string(uuid);
+  auto hoid = std::string("zlog.head.").append(key);
+  auto prefix = std::string("zlog.data.").append(key);
 
-  ProjectionObject proj_obj;
-  proj_obj.epoch = 1;
-  proj_obj.projections.emplace(proj_obj.epoch, view);
-  auto ret = objects_.emplace(name, proj_obj);
-  if (!ret.second) {
-    return -EEXIST;
+  ProjectionObject proj;
+  proj.prefix = prefix;
+  proj.epoch = 1;
+  proj.projections.emplace(proj.epoch, view);
+
+  {
+    std::lock_guard<std::mutex> lk(lock_);
+    auto ret = objects_.emplace(hoid, proj);
+    // assert that this was a unique hoid. a more robust implementation can
+    // retry generating a unique object name.
+    assert(ret.second);
+    if (!ret.second) {
+      return -EIO;
+    }
+  }
+
+  LinkObject link;
+  link.hoid = hoid;
+
+  {
+    std::lock_guard<std::mutex> lk(lock_);
+    auto ret = objects_.emplace(name, link);
+    if (!ret.second) {
+      return -EEXIST;
+    }
   }
 
   if (hoid_out) {
-    *hoid_out = name;
+    *hoid_out = hoid;
   }
 
   if (prefix_out) {
-    *prefix_out = name;
+    *prefix_out = prefix;
   }
 
   return 0;
@@ -71,17 +96,24 @@ int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
 
   std::lock_guard<std::mutex> lk(lock_);
 
-  auto it = objects_.find(name);
-  if (it == objects_.end()) {
+  auto link_it = objects_.find(name);
+  if (link_it == objects_.end()) {
     return -ENOENT;
   }
+  auto& link = boost::get<LinkObject>(link_it->second);
+
+  auto hoid_it = objects_.find(link.hoid);
+  if (hoid_it == objects_.end()) {
+    return -EIO;
+  }
+  auto& hoid = boost::get<ProjectionObject>(hoid_it->second);
 
   if (hoid_out) {
-    *hoid_out = name;
+    *hoid_out = link.hoid;
   }
 
   if (prefix_out) {
-    *prefix_out = name;
+    *prefix_out = hoid.prefix;
   }
 
   return 0;

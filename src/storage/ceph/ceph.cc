@@ -154,11 +154,13 @@ int CephBackend::CreateLog(const std::string& name, const std::string& view,
   std::string hoid;
   std::string prefix;
 
+  // create a uniquely named head object
   while (true) {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
     const auto key = boost::uuids::to_string(uuid);
 
     hoid = std::string("zlog.head.").append(key);
+    // TODO: should the prefix include the trailing "."
     prefix = std::string("zlog.data.").append(key);
 
     int ret = InitHeadObject(hoid, prefix);
@@ -172,15 +174,16 @@ int CephBackend::CreateLog(const std::string& name, const std::string& view,
     break;
   }
 
-  // the head object now exists, but is orphaned. a crash at this point is ok
-  // because a gc process could later remove it. now we'll build a link from the
-  // log name requested to the head object we just created.
-  int ret = CreateLinkObject(name, hoid);
+  // propose the first view in the new hoid.
+  int ret = ProposeView(hoid, 1, view);
   if (ret) {
     return ret;
   }
 
-  ret = ProposeView(hoid, 1, view);
+  // the head object now exists, but it is orphaned. a crash at this point is ok
+  // because a gc process could later remove it. now we'll build a link from the
+  // log name requested to the head object we just created.
+  ret = CreateLinkObject(name, hoid);
   if (ret) {
     return ret;
   }

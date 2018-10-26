@@ -5,6 +5,11 @@
 
 // CHECK epoch=0 is eninval not espipe...
 
+TEST_F(BackendTest, DeleteBeforeInit) {
+  auto no_init_be = create_minimal_backend();
+  no_init_be.reset();
+}
+
 TEST_F(BackendTest, UniqueId_Args) {
   uint64_t id;
   ASSERT_EQ(backend->uniqueId("", &id), -EINVAL);
