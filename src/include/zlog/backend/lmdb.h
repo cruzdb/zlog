@@ -64,8 +64,13 @@ class LMDBBackend : public Backend {
   MDB_env *env;
   MDB_dbi db_obj;
 
+  struct LinkObject {
+    char hoid[128];
+  };
+
   struct ProjectionObject {
     uint64_t epoch;
+    char prefix[128];
   };
 
   struct LogObject {
@@ -155,13 +160,6 @@ class LMDBBackend : public Backend {
   {
     std::stringstream ss;
     ss << oid << ".maxpos";
-    return ss.str();
-  }
-
-  std::string ObjectKey(const std::string& oid)
-  {
-    std::stringstream ss;
-    ss << oid;
     return ss.str();
   }
 

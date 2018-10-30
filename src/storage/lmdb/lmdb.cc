@@ -1,6 +1,9 @@
 #include <vector>
 #include <atomic>
 #include <cassert>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <lmdb.h>
 #include "zlog/backend.h"
 #include "zlog/backend/lmdb.h"
@@ -73,27 +76,32 @@ int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
     return -EINVAL;
   }
 
-  auto txn = NewTransaction();
+  boost::uuids::uuid uuid = boost::uuids::random_generator()();
+  const auto key = boost::uuids::to_string(uuid);
+  auto hoid = std::string("zlog.head.").append(key);
+  auto prefix = std::string("zlog.data.").append(key);
 
-  MDB_val val;
-  std::string oid_key = ObjectKey(name);
-  int ret = txn.Get(oid_key, val);
-  if (!ret) {
-    txn.Abort();
-    return -EEXIST;
-  }
+  auto txn = NewTransaction();
 
   ProjectionObject proj_obj;
   proj_obj.epoch = 1;
+  strcpy(proj_obj.prefix, prefix.c_str());
+
+  MDB_val val;
   val.mv_data = &proj_obj;
   val.mv_size = sizeof(proj_obj);
-  ret = txn.Put(oid_key, val, true);
+  int ret = txn.Put(hoid, val, true);
   if (ret) {
     txn.Abort();
+    if (ret == -EEXIST) {
+      // ensure unique hoid. a more robust implementation can
+      // retry generating a unique object name.
+      return -EIO;
+    }
     return ret;
   }
 
-  std::string proj_key = ProjectionKey(name, proj_obj.epoch);
+  std::string proj_key = ProjectionKey(hoid, proj_obj.epoch);
   val.mv_data = (void*)view.data();
   val.mv_size = view.size();
   ret = txn.Put(proj_key, val, true);
@@ -102,16 +110,27 @@ int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
     return ret;
   }
 
-  ret = txn.Commit();
-  if (ret)
+  LinkObject link;
+  strcpy(link.hoid, hoid.c_str());
+  val.mv_data = &link;
+  val.mv_size = sizeof(link);
+  ret = txn.Put(name, val, true);
+  if (ret) {
+    txn.Abort();
     return ret;
+  }
+
+  ret = txn.Commit();
+  if (ret) {
+    return ret;
+  }
 
   if (hoid_out) {
-    *hoid_out = name;
+    *hoid_out = hoid;
   }
 
   if (prefix_out) {
-    *prefix_out = name;
+    *prefix_out = prefix;
   }
 
   return 0;
@@ -127,21 +146,35 @@ int LMDBBackend::OpenLog(const std::string& name, std::string *hoid_out,
   auto txn = NewTransaction();
 
   MDB_val val;
-  std::string oid_key = ObjectKey(name);
-  int ret = txn.Get(oid_key, val);
+  int ret = txn.Get(name, val);
   if (ret) {
     txn.Abort();
     return ret;
   }
 
-  txn.Abort();
+  LinkObject *link = (LinkObject*)val.mv_data;
+  std::string hoid(link->hoid);
+
+  ret = txn.Get(hoid, val);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  ProjectionObject *proj = (ProjectionObject*)val.mv_data;
+  std::string prefix(proj->prefix);
+
+  ret = txn.Commit();
+  if (ret) {
+    return ret;
+  }
 
   if (hoid_out) {
-    *hoid_out = name;
+    *hoid_out = hoid;
   }
 
   if (prefix_out) {
-    *prefix_out = name;
+    *prefix_out = prefix;
   }
 
   return 0;
@@ -161,8 +194,7 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   auto txn = NewTransaction(true);
 
   MDB_val val;
-  std::string oid_key = ObjectKey(hoid);
-  int ret = txn.Get(oid_key, val);
+  int ret = txn.Get(hoid, val);
   if (ret) {
     txn.Abort();
     return ret;
@@ -224,8 +256,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
   auto txn = NewTransaction();
 
   MDB_val val;
-  std::string oid_key = ObjectKey(hoid);
-  int ret = txn.Get(oid_key, val);
+  int ret = txn.Get(hoid, val);
   if (ret) {
     if (ret == -ENOENT) {
       txn.Abort();
@@ -259,7 +290,7 @@ int LMDBBackend::ProposeView(const std::string& hoid,
   proj_obj->epoch = epoch;
   val.mv_data = proj_obj;
   val.mv_size = sizeof(*proj_obj);
-  ret = txn.Put(oid_key, val, false);
+  ret = txn.Put(hoid, val, false);
   if (ret) {
     txn.Abort();
     return ret;
@@ -525,8 +556,7 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
     const std::string& oid, bool eq)
 {
   MDB_val val;
-  auto key = ObjectKey(oid);
-  int ret = txn.Get(key, val);
+  int ret = txn.Get(oid, val);
   if (ret == -ENOENT)
     return ret;
   LogObject *obj = (LogObject*)val.mv_data;
@@ -596,8 +626,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
 
   // read current epoch value (if its been set yet)
   MDB_val val;
-  auto key = ObjectKey(oid);
-  int ret = txn.Get(key, val);
+  int ret = txn.Get(oid, val);
   assert(ret == 0 || ret == -ENOENT);
 
   // if exists, verify the new epoch is larger
@@ -615,7 +644,7 @@ int LMDBBackend::Seal(const std::string& oid, uint64_t epoch)
   obj.epoch = epoch;
   val.mv_data = &obj;
   val.mv_size = sizeof(obj);
-  txn.Put(key, val, false);
+  txn.Put(oid, val, false);
 
   ret = txn.Commit();
   if (ret)
