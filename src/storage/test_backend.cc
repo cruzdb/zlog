@@ -57,9 +57,6 @@ TEST_F(BackendTest, CreateLog_HoidPrefix) {
 
   ASSERT_EQ(backend->CreateLog("c", "", nullptr, &prefix), 0);
   ASSERT_FALSE(prefix.empty());
-
-  // TODO: check that creates don't result in the same hoid/prefix. duplicate
-  // for OpenLog.
 }
 
 TEST_F(BackendTest, OpenLog_Args) {
@@ -242,7 +239,6 @@ TEST_F(BackendTest, Write_StaleEpoch) {
   ASSERT_EQ(backend->Write("a", "", 0, 0), -EINVAL);
 }
 
-// TODO: add write for trim/fill should erofs
 TEST_F(BackendTest, Write_PosExists) {
   ASSERT_EQ(backend->Seal("a", 1), 0);
   ASSERT_EQ(backend->Write("a", "", 1, 0), 0);
@@ -351,7 +347,6 @@ TEST_F(BackendTest, Read_StaleEpoch) {
   ASSERT_EQ(backend->Read("a", 0, 0, &data), -EINVAL);
 }
 
-// TODO: add cases from trim/fill return enodata
 TEST_F(BackendTest, Read_NoPos) {
   ASSERT_EQ(backend->Seal("a", 10), 0);
 
