@@ -479,7 +479,7 @@ void LogImpl::queue_op(std::unique_ptr<LogOp> op)
 void LogImpl::finisher_entry_()
 {
   while (true) {
-    int do_shutdown = false;
+    bool do_shutdown = false;
     std::unique_ptr<LogOp> op;
     {
       std::unique_lock<std::mutex> lk(lock);
