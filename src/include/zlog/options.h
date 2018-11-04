@@ -30,6 +30,8 @@ struct Options {
 
   ///////////////////////////////////////////////////////////////////
 
+  // maximum views to read at once when updating current view
+  int max_refresh_views_read = 20;
 
   int width = 10;
   int entries_per_object = 200;
