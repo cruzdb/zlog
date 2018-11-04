@@ -48,8 +48,7 @@ LogImpl::LogImpl(std::shared_ptr<Backend> backend,
   assert(!hoid.empty());
   assert(!prefix.empty());
 
-  // TODO: parameterize. ensure >=1
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < options.finisher_threads; i++) {
     finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
   }
 }

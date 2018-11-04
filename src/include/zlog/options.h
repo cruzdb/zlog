@@ -30,6 +30,12 @@ struct Options {
 
   ///////////////////////////////////////////////////////////////////
 
+  // number of I/O threads
+  int finisher_threads = 10;
+
+  // maximum views to read at once when updating current view
+  // advanced
+  int max_refresh_views_read = 20;
 
   int width = 10;
   int entries_per_object = 200;
