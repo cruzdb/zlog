@@ -50,6 +50,14 @@ endif(WITH_JNI)
 # )
 # install(TARGETS zlog-seqr DESTINATION bin)
 
+add_executable(zlog_bench bench.cc)
+target_link_libraries(zlog_bench
+    libzlog
+    zlog_backend_ram
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
 if(BUILD_CEPH_BACKEND)
 
 add_executable(zlog_tool zlog_tool.cc)

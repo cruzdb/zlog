@@ -85,11 +85,10 @@ int TailOp::run()
       position_ = view->seq->check_tail(increment_);
       return 0;
     } else {
-      int ret = log_->striper.propose_sequencer(view, log_->options);
-      if (ret && ret != -ESPIPE) {
+      int ret = log_->striper.propose_sequencer();
+      if (ret) {
         return ret;
       }
-      log_->striper.refresh(view->epoch());
       continue;
     }
   }
@@ -144,7 +143,7 @@ int ReadOp::run()
     const auto view = log_->striper.view();
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -154,7 +153,7 @@ int ReadOp::run()
     int ret = log_->backend->Read(*oid, view->epoch(), position_, &data_);
 
     if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
+      log_->striper.update_current_view(view->epoch());
       continue;
     }
 
@@ -234,43 +233,59 @@ int AppendOp::run()
     if (view->seq) {
       position_ = view->seq->check_tail(true);
     } else {
-      int ret = log_->striper.propose_sequencer(view, log_->options);
-      if (ret && ret != -ESPIPE) {
-        return ret;
-      }
-      log_->striper.refresh(view->epoch());
-      continue;
-    }
-
-    const auto oid = view->object_map.map(position_);
-    if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.propose_sequencer();
       if (ret) {
         return ret;
       }
       continue;
     }
 
-    int ret = log_->backend->Write(*oid, data_, view->epoch(), position_);
-
-    if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
-      continue;
-    }
-
-    if (ret == -ENOENT) {
-      int ret = log_->backend->Seal(*oid, view->epoch());
-      if (ret && ret != -ESPIPE) {
+    const auto oid = view->object_map.map(position_);
+    if (!oid) {
+      int ret = log_->striper.try_expand_view(position_);
+      if (ret) {
         return ret;
       }
       continue;
     }
 
-    if (ret == -EROFS) {
-      continue;
+    while (true) {
+      int ret = log_->backend->Write(*oid, data_, view->epoch(), position_);
+      if (!ret) {
+        return ret;
+      } else if (ret == -ENOENT) {
+        // this can happen if a new stripe has been created but not initialized,
+        // either because we are racing with initialization, or due to a fault in
+        // the process performing the initialization.
+        int ret = log_->backend->Seal(*oid, view->epoch());
+        if (!ret) {
+          // try the append again. the view and the position are still
+          // consistent, and there is no reason to think they are out-of-date.
+          continue;
+        } else if (ret != -ESPIPE) {
+          return ret;
+        }
+        assert(ret == -ESPIPE);
+        // unlike other backend interfaces, seal will return -ESPIPE if the
+        // epoch is less than _or equal_ to the stored epoch. if the write
+        // returned -ENOENT at epoch 100 because it was racing with
+        // initialization (also at epoch 100), then seal at epoch 100 will
+        // return -ESPIPE. the point is that when -ESPIPE is returned from seal
+        // we shouldn't refresh the striper and wait on a newer epoch. if there
+        // actually is a newer view, then that will be caught by the write
+        // interface. XXX: this would be a fantastic scenario to test for in a
+        // model, by incorrectly refreshing here causing a deadlock, or perhaps
+        // changing the epoch <= test in the backend.
+        break;
+      } else if (ret == -ESPIPE) {
+        log_->striper.update_current_view(view->epoch());
+        break;
+      } else if (ret == -EROFS) {
+        break;
+      } else {
+        return ret;
+      }
     }
-
-    return ret;
   }
 }
 
@@ -324,7 +339,7 @@ int FillOp::run()
     const auto view = log_->striper.view();
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -334,7 +349,7 @@ int FillOp::run()
     int ret = log_->backend->Fill(*oid, view->epoch(), position_);
 
     if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
+      log_->striper.update_current_view(view->epoch());
       continue;
     }
 
@@ -391,7 +406,7 @@ int TrimOp::run()
     const auto view = log_->striper.view();
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -401,7 +416,7 @@ int TrimOp::run()
     int ret = log_->backend->Trim(*oid, view->epoch(), position_);
 
     if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
+      log_->striper.update_current_view(view->epoch());
       continue;
     }
 
@@ -462,7 +477,7 @@ void LogImpl::queue_op(std::unique_ptr<LogOp> op)
 void LogImpl::finisher_entry_()
 {
   while (true) {
-    int do_shutdown = false;
+    bool do_shutdown = false;
     std::unique_ptr<LogOp> op;
     {
       std::unique_lock<std::mutex> lk(lock);
