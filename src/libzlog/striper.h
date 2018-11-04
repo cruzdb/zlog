@@ -105,14 +105,17 @@ class ObjectMap {
   {}
 
   ObjectMap(uint64_t next_stripe_id,
-      std::map<uint64_t, Stripe>& stripes) :
+      const std::map<uint64_t, Stripe>& stripes) :
     next_stripe_id_(next_stripe_id),
     stripes_(stripes)
   {}
 
  public:
   boost::optional<std::string> map(uint64_t position) const;
-  bool ensure_mapping(const std::string& prefix, uint64_t position);
+
+  // expand the mapping to include the given position. true is returned when the
+  // mapping changed, and false if the position is already mapped.
+  bool expand_mapping(const std::string& prefix, uint64_t position);
 
   const std::map<uint64_t, Stripe>& stripes() const {
     return stripes_;
@@ -163,42 +166,50 @@ class View {
 
 class Striper {
  public:
-  Striper(LogImpl *log, const std::string& secret) :
-    shutdown_(false),
-    log_(log),
-    view_(std::make_shared<const View>()),
-    secret_(secret),
-    refresh_thread_(std::thread(&Striper::refresh_entry_, this))
-  {}
+  Striper(LogImpl *log, const std::string& secret);
 
-  std::shared_ptr<const View> view() const {
-    assert(view_);
-    return view_;
-  }
-
-  int ensure_mapping(uint64_t position);
-
-  void refresh(uint64_t epoch);
-
-  int propose_sequencer(const std::shared_ptr<const View>& view,
-      const Options& options);
+  ~Striper();
 
   void shutdown();
 
+  std::shared_ptr<const View> view() const;
+
+  // proposes a new log view as a copy of the current view that has been
+  // expanded to map the position. no proposal is made if the current view maps
+  // the position. if a proposal is made this method doesn't return until the
+  // new view (or a newer view) is made active. on success, callers should
+  // verify that the position has been mapped, and retry if it is still missing.
+  int try_expand_view(uint64_t position);
+
+  // wait until a view that is newer than the given epoch is read and made
+  // active. this is typically used when a backend method (e.g. read, write)
+  // returns -ESPIPE indicating that I/O was tagged with an out-of-date epoch,
+  // and the caller should retrieve the latest view.
+  void update_current_view(uint64_t epoch);
+
+  // proposes a new view with this log instance configured as the active
+  // sequencer. this method waits until the propsoed view (or a newer view) is
+  // made active. on success, caller should check the sequencer of the current
+  // view and propose again if necessary.
+  int propose_sequencer();
+
  private:
-  // seals the stripe at the given epoch. *pempty will be set to true if the
-  // stripe is empty. *pposition is set to the maximum position written in the
-  // stripe, and is only defined when the stripe is non-empty.
+  mutable std::mutex lock_;
+  bool shutdown_;
+  LogImpl * const log_;
+  const std::string secret_;
+
+ private:
+  // seals the given stripe with the given epoch. on success, *pempty will be
+  // set to true if the stripe is empty (no positions have been written, filled,
+  // etc...), and if the stripe is non-empty, *pposition will be set to the
+  // maximum position written. otherwise it is left unmodified.
   int seal_stripe(const Stripe& stripe, uint64_t epoch,
       uint64_t *pposition, bool *pempty) const;
 
-  mutable std::mutex lock_;
-  bool shutdown_;
-  LogImpl *log_;
   std::shared_ptr<const View> view_;
 
-  const std::string secret_;
-
+ private:
   struct RefreshWaiter {
     explicit RefreshWaiter(uint64_t epoch) :
       done(false),
@@ -211,8 +222,8 @@ class Striper {
   };
 
   void refresh_entry_();
-  std::list<RefreshWaiter*> waiters_;
-  std::condition_variable cond_;
+  std::list<RefreshWaiter*> refresh_waiters_;
+  std::condition_variable refresh_cond_;
   std::thread refresh_thread_;
 };
 

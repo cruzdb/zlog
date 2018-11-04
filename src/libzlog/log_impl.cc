@@ -85,11 +85,10 @@ int TailOp::run()
       position_ = view->seq->check_tail(increment_);
       return 0;
     } else {
-      int ret = log_->striper.propose_sequencer(view, log_->options);
-      if (ret && ret != -ESPIPE) {
+      int ret = log_->striper.propose_sequencer();
+      if (ret) {
         return ret;
       }
-      log_->striper.refresh(view->epoch());
       continue;
     }
   }
@@ -144,7 +143,7 @@ int ReadOp::run()
     const auto view = log_->striper.view();
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -154,7 +153,7 @@ int ReadOp::run()
     int ret = log_->backend->Read(*oid, view->epoch(), position_, &data_);
 
     if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
+      log_->striper.update_current_view(view->epoch());
       continue;
     }
 
@@ -234,17 +233,16 @@ int AppendOp::run()
     if (view->seq) {
       position_ = view->seq->check_tail(true);
     } else {
-      int ret = log_->striper.propose_sequencer(view, log_->options);
-      if (ret && ret != -ESPIPE) {
+      int ret = log_->striper.propose_sequencer();
+      if (ret) {
         return ret;
       }
-      log_->striper.refresh(view->epoch());
       continue;
     }
 
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -280,7 +278,7 @@ int AppendOp::run()
         // changing the epoch <= test in the backend.
         break;
       } else if (ret == -ESPIPE) {
-        log_->striper.refresh(view->epoch());
+        log_->striper.update_current_view(view->epoch());
         break;
       } else if (ret == -EROFS) {
         break;
@@ -341,7 +339,7 @@ int FillOp::run()
     const auto view = log_->striper.view();
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -351,7 +349,7 @@ int FillOp::run()
     int ret = log_->backend->Fill(*oid, view->epoch(), position_);
 
     if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
+      log_->striper.update_current_view(view->epoch());
       continue;
     }
 
@@ -408,7 +406,7 @@ int TrimOp::run()
     const auto view = log_->striper.view();
     const auto oid = view->object_map.map(position_);
     if (!oid) {
-      int ret = log_->striper.ensure_mapping(position_);
+      int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -418,7 +416,7 @@ int TrimOp::run()
     int ret = log_->backend->Trim(*oid, view->epoch(), position_);
 
     if (ret == -ESPIPE) {
-      log_->striper.refresh(view->epoch());
+      log_->striper.update_current_view(view->epoch());
       continue;
     }
 

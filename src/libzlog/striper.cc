@@ -103,11 +103,12 @@ boost::optional<std::string> ObjectMap::map(const uint64_t position) const
   return boost::none;
 }
 
-bool ObjectMap::ensure_mapping(const std::string& prefix,
+bool ObjectMap::expand_mapping(const std::string& prefix,
     const uint64_t position)
 {
-  if (map(position))
+  if (map(position)) {
     return false;
+  }
 
   uint32_t width = 10;
   uint32_t object_slots = 5;
@@ -128,34 +129,59 @@ bool ObjectMap::ensure_mapping(const std::string& prefix,
   return true;
 }
 
+Striper::Striper(LogImpl *log, const std::string& secret) :
+  shutdown_(false),
+  log_(log),
+  secret_(secret),
+  view_(std::make_shared<const View>()),
+  refresh_thread_(std::thread(&Striper::refresh_entry_, this))
+{
+}
+
+Striper::~Striper()
+{
+  {
+    std::lock_guard<std::mutex> lk(lock_);
+    assert(shutdown_);
+    assert(refresh_waiters_.empty());
+  }
+  assert(!refresh_thread_.joinable());
+}
+
+std::shared_ptr<const View> Striper::view() const
+{
+  std::lock_guard<std::mutex> lk(lock_);
+  assert(view_);
+  return view_;
+}
+
 void Striper::shutdown()
 {
   {
     std::lock_guard<std::mutex> lk(lock_);
     shutdown_ = true;
   }
-  cond_.notify_one();
+  refresh_cond_.notify_one();
   refresh_thread_.join();
 }
 
-// TODO: rename this. we aren't really ensuring... we might need to try again
-int Striper::ensure_mapping(const uint64_t position)
+int Striper::try_expand_view(const uint64_t position)
 {
-  // read / copy
+  // read: the view into a mutable copy
   auto v = *view();
   const auto next_epoch = v.epoch() + 1;
 
-  // modify
-  auto changed = v.object_map.ensure_mapping(log_->prefix, position);
-  if (!changed)
+  // modify: the object map to contain the position
+  auto changed = v.object_map.expand_mapping(log_->prefix, position);
+  if (!changed) {
     return 0;
+  }
 
-  // write
+  // write: the serialized view as a new epoch view
   auto data = v.serialize();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
-
   if (!ret || ret == -ESPIPE) {
-    refresh(v.epoch());
+    update_current_view(v.epoch());
     return 0;
   }
 
@@ -180,6 +206,7 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   }
 
   bool stripe_empty = true;
+  // max pos only defined for non-empty stripe
   uint64_t stripe_max_pos = 0;
 
   for (auto& oid : oids) {
@@ -190,36 +217,40 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
       return ret;
     }
 
-    if (empty)
+    if (empty) {
       continue;
+    }
 
     stripe_empty = false;
     stripe_max_pos = std::max(stripe_max_pos, max_pos);
   }
 
-  if (pempty)
+  if (pempty) {
     *pempty = stripe_empty;
+  }
 
   if (pposition) {
-    if (!stripe_empty)
+    if (!stripe_empty) {
       *pposition = stripe_max_pos;
+    }
   }
 
   return 0;
 }
 
-int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
-    const Options& options)
+int Striper::propose_sequencer()
 {
-  auto v = *view;
+  // read: a mutable copy of the current view
+  auto v = *view();
   const auto next_epoch = v.epoch() + 1;
 
   bool empty = true;
+  // max pos only defined for non-empty log
   uint64_t max_pos;
 
-  // the maximum position is contained in the first non-empty stripe scanning in
-  // reverse, beginning with the stripe that maps the maximum possible position
-  // for the current view.
+  // find the maximum position written. the maximum position written is
+  // contained in the first non-empty stripe scanning in reverse, beginning with
+  // the stripe that maps the maximum possible position for the current view.
   const auto stripes = v.object_map.stripes();
   auto it = stripes.crbegin();
   for (; it != stripes.crend(); it++) {
@@ -229,20 +260,19 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
       return ret;
     }
 
-    if (empty)
+    if (empty) {
       continue;
+    }
 
     it++;
     break;
   }
 
-  if (empty) {
-    assert(it == stripes.crend());
-  }
+  assert(!empty || it == stripes.crend());
 
-  // now seal all of the other stripes. this is not so the max remains valid,
-  // but so that clients speaking with other sequencers that might still be
-  // active are forced to grab a new view and see the new sequencer.
+  // seal all other stripes. this is not to guarantee that the max is valid, but
+  // rather to signal to clients connected / using other sequencers that they
+  // should grab a new view to see the new sequencer.
   for (; it != stripes.crend(); it++) {
     auto& stripe = it->second;
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
@@ -251,29 +281,31 @@ int Striper::propose_sequencer(const std::shared_ptr<const View>& view,
     }
   }
 
+  // new sequencer configuration
   SequencerConfig seq_config;
   seq_config.secret = secret_;
   seq_config.position = empty ? 0 : (max_pos + 1);
 
   // this is the epoch at which the new seq takes affect. this controls the
-  // validitiy of init_position since the seq info is copied into new views.
-  // maybe we could solve this issue by clearing init position on cpoy, or
-  // breaking out into different data structures?
+  // validitiy of seq_config.position since the sequencer info is copied into
+  // new views. that is, a sequencer is only initialized once when the initial
+  // epoch and view epoch are equal. XXX: maybe we could solve this odd scenario
+  // by clearing the initial seq position on copy, or breaking out into
+  // different data structures?
   seq_config.epoch = next_epoch;
 
+  // modify: the view by setting a new sequencer configuration
   v.seq_config = seq_config;
 
-  // propose the same view unmodified. finding the maximum position doesn't
-  // require changing the view, but rather only ensuring that no in-flight
-  // writes invalidate the result which is accomplished by sealing the stripes
-  // queried and aborting the process if the view changed during the process.
+  // write: the proposed new view
   auto data = v.serialize();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
-  if (ret) {
-    return ret;
+  if (!ret || ret == -ESPIPE) {
+    update_current_view(v.epoch());
+    return 0;
   }
 
-  return 0;
+  return ret;
 }
 
 void Striper::refresh_entry_()
@@ -283,7 +315,10 @@ void Striper::refresh_entry_()
 
     {
       std::unique_lock<std::mutex> lk(lock_);
-      cond_.wait(lk, [&] { return !waiters_.empty() || shutdown_; });
+
+      refresh_cond_.wait(lk, [&] {
+        return !refresh_waiters_.empty() || shutdown_;
+      });
 
       if (shutdown_)
         break;
@@ -301,7 +336,6 @@ void Striper::refresh_entry_()
 
     // read views at or after epoch
     std::map<uint64_t, std::string> views;
-    // TODO: 100 is an option
     int ret = log_->backend->ReadViews(log_->hoid, epoch, 100, &views);
     if (ret) {
       std::cerr << "read views error " << ret << std::endl;
@@ -313,7 +347,7 @@ void Striper::refresh_entry_()
       std::list<RefreshWaiter*> waiters;
       {
         std::lock_guard<std::mutex> lk(lock_);
-        waiters.swap(waiters_);
+        waiters.swap(refresh_waiters_);
       }
       for (auto it = waiters.begin(); it != waiters.end();) {
         const auto waiter = *it;
@@ -327,8 +361,13 @@ void Striper::refresh_entry_()
       }
       if (!waiters.empty()) {
         std::lock_guard<std::mutex> lk(lock_);
-        waiters_.splice(waiters_.begin(), waiters);
+        refresh_waiters_.splice(refresh_waiters_.begin(), waiters);
       }
+      // XXX: if a new waiter showed up while we were waking up waiters from the
+      // copy made above, then when we continue we'll loop back around if there
+      // are still waiters. however, when we move to a notify/watch method that
+      // avoids spinning, be careful here to make sure that new waiters are
+      // handled before blocking to wait on updates.
       continue;
     }
 
@@ -342,6 +381,7 @@ void Striper::refresh_entry_()
       epoch++;
     }
 
+    // grab the newest view in the batch
     const auto it = views.crbegin();
     assert(it != views.crend());
 
@@ -378,17 +418,14 @@ void Striper::refresh_entry_()
   }
 }
 
-void Striper::refresh(const uint64_t epoch)
+void Striper::update_current_view(const uint64_t epoch)
 {
   RefreshWaiter waiter(epoch);
   std::unique_lock<std::mutex> lk(lock_);
-  waiters_.emplace_back(&waiter);
-  cond_.notify_one();
+  refresh_waiters_.emplace_back(&waiter);
+  refresh_cond_.notify_one();
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
 }
-
-////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////
 
 std::string View::create_initial()
 {
