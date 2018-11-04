@@ -404,6 +404,11 @@ void Striper::refresh_entry_()
           assert(view_->seq);
           assert(view_->seq_config);
           assert(view_->seq_config->epoch == new_view->seq_config->epoch);
+          // be careful that this isn't copying the state of the sequencer. when
+          // this comment was written, this was copying a shared_ptr to the
+          // state which is fine. the issue that other threads may be
+          // simultaneously incrementing the sequencer and we don't want to miss
+          // those increments when setting up the new view.
           new_view->seq = view_->seq;
         }
       } else {
