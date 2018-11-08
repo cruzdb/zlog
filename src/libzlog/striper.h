@@ -37,7 +37,7 @@ namespace zlog_proto {
 namespace zlog {
 
 class LogImpl;
-class Options;
+struct Options;
 
 class Sequencer {
  public:
