@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 set -x
 
@@ -10,8 +9,7 @@ ZLOG_DIR=${THIS_DIR}/../
 BUILD_DIR=$(mktemp -d)
 DOCS_DIR=$(mktemp -d)
 INSTALL_DIR=$(mktemp -d)
-DB_DIR=$(mktemp -d)
-trap "rm -rf ${DB_DIR} ${BUILD_DIR} \
+trap "rm -rf ${BUILD_DIR} \
   ${DOCS_DIR} ${INSTALL_DIR}" EXIT
 
 # build documentation
@@ -27,15 +25,17 @@ fi
 CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
              -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 
+# TODO reenable java. javah not in newer jdks?
 JNI="ON"
 if ! [ -x "$(command -v javah)" ]; then
   JNI="OFF"
 fi
 
+# TODO: renable ceph support
+# CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_CEPH=ON -DWITH_JNI=${JNI}"
 if [[ "$OSTYPE" != "darwin"* ]]; then
-  CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_CEPH=ON -DWITH_JNI=${JNI}"
+  CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_JNI=${JNI}"
 fi
-
 
 pushd ${BUILD_DIR}
 cmake ${CMAKE_FLAGS} ${ZLOG_DIR}
@@ -60,10 +60,11 @@ if [ -e ${CEPH_CONF} ]; then
 fi
 
 # start the sequencer
-zlog-seqr --port 5678 --streams --daemon
+#zlog-seqr --port 5678 --streams --daemon
 
 for test_runner in $tests; do
   ${test_runner}
+  # TODO: reenable coverage
   if [ "${RUN_COVERAGE}" == 1 ]; then
     pushd ${BUILD_DIR}
     make ${test_runner}_coverage || (popd && continue)
