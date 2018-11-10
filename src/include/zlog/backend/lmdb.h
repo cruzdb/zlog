@@ -1,4 +1,5 @@
 #pragma once
+#include <cstring>
 #include <vector>
 #include <sstream>
 #include <iostream>
@@ -33,6 +34,10 @@ class LMDBBackend : public Backend {
 
   int OpenLog(const std::string& name, std::string *hoid,
       std::string *prefix_out) override;
+
+  int ListLinks(std::vector<std::string> &loids_out) override;
+
+  int ListHeads(std::vector<std::string> &ooids_out) override;
 
   int ReadViews(const std::string& hoid,
       uint64_t epoch, uint32_t max_views,
@@ -125,6 +130,30 @@ class LMDBBackend : public Backend {
       return 0;
     }
 
+    int GetAll(const std::string& prefix, std::vector<MDB_val> &keys) {
+      MDB_cursor *cursor;
+      int ret = mdb_cursor_open(txn, be->db_obj, &cursor);
+      assert(ret == 0);
+      MDB_val key;
+      ret = mdb_cursor_get(cursor, &key, nullptr, MDB_FIRST);
+      if (ret == MDB_NOTFOUND) {
+        mdb_cursor_close(cursor);
+        return 0;
+      }
+      assert(ret == 0);
+      if (startsWith(key, prefix)) {
+        keys.push_back(key);
+      }
+      while ((ret = mdb_cursor_get(cursor, &key, nullptr, MDB_NEXT)) == 0) {
+        if (startsWith(key, prefix)) {
+          keys.push_back(key);
+        }
+      }
+      assert(ret == MDB_NOTFOUND);
+      mdb_cursor_close(cursor);
+      return 0;
+    }
+
     int Put(const std::string& key, MDB_val& val, bool exclusive) {
       MDB_val k;
       k.mv_size = key.size();
@@ -143,6 +172,12 @@ class LMDBBackend : public Backend {
       v.mv_size = val.size();
       v.mv_data = (void*)val.data();
       return Put(key, v, exclusive);
+    }
+
+  private:
+    bool startsWith(const MDB_val &val, const std::string &prefix) {
+      return val.mv_size >= prefix.size()
+         && std::strncmp(reinterpret_cast<const char*>(val.mv_data), prefix.c_str(), prefix.size()) == 0;
     }
   };
 

@@ -71,6 +71,26 @@ class Backend {
   virtual int OpenLog(const std::string& name, std::string *hoid_out,
       std::string *prefix_out) = 0;
 
+  /**
+   * List links.
+   *
+   * @return 0 or non-zero
+   * -1 not implemented
+   */
+  virtual int ListLinks(std::vector<std::string> &loids_out) {
+    return -1;
+  }
+
+  /**
+   * List heads.
+   *
+   * @return 0 or non-zero
+   * -1 not implemented
+   */
+  virtual int ListHeads(std::vector<std::string> &hoids_out) {
+    return -1;
+  }
+
  public:
   /**
    * Read views.
