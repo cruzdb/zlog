@@ -104,10 +104,6 @@ int Log::Open(const Options& options,
   auto impl = std::unique_ptr<LogImpl>(
       new LogImpl(backend, name, hoid, prefix, secret.str(), options));
 
-  if (options.prefault_position) {
-    // call something like ensure mapping
-  }
-
   *logpp = impl.release();
 
   return 0;
