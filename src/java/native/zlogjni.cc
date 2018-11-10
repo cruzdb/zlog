@@ -72,7 +72,12 @@ JNIEXPORT void JNICALL Java_org_cruzdb_zlog_Log_openNative
   zlog::Log *log;
   zlog::Options options;
 
-  int ret = zlog::Log::Create(options, scheme, name, opts, "", "", &log);
+  options.create_if_missing = true;
+  options.error_if_exists = true;
+  options.backend_name = scheme;
+  options.backend_options = opts;
+
+  int ret = zlog::Log::Open(options, name, &log);
 
   env->ReleaseStringUTFChars(jscheme, scheme);
   env->ReleaseStringUTFChars(jname, name);
@@ -95,7 +100,7 @@ jlong Java_org_cruzdb_zlog_Log_append(JNIEnv *env, jobject jlog,
   jbyte *data = env->GetByteArrayElements(jdata, 0);
 
   uint64_t position;
-  int ret = log->Append(zlog::Slice((char*)data, jdata_len), &position);
+  int ret = log->Append(std::string((char*)data, jdata_len), &position);
   ZlogExceptionJni::ThrowNew(env, ret);
   env->ReleaseByteArrayElements(jdata, data, JNI_ABORT);
 

@@ -5,7 +5,7 @@ set_target_properties(zlogjni PROPERTIES
   VERSION 1.0.0
   SOVERSION 1)
 
-set(add_libs libzlog zlog_seqr ${JNI_LIBRARIES})
+set(add_libs libzlog ${JNI_LIBRARIES})
 
 add_dependencies(zlogjni jni_headers)
 include_directories(${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
