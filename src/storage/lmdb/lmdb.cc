@@ -271,6 +271,10 @@ int LMDBBackend::ProposeView(const std::string& hoid,
   assert(val.mv_size == sizeof(*proj_obj));
 
   const auto required_epoch = proj_obj->epoch + 1;
+  if (epoch > required_epoch) {
+    txn.Abort();
+    return -EINVAL;
+  }
   if (epoch != required_epoch) {
     txn.Abort();
     return -ESPIPE;

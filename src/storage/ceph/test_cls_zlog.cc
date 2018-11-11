@@ -1057,7 +1057,7 @@ TEST_F(ClsZlogTest, CreateView_InitWithEpochOne) {
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
   ret = view_create(2, bl);
-  ASSERT_EQ(ret, -ESPIPE);
+  ASSERT_EQ(ret, -EINVAL);
 
   // first epoch = 1
   ret = view_create(1, bl);
@@ -1074,7 +1074,7 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
   ret = view_create(2, bl);
-  ASSERT_EQ(ret, -ESPIPE);
+  ASSERT_EQ(ret, -EINVAL);
 
   // first epoch = 1
   ret = view_create(1, bl);
@@ -1085,9 +1085,9 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ret = view_create(1, bl);
   ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(4, bl);
-  ASSERT_EQ(ret, -ESPIPE);
+  ASSERT_EQ(ret, -EINVAL);
   ret = view_create(5, bl);
-  ASSERT_EQ(ret, -ESPIPE);
+  ASSERT_EQ(ret, -EINVAL);
   ret = view_create(0, bl);
   ASSERT_EQ(ret, -EINVAL);
 
@@ -1110,6 +1110,13 @@ TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   ASSERT_EQ(ret, -ESPIPE);
   ret = view_create(4, bl);
   ASSERT_EQ(ret, -ESPIPE);
+  ret = view_create(5, bl);
+  ASSERT_EQ(ret, -ESPIPE);
+  ret = view_create(7, bl);
+  ASSERT_EQ(ret, -EINVAL);
+
+  ret = view_create(6, bl);
+  ASSERT_EQ(ret, 0);
 }
 
 TEST_F(ClsZlogTest, ReadView_BadInput) {
