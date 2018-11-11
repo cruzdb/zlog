@@ -26,8 +26,6 @@ struct Options {
   bool create_if_missing = false;
   bool error_if_exists = false;
 
-  boost::optional<uint64_t> prefault_position = 0;
-
   ///////////////////////////////////////////////////////////////////
 
   // number of I/O threads

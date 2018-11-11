@@ -5,7 +5,6 @@
 #include <cassert>
 #include <sstream>
 #include "zlog/log.h"
-#include "zlog/slice.h"
 
 template<class PTR, class DERIVED> class ZlogNativeClass {
  public:
