@@ -33,17 +33,7 @@ LogImpl::LogImpl(std::shared_ptr<Backend> backend,
   prefix(prefix),
   striper(this, secret),
   options(opts)
-#ifdef WITH_STATS
-  ,metrics_http_server_(nullptr),
-  metrics_handler_(this)
-#endif
 {
-#ifdef WITH_STATS
-  if (!opts.http.empty()) {
-    metrics_http_server_ = new CivetServer(opts.http);
-    metrics_http_server_->addHandler("/metrics", &metrics_handler_);
-  }
-#endif
   assert(!name.empty());
   assert(!hoid.empty());
   assert(!prefix.empty());
@@ -60,14 +50,6 @@ LogImpl::~LogImpl()
     shutdown = true;
   }
   
-  #ifdef WITH_STATS
-  if(metrics_http_server_){
-    metrics_http_server_->removeHandler("/metrics");
-    metrics_http_server_->close();
-    delete metrics_http_server_;
-  }
-  #endif
-
   finishers_cond_.notify_all();
   for (auto& finisher : finishers_) {
     finisher.join();

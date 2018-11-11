@@ -14,11 +14,9 @@ set(libzlog_sources
   ../monitoring/statistics.cc
   ../monitoring/histogram.cc
   ../util/mempool.cc
-  ../civetweb/src/civetweb.c
-  ../civetweb/src/CivetServer.cpp
   )
 
-set_source_files_properties(../civetweb/src/civetweb.c PROPERTIES COMPILE_FLAGS -Wno-error)
+#set_source_files_properties(../civetweb/src/civetweb.c PROPERTIES COMPILE_FLAGS -Wno-error)
 
 add_definitions("-DZLOG_LIBDIR=\"${CMAKE_INSTALL_FULL_LIBDIR}\"")
 add_definitions("-DCMAKE_SHARED_LIBRARY_SUFFIX=\"${CMAKE_SHARED_LIBRARY_SUFFIX}\"")
