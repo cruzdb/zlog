@@ -192,6 +192,9 @@ int RAMBackend::ProposeView(const std::string& hoid,
 
   ProjectionObject& proj_obj = boost::get<ProjectionObject>(it->second);
   const auto required_epoch = proj_obj.epoch + 1;
+  if (epoch > required_epoch) {
+    return -EINVAL;
+  }
   if (epoch != required_epoch) {
     return -ESPIPE;
   }

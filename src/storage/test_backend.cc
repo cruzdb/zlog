@@ -3,8 +3,6 @@
 #include <map>
 #include <set>
 
-// CHECK epoch=0 is eninval not espipe...
-
 TEST_F(BackendTest, DeleteBeforeInit) {
   auto no_init_be = create_minimal_backend();
   no_init_be.reset();
@@ -122,12 +120,14 @@ TEST_F(BackendTest, ProposeView_Epoch) {
   ASSERT_EQ(backend->ProposeView(hoid, 1, ""), -ESPIPE);
   ASSERT_EQ(backend->ProposeView(hoid, 2, ""), 0);
   ASSERT_EQ(backend->ProposeView(hoid, 3, ""), 0);
-  ASSERT_EQ(backend->ProposeView(hoid, 5, ""), -ESPIPE);
-  ASSERT_EQ(backend->ProposeView(hoid, 6, ""), -ESPIPE);
-  ASSERT_EQ(backend->ProposeView(hoid, 6000, ""), -ESPIPE);
-  ASSERT_EQ(backend->ProposeView(hoid, 5, ""), -ESPIPE);
+  ASSERT_EQ(backend->ProposeView(hoid, 5, ""), -EINVAL);
+  ASSERT_EQ(backend->ProposeView(hoid, 6, ""), -EINVAL);
+  ASSERT_EQ(backend->ProposeView(hoid, 3, ""), -ESPIPE);
+  ASSERT_EQ(backend->ProposeView(hoid, 6000, ""), -EINVAL);
+  ASSERT_EQ(backend->ProposeView(hoid, 5, ""), -EINVAL);
   ASSERT_EQ(backend->ProposeView(hoid, 4, ""), 0);
   ASSERT_EQ(backend->ProposeView(hoid, 2, ""), -ESPIPE);
+  ASSERT_EQ(backend->ProposeView(hoid, 3, ""), -ESPIPE);
   ASSERT_EQ(backend->ProposeView(hoid, 1, ""), -ESPIPE);
 
   ASSERT_EQ(backend->CreateLog("b", "", &hoid, &prefix), 0);

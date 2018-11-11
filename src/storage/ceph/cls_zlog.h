@@ -224,9 +224,12 @@ class HeadObject {
   }
 
   int set_epoch(uint64_t epoch) {
-    if (epoch == (hdr_.epoch() + 1)) {
+    const uint64_t required_epoch = hdr_.epoch() + 1;
+    if (epoch == required_epoch) {
       hdr_.set_epoch(epoch);
       return 0;
+    } else if (epoch > required_epoch) {
+      return -EINVAL;
     }
     return -ESPIPE;
   }
