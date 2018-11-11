@@ -212,6 +212,13 @@ int AppendOp::run()
     const auto view = log_->striper.view();
 
     if (view->seq) {
+      // avoid obtaining a new append position when the view has been updated
+      // (e.g. because the mapping was extended), but the sequencer did not
+      // change. this is generally a minor optimization. but for completeness,
+      // it also handles the edge case in which stripes are configured to hold
+      // exactly one log entry. in this case a loop will be created by which the
+      // new position doesn't map, the map is extended, and then a new unmapped
+      // position is obtained.
       if (!position_epoch_ || (*position_epoch_ != view->seq->epoch())) {
         position_ = view->seq->check_tail(true);
         position_epoch_ = view->seq->epoch();
