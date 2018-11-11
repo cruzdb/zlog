@@ -126,6 +126,7 @@ class AppendOp : public LogOp {
       std::function<void(int, uint64_t)> cb) :
     LogOp(log),
     data_(data.data(), data.size()),
+    position_epoch_(boost::none),
     cb_(cb)
   {}
 
@@ -140,6 +141,7 @@ class AppendOp : public LogOp {
  private:
   std::string data_;
   uint64_t position_;
+  boost::optional<uint64_t> position_epoch_;
   std::function<void(int, uint64_t)> cb_;
 };
 

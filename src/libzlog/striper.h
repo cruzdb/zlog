@@ -41,7 +41,8 @@ struct Options;
 
 class Sequencer {
  public:
-  explicit Sequencer(uint64_t position) :
+  explicit Sequencer(uint64_t epoch, uint64_t position) :
+    epoch_(epoch),
     position_(position)
   {}
 
@@ -53,7 +54,12 @@ class Sequencer {
     }
   }
 
+  uint64_t epoch() const {
+    return epoch_;
+  }
+
  private:
+  const uint64_t epoch_;
   std::atomic<uint64_t> position_;
 };
 
