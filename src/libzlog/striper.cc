@@ -487,6 +487,23 @@ View::View(const std::string& prefix, uint64_t epoch,
     assert(res.second);
   }
 
+  if (!stripes.empty()) {
+    std::set<uint64_t> ids;
+    auto it = stripes.cbegin();
+    auto it2 = std::next(it);
+    for (; it != stripes.cend(); it++) {
+      assert(it->first <= it->second.max_position());
+      assert(it->second.width() > 0);
+      auto res = ids.emplace(it->second.id());
+      assert(res.second);
+      if (it2 != stripes.cend()) {
+        assert(it->second.max_position() < it2->first);
+      }
+      it2++;
+    }
+    assert(ids.find(view.next_stripe_id()) == ids.end());
+  }
+
   object_map = ObjectMap(view.next_stripe_id(), stripes);
 
   if (view.has_seq()) {
@@ -496,6 +513,8 @@ View::View(const std::string& prefix, uint64_t epoch,
     conf.secret = seq.secret();
     conf.position = seq.position();
     seq_config = conf;
+    assert(seq_config->epoch > 0);
+    assert(!seq_config->secret.empty());
   }
 }
 

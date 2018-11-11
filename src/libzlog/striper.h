@@ -71,6 +71,8 @@ class Stripe {
     max_position_(max_position),
     oids_(make_oids(prefix, id_, width))
   {
+    assert(width > 0);
+    assert(!prefix.empty());
     assert(!oids_.empty());
   }
 
