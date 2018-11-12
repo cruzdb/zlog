@@ -120,6 +120,39 @@ int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
   return 0;
 }
 
+int RAMBackend::ListLinks(std::vector<std::string> &loids_out) {
+  std::lock_guard<std::mutex> lk(lock_);
+
+  auto prefix = std::string("head.");
+  for (const auto &entry : objects_) {
+    const auto &key = entry.first;
+    if (startsWith(key, prefix)) {
+      loids_out.emplace_back(key);
+    }
+  }
+
+  return 0;
+}
+
+int RAMBackend::ListHeads(std::vector<std::string> &ooids_out) {
+  std::lock_guard<std::mutex> lk(lock_);
+
+  auto prefix = std::string("zlog.head.");
+  for (const auto &entry : objects_) {
+    const auto &key = entry.first;
+    if (startsWith(key, prefix)) {
+      auto prefix_stripped = key.substr(prefix.size());
+      // Filter zlog.head.*.N entries
+      if (prefix_stripped.find('.') != std::string::npos) {
+        continue;
+      }
+      ooids_out.emplace_back(key);
+    }
+  }
+
+  return 0;
+}
+
 int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
     uint32_t max_views, std::map<uint64_t, std::string> *views_out)
 {

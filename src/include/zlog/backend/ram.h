@@ -32,6 +32,10 @@ class RAMBackend : public Backend {
   int OpenLog(const std::string& name, std::string *hoid,
       std::string *prefix_out) override;
 
+  int ListLinks(std::vector<std::string> &loids_out) override;
+
+  int ListHeads(std::vector<std::string> &ooids_out) override;
+
   int ReadViews(const std::string& hoid,
       uint64_t epoch, uint32_t max_views,
       std::map<uint64_t, std::string> *views_out) override;
@@ -86,6 +90,10 @@ class RAMBackend : public Backend {
  private:
   int CheckEpoch(uint64_t epoch, const std::string& oid,
       bool eq, LogObject*& lobj);
+
+  bool startsWith(std::string s, std::string prefix) {
+    return s.size() >= prefix.size() && std::equal(prefix.cbegin(), prefix.cend(), s.cbegin());
+  }
 
  private:
   mutable std::mutex lock_;
