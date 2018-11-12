@@ -67,10 +67,10 @@ int RAMBackend::CreateLog(const std::string& name, const std::string& view,
 
   LinkObject link;
   link.hoid = hoid;
-
+  auto prefixed_name = std::string("head.").append(name);
   {
     std::lock_guard<std::mutex> lk(lock_);
-    auto ret = objects_.emplace(name, link);
+    auto ret = objects_.emplace(prefixed_name, link);
     if (!ret.second) {
       return -EEXIST;
     }
@@ -96,7 +96,8 @@ int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
 
   std::lock_guard<std::mutex> lk(lock_);
 
-  auto link_it = objects_.find(name);
+  auto prefixed_name = std::string("head.").append(name);
+  auto link_it = objects_.find(prefixed_name);
   if (link_it == objects_.end()) {
     return -ENOENT;
   }
