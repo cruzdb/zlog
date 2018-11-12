@@ -230,7 +230,13 @@ int AppendOp::run()
     const auto view = log_->striper.view();
 
     if (view->seq) {
-      position_ = view->seq->check_tail(true);
+      if (!position_epoch_ || (*position_epoch_ != view->seq->epoch())) {
+        position_ = view->seq->check_tail(true);
+        position_epoch_ = view->seq->epoch();
+      }
+      assert(position_epoch_);
+      assert(*position_epoch_ > 0);
+      assert(*position_epoch_ == view->seq->epoch());
     } else {
       int ret = log_->striper.propose_sequencer();
       if (ret) {
@@ -280,6 +286,7 @@ int AppendOp::run()
         log_->striper.update_current_view(view->epoch());
         break;
       } else if (ret == -EROFS) {
+        position_epoch_.reset(); // make sure to get a new position
         break;
       } else {
         return ret;
