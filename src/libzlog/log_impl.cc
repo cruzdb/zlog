@@ -33,17 +33,7 @@ LogImpl::LogImpl(std::shared_ptr<Backend> backend,
   prefix(prefix),
   striper(this, secret),
   options(opts)
-#ifdef WITH_STATS
-  ,metrics_http_server_(nullptr),
-  metrics_handler_(this)
-#endif
 {
-#ifdef WITH_STATS
-  if (!opts.http.empty()) {
-    metrics_http_server_ = new CivetServer(opts.http);
-    metrics_http_server_->addHandler("/metrics", &metrics_handler_);
-  }
-#endif
   assert(!name.empty());
   assert(!hoid.empty());
   assert(!prefix.empty());
@@ -60,14 +50,6 @@ LogImpl::~LogImpl()
     shutdown = true;
   }
   
-  #ifdef WITH_STATS
-  if(metrics_http_server_){
-    metrics_http_server_->removeHandler("/metrics");
-    metrics_http_server_->close();
-    delete metrics_http_server_;
-  }
-  #endif
-
   finishers_cond_.notify_all();
   for (auto& finisher : finishers_) {
     finisher.join();
@@ -230,6 +212,13 @@ int AppendOp::run()
     const auto view = log_->striper.view();
 
     if (view->seq) {
+      // avoid obtaining a new append position when the view has been updated
+      // (e.g. because the mapping was extended), but the sequencer did not
+      // change. this is generally a minor optimization. but for completeness,
+      // it also handles the edge case in which stripes are configured to hold
+      // exactly one log entry. in this case a loop will be created by which the
+      // new position doesn't map, the map is extended, and then a new unmapped
+      // position is obtained.
       if (!position_epoch_ || (*position_epoch_ != view->seq->epoch())) {
         position_ = view->seq->check_tail(true);
         position_epoch_ = view->seq->epoch();

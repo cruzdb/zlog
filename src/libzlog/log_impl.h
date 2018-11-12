@@ -3,7 +3,6 @@
 #include <list>
 #include <mutex>
 #include <thread>
-#include <CivetServer.h>
 
 #include "include/zlog/log.h"
 #include "include/zlog/statistics.h"
@@ -196,40 +195,6 @@ class LogImpl : public Log {
     return -EINVAL;
   }
 
-#ifdef WITH_STATS
- private:
-  class MetricsHandler : public CivetHandler {
-   public:
-    explicit MetricsHandler(LogImpl* log) : log_(log) {}
-
-    bool handleGet(CivetServer *server, struct mg_connection *conn) {
-
-      auto stats = log_->options.statistics;
-
-      std::stringstream out_stream;
-
-      out_stream << stats->ToString() << std::endl;
-
-      std::string body = out_stream.str();
-      std::string content_type = "text/plain";
-
-      mg_printf(conn,
-          "HTTP/1.1 200 OK\r\n"
-          "Content-Type: %s\r\n",
-          content_type.c_str());
-
-      mg_printf(conn, "Content-Length: %lu\r\n\r\n",
-          static_cast<unsigned long>(body.size()));
-
-      mg_write(conn, body.data(), body.size());
-
-      return true;
-    }
-
-    LogImpl* log_;
-  };
-#endif
-
  public:
   bool shutdown;
   std::mutex lock;
@@ -248,10 +213,6 @@ class LogImpl : public Log {
   bool exclusive_empty;
 
   const Options options;
-#ifdef WITH_STATS
-  CivetServer* metrics_http_server_ = nullptr;
-  MetricsHandler metrics_handler_;
-#endif
 };
 
 }
