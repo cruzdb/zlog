@@ -1,4 +1,6 @@
 add_library(zlog_backend_ram SHARED ram.cc)
+target_include_directories(zlog_backend_ram
+  PUBLIC ${Boost_INCLUDE_DIRS})
 set_target_properties(zlog_backend_ram PROPERTIES
   OUTPUT_NAME zlog_backend_ram
   VERSION 1.0.0

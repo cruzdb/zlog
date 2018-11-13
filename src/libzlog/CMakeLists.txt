@@ -40,4 +40,5 @@ install(TARGETS libzlog LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 add_library(test_libzlog OBJECT test_libzlog.cc)
 target_include_directories(test_libzlog
+  PUBLIC ${Boost_INCLUDE_DIRS}
   PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)

@@ -1,5 +1,9 @@
 add_library(zlog_backend_lmdb SHARED lmdb.cc)
-target_link_libraries(zlog_backend_lmdb lmdb)
+target_link_libraries(zlog_backend_lmdb
+  ${LMDB_LIBRARIES})
+target_include_directories(zlog_backend_lmdb
+  PRIVATE ${LMDB_INCLUDE_DIR}
+  PRIVATE ${Boost_INCLUDE_DIRS})
 set_target_properties(zlog_backend_lmdb PROPERTIES
   OUTPUT_NAME zlog_backend_lmdb
   VERSION 1.0.0
