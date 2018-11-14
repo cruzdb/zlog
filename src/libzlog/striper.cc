@@ -352,6 +352,10 @@ void Striper::refresh_entry_()
       }
       for (auto it = waiters.begin(); it != waiters.end();) {
         const auto waiter = *it;
+	// trying to make this locking fine grained to avoid blocking clients
+	// is admirable, but really we probably just need a finger grained lock
+	// to protect the waiters list rather than lock/unlock/lock/unlock/...
+        std::lock_guard<std::mutex> lk(lock_);
         if (current_epoch > waiter->epoch) {
           waiter->done = true;
           waiter->cond.notify_one();
@@ -427,8 +431,12 @@ void Striper::refresh_entry_()
 
 void Striper::update_current_view(const uint64_t epoch)
 {
-  RefreshWaiter waiter(epoch);
   std::unique_lock<std::mutex> lk(lock_);
+  RefreshWaiter waiter(epoch);
+  // XXX: is it necessary to hold the lock here to ensure that the epoch set
+  // above in waiter is always seen by by the refresh thread, even though the
+  // refresh thread will always grab the lock too to discover the waiter?  need
+  // to go do a quick refresher on the memory consistency semantics.
   refresh_waiters_.emplace_back(&waiter);
   refresh_cond_.notify_one();
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
@@ -498,8 +506,8 @@ View::View(const std::string& prefix, uint64_t epoch,
       assert(res.second);
       if (it2 != stripes.cend()) {
         assert(it->second.max_position() < it2->first);
+	it2++;
       }
-      it2++;
     }
     assert(ids.find(view.next_stripe_id()) == ids.end());
   }

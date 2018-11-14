@@ -100,8 +100,9 @@ int LogImpl::CheckTail(uint64_t *position_out)
       if (!ctx.ret) {
         ctx.position = position;
       }
+      // XXX: document the race here with the caller
+      ctx.cond.notify_one();
     }
-    ctx.cond.notify_one();
   });
 
   if (ret) {
@@ -180,8 +181,8 @@ int LogImpl::Read(const uint64_t position, std::string *data_out)
       if (!ctx.ret) {
         ctx.data.assign(std::move(data));
       }
+      ctx.cond.notify_one();
     }
-    ctx.cond.notify_one();
   });
 
   if (ret) {
@@ -302,8 +303,8 @@ int LogImpl::Append(const std::string& data, uint64_t *pposition)
       if (!ctx.ret) {
         ctx.position = position;
       }
+      ctx.cond.notify_one();
     }
-    ctx.cond.notify_one();
   });
 
   if (ret) {
@@ -374,8 +375,8 @@ int LogImpl::Fill(const uint64_t position)
       std::lock_guard<std::mutex> lk(ctx.lock);
       ctx.ret = ret;
       ctx.done = true;
+      ctx.cond.notify_one();
     }
-    ctx.cond.notify_one();
   });
 
   if (ret) {
@@ -441,8 +442,8 @@ int LogImpl::Trim(const uint64_t position)
       std::lock_guard<std::mutex> lk(ctx.lock);
       ctx.ret = ret;
       ctx.done = true;
+      ctx.cond.notify_one();
     }
-    ctx.cond.notify_one();
   });
 
   if (ret) {
