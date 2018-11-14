@@ -67,10 +67,10 @@ int RAMBackend::CreateLog(const std::string& name, const std::string& view,
 
   LinkObject link;
   link.hoid = hoid;
-
+  auto prefixed_name = std::string("head.").append(name);
   {
     std::lock_guard<std::mutex> lk(lock_);
-    auto ret = objects_.emplace(name, link);
+    auto ret = objects_.emplace(prefixed_name, link);
     if (!ret.second) {
       return -EEXIST;
     }
@@ -96,7 +96,8 @@ int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
 
   std::lock_guard<std::mutex> lk(lock_);
 
-  auto link_it = objects_.find(name);
+  auto prefixed_name = std::string("head.").append(name);
+  auto link_it = objects_.find(prefixed_name);
   if (link_it == objects_.end()) {
     return -ENOENT;
   }
@@ -114,6 +115,39 @@ int RAMBackend::OpenLog(const std::string& name, std::string *hoid_out,
 
   if (prefix_out) {
     *prefix_out = hoid.prefix;
+  }
+
+  return 0;
+}
+
+int RAMBackend::ListLinks(std::vector<std::string> &loids_out) {
+  std::lock_guard<std::mutex> lk(lock_);
+
+  auto prefix = std::string("head.");
+  for (const auto &entry : objects_) {
+    const auto &key = entry.first;
+    if (startsWith(key, prefix)) {
+      loids_out.emplace_back(key);
+    }
+  }
+
+  return 0;
+}
+
+int RAMBackend::ListHeads(std::vector<std::string> &ooids_out) {
+  std::lock_guard<std::mutex> lk(lock_);
+
+  auto prefix = std::string("zlog.head.");
+  for (const auto &entry : objects_) {
+    const auto &key = entry.first;
+    if (startsWith(key, prefix)) {
+      auto prefix_stripped = key.substr(prefix.size());
+      // Filter zlog.head.*.N entries
+      if (prefix_stripped.find('.') != std::string::npos) {
+        continue;
+      }
+      ooids_out.emplace_back(key);
+    }
   }
 
   return 0;

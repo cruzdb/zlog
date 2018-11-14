@@ -110,11 +110,12 @@ int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
     return ret;
   }
 
+  auto prefixed_name = std::string("head.").append(name);
   LinkObject link;
   strcpy(link.hoid, hoid.c_str());
   val.mv_data = &link;
   val.mv_size = sizeof(link);
-  ret = txn.Put(name, val, true);
+  ret = txn.Put(prefixed_name, val, true);
   if (ret) {
     txn.Abort();
     return ret;
@@ -145,8 +146,9 @@ int LMDBBackend::OpenLog(const std::string& name, std::string *hoid_out,
 
   auto txn = NewTransaction();
 
+  auto prefixed_name = std::string("head.").append(name);
   MDB_val val;
-  int ret = txn.Get(name, val);
+  int ret = txn.Get(prefixed_name, val);
   if (ret) {
     txn.Abort();
     return ret;
@@ -178,6 +180,40 @@ int LMDBBackend::OpenLog(const std::string& name, std::string *hoid_out,
   }
 
   return 0;
+}
+int LMDBBackend::ListLinks(std::vector<std::string> &loids_out) {
+  auto txn = NewTransaction(true);
+  std::vector<MDB_val> keys;
+  int ret = txn.GetAll("head.", keys);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+  std::transform(keys.cbegin(), keys.cend(), std::back_inserter(loids_out), [](MDB_val key) {
+    return std::string(reinterpret_cast<const char *>(key.mv_data), key.mv_size);
+  });
+  return txn.Commit();
+}
+
+int LMDBBackend::ListHeads(std::vector<std::string> &ooids_out) {
+  auto txn = NewTransaction(true);
+  std::vector<MDB_val> keys;
+  std::string prefix("zlog.head.");
+  int ret = txn.GetAll(prefix, keys);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+  size_t prefixLength = prefix.size();
+  for (auto &key : keys) {
+    std::string prefixStripped(reinterpret_cast<const char*>(key.mv_data) + prefixLength, key.mv_size - prefixLength);
+    // Filter out 'zlog.head.*.N'
+    if (prefixStripped.find('.') != std::string::npos) {
+      continue;
+    }
+    ooids_out.emplace_back(reinterpret_cast<const char*>(key.mv_data), key.mv_size);
+  }
+  return txn.Commit();
 }
 
 int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,

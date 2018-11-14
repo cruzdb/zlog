@@ -722,3 +722,45 @@ TEST_F(BackendTest, MaxPos) {
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 200000001u);
 }
+
+TEST_F(BackendTest, ListHeads_Empty) {
+  std::vector<std::string> output;
+  ASSERT_EQ(backend->ListHeads(output), 0);
+  ASSERT_EQ(output.size(), 0u);
+}
+
+TEST_F(BackendTest, ListHeads) {
+  std::string hoid;
+  std::vector<std::string> expected;
+
+  ASSERT_EQ(backend->CreateLog("log1", "", &hoid, nullptr), 0);
+  expected.emplace_back(hoid);
+  ASSERT_EQ(backend->CreateLog("another_log", "", &hoid, nullptr), 0);
+  expected.emplace_back(hoid);
+  ASSERT_EQ(backend->CreateLog("lastOne", "", &hoid, nullptr), 0);
+  expected.emplace_back(hoid);
+
+  std::sort(expected.begin(), expected.end());
+  
+  std::vector<std::string> output;
+  ASSERT_EQ(backend->ListHeads(output), 0);
+  ASSERT_EQ(output, expected);
+}
+
+TEST_F(BackendTest, ListLinks_Empty) {
+  std::vector<std::string> output;
+  ASSERT_EQ(backend->ListHeads(output), 0);
+  ASSERT_EQ(output.size(), 0u);
+}
+
+TEST_F(BackendTest, ListLinks) {
+  ASSERT_EQ(backend->CreateLog("log1", "", nullptr, nullptr), 0);
+  ASSERT_EQ(backend->CreateLog("another_log", "", nullptr, nullptr), 0);
+  ASSERT_EQ(backend->CreateLog("lastOne", "", nullptr, nullptr), 0);
+
+  std::vector<std::string> expected = { "head.another_log", "head.lastOne", "head.log1" };
+
+  std::vector<std::string> output;
+  ASSERT_EQ(backend->ListLinks(output), 0);
+  ASSERT_EQ(output, expected);
+}
