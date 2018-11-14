@@ -506,8 +506,8 @@ View::View(const std::string& prefix, uint64_t epoch,
       assert(res.second);
       if (it2 != stripes.cend()) {
         assert(it->second.max_position() < it2->first);
+	it2++;
       }
-      it2++;
     }
     assert(ids.find(view.next_stripe_id()) == ids.end());
   }
