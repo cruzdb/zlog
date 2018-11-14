@@ -89,7 +89,8 @@ std::vector<std::string> Stripe::make_oids(
   return oids;
 }
 
-boost::optional<std::string> ObjectMap::map(const uint64_t position) const
+std::pair<boost::optional<std::string>, bool>
+ObjectMap::map(const uint64_t position) const
 {
   if (!stripes_.empty()) {
     auto it = stripes_.upper_bound(position);
@@ -97,16 +98,17 @@ boost::optional<std::string> ObjectMap::map(const uint64_t position) const
     assert(it->first <= position);
     if (position <= it->second.max_position()) {
       auto oid = it->second.map(position);
-      return oid;
+      auto last_stripe = std::next(it) == stripes_.end();
+      return std::make_pair(oid, last_stripe);
     }
   }
-  return boost::none;
+  return std::make_pair(boost::none, false);
 }
 
 bool ObjectMap::expand_mapping(const std::string& prefix,
     const uint64_t position)
 {
-  if (map(position)) {
+  if (map(position).first) {
     return false;
   }
 
@@ -124,9 +126,16 @@ bool ObjectMap::expand_mapping(const std::string& prefix,
     const auto stripe_id = next_stripe_id_++;
     stripes_.emplace(min_position,
         Stripe{prefix, stripe_id, width, max_position});
-  } while (!map(position));
+  } while (!map(position).first);
 
   return true;
+}
+
+uint64_t ObjectMap::max_position() const
+{
+  auto stripe = stripes_.crbegin();
+  assert(stripe != stripes_.crend());
+  return stripe->second.max_position();
 }
 
 Striper::Striper(LogImpl *log, const std::string& secret) :
@@ -134,7 +143,9 @@ Striper::Striper(LogImpl *log, const std::string& secret) :
   log_(log),
   secret_(secret),
   view_(std::make_shared<const View>()),
-  refresh_thread_(std::thread(&Striper::refresh_entry_, this))
+  refresh_thread_(std::thread(&Striper::refresh_entry_, this)),
+  expand_pos_(boost::none),
+  expander_thread_(std::thread(&Striper::expander_entry_, this))
 {
 }
 
@@ -146,6 +157,7 @@ Striper::~Striper()
     assert(refresh_waiters_.empty());
   }
   assert(!refresh_thread_.joinable());
+  assert(!expander_thread_.joinable());
 }
 
 std::shared_ptr<const View> Striper::view() const
@@ -162,7 +174,44 @@ void Striper::shutdown()
     shutdown_ = true;
   }
   refresh_cond_.notify_one();
+  expander_cond_.notify_one();
   refresh_thread_.join();
+  expander_thread_.join();
+}
+
+boost::optional<std::string> Striper::map(
+    const std::shared_ptr<const View>& view,
+    uint64_t position)
+{
+  const auto mapping = view->object_map.map(position);
+  const auto oid = mapping.first;
+  const auto last_stripe = mapping.second;
+
+  // oid, false -> return oid (fast return case)
+  if (oid && !last_stripe) {
+    return oid;
+  }
+
+  // oid, true -> expand(max view pos + 1)
+  if (oid && last_stripe) {
+    // asynchronsouly expand the view to map the next stripe
+    async_expand_view(view->object_map.max_position() + 1);
+    return oid;
+  }
+
+  // none, true   -> not a valid combination
+  // none, false  -> expand(position)
+  assert(!oid);
+  assert(!last_stripe);
+
+  // the position mapped past the view's maximum position. the caller can't make
+  // progress, so we can immediately try to create a new view. since the
+  // position will by definition map into a new stripe that is also the last
+  // stripe in the new view, go ahead and create the target stripe and the
+  // following stripe. XXX: this is a future enhancement. returning boost::none
+  // here will cause the caller to expand the view to map the position, but
+  // won't add an extra stripe until the next I/O occurs.
+  return boost::none;
 }
 
 int Striper::try_expand_view(const uint64_t position)
@@ -306,6 +355,48 @@ int Striper::propose_sequencer()
   }
 
   return ret;
+}
+
+void Striper::expander_entry_()
+{
+  while (true) {
+    std::unique_lock<std::mutex> lk(lock_);
+
+    expander_cond_.wait(lk, [&] {
+      return expand_pos_ || shutdown_;
+    });
+
+    if (shutdown_) {
+      break;
+    }
+
+    assert(expand_pos_);
+    const auto position = *expand_pos_;
+    lk.unlock();
+
+    const auto v = view();
+    const auto mapping = v->object_map.map(position);
+    if (!mapping.first) {
+      try_expand_view(position);
+      continue;
+    }
+
+    lk.lock();
+    assert(expand_pos_);
+    if (*expand_pos_ > position) {
+      continue;
+    }
+    expand_pos_ = boost::none;
+  }
+}
+
+void Striper::async_expand_view(uint64_t position)
+{
+  std::unique_lock<std::mutex> lk(lock_);
+  if (!expand_pos_ || position > *expand_pos_) {
+    expand_pos_ = position;
+    expander_cond_.notify_one();
+  }
 }
 
 void Striper::refresh_entry_()

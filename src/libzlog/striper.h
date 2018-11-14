@@ -119,7 +119,11 @@ class ObjectMap {
   {}
 
  public:
-  boost::optional<std::string> map(uint64_t position) const;
+  // returns a pair where the first element is either boost::none if the
+  // position doesn't map, or it is the name of the object that the position
+  // maps to. The second element is true iff the position maps to the last
+  // stripe in the object map.
+  std::pair<boost::optional<std::string>, bool> map(uint64_t position) const;
 
   // expand the mapping to include the given position. true is returned when the
   // mapping changed, and false if the position is already mapped.
@@ -132,6 +136,8 @@ class ObjectMap {
   uint64_t next_stripe_id() const {
     return next_stripe_id_;
   }
+
+  uint64_t max_position() const;
 
  private:
   uint64_t next_stripe_id_;
@@ -182,12 +188,16 @@ class Striper {
 
   std::shared_ptr<const View> view() const;
 
+  boost::optional<std::string> map(const std::shared_ptr<const View>& view,
+      uint64_t position);
+
   // proposes a new log view as a copy of the current view that has been
   // expanded to map the position. no proposal is made if the current view maps
   // the position. if a proposal is made this method doesn't return until the
   // new view (or a newer view) is made active. on success, callers should
   // verify that the position has been mapped, and retry if it is still missing.
   int try_expand_view(uint64_t position);
+  void async_expand_view(uint64_t position);
 
   // wait until a view that is newer than the given epoch is read and made
   // active. this is typically used when a backend method (e.g. read, write)
@@ -229,10 +239,17 @@ class Striper {
     std::condition_variable cond;
   };
 
+  // log replay (read and activate views)
   void refresh_entry_();
   std::list<RefreshWaiter*> refresh_waiters_;
   std::condition_variable refresh_cond_;
   std::thread refresh_thread_;
+
+  // asynch view expansion
+  boost::optional<uint64_t> expand_pos_;
+  std::condition_variable expander_cond_;
+  void expander_entry_();
+  std::thread expander_thread_;
 };
 
 }
