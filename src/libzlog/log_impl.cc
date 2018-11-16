@@ -123,7 +123,7 @@ int ReadOp::run()
 {
   while (true) {
     const auto view = log_->striper.view();
-    const auto oid = view->object_map.map(position_);
+    const auto oid = log_->striper.map(view, position_);
     if (!oid) {
       int ret = log_->striper.try_expand_view(position_);
       if (ret) {
@@ -235,7 +235,7 @@ int AppendOp::run()
       continue;
     }
 
-    const auto oid = view->object_map.map(position_);
+    const auto oid = log_->striper.map(view, position_);
     if (!oid) {
       int ret = log_->striper.try_expand_view(position_);
       if (ret) {
@@ -333,7 +333,7 @@ int FillOp::run()
 {
   while (true) {
     const auto view = log_->striper.view();
-    const auto oid = view->object_map.map(position_);
+    const auto oid = log_->striper.map(view, position_);
     if (!oid) {
       int ret = log_->striper.try_expand_view(position_);
       if (ret) {
@@ -400,7 +400,7 @@ int TrimOp::run()
 {
   while (true) {
     const auto view = log_->striper.view();
-    const auto oid = view->object_map.map(position_);
+    const auto oid = log_->striper.map(view, position_);
     if (!oid) {
       int ret = log_->striper.try_expand_view(position_);
       if (ret) {
