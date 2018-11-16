@@ -320,8 +320,14 @@ void Striper::refresh_entry_()
         return !refresh_waiters_.empty() || shutdown_;
       });
 
-      if (shutdown_)
+      if (shutdown_) {
+        for (auto waiter : refresh_waiters_) {
+          waiter->done = true;
+          waiter->cond.notify_one();
+        }
+        refresh_waiters_.clear();
         break;
+      }
 
       current_epoch = view_->epoch();
     }
@@ -432,6 +438,9 @@ void Striper::refresh_entry_()
 void Striper::update_current_view(const uint64_t epoch)
 {
   std::unique_lock<std::mutex> lk(lock_);
+  if (shutdown_) {
+    return;
+  }
   RefreshWaiter waiter(epoch);
   // XXX: is it necessary to hold the lock here to ensure that the epoch set
   // above in waiter is always seen by by the refresh thread, even though the
