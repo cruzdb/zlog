@@ -130,7 +130,8 @@ class ObjectMap {
 
   // expand the mapping to include the given position. true is returned when the
   // mapping changed, and false if the position is already mapped.
-  bool expand_mapping(const std::string& prefix, uint64_t position);
+  bool expand_mapping(const std::string& prefix, uint64_t position,
+      uint32_t stripe_width, uint32_t stripe_slots);
 
   const std::map<uint64_t, Stripe>& stripes() const {
     return stripes_;

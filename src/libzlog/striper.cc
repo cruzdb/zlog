@@ -120,26 +120,23 @@ ObjectMap::map(const uint64_t position) const
 }
 
 bool ObjectMap::expand_mapping(const std::string& prefix,
-    const uint64_t position)
+    const uint64_t position, uint32_t stripe_width, uint32_t stripe_slots)
 {
   if (map(position).first) {
     return false;
   }
 
-  uint32_t width = 10;
-  uint32_t object_slots = 5;
-
-  const uint64_t stripe_slots = (uint64_t)width * object_slots;
-  assert(stripe_slots > 0);
+  const uint64_t num_stripe_entries = (uint64_t)stripe_width * stripe_slots;
+  assert(num_stripe_entries > 0);
 
   do {
     const auto it = stripes_.crbegin();
     const auto empty = it == stripes_.crend();
     const auto min_position = empty ? 0 : (it->second.max_position() + 1);
-    const auto max_position = min_position + stripe_slots - 1;
+    const auto max_position = min_position + num_stripe_entries - 1;
     const auto stripe_id = next_stripe_id_++;
     stripes_.emplace(min_position,
-        Stripe{prefix, stripe_id, width, max_position});
+        Stripe{prefix, stripe_id, stripe_width, max_position});
   } while (!map(position).first);
 
   return true;
@@ -239,7 +236,8 @@ int Striper::try_expand_view(const uint64_t position)
   const auto next_epoch = v.epoch() + 1;
 
   // modify: the object map to contain the position
-  auto changed = v.object_map.expand_mapping(log_->prefix, position);
+  auto changed = v.object_map.expand_mapping(log_->prefix, position,
+      log_->options.stripe_width, log_->options.stripe_slots);
   if (!changed) {
     return 0;
   }
