@@ -89,6 +89,20 @@ std::vector<std::string> Stripe::make_oids(
   return oids;
 }
 
+// TODO: refactor this with ObjectMap::map
+boost::optional<Stripe> ObjectMap::map_stripe(uint64_t position) const
+{
+  if (!stripes_.empty()) {
+    auto it = stripes_.upper_bound(position);
+    it = std::prev(it);
+    assert(it->first <= position);
+    if (position <= it->second.max_position()) {
+      return it->second;
+    }
+  }
+  return boost::none;
+}
+
 std::pair<boost::optional<std::string>, bool>
 ObjectMap::map(const uint64_t position) const
 {
@@ -143,10 +157,11 @@ Striper::Striper(LogImpl *log, const std::string& secret) :
   log_(log),
   secret_(secret),
   view_(std::make_shared<const View>()),
-  refresh_thread_(std::thread(&Striper::refresh_entry_, this)),
-  expand_pos_(boost::none),
-  expander_thread_(std::thread(&Striper::expander_entry_, this))
+  expand_pos_(boost::none)
 {
+  refresh_thread_ = std::thread(&Striper::refresh_entry_, this);
+  expander_thread_ = std::thread(&Striper::expander_entry_, this);
+  stripe_init_thread_ = std::thread(&Striper::stripe_init_entry_, this);
 }
 
 Striper::~Striper()
@@ -158,6 +173,7 @@ Striper::~Striper()
   }
   assert(!refresh_thread_.joinable());
   assert(!expander_thread_.joinable());
+  assert(!stripe_init_thread_.joinable());
 }
 
 std::shared_ptr<const View> Striper::view() const
@@ -175,8 +191,10 @@ void Striper::shutdown()
   }
   refresh_cond_.notify_one();
   expander_cond_.notify_one();
+  stripe_init_cond_.notify_one();
   refresh_thread_.join();
   expander_thread_.join();
+  stripe_init_thread_.join();
 }
 
 boost::optional<std::string> Striper::map(
@@ -226,11 +244,32 @@ int Striper::try_expand_view(const uint64_t position)
     return 0;
   }
 
+  // TODO: it would be good track information that let us identify scenarios
+  // when lots of threads or async ops are producing a thundering herd to
+  // propose a new view. if this is occuring then we can optimize by
+  // deduplicating the requests. this shouldn't be an issue when double
+  // buffering view creation is working well.
+
   // write: the serialized view as a new epoch view
   auto data = v.serialize();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(v.epoch());
+    if (!ret) {
+      // we successfully proposed the new stripe, so schedule an initialization
+      // job for the objects in the new stripe. it's possible that in the case
+      // of ESPIPE (out-of-date epoch) that another proposer process (or the
+      // auto view expander thread) created the target stripe but crashed (or in
+      // the case of the auto view expander thread, it would be racing) before
+      // initializing the stripe. ideally we could detect this (possibly with a
+      // heuristic or flag in views) and schedule initialization. this is not
+      // for correctness: client I/O path will do its own synchronous
+      // initialization to make progress. the optimization is future work if
+      // necessary: keeping stats on these scenarios would be useful.
+      if (log_->options.init_stripe_on_create) {
+        async_init_stripe(position);
+      }
+    }
     return 0;
   }
 
@@ -355,6 +394,59 @@ int Striper::propose_sequencer()
   }
 
   return ret;
+}
+
+// no deduplication is performed here, but this is only triggered by the thread
+// that successfully creates a new stripe, of which there should just be one per
+// stripe. later if/when we try to optimize for the rare case of the stripe
+// creator crashing before finishing initialization, we _might_ run into a case
+// where we want to deduplicate the stripe init jobs.
+void Striper::async_init_stripe(uint64_t position)
+{
+  std::lock_guard<std::mutex> lk(lock_);
+  stripe_init_pos_.push_back(position);
+  stripe_init_cond_.notify_one();
+}
+
+void Striper::stripe_init_entry_()
+{
+  while (true) {
+    uint64_t position;
+    {
+      std::unique_lock<std::mutex> lk(lock_);
+
+      stripe_init_cond_.wait(lk, [&] {
+        return !stripe_init_pos_.empty() || shutdown_;
+      });
+
+      if (shutdown_) {
+        break;
+      }
+
+      assert(!stripe_init_pos_.empty());
+      position = stripe_init_pos_.front();
+      stripe_init_pos_.pop_front();
+    }
+
+    auto v = view();
+    auto stripe = v->object_map.map_stripe(position);
+    if (!stripe) {
+      continue;
+    }
+
+    auto& oids = stripe->oids();
+    assert(!oids.empty());
+
+    // TODO: this is a case for not using Seal to initialize objects. if the
+    // objects in the stripe are already initialized, then it is common for this
+    // initialization job to be using a newer epoch/view, which means that the
+    // epoch will be bumped on the objects (for no good reason) in the stripe
+    // even though all we really wanted to do is initialize if not already
+    // initialized.
+    for (auto& oid : oids) {
+      log_->backend->Seal(oid, v->epoch());
+    }
+  }
 }
 
 void Striper::expander_entry_()

@@ -78,7 +78,7 @@ class Stripe {
 
   std::string map(uint64_t position) const {
     const auto index = position % oids_.size();
-    return oids_[index];
+    return oids_.at(index);
   }
 
   uint64_t id() const {
@@ -124,6 +124,9 @@ class ObjectMap {
   // maps to. The second element is true iff the position maps to the last
   // stripe in the object map.
   std::pair<boost::optional<std::string>, bool> map(uint64_t position) const;
+
+  // return the stripe that maps the position.
+  boost::optional<Stripe> map_stripe(uint64_t position) const;
 
   // expand the mapping to include the given position. true is returned when the
   // mapping changed, and false if the position is already mapped.
@@ -199,6 +202,9 @@ class Striper {
   int try_expand_view(uint64_t position);
   void async_expand_view(uint64_t position);
 
+  // schedule initialization of the stripe that maps the position.
+  void async_init_stripe(uint64_t position);
+
   // wait until a view that is newer than the given epoch is read and made
   // active. this is typically used when a backend method (e.g. read, write)
   // returns -ESPIPE indicating that I/O was tagged with an out-of-date epoch,
@@ -245,11 +251,17 @@ class Striper {
   std::condition_variable refresh_cond_;
   std::thread refresh_thread_;
 
-  // asynch view expansion
+  // async view expansion
   boost::optional<uint64_t> expand_pos_;
   std::condition_variable expander_cond_;
   void expander_entry_();
   std::thread expander_thread_;
+
+  // async stripe initilization
+  std::list<uint64_t> stripe_init_pos_;
+  std::condition_variable stripe_init_cond_;
+  void stripe_init_entry_();
+  std::thread stripe_init_thread_;
 };
 
 }
