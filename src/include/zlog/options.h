@@ -31,6 +31,10 @@ struct Options {
   // in testing scenarios (e.g. synchronous object init in i/o path).
   bool init_stripe_on_create = true;
 
+  // TODO: per-backend defeaults and precedence (e.g. option, be, view)
+  uint32_t stripe_width = 10;
+  uint32_t stripe_slots = 5;
+
   ///////////////////////////////////////////////////////////////////
 
   // number of I/O threads
