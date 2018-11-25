@@ -26,6 +26,11 @@ struct Options {
   bool create_if_missing = false;
   bool error_if_exists = false;
 
+  // schedule a background task to initialize stripe objects whenever a new
+  // stripe is created. this should always be set to true, and is only false for
+  // in testing scenarios (e.g. synchronous object init in i/o path).
+  bool init_stripe_on_create = true;
+
   ///////////////////////////////////////////////////////////////////
 
   // number of I/O threads

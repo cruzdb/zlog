@@ -13,6 +13,7 @@ int main(int argc, char **argv)
   options.backend = std::move(backend);
   options.create_if_missing = true;
   options.error_if_exists = true;
+  options.init_stripe_on_create = true;
 
   zlog::Log *log;
   int ret = zlog::Log::Open(options, "mylog", &log);
