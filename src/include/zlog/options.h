@@ -35,6 +35,8 @@ struct Options {
   uint32_t stripe_width = 10;
   uint32_t stripe_slots = 5;
 
+  uint32_t max_inflight_ops = 1024;
+
   ///////////////////////////////////////////////////////////////////
 
   // number of I/O threads

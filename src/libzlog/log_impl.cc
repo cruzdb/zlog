@@ -32,6 +32,7 @@ LogImpl::LogImpl(std::shared_ptr<Backend> backend,
   hoid(hoid),
   prefix(prefix),
   striper(this, secret),
+  num_inflight_ops_(0),
   options(opts)
 {
   assert(!name.empty());
@@ -465,7 +466,21 @@ int LogImpl::trimAsync(uint64_t position, std::function<void(int)> cb)
 
 void LogImpl::queue_op(std::unique_ptr<LogOp> op)
 {
-  std::lock_guard<std::mutex> lk(lock);
+  std::unique_lock<std::mutex> lk(lock);
+
+  if (num_inflight_ops_ >= options.max_inflight_ops) {
+    std::condition_variable cond;
+    queue_op_waiters_.emplace_front(false, &cond);
+    auto it = queue_op_waiters_.begin();
+    cond.wait(lk, [&] {
+      assert(it->second == &cond);
+      return it->first;
+    });
+    queue_op_waiters_.erase(it);
+  }
+
+  num_inflight_ops_++;
+
   pending_ops_.emplace_back(std::move(op));
   finishers_cond_.notify_all();
 }
@@ -498,6 +513,14 @@ void LogImpl::finisher_entry_()
     } else {
       int ret = op->run();
       op->callback(ret);
+    }
+
+    std::lock_guard<std::mutex> lk(lock);
+    assert(num_inflight_ops_ > 0);
+    num_inflight_ops_--;
+    if (!queue_op_waiters_.empty()) {
+      queue_op_waiters_.back().first = true;
+      queue_op_waiters_.back().second->notify_one();
     }
   }
 }
