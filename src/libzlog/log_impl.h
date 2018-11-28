@@ -212,6 +212,10 @@ class LogImpl : public Log {
   uint64_t exclusive_position;
   bool exclusive_empty;
 
+  uint32_t num_inflight_ops_;
+  std::list<std::pair<bool,
+    std::condition_variable*>> queue_op_waiters_;
+
   const Options options;
 };
 
