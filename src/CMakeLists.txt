@@ -53,7 +53,6 @@ endif(WITH_JNI)
 add_executable(zlog_bench bench.cc)
 target_link_libraries(zlog_bench
     libzlog
-    zlog_backend_ram
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
