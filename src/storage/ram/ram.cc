@@ -1,5 +1,6 @@
 #include <vector>
 #include <atomic>
+#include <boost/algorithm/string.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -17,6 +18,11 @@ RAMBackend::~RAMBackend()
 int RAMBackend::Initialize(
     const std::map<std::string, std::string>& opts)
 {
+  auto it = opts.find("blackhole");
+  if (it != opts.end()) {
+    blackhole_ = boost::iequals(it->second, "yes") ||
+      boost::iequals(it->second, "true");
+  }
   return 0;
 }
 
@@ -306,7 +312,9 @@ int RAMBackend::Write(const std::string& oid, const std::string& data,
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {
     LogEntry entry;
-    entry.data = data;
+    if (!blackhole_) {
+      entry.data = data;
+    }
     lobj->entries.emplace(position, entry);
     lobj->maxpos = std::max(lobj->maxpos, position);
     return 0;

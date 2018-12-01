@@ -15,6 +15,7 @@ namespace ram {
 class RAMBackend : public Backend {
  public:
   RAMBackend() :
+    blackhole_(false),
     options_{{"scheme", "ram"}}
   {}
 
@@ -97,8 +98,9 @@ class RAMBackend : public Backend {
 
  private:
   mutable std::mutex lock_;
+  bool blackhole_;
   std::map<std::string, std::string> options_;
-  std::map<std::string,
+  std::unordered_map<std::string,
     boost::variant<LinkObject, ProjectionObject, LogObject>> objects_;
 };
 
