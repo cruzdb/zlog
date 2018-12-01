@@ -744,6 +744,8 @@ TEST_F(BackendTest, ListHeads) {
   
   std::vector<std::string> output;
   ASSERT_EQ(backend->ListHeads(output), 0);
+  std::sort(output.begin(), output.end());
+
   ASSERT_EQ(output, expected);
 }
 
@@ -759,8 +761,11 @@ TEST_F(BackendTest, ListLinks) {
   ASSERT_EQ(backend->CreateLog("lastOne", "", nullptr, nullptr), 0);
 
   std::vector<std::string> expected = { "head.another_log", "head.lastOne", "head.log1" };
+  std::sort(expected.begin(), expected.end());
 
   std::vector<std::string> output;
   ASSERT_EQ(backend->ListLinks(output), 0);
+  std::sort(output.begin(), output.end());
+
   ASSERT_EQ(output, expected);
 }
