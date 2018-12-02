@@ -142,6 +142,8 @@ int main(int argc, char **argv)
 
   if (backend == "ceph") {
     options.backend_options["pool"] = pool;
+    // zero-length string here causes default path search
+    options.backend_options["conf_file"] = "";
   }
 
   if (backend == "lmdb") {
@@ -195,6 +197,7 @@ int main(int argc, char **argv)
     });
     if (ret) {
       std::cerr << "appendAsync failed: " << strerror(-ret) << std::endl;
+      assert(0);
       break;
     }
   }
