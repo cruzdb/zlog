@@ -165,8 +165,7 @@ int main(int argc, char **argv)
 
   zlog::Log *log;
   int ret = zlog::Log::Open(options, log_name, &log);
-  if (ret < 0) {
-    delete log;
+  if (ret) {
     std::cerr << "log::open failed: " << strerror(-ret) << std::endl;
     return -1;
   }
