@@ -57,6 +57,13 @@ target_link_libraries(zlog_bench
     ${Boost_SYSTEM_LIBRARY}
 )
 
+add_executable(zlog zlog.cc)
+target_link_libraries(zlog
+    libzlog
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
 if(BUILD_CEPH_BACKEND)
 
 add_executable(zlog_tool zlog_tool.cc)
