@@ -343,6 +343,10 @@ int Striper::propose_sequencer()
     auto& stripe = it->second;
     int ret = seal_stripe(stripe, next_epoch, &max_pos, &empty);
     if (ret < 0) {
+      if (ret == -ESPIPE) {
+        update_current_view(v.epoch());
+        return 0;
+      }
       return ret;
     }
 
@@ -363,6 +367,10 @@ int Striper::propose_sequencer()
     auto& stripe = it->second;
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
     if (ret < 0) {
+      if (ret == -ESPIPE) {
+        update_current_view(v.epoch());
+        return 0;
+      }
       return ret;
     }
   }

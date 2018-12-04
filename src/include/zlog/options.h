@@ -46,9 +46,6 @@ struct Options {
   // advanced
   int max_refresh_views_read = 20;
 
-  int width = 10;
-  int entries_per_object = 200;
-
   Statistics* statistics = nullptr;
   std::vector<std::string> http;
   
