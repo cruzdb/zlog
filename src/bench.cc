@@ -101,6 +101,7 @@ int main(int argc, char **argv)
   uint32_t slots;
   size_t entry_size;
   int qdepth;
+  bool excl_open;
   bool verify;
   int runtime;
   std::string backend;
@@ -116,6 +117,7 @@ int main(int argc, char **argv)
     ("slots", po::value<uint32_t>(&slots)->default_value(10), "object slots")
     ("size", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
     ("qdepth", po::value<int>(&qdepth)->default_value(1), "queue depth")
+    ("excl", po::bool_switch(&excl_open), "exclusive open")
     ("verify", po::bool_switch(&verify), "verify writes")
     ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
 
@@ -157,7 +159,7 @@ int main(int argc, char **argv)
   }
 
   options.create_if_missing = true;
-  options.error_if_exists = true;
+  options.error_if_exists = excl_open;
 
   options.stripe_width = width;
   options.stripe_slots = slots;
