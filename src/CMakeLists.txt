@@ -63,16 +63,3 @@ target_link_libraries(zlog
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
-
-if(BUILD_CEPH_BACKEND)
-
-add_executable(zlog_tool zlog_tool.cc)
-set_target_properties(zlog_tool PROPERTIES OUTPUT_NAME "zlog")
-target_link_libraries(zlog_tool
-    libzlog
-    zlog_backend_ceph
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
-
-endif(BUILD_CEPH_BACKEND)
