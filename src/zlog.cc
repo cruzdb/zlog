@@ -11,6 +11,7 @@ namespace po = boost::program_options;
 
 int main(int argc, char **argv)
 {
+  std::vector<std::string> command;
   std::string log_name;
   std::string backend_name;
   std::string pool;
@@ -23,10 +24,14 @@ int main(int argc, char **argv)
     ("backend", po::value<std::string>(&backend_name)->required(), "backend")
     ("pool", po::value<std::string>(&pool)->default_value("zlog"), "pool (ceph)")
     ("db-path", po::value<std::string>(&db_path)->default_value("/tmp/zlog.bench.db"), "db path (lmdb)")
+    ("command", po::value<std::vector<std::string>>(&command), "command")
   ;
 
+  po::positional_options_description popts;
+  popts.add("command", -1);
+
   po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, opts), vm);
+  po::store(po::command_line_parser(argc, argv).options(opts).positional(popts).run(), vm);
 
   if (vm.count("help")) {
     std::cout << opts << std::endl;
