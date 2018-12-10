@@ -6,3 +6,4 @@ target_include_directories(test_backend
 add_subdirectory(ceph)
 add_subdirectory(lmdb)
 add_subdirectory(ram)
+add_subdirectory(bench)
