@@ -1,0 +1,219 @@
+diff --git a/src/backend_bench.cc b/src/backend_bench.cc
+index 23b495e..5747f43 100644
+--- a/src/backend_bench.cc
++++ b/src/backend_bench.cc
+@@ -149,6 +149,7 @@ int main(int argc, char **argv)
+   std::string pool;
+   std::string db_path;
+   uint64_t max_pos;
++  bool bytestream = false;
+ 
+   po::options_description opts("Benchmark options");
+   opts.add_options()
+@@ -165,6 +166,8 @@ int main(int argc, char **argv)
+     ("backend", po::value<std::string>(&backend_name)->required(), "backend")
+     ("pool", po::value<std::string>(&pool)->default_value("zlog"), "pool (ceph)")
+     ("db-path", po::value<std::string>(&db_path)->default_value("/tmp/zlog.bench.db"), "db path (lmdb)")
++
++    ("bytestream", po::bool_switch(&bytestream), "use bytestream")
+   ;
+ 
+   po::variables_map vm;
+@@ -183,6 +186,8 @@ int main(int argc, char **argv)
+   zlog::Options options;
+   options.backend_name = backend_name;
+ 
++  options.backend_options["bytestream"] = bytestream ? "yes" : "no";
++
+   if (backend_name == "ceph") {
+     options.backend_options["pool"] = pool;
+     // zero-length string here causes default path search
+diff --git a/src/include/zlog/backend/ceph.h b/src/include/zlog/backend/ceph.h
+index 6839544..e3bf0a2 100644
+--- a/src/include/zlog/backend/ceph.h
++++ b/src/include/zlog/backend/ceph.h
+@@ -58,6 +58,8 @@ class CephBackend : public Backend {
+   librados::IoCtx *ioctx_;
+   std::string pool_;
+ 
++  bool bytestream_;
++
+   static std::string LinkObjectName(const std::string& name);
+ 
+   int CreateLinkObject(const std::string& name,
+diff --git a/src/storage/ceph/ceph.cc b/src/storage/ceph/ceph.cc
+index b6c6ba7..0cfb4ed 100644
+--- a/src/storage/ceph/ceph.cc
++++ b/src/storage/ceph/ceph.cc
+@@ -20,7 +20,8 @@ CephBackend::CephBackend() :
+ CephBackend::CephBackend(librados::IoCtx *ioctx) :
+   cluster_(nullptr),
+   ioctx_(ioctx),
+-  pool_(ioctx_->get_pool_name())
++  pool_(ioctx_->get_pool_name()),
++  bytestream_(false)
+ {
+   options["scheme"] = "ceph";
+   options["conf_file"] = "";
+@@ -95,6 +96,9 @@ int CephBackend::Initialize(
+   ioctx_ = ioctx;
+   pool_ = ioctx_->get_pool_name();
+ 
++  it = opts.find("bytestream");
++  bytestream_ = it != opts.end() && it->second == "yes";
++
+   return 0;
+ }
+ 
+@@ -380,7 +384,7 @@ int CephBackend::Seal(const std::string& oid, uint64_t epoch)
+   }
+ 
+   librados::ObjectWriteOperation op;
+-  zlog::cls_zlog_seal(op, epoch);
++  zlog::cls_zlog_seal(op, epoch, bytestream_);
+   return ioctx_->operate(oid, &op);
+ }
+ 
+diff --git a/src/storage/ceph/cls_zlog.cc b/src/storage/ceph/cls_zlog.cc
+index 1751c69..6038988 100644
+--- a/src/storage/ceph/cls_zlog.cc
++++ b/src/storage/ceph/cls_zlog.cc
+@@ -85,7 +85,13 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
+     return -EROFS;
+   }
+ 
+-  entry.set_data(op.data());
++  ret = entry.set_data(op.data(), header.bytestream());
++  if (ret < 0) {
++    CLS_ERR("ERROR: log_entry_write(): set entry failed (b=%d) %d",
++        header.bytestream(), ret);
++    return ret;
++  }
++
+   ret = entry.write();
+   if (ret < 0) {
+     CLS_ERR("ERROR: log_entry_write(): entry write failed %d", ret);
+@@ -195,6 +201,8 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
+     return -EIO;
+   }
+ 
++  header.set_bytestream(op.bytestream());
++
+   header.set_epoch(op.epoch());
+   ret = header.write();
+   if (ret < 0) {
+diff --git a/src/storage/ceph/cls_zlog.h b/src/storage/ceph/cls_zlog.h
+index 00a511f..7286955 100644
+--- a/src/storage/ceph/cls_zlog.h
++++ b/src/storage/ceph/cls_zlog.h
+@@ -92,6 +92,14 @@ class LogObjectHeader {
+     return false;
+   }
+ 
++  bool bytestream() const {
++    return hdr_.bytestream();
++  }
++
++  void set_bytestream(bool val) {
++    hdr_.set_bytestream(val);
++  }
++
+  private:
+   cls_method_context_t hctx_;
+   zlog_ceph_proto::LogObjectHeader hdr_;
+@@ -144,9 +152,28 @@ class LogEntry {
+     entry_.set_invalid(true);
+   }
+ 
+-  void set_data(const std::string& data) {
++  int set_data(const std::string& data, bool bytestream) {
+     assert(!entry_.has_data());
+-    entry_.set_data(data);
++    assert(!entry_.has_offset());
++    assert(!entry_.has_length());
++    if (bytestream) {
++      uint64_t size;
++      // TODO: track size in header?
++      int ret = cls_cxx_stat(hctx_, &size, NULL);
++      if (ret < 0) {
++        return ret;
++      }
++      // TODO: pad to align? enforce max?
++      entry_.set_offset(size);
++      entry_.set_length(data.size());
++      ceph::bufferlist bl;
++      bl.append(data.data(), data.size());
++      return cls_cxx_write(hctx_, entry_.offset(),
++          entry_.length(), &bl);
++    } else {
++      entry_.set_data(data);
++      return 0;
++    }
+   }
+ 
+   int read(ceph::bufferlist *out) {
+diff --git a/src/storage/ceph/cls_zlog.proto b/src/storage/ceph/cls_zlog.proto
+index ed6c6e8..82f0bac 100644
+--- a/src/storage/ceph/cls_zlog.proto
++++ b/src/storage/ceph/cls_zlog.proto
+@@ -51,6 +51,7 @@ message Views {
+ message LogObjectHeader {
+   required uint64 epoch = 1;
+   optional uint64 max_pos = 2;
++  required bool bytestream = 3;
+ }
+ 
+ message LogEntry {
+@@ -81,6 +82,7 @@ message InitEntry {
+ 
+ message Seal {
+   required uint64 epoch = 1;
++  required bool bytestream = 2;
+ }
+ 
+ message WriteEntry {
+diff --git a/src/storage/ceph/cls_zlog_client.cc b/src/storage/ceph/cls_zlog_client.cc
+index bd3ed60..adf05c6 100644
+--- a/src/storage/ceph/cls_zlog_client.cc
++++ b/src/storage/ceph/cls_zlog_client.cc
+@@ -41,11 +41,12 @@ void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
+   op.exec("zlog", "entry_invalidate", bl);
+ }
+ 
+-void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch)
++void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch, bool bytestream)
+ {
+   ceph::bufferlist bl;
+   zlog_ceph_proto::Seal call;
+   call.set_epoch(epoch);
++  call.set_bytestream(bytestream);
+   encode(bl, call);
+   op.exec("zlog", "entry_seal", bl);
+ }
+diff --git a/src/storage/ceph/cls_zlog_client.h b/src/storage/ceph/cls_zlog_client.h
+index 567457f..24c41d9 100644
+--- a/src/storage/ceph/cls_zlog_client.h
++++ b/src/storage/ceph/cls_zlog_client.h
+@@ -15,7 +15,8 @@ namespace zlog {
+   void cls_zlog_invalidate(librados::ObjectWriteOperation& op, uint64_t epoch,
+       uint64_t position, bool force);
+ 
+-  void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch);
++  void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch,
++      bool bytestream);
+ 
+   void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch);
+ 
+diff --git a/src/storage/ceph/test_cls_zlog.cc b/src/storage/ceph/test_cls_zlog.cc
+index 11034e0..3612ae2 100644
+--- a/src/storage/ceph/test_cls_zlog.cc
++++ b/src/storage/ceph/test_cls_zlog.cc
+@@ -66,7 +66,7 @@ class ClsZlogTest : public ::testing::Test {
+ 
+   int entry_seal(uint64_t epoch, const std::string& oid = "obj") {
+     librados::ObjectWriteOperation op;
+-    zlog::cls_zlog_seal(op, epoch);
++    zlog::cls_zlog_seal(op, epoch, false);
+     return ioctx.operate(oid, &op);
+   }
+ 
