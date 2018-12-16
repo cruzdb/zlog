@@ -2,6 +2,8 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <boost/optional.hpp>
+#include <boost/lexical_cast.hpp>
 #include "storage/ceph/protobuf_bufferlist_adapter.h"
 #include "zlog/backend/ceph.h"
 #include "cls_zlog_client.h"
@@ -11,16 +13,21 @@ namespace zlog {
 namespace storage {
 namespace ceph {
 
+// TODO: we should also choose (or derive) a default value for omap_max_size
+// because having one is the common case and shouldn't be default.
+
 CephBackend::CephBackend() :
   cluster_(nullptr),
-  ioctx_(nullptr)
+  ioctx_(nullptr),
+  omap_max_size_(boost::none)
 {
 }
 
 CephBackend::CephBackend(librados::IoCtx *ioctx) :
   cluster_(nullptr),
   ioctx_(ioctx),
-  pool_(ioctx_->get_pool_name())
+  pool_(ioctx_->get_pool_name()),
+  omap_max_size_(boost::none)
 {
   options["scheme"] = "ceph";
   options["conf_file"] = "";
@@ -86,6 +93,16 @@ int CephBackend::Initialize(
     cluster->shutdown();
     delete cluster;
     return ret;
+  }
+
+  it = opts.find("omap_max_size");
+  if (it != opts.end()) {
+    try {
+      omap_max_size_ = boost::lexical_cast<uint32_t>(it->second);
+    } catch (boost::bad_lexical_cast& e) {
+      std::cerr << "could not convert to integer: " << it->second << std::endl;
+      return -EINVAL;
+    }
   }
 
   options = opts;
@@ -380,7 +397,7 @@ int CephBackend::Seal(const std::string& oid, uint64_t epoch)
   }
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_seal(op, epoch);
+  zlog::cls_zlog_seal(op, epoch, omap_max_size_);
   return ioctx_->operate(oid, &op);
 }
 

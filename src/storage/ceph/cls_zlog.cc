@@ -85,13 +85,21 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EROFS;
   }
 
-  entry.set_data(op.data());
+  ret = entry.set_data(op.data(), header.omap_max_size());
+  if (ret < 0) {
+    auto ms = header.omap_max_size();
+    CLS_ERR("ERROR: log_entry_write(): set entry failed (b=%d) %d",
+        (ms ? (int)(*ms) : -1), ret);
+    return ret;
+  }
+
   ret = entry.write();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_write(): entry write failed %d", ret);
     return ret;
   }
 
+  // TODO: update max pos before write above, to avoid double update?
   if (header.update_max_pos(op.pos())) {
     ret = header.write();
     if (ret < 0) {
@@ -194,6 +202,8 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
     CLS_ERR("ERROR: unexpected return value %d", ret);
     return -EIO;
   }
+
+  header.set_omap_max_size(op.omap_max_size());
 
   header.set_epoch(op.epoch());
   ret = header.write();

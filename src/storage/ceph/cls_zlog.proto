@@ -51,6 +51,7 @@ message Views {
 message LogObjectHeader {
   required uint64 epoch = 1;
   optional uint64 max_pos = 2;
+  required int32 omap_max_size = 3;
 }
 
 message LogEntry {
@@ -81,6 +82,7 @@ message InitEntry {
 
 message Seal {
   required uint64 epoch = 1;
+  optional int32 omap_max_size = 2 [default = -1];
 }
 
 message WriteEntry {

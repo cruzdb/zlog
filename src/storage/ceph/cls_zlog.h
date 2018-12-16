@@ -92,6 +92,17 @@ class LogObjectHeader {
     return false;
   }
 
+  void set_omap_max_size(int32_t size) {
+    hdr_.set_omap_max_size(size);
+  }
+
+  boost::optional<uint32_t> omap_max_size() const {
+    if (hdr_.omap_max_size() >= 0) {
+      return hdr_.omap_max_size();
+    }
+    return boost::none;
+  }
+
  private:
   cls_method_context_t hctx_;
   zlog_ceph_proto::LogObjectHeader hdr_;
@@ -144,9 +155,38 @@ class LogEntry {
     entry_.set_invalid(true);
   }
 
-  void set_data(const std::string& data) {
+  int set_data(const std::string& data,
+      boost::optional<uint32_t> omap_max_size) {
     assert(!entry_.has_data());
-    entry_.set_data(data);
+    assert(!entry_.has_offset());
+    assert(!entry_.has_length());
+
+    if (omap_max_size && data.size() >= *omap_max_size) {
+      // TODO: track object size in header?
+      uint64_t obj_size;
+      int ret = cls_cxx_stat(hctx_, &obj_size, NULL);
+      if (ret < 0) {
+        CLS_ERR("ERROR: set_data(): stat failed %d", ret);
+        return ret;
+      }
+
+      // TODO: pad to align entry ios?
+      // TODO: enforce a maximum size?
+      entry_.set_offset(obj_size);
+      entry_.set_length(data.size());
+
+      ceph::bufferlist bl;
+      bl.append(data.data(), data.size());
+      ret = cls_cxx_write(hctx_, entry_.offset(),
+          entry_.length(), &bl);
+      if (ret < 0) {
+        CLS_ERR("ERROR: set_data(): write failed %d", ret);
+      }
+      return ret;
+    } else {
+      entry_.set_data(data);
+      return 0;
+    }
   }
 
   int read(ceph::bufferlist *out) {

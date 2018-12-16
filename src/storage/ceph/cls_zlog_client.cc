@@ -41,11 +41,17 @@ void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
   op.exec("zlog", "entry_invalidate", bl);
 }
 
-void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch)
+void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch,
+    boost::optional<uint32_t> omap_max_size)
 {
   ceph::bufferlist bl;
   zlog_ceph_proto::Seal call;
   call.set_epoch(epoch);
+  if (omap_max_size) {
+    call.set_omap_max_size(*omap_max_size);
+  } else {
+    call.set_omap_max_size(-1);
+  }
   encode(bl, call);
   op.exec("zlog", "entry_seal", bl);
 }

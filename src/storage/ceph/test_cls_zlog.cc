@@ -66,7 +66,7 @@ class ClsZlogTest : public ::testing::Test {
 
   int entry_seal(uint64_t epoch, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_seal(op, epoch);
+    zlog::cls_zlog_seal(op, epoch, boost::none);
     return ioctx.operate(oid, &op);
   }
 
