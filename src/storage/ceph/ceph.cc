@@ -4,17 +4,14 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/optional.hpp>
 #include <boost/lexical_cast.hpp>
-#include "storage/ceph/protobuf_bufferlist_adapter.h"
 #include "zlog/backend/ceph.h"
 #include "cls_zlog_client.h"
-#include "storage/ceph/cls_zlog.pb.h"
+#include "storage/ceph/cls_zlog_generated.h"
+#include "fbs_helper.h"
 
 namespace zlog {
 namespace storage {
 namespace ceph {
-
-// TODO: we should also choose (or derive) a default value for omap_max_size
-// because having one is the common case and shouldn't be default.
 
 CephBackend::CephBackend() :
   cluster_(nullptr),
@@ -127,7 +124,7 @@ int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
     {
       ::ceph::bufferlist bl;
       librados::ObjectReadOperation op;
-      zlog::cls_zlog_read_unique_id(op);
+      cls_zlog_client::cls_zlog_read_unique_id(op);
       int ret = ioctx_->operate(hoid, &op, &bl);
       if (ret < 0) {
         if (ret == -ENOENT || ret == -ENODATA) {
@@ -136,18 +133,18 @@ int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
           return ret;
         }
       } else {
-        zlog_ceph_proto::UniqueId msg;
-        if (!decode(bl, &msg)) {
+        auto msg = fbs_bl_decode<cls_zlog::fbs::UniqueId>(&bl);
+        if (!msg) {
           return -EIO;
         }
-        unique_id = msg.id();
+        unique_id = msg->id();
       }
     }
 
     unique_id++;
 
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write_unique_id(op, unique_id);
+    cls_zlog_client::cls_zlog_write_unique_id(op, unique_id);
     int ret = ioctx_->operate(hoid, &op);
     if (ret < 0) {
       if (ret == -ESTALE) {
@@ -233,12 +230,16 @@ int CephBackend::OpenLog(const std::string& name, std::string *hoid_out,
       return ret;
     }
 
-    zlog_ceph_proto::LinkObjectHeader link;
-    if (!decode(bl, &link)) {
+    auto link = fbs_bl_decode<cls_zlog::fbs::LinkObjectHeader>(&bl);
+    if (!link) {
       return -EIO;
     }
 
-    hoid = link.hoid();
+    if (!link->hoid()) {
+      return -EIO;
+    }
+
+    hoid = link->hoid()->str();
   }
 
   // load log metadata from the head object
@@ -255,12 +256,16 @@ int CephBackend::OpenLog(const std::string& name, std::string *hoid_out,
     return ret;
   }
 
-  zlog_ceph_proto::HeadObjectHeader head;
-  if (!decode(bl, &head)) {
+  auto head = fbs_bl_decode<cls_zlog::fbs::HeadObjectHeader>(&bl);
+  if (!head) {
     return -EIO;
   }
 
-  auto prefix = head.prefix();
+  if (!head->prefix()) {
+    return -EIO;
+  }
+
+  auto prefix = head->prefix()->str();
   if (prefix.empty()) {
     return -EIO;
   }
@@ -288,25 +293,32 @@ int CephBackend::ReadViews(const std::string& hoid, uint64_t epoch,
 
   // read views starting with specified epoch
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read_view(op, epoch, max_views);
+  cls_zlog_client::cls_zlog_read_view(op, epoch, max_views);
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(hoid, &op, &bl);
   if (ret) {
     return ret;
   }
 
-  zlog_ceph_proto::Views views;
-  if (!decode(bl, &views)) {
+  auto reply = fbs_bl_decode<cls_zlog::fbs::Views>(&bl);
+  if (!reply) {
     return -EIO;
   }
 
-  // unpack into return map
-  for (int i = 0; i < views.views_size(); i++) {
-    auto view = views.views(i);
-    std::string data(view.data().c_str(), view.data().size());
-    auto res = tmp.emplace(view.epoch(), data);
-    assert(res.second);
-    (void)res;
+  if (reply->views()) {
+    auto views = reply->views();
+    for (auto it = views->begin(); it != views->end(); it++) {
+      auto bytes = it->data();
+
+      std::string data;
+      if (bytes) {
+        data = std::string(bytes->begin(), bytes->end());
+      }
+
+      auto res = tmp.emplace(it->epoch(), data);
+      assert(res.second);
+      (void)res;
+    }
   }
 
   views_out->swap(tmp);
@@ -324,7 +336,7 @@ int CephBackend::ProposeView(const std::string& hoid,
   ::ceph::bufferlist bl;
   bl.append(view.c_str(), view.size());
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_create_view(op, epoch, bl);
+  cls_zlog_client::cls_zlog_create_view(op, epoch, bl);
   int ret = ioctx_->operate(hoid, &op);
   return ret;
 }
@@ -337,7 +349,7 @@ int CephBackend::Read(const std::string& oid, uint64_t epoch,
   }
 
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_read(op, epoch, position);
+  cls_zlog_client::cls_zlog_read(op, epoch, position);
 
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
@@ -361,7 +373,7 @@ int CephBackend::Write(const std::string& oid, const std::string& data,
   data_bl.append(data.data(), data.size());
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_write(op, epoch, position, data_bl);
+  cls_zlog_client::cls_zlog_write(op, epoch, position, data_bl);
 
   return ioctx_->operate(oid, &op);
 }
@@ -374,7 +386,7 @@ int CephBackend::Fill(const std::string& oid, uint64_t epoch,
   }
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, false);
+  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, false);
   return ioctx_->operate(oid, &op);
 }
 
@@ -386,7 +398,7 @@ int CephBackend::Trim(const std::string& oid, uint64_t epoch,
   }
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_invalidate(op, epoch, position, true);
+  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, true);
   return ioctx_->operate(oid, &op);
 }
 
@@ -397,7 +409,7 @@ int CephBackend::Seal(const std::string& oid, uint64_t epoch)
   }
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_seal(op, epoch, omap_max_size_);
+  cls_zlog_client::cls_zlog_seal(op, epoch, omap_max_size_);
   return ioctx_->operate(oid, &op);
 }
 
@@ -409,7 +421,7 @@ int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
   }
 
   librados::ObjectReadOperation op;
-  zlog::cls_zlog_max_position(op, epoch);
+  cls_zlog_client::cls_zlog_max_position(op, epoch);
 
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
@@ -417,14 +429,16 @@ int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
     return ret;
   }
 
-  zlog_ceph_proto::MaxPos reply;
-  if (!decode(bl, &reply)) {
+  auto reply = fbs_bl_decode<cls_zlog::fbs::ReadMaxPosReply>(&bl);
+  if (!reply) {
     return -EIO;
   }
 
-  *empty_out = !reply.has_pos();
-  if (reply.has_pos()) {
-    *position_out = reply.pos();
+  if (reply->empty()) {
+    *empty_out = true;
+  } else {
+    *empty_out = false;
+    *position_out = reply->position();
   }
 
   return 0;
@@ -443,11 +457,12 @@ int CephBackend::CreateLinkObject(const std::string& name,
   assert(!name.empty());
   assert(!hoid.empty());
 
-  zlog_ceph_proto::LinkObjectHeader meta;
-  meta.set_hoid(hoid);
+  flatbuffers::FlatBufferBuilder fbb;
+  auto header = cls_zlog::fbs::CreateLinkObjectHeaderDirect(fbb, hoid.c_str());
+  fbb.Finish(header);
 
   ::ceph::bufferlist bl;
-  encode(bl, meta);
+  fbs_bl_encode(fbb, &bl);
 
   librados::ObjectWriteOperation op;
   op.create(true);
@@ -463,7 +478,7 @@ int CephBackend::InitHeadObject(const std::string& hoid,
     const std::string& prefix)
 {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, prefix);
+  cls_zlog_client::cls_zlog_init_head(op, prefix);
   return ioctx_->operate(hoid, &op);
 }
 

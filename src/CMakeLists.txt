@@ -26,6 +26,12 @@ include_directories(${CMAKE_SOURCE_DIR}/src/civetweb/include)
 
 ################################################################################
 
+set(FLATBUFFERS_BUILD_TESTS OFF CACHE "" INTERNAL FORCE)
+set(FLATBUFFERS_INSTALL OFF CACHE "" INTERNAL FORCE)
+set(FLATBUFFERS_FLATLIB OFF CACHE "" INTERNAL FORCE)
+set(FLATBUFFERS_FLATHASH OFF CACHE "" INTERNAL FORCE)
+add_subdirectory(flatbuffers EXCLUDE_FROM_ALL)
+
 add_subdirectory(googletest/googlemock)
 add_subdirectory(include)
 add_subdirectory(proto)
