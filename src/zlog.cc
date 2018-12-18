@@ -31,14 +31,18 @@ int main(int argc, char **argv)
   popts.add("command", -1);
 
   po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(opts).positional(popts).run(), vm);
+  try {
+    po::store(po::command_line_parser(argc, argv).options(opts).positional(popts).run(), vm);
+    po::notify(vm);
+  } catch (const boost::program_options::error &exception) {
+    std::cerr << exception.what() << std::endl;
+    return 1;
+  }
 
   if (vm.count("help")) {
     std::cout << opts << std::endl;
     return 1;
   }
-
-  po::notify(vm);
 
   zlog::Options options;
   options.backend_name = backend_name;
