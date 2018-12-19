@@ -3,11 +3,14 @@
 #include <string>
 #include <boost/program_options.hpp>
 #include "zlog/backend.h"
+#include "zlog/log.h"
 #include "zlog/options.h"
 #include "libzlog/striper.h"
 #include "proto/zlog.pb.h"
 
 namespace po = boost::program_options;
+
+int handle_log(std::vector<std::string>, std::shared_ptr<zlog::Backend>);
 
 int main(int argc, char **argv)
 {
@@ -27,6 +30,7 @@ int main(int argc, char **argv)
     ("command", po::value<std::vector<std::string>>(&command), "command")
   ;
 
+  // This gives us a vector of the command line arguments with flags removed
   po::positional_options_description popts;
   popts.add("command", -1);
 
@@ -61,6 +65,13 @@ int main(int argc, char **argv)
   if (ret) {
     std::cerr << "backend::load " << ret << std::endl;
     return ret;
+  }
+
+  if (command.size() > 0) {
+    if (command[0] == "log") {
+      auto subcommand = std::vector<std::string>(command.begin() + 1, command.end());
+      return handle_log(subcommand, backend);
+    }
   }
 
   std::string hoid;
@@ -106,4 +117,170 @@ int main(int argc, char **argv)
   }
 
   return 0;
+}
+
+/*
+ * Handles log commands and returns an exit code. The accepted commands are
+ * - create <log name>
+ * - append <log name>
+ * - dump <log name>
+ * - trim <log name>
+ * - fill <log name>
+ * - rename <log name> <new log name>
+ *
+ * @param command the command to execute
+ * @param backend the backend to use
+ *
+ * @return exit code
+ */
+int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> backend) {
+  const static std::map<std::string, std::string> usages = {
+          { "create", "zlog log create <log name>" },
+          { "append", "zlog log append <log name>" },
+          { "dump", "zlog log dump <log name>" },
+          { "trim", "zlog log trim <log name> <position>" },
+          { "fill", "zlog log fill <log name> <position>" },
+          { "rename", "zlog log rename <log name> <new log name>" },
+  };
+
+  if (command.size() == 0 || usages.find(command[0]) == usages.end()) {
+    std::cerr << "usage:" << std::endl;
+    for (const auto &usage : usages) {
+      std::cerr << usage.second << std::endl;
+    }
+    return 1;
+  }
+
+  if (command[0] == "create") {
+    if (command.size() != 2) { // create <log name>
+      std::cerr << usages.at("create") << std::endl;
+      return 1;
+    }
+    std::string hoid, prefix;
+    int ret = backend->CreateLog(command[1], "", &hoid, &prefix);
+    switch (ret) {
+      case 0:
+        break;
+      case -EEXIST:
+        std::cerr << "error: log name already exists" << std::endl;
+        return ret;
+      case -EINVAL:
+        std::cerr << "error: invalid input" << std::endl;
+        return ret;
+      default:
+        std::cerr << "error: unknown error" << std::endl;
+        return ret;
+    }
+    std::cout << hoid << std::endl << prefix << std::endl;
+    return 0;
+  }
+
+  // The rest of the commands need an opened log
+  zlog::Log *plog;
+  zlog::Options options;
+  options.backend = backend;
+  int ret = zlog::Log::Open(options, command[1], &plog);
+  switch (ret) {
+    case 0:
+      break;
+    case -ENOENT:
+      std::cerr << "error: no log named \"" + command[1] + "\"" << std::endl;
+      return ret;
+    case -EINVAL:
+      std::cerr << "error: invalid input" << std::endl;
+    default:
+      std::cerr << "error: unknown error " << ret << std::endl;
+      return ret;
+  }
+  std::unique_ptr<zlog::Log> log(plog);
+
+  if (command[0] == "append") {
+    if (command.size() != 2) { // append <log name>
+      std::cerr << usages.at("append") << std::endl;
+      return 1;
+    }
+    uint64_t tail;
+    int ret = log->CheckTail(&tail);
+    if (ret != 0) {
+      std::cerr << "log::CheckTail " << ret << std::endl;
+      return ret;
+    }
+    std::string data;
+    while (std::getline(std::cin, data)) { // Extra lines at end of file possible
+      int ret = log->Append(data, &tail);
+      if (ret != 0) {
+        std::cerr << "log::Append " << ret << std::endl;
+        return ret;
+      }
+    }
+    return 0;
+  } else if (command[0] == "dump") {
+    if (command.size() != 2) { // dump <log name>
+      std::cerr << usages.at("dump") << std::endl;
+      return 1;
+    }
+    uint64_t tail;
+    int ret = log->CheckTail(&tail);
+    if (ret != 0) {
+      std::cerr << "log::CheckTail " << ret << std::endl;
+      return ret;
+    }
+    std::string data;
+    for (uint64_t i = 0; i < tail; ++i) {
+      int ret = log->Read(i, &data);
+      if (ret != 0) {
+        std::cerr << "log::Read " << ret << std::endl;
+        return ret;
+      }
+      std::cout << data << std::endl;
+    }
+    return 0;
+  } else if (command[0] == "trim") {
+    if (command.size() != 3) { // trim <log name> <position>
+      std::cerr << usages.at("trim") << std::endl;
+      return 1;
+    }
+    uint64_t pos;
+    try {
+      pos = std::stoul(command[2]);
+    } catch (const std::invalid_argument &e) {
+      std::cerr << e.what() << std::endl;
+      return 1;
+    }
+    int ret = log->Trim(pos);
+    if (ret != 0) {
+      std::cerr << "log::Trim " << ret << std::endl;
+    }
+    return ret;
+  } else if (command[0] == "fill") {
+    if (command.size() != 3) { // fill <log name> <position>
+      std::cerr << usages.at("fill") << std::endl;
+      return 1;
+    }
+    uint64_t pos;
+    try {
+      pos = std::stoul(command[2]);
+    } catch (const std::invalid_argument &e) {
+      std::cerr << e.what() << std::endl;
+      return 1;
+    }
+    int ret = log->Fill(pos);
+    if (ret != 0) {
+      std::cerr << "log::Fill " << ret << std::endl;
+    }
+    return ret;
+  } else if (command[0] == "rename") {
+    if (command.size() != 3) { // rename <old log name> <new log name>
+      std::cerr << usages.at("rename") << std::endl;
+      return 1;
+    }
+    std::cerr << "Not implemented" << std::endl;
+    return 0;
+  }
+  // Should never reach here, but just to be safe
+  std::cerr << "usage:" << std::endl;
+  for (const auto &usage : usages) {
+    std::cerr << usage.second << std::endl;
+  }
+  return 1;
 }
