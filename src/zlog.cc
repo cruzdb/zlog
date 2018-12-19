@@ -190,21 +190,18 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       return ret;
     }
     if (command.size() == 2 && filename != "") { // append <log name> with input file
-      std::ifstream input_file;
-      input_file.open(filename);
-      if (!input_file.is_open()) {
+      std::ifstream ifs(filename);
+      if (!ifs.is_open()) {
         std::cerr << "no such file" << std::endl;
         return 1;
       }
-      std::string line;
-      while (std::getline(input_file, line)) {
-        int ret = log->Append(line, &tail);
-        if (ret != 0) {
-          std::cerr << "log::Append " << ret << std::endl;
-          return ret;
-        }
+      std::string content( (std::istreambuf_iterator<char>(ifs) ),
+                           (std::istreambuf_iterator<char>()    ) );
+      int ret = log->Append(content, &tail);
+      if (ret != 0) {
+        std::cerr << "log::Append " << ret << std::endl;
       }
-      return 0;
+      return ret;
     } else if (command.size() == 3) { // append <log name> <string>
       int ret = log->Append(command[2], &tail);
       if (ret != 0) {
