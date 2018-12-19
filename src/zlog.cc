@@ -1,5 +1,6 @@
 #include <iostream>
 #include <memory>
+#include <fstream>
 #include <string>
 #include <boost/program_options.hpp>
 #include "zlog/backend.h"
@@ -10,7 +11,7 @@
 
 namespace po = boost::program_options;
 
-int handle_log(std::vector<std::string>, std::shared_ptr<zlog::Backend>);
+int handle_log(std::vector<std::string>, std::shared_ptr<zlog::Backend>, std::string);
 
 int main(int argc, char **argv)
 {
@@ -19,6 +20,7 @@ int main(int argc, char **argv)
   std::string backend_name;
   std::string pool;
   std::string db_path;
+  std::string input_filename;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
@@ -28,6 +30,7 @@ int main(int argc, char **argv)
     ("pool", po::value<std::string>(&pool)->default_value("zlog"), "pool (ceph)")
     ("db-path", po::value<std::string>(&db_path)->default_value("/tmp/zlog.bench.db"), "db path (lmdb)")
     ("command", po::value<std::vector<std::string>>(&command), "command")
+    ("input-file,i", po::value<std::string>(&input_filename), "input filename for log append")
   ;
 
   // This gives us a vector of the command line arguments with flags removed
@@ -70,7 +73,7 @@ int main(int argc, char **argv)
   if (command.size() > 0) {
     if (command[0] == "log") {
       auto subcommand = std::vector<std::string>(command.begin() + 1, command.end());
-      return handle_log(subcommand, backend);
+      return handle_log(subcommand, backend, input_filename);
     }
   }
 
@@ -152,15 +155,16 @@ int main(int argc, char **argv)
  * - fill <log name>
  * - rename <log name> <new log name>
  *
- * @param command the command to execute
- * @param backend the backend to use
+ * @param command  the command to execute
+ * @param backend  the backend to use
+ * @param filename the input filename for append commands
  *
  * @return exit code
  */
-int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> backend) {
+int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> backend, std::string filename) {
   const static std::map<std::string, std::string> usages = {
           { "create", "zlog log create <log name>" },
-          { "append", "zlog log append <log name>" },
+          { "append", "zlog log append <log name> <string>\nzlog log append <log name> -i <filename>" },
           { "dump", "zlog log dump <log name>" },
           { "trim", "zlog log trim <log name> <position>" },
           { "fill", "zlog log fill <log name> <position>" },
@@ -219,25 +223,38 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
   std::unique_ptr<zlog::Log> log(plog);
 
   if (command[0] == "append") {
-    if (command.size() != 2) { // append <log name>
-      std::cerr << usages.at("append") << std::endl;
-      return 1;
-    }
     uint64_t tail;
     int ret = log->CheckTail(&tail);
     if (ret != 0) {
       std::cerr << "log::CheckTail " << ret << std::endl;
       return ret;
     }
-    std::string data;
-    while (std::getline(std::cin, data)) { // Extra lines at end of file possible
-      int ret = log->Append(data, &tail);
+    if (command.size() == 2 && filename != "") { // append <log name> with input file
+      std::ifstream input_file;
+      input_file.open(filename);
+      if (!input_file.is_open()) {
+        std::cerr << "no such file" << std::endl;
+        return 1;
+      }
+      std::string line;
+      while (std::getline(input_file, line)) {
+        int ret = log->Append(line, &tail);
+        if (ret != 0) {
+          std::cerr << "log::Append " << ret << std::endl;
+          return ret;
+        }
+      }
+      return 0;
+    } else if (command.size() == 3) { // append <log name> <string>
+      int ret = log->Append(command[2], &tail);
       if (ret != 0) {
         std::cerr << "log::Append " << ret << std::endl;
-        return ret;
       }
+      return ret;
+    } else {
+      std::cerr << usages.at("append") << std::endl;
+      return 1;
     }
-    return 0;
   } else if (command[0] == "dump") {
     if (command.size() != 2) { // dump <log name>
       std::cerr << usages.at("dump") << std::endl;
