@@ -8,17 +8,25 @@ TEST_F(BackendTest, DeleteBeforeInit) {
   no_init_be.reset();
 }
 
+// TODO: the unique id tests should enforce that the log exists, even though an
+// implementation may not require that to generate a unique id. currently this
+// is needed for lmdb. the implementations are correct this is just a nit pick
+// on how restrictive we want to make the backend api.
 TEST_F(BackendTest, UniqueId_Args) {
   uint64_t id;
   ASSERT_EQ(backend->uniqueId("", &id), -EINVAL);
-  ASSERT_EQ(backend->uniqueId("a", &id), 0);
+  std::string hoid, prefix;
+  ASSERT_EQ(backend->CreateLog("a", "", &hoid, &prefix), 0);
+  ASSERT_EQ(backend->uniqueId(hoid, &id), 0);
 }
 
 TEST_F(BackendTest, UniqueId) {
+  std::string hoid, prefix;
+  ASSERT_EQ(backend->CreateLog("a", "", &hoid, &prefix), 0);
   std::set<uint64_t> ids;
   for (int i = 0; i < 100; i++) {
     uint64_t id;
-    int ret = backend->uniqueId("hoid", &id);
+    int ret = backend->uniqueId(hoid, &id);
     ASSERT_EQ(ret, 0);
     auto res = ids.emplace(id);
     ASSERT_TRUE(res.second);
