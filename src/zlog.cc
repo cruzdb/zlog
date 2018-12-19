@@ -153,7 +153,6 @@ int main(int argc, char **argv)
  * - dump <log name>
  * - trim <log name>
  * - fill <log name>
- * - rename <log name> <new log name>
  *
  * @param command  the command to execute
  * @param backend  the backend to use
@@ -168,7 +167,6 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           { "dump", "zlog log dump <log name>" },
           { "trim", "zlog log trim <log name> <position>" },
           { "fill", "zlog log fill <log name> <position>" },
-          { "rename", "zlog log rename <log name> <new log name>" },
   };
 
   if (command.size() == 0 || usages.find(command[0]) == usages.end()) {
@@ -310,14 +308,8 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << "log::Fill " << ret << std::endl;
     }
     return ret;
-  } else if (command[0] == "rename") {
-    if (command.size() != 3) { // rename <old log name> <new log name>
-      std::cerr << usages.at("rename") << std::endl;
-      return 1;
-    }
-    std::cerr << "Not implemented" << std::endl;
-    return 0;
   }
+
   // Should never reach here, but just to be safe
   std::cerr << "usage:" << std::endl;
   for (const auto &usage : usages) {
