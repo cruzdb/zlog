@@ -1,3 +1,4 @@
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <fstream>
@@ -232,7 +233,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       }
       std::cout << i << ": ";
       for (char c : data.substr(0, 80)) {
-        std::cout << std::hex << static_cast<int>(c);
+        std::cout << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(c);
       }
       std::cout << std::endl;
     }
