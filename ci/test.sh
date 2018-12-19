@@ -100,3 +100,8 @@ if [[ "$OSTYPE" != "darwin"* && "$JNI" == "ON" ]]; then
 
   popd
 fi
+
+# test cli
+export PATH
+${ZLOG_DIR}/ci/cli-test.sh
+
