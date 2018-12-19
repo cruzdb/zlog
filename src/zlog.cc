@@ -233,7 +233,11 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
         std::cerr << "log::Read " << ret << std::endl;
         return ret;
       }
-      std::cout << data << std::endl;
+      std::cout << i << ": ";
+      for (char c : data.substr(0, 80)) {
+        std::cout << std::hex << static_cast<int>(c);
+      }
+      std::cout << std::endl;
     }
     return 0;
   } else if (command[0] == "trim") {
