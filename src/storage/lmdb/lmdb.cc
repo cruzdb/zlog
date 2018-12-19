@@ -57,14 +57,35 @@ int LMDBBackend::Initialize(
   return 0;
 }
 
-int LMDBBackend::uniqueId(const std::string& hoid, uint64_t *id)
+int LMDBBackend::uniqueId(const std::string& hoid, uint64_t *id_out)
 {
   if (hoid.empty()) {
     return -EINVAL;
   }
 
-  static std::atomic<uint64_t> __unique_id(0);
-  *id = __unique_id++;
+  auto txn = NewTransaction();
+
+  MDB_val val;
+  int ret = txn.Get(hoid, val);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  ProjectionObject *proj_obj = (ProjectionObject*)val.mv_data;
+  assert(val.mv_size == sizeof(*proj_obj));
+
+  auto id = proj_obj->unique_id++;
+
+  ret = txn.Put(hoid, val, false);
+  if (ret) {
+    txn.Abort();
+    return ret;
+  }
+
+  txn.Commit();
+
+  *id_out = id;
 
   return 0;
 }
@@ -85,6 +106,7 @@ int LMDBBackend::CreateLog(const std::string& name, const std::string& view,
 
   ProjectionObject proj_obj;
   proj_obj.epoch = 1;
+  proj_obj.unique_id = 0;
   strcpy(proj_obj.prefix, prefix.c_str());
 
   MDB_val val;

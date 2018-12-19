@@ -75,6 +75,7 @@ class LMDBBackend : public Backend {
 
   struct ProjectionObject {
     uint64_t epoch;
+    uint64_t unique_id;
     char prefix[128];
   };
 
