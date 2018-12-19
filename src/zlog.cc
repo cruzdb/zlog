@@ -101,49 +101,11 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  std::string hoid;
-  std::string prefix;
-  ret = backend->OpenLog(log_name, &hoid, &prefix);
-  if (ret) {
-    std::cerr << "backend::openlog " << ret << std::endl;
-    return ret;
-  }
-
-  uint64_t epoch = 1;
-  while (true) {
-    std::map<uint64_t, std::string> views;
-    ret = backend->ReadViews(hoid, epoch, 1, &views);
-    if (ret) {
-      std::cerr << "read views error " << ret << std::endl;
-      return ret;
-    }
-
-    if (views.empty()) {
-      break;
-    }
-
-    assert(views.size() == 1u);
-    auto it = views.find(epoch);
-    assert(it != views.end());
-
-    zlog_proto::View view_src;
-    if (!view_src.ParseFromString(it->second)) {
-      assert(0);
-      exit(1);
-    }
-
-    auto view = std::make_shared<zlog::View>(prefix, it->first, view_src);
-
-    std::cout << "view@" << view->epoch() << std::endl;
-    for (auto it : view->object_map.stripes()) {
-      std::cout << "   stripe@" << it.second.id() << " [" << it.first
-        << ", " << it.second.max_position() << "]" << std::endl;
-    }
-
-    epoch++;
-  }
-
-  return 0;
+  std::cerr << "usage:" << std::endl
+            << "zlog log ..." << std::endl
+            << "zlog link list" << std::endl
+            << "zlog head list" << std::endl;
+  return 1;
 }
 
 /*
