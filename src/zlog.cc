@@ -74,6 +74,30 @@ int main(int argc, char **argv)
     }
   }
 
+  if (command == std::vector<std::string>{ "link", "list" }) {
+    std::vector<std::string> links;
+    int ret = backend->ListLinks(links);
+    if (ret != 0) {
+      std::cerr << "backend::ListLinks " << ret << std::endl;
+      return ret;
+    }
+    for (const auto &link : links) {
+      std::cout << link << std::endl;
+    }
+    return 0;
+  } else if (command == std::vector<std::string>{ "head", "list" }) {
+    std::vector<std::string> heads;
+    int ret = backend->ListHeads(heads);
+    if (ret != 0) {
+      std::cerr << "backend::ListHeads " << ret << std::endl;
+      return ret;
+    }
+    for (const auto &head : heads) {
+      std::cout << head << std::endl;
+    }
+    return 0;
+  }
+
   std::string hoid;
   std::string prefix;
   ret = backend->OpenLog(log_name, &hoid, &prefix);
