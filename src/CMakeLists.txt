@@ -63,3 +63,4 @@ target_link_libraries(zlog
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
 )
+install(TARGETS zlog DESTINATION bin)
