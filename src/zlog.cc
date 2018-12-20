@@ -227,9 +227,18 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
     std::string data;
     for (uint64_t i = 0; i < tail; ++i) {
       int ret = log->Read(i, &data);
-      if (ret != 0) {
-        std::cerr << "log::Read " << ret << std::endl;
-        return ret;
+      switch (ret) {
+        case 0:
+          break;
+        case -ENODATA:
+          std::cerr << i << ": invalidated" << std::endl;
+          continue;
+        case -ERANGE:
+          std::cerr << i << ": free" << std::endl;
+          continue;
+        default:
+          std::cerr << "log::Read " << ret << std::endl;
+          return ret;
       }
       std::cout << i << ": ";
       for (char c : data.substr(0, 80)) {
