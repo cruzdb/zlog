@@ -17,6 +17,13 @@ ${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log append testlog 'just a lil t
 ${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log append testlog 'and another'
 ${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log append testlog 'one more and were done'
 
+echo '616e6420616e6f74686572' >> ${EXPECTED_FILE}
+${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log read testlog 1 >> ${OUTPUT_FILE}
+diff ${EXPECTED_FILE} ${OUTPUT_FILE}
+
+> ${EXPECTED_FILE}
+> ${OUTPUT_FILE}
+
 echo 'arthur willey!' >> ${INPUT_FILE}
 echo 'nautili hunter' >> ${INPUT_FILE}
 echo 'abcdefghijlmno' >> ${INPUT_FILE}

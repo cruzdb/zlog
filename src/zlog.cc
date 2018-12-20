@@ -128,6 +128,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           { "create", "zlog log create <log name>" },
           { "append", "zlog log append <log name> <string>\nzlog log append <log name> -i <filename>" },
           { "dump", "zlog log dump <log name>" },
+          { "read", "zlog log read <log name> <position>" },
           { "trim", "zlog log trim <log name> <position>" },
           { "fill", "zlog log fill <log name> <position>" },
   };
@@ -246,6 +247,38 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       }
       std::cout << std::endl;
     }
+    return 0;
+  } else if (command[0] == "read") {
+    if (command.size() != 3) { // read <log name> <position>
+      std::cerr << usages.at("trim") << std::endl;
+      return 1;
+    }
+    uint64_t pos;
+    try {
+      pos = std::stoul(command[2]);
+    } catch (const std::invalid_argument &e) {
+      std::cerr << e.what() << std::endl;
+      return 1;
+    }
+    std::string data;
+    int ret = log->Read(pos, &data);
+    switch (ret) {
+      case 0:
+        break;
+      case -ENODATA:
+        std::cerr << "invalidated" << std::endl;
+        return ret;
+      case -ERANGE:
+        std::cerr << "free" << std::endl;
+        return ret;
+      default:
+        std::cerr << "log::Read " << ret << std::endl;
+        return ret;
+    }
+    for (char c : data) {
+      std::cout << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(c);
+    }
+    std::cout << std::endl;
     return 0;
   } else if (command[0] == "trim") {
     if (command.size() != 3) { // trim <log name> <position>
