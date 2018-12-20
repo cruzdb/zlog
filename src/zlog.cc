@@ -133,6 +133,14 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           { "fill", "zlog log fill <log name> <position>" },
   };
 
+  if (command.size() > 0 && usages.find(command[0]) == usages.end()) {
+    std::cerr << "uknown command \"" << command[0] << "\"" << std::endl;
+  }
+
+  if (command.size() == 1 && usages.find(command[0]) != usages.end()) {
+    std::cerr << "command requires log name" << std::endl;
+  }
+
   if (command.size() < 2 || usages.find(command[0]) == usages.end()) {
     std::cerr << "usage:" << std::endl;
     for (const auto &usage : usages) {
