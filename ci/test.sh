@@ -100,3 +100,9 @@ if [[ "$OSTYPE" != "darwin"* && "$JNI" == "ON" ]]; then
 
   popd
 fi
+
+# test cli
+pushd ${BUILD_DIR}
+./cli-test.sh
+popd ${BUILD_DIR}
+
