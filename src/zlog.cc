@@ -132,7 +132,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           { "fill", "zlog log fill <log name> <position>" },
   };
 
-  if (command.size() == 0 || usages.find(command[0]) == usages.end()) {
+  if (command.size() < 2 || usages.find(command[0]) == usages.end()) {
     std::cerr << "usage:" << std::endl;
     for (const auto &usage : usages) {
       std::cerr << usage.second << std::endl;
