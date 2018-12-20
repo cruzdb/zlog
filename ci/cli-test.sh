@@ -2,7 +2,7 @@
 set -e
 set -x
 
-CLI_CMD=./zlog
+CLI_CMD=zlog
 LMDB_DIR=$(mktemp -d)
 
 INPUT_FILE=$(mktemp)
