@@ -4,11 +4,11 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <rados/librados.hpp>
-#include "storage/ceph/protobuf_bufferlist_adapter.h"
 #include "storage/ceph/cls_zlog_client.h"
-#include "storage/ceph/cls_zlog.pb.h"
 #include "gtest/gtest.h"
 #include "port/stack_trace.h"
+#include "storage/ceph/cls_zlog_generated.h"
+#include "fbs_helper.h"
 
 class ClsZlogTest : public ::testing::Test {
  protected:
@@ -46,34 +46,34 @@ class ClsZlogTest : public ::testing::Test {
   int entry_read(uint64_t epoch, uint64_t pos,
       ceph::bufferlist& bl, const std::string& oid = "obj") {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read(op, epoch, pos);
+    cls_zlog_client::cls_zlog_read(op, epoch, pos);
     return ioctx.operate(oid, &op, &bl);
   }
 
   int entry_write(uint64_t epoch, uint64_t pos,
       ceph::bufferlist& bl, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write(op, epoch, pos, bl);
+    cls_zlog_client::cls_zlog_write(op, epoch, pos, bl);
     return ioctx.operate(oid, &op);
   }
 
   int entry_inval(uint64_t epoch, uint64_t pos,
       bool force, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_invalidate(op, epoch, pos, force);
+    cls_zlog_client::cls_zlog_invalidate(op, epoch, pos, force);
     return ioctx.operate(oid, &op);
   }
 
   int entry_seal(uint64_t epoch, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_seal(op, epoch);
+    cls_zlog_client::cls_zlog_seal(op, epoch, boost::none);
     return ioctx.operate(oid, &op);
   }
 
   int entry_maxpos(uint64_t epoch, uint64_t *position_out,
       bool *empty_out, const std::string& oid = "obj") {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_max_position(op, epoch);
+    cls_zlog_client::cls_zlog_max_position(op, epoch);
 
     ceph::bufferlist bl;
     int ret = ioctx.operate(oid, &op, &bl);
@@ -81,14 +81,16 @@ class ClsZlogTest : public ::testing::Test {
       return ret;
     }
 
-    zlog_ceph_proto::MaxPos reply;
-    if (!decode(bl, &reply)) {
+    auto reply = fbs_bl_decode<cls_zlog::fbs::ReadMaxPosReply>(&bl);
+    if (!reply) {
       return -EIO;
     }
 
-    *empty_out = !reply.has_pos();
-    if (reply.has_pos()) {
-      *position_out = reply.pos();
+    if (reply->empty()) {
+      *empty_out = true;
+    } else {
+      *empty_out = false;
+      *position_out = reply->position();
     }
 
     return 0;
@@ -97,38 +99,38 @@ class ClsZlogTest : public ::testing::Test {
   int view_create(uint64_t epoch, ceph::bufferlist& bl,
       const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_create_view(op, epoch, bl);
+    cls_zlog_client::cls_zlog_create_view(op, epoch, bl);
     return ioctx.operate(oid, &op);
   }
 
   int view_read(uint64_t epoch, ceph::bufferlist& bl,
       uint32_t max_views = 100, const std::string& oid = "obj") {
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read_view(op, epoch, max_views);
+    cls_zlog_client::cls_zlog_read_view(op, epoch, max_views);
     return ioctx.operate(oid, &op, &bl);
   }
 
   int unique_id_read(uint64_t *id, const std::string& oid = "obj") {
     ceph::bufferlist bl;
     librados::ObjectReadOperation op;
-    zlog::cls_zlog_read_unique_id(op);
+    cls_zlog_client::cls_zlog_read_unique_id(op);
     int ret = ioctx.operate(oid, &op, &bl);
     if (ret < 0) {
       return ret;
     }
     if (id) {
-      zlog_ceph_proto::UniqueId msg;
-      if (!decode(bl, &msg)) {
+      auto msg = fbs_bl_decode<cls_zlog::fbs::UniqueId>(&bl);
+      if (!msg) {
         return -EBADMSG;
       }
-      *id = msg.id();
+      *id = msg->id();
     }
     return ret;
   }
 
   int unique_id_write(uint64_t id, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    zlog::cls_zlog_write_unique_id(op, id);
+    cls_zlog_client::cls_zlog_write_unique_id(op, id);
     return ioctx.operate(oid, &op);
   }
 
@@ -137,16 +139,23 @@ class ClsZlogTest : public ::testing::Test {
 
     std::map<uint64_t, std::string> tmp;
 
-    zlog_ceph_proto::Views views;
-    ASSERT_TRUE(decode(bl, &views));
+    auto reply = fbs_bl_decode<cls_zlog::fbs::Views>(&bl);
+    ASSERT_TRUE(reply);
 
-    // unpack into return map
-    for (int i = 0; i < views.views_size(); i++) {
-      auto view = views.views(i);
-      std::string data(view.data().c_str(), view.data().size());
-      auto res = tmp.emplace(view.epoch(), data);
-      (void)res;
-      assert(res.second);
+    if (reply->views()) {
+      auto views = reply->views();
+      for (auto it = views->begin(); it != views->end(); it++) {
+        auto bytes = it->data();
+
+        std::string data;
+        if (bytes) {
+          data = std::string(bytes->begin(), bytes->end());
+        }
+
+        auto res = tmp.emplace(it->epoch(), data);
+        assert(res.second);
+        (void)res;
+      }
     }
 
     out.swap(tmp);
@@ -989,7 +998,7 @@ TEST_F(ClsZlogTest, InitView_BadInput) {
 
 TEST_F(ClsZlogTest, InitView_EmptyPrefix) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "");
+  cls_zlog_client::cls_zlog_init_head(op, "");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, -EINVAL);
 }
@@ -999,14 +1008,14 @@ TEST_F(ClsZlogTest, InitView_Exists) {
   ASSERT_EQ(ret, 0);
 
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, -EEXIST);
 }
 
 TEST_F(ClsZlogTest, InitView_Success) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 }
@@ -1049,7 +1058,7 @@ TEST_F(ClsZlogTest, CreateView_CorruptHeader) {
 
 TEST_F(ClsZlogTest, CreateView_InitWithEpochOne) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
@@ -1066,7 +1075,7 @@ TEST_F(ClsZlogTest, CreateView_InitWithEpochOne) {
 
 TEST_F(ClsZlogTest, CreateView_StrictOrdering) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
@@ -1159,7 +1168,7 @@ TEST_F(ClsZlogTest, ReadView_CorruptHeader) {
 
 TEST_F(ClsZlogTest, ReadView_InvalidEpoch) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
@@ -1202,7 +1211,7 @@ TEST_F(ClsZlogTest, ReadView_InvalidEpoch) {
 
 TEST_F(ClsZlogTest, ReadView_EmptyRange) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
@@ -1219,7 +1228,7 @@ TEST_F(ClsZlogTest, ReadView_EmptyRange) {
 
 TEST_F(ClsZlogTest, ReadView_MinMaxRet) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
@@ -1247,6 +1256,8 @@ TEST_F(ClsZlogTest, ReadView_MinMaxRet) {
   ASSERT_EQ(views.size(), 0u);
 
   // max cap 100
+  bl.clear(); // see: https://marc.info/?l=ceph-devel&m=154561042703436&w=2
+              // Subject:    infinite osd operation RETRY loop
   views.clear();
   ret = view_read(1, bl, 110);
   ASSERT_EQ(ret, 0);
@@ -1261,7 +1272,7 @@ TEST_F(ClsZlogTest, ReadView_MinMaxRet) {
 
 TEST_F(ClsZlogTest, ReadView_NonEmpty) {
   librados::ObjectWriteOperation op;
-  zlog::cls_zlog_init_head(op, "prefix");
+  cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
@@ -1404,10 +1415,14 @@ TEST_F(ClsZlogTest, UniqueIdRead_CorruptId) {
 }
 
 TEST_F(ClsZlogTest, UniqueIdRead_InvalidStored) {
-  zlog_ceph_proto::UniqueId msg;
-  msg.set_id(0);
+
+  flatbuffers::FlatBufferBuilder fbb;
+  auto call = cls_zlog::fbs::CreateUniqueId(fbb, static_cast<uint64_t>(0));
+  fbb.Finish(call);
+
   ceph::bufferlist bl;
-  encode(bl, msg);
+  fbs_bl_encode(fbb, &bl);
+
   int ret = ioctx.setxattr("obj", "zlog.unique_id", bl);
   ASSERT_EQ(ret, 0);
 
@@ -1505,10 +1520,14 @@ TEST_F(ClsZlogTest, UniqueIdWrite_MissingId) {
 }
 
 TEST_F(ClsZlogTest, UniqueIdWrite_InvalidStored) {
-  zlog_ceph_proto::UniqueId msg;
-  msg.set_id(0);
+
+  flatbuffers::FlatBufferBuilder fbb;
+  auto call = cls_zlog::fbs::CreateUniqueId(fbb, static_cast<uint64_t>(0));
+  fbb.Finish(call);
+
   ceph::bufferlist bl;
-  encode(bl, msg);
+  fbs_bl_encode(fbb, &bl);
+
   int ret = ioctx.setxattr("obj", "zlog.unique_id", bl);
   ASSERT_EQ(ret, 0);
 

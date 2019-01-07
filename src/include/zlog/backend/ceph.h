@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <boost/optional.hpp>
 #include <rados/librados.hpp>
 #include "zlog/backend.h"
 
@@ -57,6 +58,11 @@ class CephBackend : public Backend {
   librados::Rados *cluster_;
   librados::IoCtx *ioctx_;
   std::string pool_;
+
+  // boost::none -> always use omap
+  //           0 -> always use bytestream
+  //         > 0 -> use omap when entry < max size
+  boost::optional<uint32_t> omap_max_size_;
 
   static std::string LinkObjectName(const std::string& name);
 

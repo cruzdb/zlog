@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <sstream>
 #include <thread>
 #include <signal.h>
 #include <time.h>
@@ -149,6 +150,7 @@ int main(int argc, char **argv)
   std::string pool;
   std::string db_path;
   uint64_t max_pos;
+  ssize_t omap_max_size;
 
   po::options_description opts("Benchmark options");
   opts.add_options()
@@ -165,6 +167,7 @@ int main(int argc, char **argv)
     ("backend", po::value<std::string>(&backend_name)->required(), "backend")
     ("pool", po::value<std::string>(&pool)->default_value("zlog"), "pool (ceph)")
     ("db-path", po::value<std::string>(&db_path)->default_value("/tmp/zlog.bench.db"), "db path (lmdb)")
+    ("omap-max-size", po::value<ssize_t>(&omap_max_size)->default_value(-1), "omap max size (ceph)")
   ;
 
   po::variables_map vm;
@@ -187,6 +190,11 @@ int main(int argc, char **argv)
     options.backend_options["pool"] = pool;
     // zero-length string here causes default path search
     options.backend_options["conf_file"] = "";
+    if (omap_max_size >= 0) {
+      std::stringstream ss;
+      ss << omap_max_size;
+      options.backend_options["omap_max_size"] = ss.str();
+    }
   } else if (backend_name == "lmdb") {
     options.backend_options["path"] = db_path;
   }

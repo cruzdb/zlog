@@ -6,8 +6,8 @@ CLS_NAME(zlog)
 static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::ReadEntry op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::ReadEntryOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: log_entry_read(): failed to decode input");
     return -EINVAL;
   }
@@ -19,13 +19,13 @@ static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  ret = header.epoch_guard(op.epoch());
+  ret = header.epoch_guard(op->epoch());
   if (ret < 0) {
     CLS_LOG(10, "log_entry_read(): failed epoch guard %d", ret);
     return ret;
   }
 
-  cls_zlog::LogEntry entry(hctx, op.pos());
+  cls_zlog::LogEntry entry(hctx, op->position());
   ret = entry.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_read(): error reading entry %d", ret);
@@ -54,8 +54,8 @@ static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
 static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::WriteEntry op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::WriteEntryOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: log_entry_write(): failed to decode input");
     return -EINVAL;
   }
@@ -67,13 +67,13 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  ret = header.epoch_guard(op.epoch());
+  ret = header.epoch_guard(op->epoch());
   if (ret < 0) {
     CLS_LOG(10, "log_entry_write(): failed epoch guard %d", ret);
     return ret;
   }
 
-  cls_zlog::LogEntry entry(hctx, op.pos());
+  cls_zlog::LogEntry entry(hctx, op->position());
   ret = entry.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_write(): init failed %d", ret);
@@ -85,14 +85,26 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EROFS;
   }
 
-  entry.set_data(op.data());
+  std::string blob;
+  if (op->data()) {
+    blob = std::string(op->data()->begin(), op->data()->end());
+  }
+
+  ret = entry.set_data(blob, header.omap_max_size());
+  if (ret < 0) {
+    auto ms = header.omap_max_size();
+    CLS_ERR("ERROR: log_entry_write(): set entry failed (b=%d) %d",
+        (ms ? (int)(*ms) : -1), ret);
+    return ret;
+  }
+
   ret = entry.write();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_write(): entry write failed %d", ret);
     return ret;
   }
 
-  if (header.update_max_pos(op.pos())) {
+  if (header.update_max_pos(op->position())) {
     ret = header.write();
     if (ret < 0) {
       CLS_ERR("ERROR: log_entry_write(): header update failed %d", ret);
@@ -106,8 +118,8 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
 static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::InvalidateEntry op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::InvalidateEntryOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: log_entry_invalidate(): failed to decode input");
     return -EINVAL;
   }
@@ -119,13 +131,13 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  ret = header.epoch_guard(op.epoch());
+  ret = header.epoch_guard(op->epoch());
   if (ret < 0) {
     CLS_LOG(10, "log_entry_invalidate(): failed epoch guard %d", ret);
     return ret;
   }
 
-  cls_zlog::LogEntry entry(hctx, op.pos());
+  cls_zlog::LogEntry entry(hctx, op->position());
   ret = entry.read();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_invalidate(): init failed %d", ret);
@@ -137,7 +149,7 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
       CLS_LOG(10, "log_entry_invalidate(): already invalidated");
       return 0;
     }
-    if (!op.force()) {
+    if (!op->force()) {
       CLS_LOG(10, "log_entry_invalidate(): entry exists (non-forced)");
       return -EROFS;
     }
@@ -150,7 +162,7 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  if (header.update_max_pos(op.pos())) {
+  if (header.update_max_pos(op->position())) {
     ret = header.write();
     if (ret < 0) {
       CLS_ERR("ERROR: log_entry_invalidate(): header update failed %d", ret);
@@ -164,15 +176,15 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
 static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::Seal op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::SealOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: log_entry_seal(): failed to decode input");
     return -EINVAL;
   }
 
-  if (op.epoch() < 1) {
+  if (op->epoch() < 1) {
     CLS_ERR("ERROR: log_entry_seal(): invalid epoch %llu",
-        op.epoch());
+        op->epoch());
     return -EINVAL;
   }
 
@@ -184,9 +196,9 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   if (ret == 0) {
-    if (op.epoch() <= header.epoch()) {
+    if (op->epoch() <= header.epoch()) {
       CLS_LOG(10, "log_entry_seal(): stale op epoch %llu <= %llu (hdr)",
-          (unsigned long long)op.epoch(),
+          (unsigned long long)op->epoch(),
           (unsigned long long)header.epoch());
       return -ESPIPE;
     }
@@ -195,7 +207,9 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EIO;
   }
 
-  header.set_epoch(op.epoch());
+  header.set_omap_max_size(op->omap_max_size());
+
+  header.set_epoch(op->epoch());
   ret = header.write();
   if (ret < 0) {
     CLS_ERR("ERROR: log_entry_seal(): write header failed %d", ret);
@@ -208,8 +222,8 @@ static int log_entry_seal(cls_method_context_t hctx, ceph::bufferlist *in,
 static int log_entry_max_position(cls_method_context_t hctx,
     ceph::bufferlist *in, ceph::bufferlist *out)
 {
-  zlog_ceph_proto::ReadMaxPos op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::ReadMaxPosOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: log_entry_max_position(): failed to decode input");
     return -EINVAL;
   }
@@ -221,23 +235,30 @@ static int log_entry_max_position(cls_method_context_t hctx,
     return ret;
   }
 
-  if (op.epoch() < 1) {
+  if (op->epoch() < 1) {
     CLS_ERR("ERROR: log_entry_max_position(): invalid epoch");
     return -EINVAL;
-  } else if (op.epoch() != header.epoch()) {
+  } else if (op->epoch() != header.epoch()) {
     CLS_LOG(10, "log_entry_max_position(): op epoch %llu != %llu (hdr)",
-        (unsigned long long)op.epoch(),
+        (unsigned long long)op->epoch(),
         (unsigned long long)header.epoch());
     return -ESPIPE;
   }
 
-  zlog_ceph_proto::MaxPos reply;
   auto max_pos = header.max_pos();
-  if (max_pos) {
-    reply.set_pos(*max_pos);
-  }
 
-  encode(*out, reply);
+  flatbuffers::FlatBufferBuilder fbb;
+  cls_zlog::fbs::ReadMaxPosReplyBuilder builder(fbb);
+  if (max_pos) {
+    builder.add_position(*max_pos);
+    builder.add_empty(false);
+  } else {
+    builder.add_empty(true);
+  }
+  auto reply = builder.Finish();
+  fbb.Finish(reply);
+
+  fbs_bl_encode(fbb, out);
 
   return 0;
 }
@@ -245,13 +266,19 @@ static int log_entry_max_position(cls_method_context_t hctx,
 static int head_init(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::InitHead op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::InitHeadOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: head_init(): decoding input");
     return -EINVAL;
   }
 
-  if (op.prefix().empty()) {
+  if (!op->prefix()) {
+    CLS_ERR("ERROR: head_init(): prefix undefined");
+    return -EINVAL;
+  }
+
+  const auto prefix = op->prefix()->str();
+  if (prefix.empty()) {
     CLS_ERR("ERROR: head_init(): zero-length prefix");
     return -EINVAL;
   }
@@ -267,11 +294,7 @@ static int head_init(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  zlog_ceph_proto::HeadObjectHeader hdr;
-  hdr.set_epoch(0);
-  hdr.set_prefix(op.prefix());
-
-  cls_zlog::HeadObject head(hctx, hdr);
+  cls_zlog::HeadObject head(hctx, 0, prefix);
   ret = head.finalize();
   if (ret < 0) {
     CLS_ERR("ERROR: head_init(): finalizing ret %d", ret);
@@ -284,14 +307,14 @@ static int head_init(cls_method_context_t hctx, ceph::bufferlist *in,
 static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::CreateView op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::CreateViewOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: view_create(): decoding input");
     return -EINVAL;
   }
 
-  if (op.epoch() < 1) {
-    CLS_ERR("ERROR: view_create(): invalid epoch %llu", op.epoch());
+  if (op->epoch() < 1) {
+    CLS_ERR("ERROR: view_create(): invalid epoch %llu", op->epoch());
     return -EINVAL;
   }
 
@@ -302,14 +325,19 @@ static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  ret = head.set_epoch(op.epoch());
+  ret = head.set_epoch(op->epoch());
   if (ret < 0) {
     CLS_ERR("ERROR: view_create(): epoch %llu hdr %llu",
-        op.epoch(), head.epoch());
+        op->epoch(), head.epoch());
     return ret;
   }
 
-  ret = head.write_view(op.data());
+  std::string blob;
+  if (op->data()) {
+    blob = std::string(op->data()->begin(), op->data()->end());
+  }
+
+  ret = head.write_view(blob);
   if (ret < 0) {
     CLS_ERR("ERROR: view_create(): writing view ret %d", ret);
     return ret;
@@ -327,8 +355,8 @@ static int view_create(cls_method_context_t hctx, ceph::bufferlist *in,
 static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
     ceph::bufferlist *out)
 {
-  zlog_ceph_proto::ReadView op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::ReadViewsOp>(in);
+  if (!op) {
     CLS_ERR("ERROR: view_read(): decoding input");
     return -EINVAL;
   }
@@ -340,17 +368,19 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
-  uint64_t epoch = op.epoch();
+  uint64_t epoch = op->epoch();
   if (epoch < 1) {
     CLS_ERR("ERROR: view_read(): bad start epoch %llu", epoch);
     return -EINVAL;
   }
 
-  uint32_t max_views = std::min(((uint32_t)op.max_views()),
+  uint32_t max_views = std::min(((uint32_t)op->max_views()),
       ((uint32_t)ZLOG_MAX_VIEW_READS));
 
+  flatbuffers::FlatBufferBuilder fbb;
+
   uint32_t count = 0;
-  zlog_ceph_proto::Views views;
+  std::vector<flatbuffers::Offset<cls_zlog::fbs::View>> views;
   while (epoch <= head.epoch() && count < max_views) {
     ceph::bufferlist bl;
     ret = head.read_view(epoch, &bl);
@@ -368,15 +398,18 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
       return ret;
     }
 
-    auto view = views.add_views();
-    view->set_epoch(epoch);
-    view->set_data(bl.c_str(), bl.length());
+    auto data = fbb.CreateVector((uint8_t*)bl.c_str(), bl.length());
+    auto view = cls_zlog::fbs::CreateView(fbb, epoch, data);
+    views.push_back(view);
 
     epoch++;
     count++;
   }
 
-  encode(*out, views);
+  auto reply = cls_zlog::fbs::CreateViewsDirect(fbb, &views);
+  fbb.Finish(reply);
+
+  fbs_bl_encode(fbb, out);
 
   return 0;
 }
@@ -388,12 +421,12 @@ static int __unique_id_read(cls_method_context_t hctx, uint64_t *pid)
   if (ret < 0) {
     return ret;
   } else {
-    zlog_ceph_proto::UniqueId stored_id;
-    if (!decode(bl, &stored_id)) {
+    auto stored_id = fbs_bl_decode<cls_zlog::fbs::UniqueId>(&bl);
+    if (!stored_id) {
       CLS_ERR("ERROR: __unique_id_read(): decoding stored id");
       return -EIO;
     }
-    *pid = stored_id.id();
+    *pid = stored_id->id();
     return 0;
   }
 }
@@ -413,9 +446,11 @@ static int unique_id_read(cls_method_context_t hctx,
     return -EIO;
   }
 
-  zlog_ceph_proto::UniqueId msg;
-  msg.set_id(id);
-  encode(*out, msg);
+  flatbuffers::FlatBufferBuilder fbb;
+  auto reply = cls_zlog::fbs::CreateUniqueId(fbb, id);
+  fbb.Finish(reply);
+
+  fbs_bl_encode(fbb, out);
 
   return 0;
 }
@@ -423,8 +458,8 @@ static int unique_id_read(cls_method_context_t hctx,
 static int unique_id_write(cls_method_context_t hctx,
     ceph::bufferlist *in, ceph::bufferlist *out)
 {
-  zlog_ceph_proto::UniqueId op;
-  if (!decode(*in, &op)) {
+  auto op = fbs_bl_decode<cls_zlog::fbs::UniqueId>(in);
+  if (!op) {
     CLS_ERR("ERROR: unique_id_write(): decoding input");
     return -EINVAL;
   }
@@ -444,14 +479,19 @@ static int unique_id_write(cls_method_context_t hctx,
   }
 
   const uint64_t expected_id = id + 1;
-  if (op.id() != expected_id) {
+  if (op->id() != expected_id) {
     CLS_ERR("ERROR: unique_id_write(): unexpected id %llu != %llu",
-        op.id(), expected_id);
+        op->id(), expected_id);
     return -ESTALE;
   }
 
+  flatbuffers::FlatBufferBuilder fbb;
+  auto unique_id = cls_zlog::fbs::CreateUniqueId(fbb, expected_id);
+  fbb.Finish(unique_id);
+
   ceph::bufferlist bl;
-  encode(bl, op);
+  fbs_bl_encode(fbb, &bl);
+
   ret = cls_cxx_setxattr(hctx, "zlog.unique_id", &bl);
   if (ret < 0) {
     CLS_ERR("ERROR: unique_id_write(): setting new id ret %d", ret);

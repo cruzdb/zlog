@@ -1,0 +1,84 @@
+namespace cls_zlog.fbs;
+
+table LogEntry {
+  invalid:bool;
+  bytestream:bool;
+  data:[ubyte];
+  offset:uint32;
+  length:uint32;
+}
+
+table LogObjectHeader {
+  epoch:uint64;
+  empty:bool;
+  max_pos:uint64;
+  omap_max_size:int32;
+}
+
+table UniqueId {
+  id:uint64;
+}
+
+table HeadObjectHeader {
+  epoch:uint64;
+  prefix:string;
+}
+
+table InitHeadOp {
+  prefix:string;
+}
+
+table CreateViewOp {
+  epoch:uint64;
+  data:[ubyte];
+}
+
+table ReadViewsOp {
+  epoch:uint64;
+  max_views:uint32;
+}
+
+table View {
+  epoch:uint64;
+  data:[ubyte];
+}
+
+table Views {
+  views:[View];
+}
+
+// metadata for objects linking to head object
+table LinkObjectHeader {
+  hoid:string;
+}
+
+table ReadEntryOp {
+  epoch:uint64;
+  position:uint64;
+}
+
+table WriteEntryOp {
+  epoch:uint64;
+  position:uint64;
+  data:[ubyte];
+}
+
+table InvalidateEntryOp {
+  epoch:uint64;
+  position:uint64;
+  force:bool;
+}
+
+table SealOp {
+  epoch:uint64;
+  omap_max_size:int32 = -1;
+}
+
+table ReadMaxPosOp {
+  epoch:uint64;
+}
+
+table ReadMaxPosReply {
+  empty:bool;
+  position:uint64;
+}

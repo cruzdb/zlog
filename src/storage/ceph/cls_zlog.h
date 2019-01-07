@@ -5,8 +5,8 @@
 #include <boost/optional.hpp>
 #include <rados/buffer.h>
 #include <rados/objclass.h>
-#include "storage/ceph/cls_zlog.pb.h"
-#include "storage/ceph/protobuf_bufferlist_adapter.h"
+#include "storage/ceph/cls_zlog_generated.h"
+#include "fbs_helper.h"
 
 #define ZLOG_MAX_VIEW_READS ((uint32_t)100)
 #define ZLOG_HEAD_HDR_KEY "zlog.head.header"
@@ -27,7 +27,9 @@ static inline std::string u64tostr(uint64_t value,
 class LogObjectHeader {
  public:
   explicit LogObjectHeader(cls_method_context_t hctx) :
-    hctx_(hctx)
+    hctx_(hctx),
+    empty_(true),
+    omap_max_size_(-1)
   {}
 
   int read() {
@@ -44,24 +46,36 @@ class LogObjectHeader {
       return ret;
     }
 
-    if (!decode(bl, &hdr_)) {
+    auto header = fbs_bl_decode<fbs::LogObjectHeader>(&bl);
+    if (!header) {
       CLS_ERR("ERROR: read_header(): failed to decode header");
       return -EIO;
     }
+
+    epoch_ = header->epoch();
+    empty_ = header->empty();
+    max_pos_ = header->max_pos();
+    omap_max_size_ = header->omap_max_size();
 
     return 0;
   }
 
   int write() {
+    flatbuffers::FlatBufferBuilder fbb;
+    auto header = fbs::CreateLogObjectHeader(fbb, epoch_,
+        empty_, max_pos_, omap_max_size_);
+    fbb.Finish(header);
+
     ceph::bufferlist bl;
-    encode(bl, hdr_);
+    fbs_bl_encode(fbb, &bl);
+
     return cls_cxx_setxattr(hctx_, ZLOG_DATA_HDR_KEY, &bl);
   }
 
   int epoch_guard(uint64_t epoch) {
     if (epoch < 1) {
       return -EINVAL;
-    } else if (epoch < hdr_.epoch()) {
+    } else if (epoch < epoch_) {
       return -ESPIPE;
     } else {
       return 0;
@@ -69,16 +83,16 @@ class LogObjectHeader {
   }
 
   uint64_t epoch() const {
-    return hdr_.epoch();
+    return epoch_;
   }
 
   void set_epoch(uint64_t epoch) {
-    return hdr_.set_epoch(epoch);
+    epoch_ = epoch;
   }
 
   boost::optional<uint64_t> max_pos() {
-    if (hdr_.has_max_pos()) {
-      return hdr_.max_pos();
+    if (!empty_) {
+      return max_pos_;
     }
     return boost::none;
   }
@@ -86,15 +100,30 @@ class LogObjectHeader {
   bool update_max_pos(uint64_t pos) {
     auto m = max_pos();
     if (!m || pos > *m) {
-      hdr_.set_max_pos(pos);
+      max_pos_ = pos;
+      empty_ = false;
       return true;
     }
     return false;
   }
 
+  void set_omap_max_size(int32_t size) {
+    omap_max_size_ = size;
+  }
+
+  boost::optional<uint32_t> omap_max_size() const {
+    if (omap_max_size_ >= 0) {
+      return omap_max_size_;
+    }
+    return boost::none;
+  }
+
  private:
   cls_method_context_t hctx_;
-  zlog_ceph_proto::LogObjectHeader hdr_;
+  uint64_t epoch_;
+  bool empty_;
+  uint64_t max_pos_;
+  int32_t omap_max_size_;
 };
 
 class LogEntry {
@@ -102,7 +131,10 @@ class LogEntry {
   LogEntry(cls_method_context_t hctx, uint64_t pos) :
     entry_key_(u64tostr(pos, ZLOG_ENTRY_KEY_PREFIX)),
     exists_(boost::none),
-    hctx_(hctx)
+    hctx_(hctx),
+    invalid_(false),
+    offset_(0),
+    length_(0)
   {}
 
   int read() {
@@ -116,17 +148,40 @@ class LogEntry {
       }
       return ret;
     }
-    if (!decode(bl, &entry_)) {
+
+    auto entry = fbs_bl_decode<fbs::LogEntry>(&bl);
+    if (!entry) {
       CLS_ERR("ERROR: LogEntry::read decode failed");
       return -EIO;
     }
+
+    invalid_ = entry->invalid();
+    bytestream_ = entry->bytestream();
+    if (entry->data()) {
+      data_ = std::string(entry->data()->begin(), entry->data()->end());
+    }
+    offset_ = entry->offset();
+    length_ = entry->length();
+
     exists_ = true;
+
     return 0;
   }
 
   int write() {
+    flatbuffers::FlatBufferBuilder fbb(data_.size());
+    auto data = fbb.CreateVector((uint8_t*)data_.c_str(), data_.size());
+    auto entry = fbs::CreateLogEntry(fbb,
+        invalid_,
+        bytestream_,
+        data,
+        offset_,
+        length_);
+    fbb.Finish(entry);
+
     ceph::bufferlist bl;
-    encode(bl, entry_);
+    fbs_bl_encode(fbb, &bl);
+
     return cls_cxx_map_set_val(hctx_, entry_key_, &bl);
   }
 
@@ -137,31 +192,64 @@ class LogEntry {
 
   bool invalid() const {
     assert(exists());
-    return entry_.invalid();
+    return invalid_;
   }
 
   void invalidate() {
-    entry_.set_invalid(true);
+    invalid_ = true;
   }
 
-  void set_data(const std::string& data) {
-    assert(!entry_.has_data());
-    entry_.set_data(data);
+  int set_data(const std::string& data,
+      boost::optional<uint32_t> omap_max_size) {
+    assert(offset_ == 0);
+    assert(length_ == 0);
+    assert(data_.empty());
+
+    if (omap_max_size && data.size() >= *omap_max_size) {
+      uint64_t obj_size;
+      int ret = cls_cxx_stat(hctx_, &obj_size, NULL);
+      if (ret < 0) {
+        CLS_ERR("ERROR: set_data(): stat failed %d", ret);
+        return ret;
+      }
+
+      offset_ = obj_size;
+      length_ = data.size();
+
+      ceph::bufferlist bl;
+      bl.append(data.data(), data.size());
+      ret = cls_cxx_write(hctx_, offset_, length_, &bl);
+      if (ret < 0) {
+        CLS_ERR("ERROR: set_data(): write failed %d", ret);
+      }
+      bytestream_ = true;
+      return ret;
+    } else {
+      bytestream_ = false;
+      data_ = data;
+      return 0;
+    }
   }
 
   int read(ceph::bufferlist *out) {
     assert(exists());
-    if (entry_.has_data()) {
-      if (entry_.has_offset() || entry_.has_length()) {
+    if (bytestream_) {
+      if (!data_.empty()) {
+        CLS_ERR("ERROR: unexpected data");
         return -EIO;
       }
-      out->append(entry_.data());
-      return 0;
+      if (length_ == 0) {
+        // passing len=0 to read will return all object data
+        return 0;
+      }
+      return cls_cxx_read(hctx_, offset_, length_, out);
     } else {
-      if (!entry_.has_offset() || !entry_.has_length()) {
+      if (offset_ != 0 || length_ != 0) {
+        CLS_ERR("ERROR: unexpected offset / length");
         return -EIO;
       }
-      return cls_cxx_read(hctx_, entry_.offset(), entry_.length(), out);
+      out->append(data_.c_str(), data_.size());
+      return 0;
     }
   }
 
@@ -175,7 +263,11 @@ class LogEntry {
 
   cls_method_context_t hctx_;
 
-  zlog_ceph_proto::LogEntry entry_;
+  bool invalid_;
+  bool bytestream_;
+  std::string data_;
+  uint32_t offset_;
+  uint32_t length_;
 };
 
 /*
@@ -188,9 +280,10 @@ class HeadObject {
   {}
 
   HeadObject(cls_method_context_t hctx,
-      zlog_ceph_proto::HeadObjectHeader hdr) :
+      uint64_t epoch, std::string prefix) :
     hctx_(hctx),
-    hdr_(hdr)
+    epoch_(epoch),
+    prefix_(prefix)
   {}
 
   int initialize() {
@@ -206,27 +299,49 @@ class HeadObject {
       }
       return ret;
     }
-    if (!decode(bl, &hdr_)) {
+
+    auto header = fbs_bl_decode<fbs::HeadObjectHeader>(&bl);
+    if (!header) {
       CLS_ERR("ERROR: decoding header");
       return -EIO;
     }
+
+    if (!header->prefix()) {
+      CLS_ERR("ERROR: prefix undefined");
+      return -EIO;
+    }
+
+    prefix_ = header->prefix()->str();
+    if (prefix_.empty()) {
+      CLS_ERR("ERROR: empty prefix");
+      return -EIO;
+    }
+
+    epoch_ = header->epoch();
+
     return 0;
   }
 
   int finalize() {
+    flatbuffers::FlatBufferBuilder fbb;
+    auto header = fbs::CreateHeadObjectHeaderDirect(
+        fbb, epoch_, prefix_.c_str());
+    fbb.Finish(header);
+
     ceph::bufferlist bl;
-    encode(bl, hdr_);
+    fbs_bl_encode(fbb, &bl);
+
     return cls_cxx_setxattr(hctx_, ZLOG_HEAD_HDR_KEY, &bl);
   }
 
   uint64_t epoch() const {
-    return hdr_.epoch();
+    return epoch_;
   }
 
   int set_epoch(uint64_t epoch) {
-    const uint64_t required_epoch = hdr_.epoch() + 1;
+    const uint64_t required_epoch = epoch_ + 1;
     if (epoch == required_epoch) {
-      hdr_.set_epoch(epoch);
+      epoch_ = epoch;
       return 0;
     } else if (epoch > required_epoch) {
       return -EINVAL;
@@ -235,7 +350,7 @@ class HeadObject {
   }
 
   int write_view(const std::string& data) {
-    const auto key = view_key(hdr_.epoch());
+    const auto key = view_key(epoch_);
     ceph::bufferlist bl;
     bl.append(data);
     return cls_cxx_map_set_val(hctx_, key, &bl);
@@ -252,7 +367,8 @@ class HeadObject {
   }
 
   cls_method_context_t hctx_;
-  zlog_ceph_proto::HeadObjectHeader hdr_;
+  uint64_t epoch_;
+  std::string prefix_;
 };
 
 }
