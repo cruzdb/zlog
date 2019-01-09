@@ -47,18 +47,24 @@ rm -rf %{buildroot}
 
 %files
 
+%{_bindir}/zlog
 %{_bindir}/zlog_test_backend_lmdb
-%{_includedir}/zlog/backend.h
-%{_includedir}/zlog/backend/lmdb.h
+%{_bindir}/zlog_test_backend_ram
+%{_bindir}/zlog_test_backend_ceph
+%{_bindir}/zlog_test_cls_zlog
+
 %{_includedir}/zlog/capi.h
 %{_includedir}/zlog/log.h
-%{_includedir}/zlog/slice.h
-%{_includedir}/zlog/stream.h
-%{_libdir}/libzlog.so
-%{_libdir}/libzlog.so.1
-%{_libdir}/libzlog.so.1.0.0
-%{_libdir}/libzlog_backend_lmdb.so
-%{_libdir}/libzlog_backend_lmdb.so.1
-%{_libdir}/libzlog_backend_lmdb.so.1.0.0
+%{_includedir}/zlog/options.h
+%{_includedir}/zlog/backend.h
+%{_includedir}/zlog/backend/lmdb.h
+%{_includedir}/zlog/backend/ceph.h
+%{_includedir}/zlog/backend/ram.h
+
+%{_libdir}/libzlog.so*
+%{_libdir}/libzlog_backend_lmdb.so*
 %{_libdir}/libzlog_proto.so
-%{_libdir}/libzlog_seqr.so
+%{_libdir}/libcls_zlog_client.so
+%{_libdir}/libzlog_backend_ceph.so*
+%{_libdir}/libzlog_backend_ram.so*
+%{_libdir}/rados-classes/*
