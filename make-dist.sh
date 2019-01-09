@@ -8,7 +8,10 @@ if [ ! -d .git ]; then
   exit 1
 fi
 
-# get version
+# get version from git tags and the current working directory version. it will
+# show vX.Y.Z-patch_count-sha1 where X.Y.Z is the most recent reachable tag. And
+# run on a checked out version that matches a tag the version will be exactly:
+# x.y.z for a clean release name.
 version=$1
 [ -z "$version" ] && version=`git describe --match 'v*' | sed 's/^v//'`
 echo "version $version"
