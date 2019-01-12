@@ -80,7 +80,6 @@ rm -rf %{buildroot}
 %{_bindir}/zlog
 %{_bindir}/zlog_test_backend_ram
 %{_bindir}/zlog_test_backend_lmdb
-%{_libdir}/libzlog_proto.so
 %{_libdir}/libzlog.so.*
 %{_libdir}/libzlog_backend_ram.so.*
 %{_libdir}/libzlog_backend_lmdb.so.*

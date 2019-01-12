@@ -1,3 +1,5 @@
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS zlog.proto)
+
 set(libzlog_sources
   log_impl.cc
   striper.cc
@@ -14,7 +16,8 @@ set(libzlog_sources
   ../monitoring/statistics.cc
   ../monitoring/histogram.cc
   ../util/mempool.cc
-  )
+  ${PROTO_SRCS}
+  ${PROTO_HDRS})
 
 #set_source_files_properties(../civetweb/src/civetweb.c PROPERTIES COMPILE_FLAGS -Wno-error)
 
@@ -24,9 +27,12 @@ add_definitions("-DCMAKE_SHARED_LIBRARY_PREFIX=\"${CMAKE_SHARED_LIBRARY_PREFIX}\
 
 add_library(libzlog SHARED ${libzlog_sources})
 
+target_include_directories(libzlog
+  PRIVATE ${PROTOBUF_INCLUDE_DIR})
+
 target_link_libraries(libzlog
-    zlog_proto
     dl
+    ${PROTOBUF_LIBRARIES}
     ${Boost_SYSTEM_LIBRARY}
     ${Backtrace_LIBRARIES}
 )

@@ -1,5 +1,4 @@
 #include "striper.h"
-#include "proto/zlog.pb.h"
 #include "log_impl.h"
 #include <iterator>
 #include <boost/uuid/uuid.hpp>

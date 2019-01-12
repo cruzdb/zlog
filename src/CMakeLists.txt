@@ -28,7 +28,6 @@ add_subdirectory(flatbuffers EXCLUDE_FROM_ALL)
 
 add_subdirectory(googletest/googlemock)
 add_subdirectory(include)
-add_subdirectory(proto)
 #add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(storage)
