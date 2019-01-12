@@ -10,12 +10,6 @@ IF("${isSystemDir}" STREQUAL "-1")
   SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_FULL_LIBDIR}")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
-set(HDR_HISTOGRAM_BUILD_SHARED OFF CACHE BOOL
-  "Disable building hdr_histogram shared library")
-set(HDR_HISTOGRAM_BUILD_PROGRAMS OFF CACHE BOOL
-  "Disable building hdr_histogram tests and examples")
-add_subdirectory(HdrHistogram_c)
-
 ################################################################################
 
 include_directories(${CMAKE_BINARY_DIR}/src)
@@ -34,7 +28,6 @@ add_subdirectory(flatbuffers EXCLUDE_FROM_ALL)
 
 add_subdirectory(googletest/googlemock)
 add_subdirectory(include)
-add_subdirectory(proto)
 #add_subdirectory(libseq)
 add_subdirectory(libzlog)
 add_subdirectory(storage)

@@ -7,7 +7,7 @@
 #include <list>
 #include <condition_variable>
 #include <boost/optional.hpp>
-#include "proto/zlog.pb.h"
+#include "libzlog/zlog.pb.h"
 
   // don't want to expand mappings on an empty object map (like the zero state)
   // need to figure that out. as it stands map would send caller to

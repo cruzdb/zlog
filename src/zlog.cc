@@ -8,7 +8,6 @@
 #include "zlog/log.h"
 #include "zlog/options.h"
 #include "libzlog/striper.h"
-#include "proto/zlog.pb.h"
 
 namespace po = boost::program_options;
 

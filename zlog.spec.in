@@ -5,18 +5,49 @@ Summary:	distributed shared log
 License:	LGPL-2.1
 Source0:	@TARBALL_BASENAME@.tar.bz2
 
+BuildRequires:	boost-devel
 BuildRequires:	cmake
 BuildRequires:	gcc-c++
-BuildRequires:	boost-devel
-BuildRequires:	protobuf-devel
-BuildRequires:	protobuf-compiler
 BuildRequires:	java-devel
 BuildRequires:	lcov
 BuildRequires:  libatomic
+BuildRequires:  librados-devel
 BuildRequires:  lmdb-devel
+BuildRequires:	protobuf-devel
+BuildRequires:	protobuf-compiler
+BuildRequires:  rados-objclass-devel
 
 %description
 distributed shared log
+
+%package -n libzlog
+Summary: zlog client library
+%description -n libzlog
+zlog is a thing
+
+%package -n libzlog-devel
+Summary: zlog client headers
+Requires: libzlog
+Provides: libzlog-devel
+%description -n libzlog-devel
+contains zlog headers
+
+%package -n zlog-ceph
+Summary: zlog ceph support
+Requires: libzlog
+%description -n zlog-ceph
+zlog ceph support
+
+%package -n zlog-ceph-devel
+Summary: zlog ceph devel headers
+Requires: libzlog-devel
+%description -n zlog-ceph-devel
+zlog ceph devel headers
+
+%package -n zlog-ceph-plugin
+Summary: zlog ceph server plugin
+%description -n zlog-ceph-plugin
+zlog ceph server plugin
 
 %prep
 %autosetup -p1 -n @TARBALL_BASENAME@
@@ -45,20 +76,35 @@ make DESTDIR=%{buildroot} install
 %clean
 rm -rf %{buildroot}
 
-%files
-
+%files -n libzlog
+%{_bindir}/zlog
+%{_bindir}/zlog_test_backend_ram
 %{_bindir}/zlog_test_backend_lmdb
-%{_includedir}/zlog/backend.h
-%{_includedir}/zlog/backend/lmdb.h
+%{_libdir}/libzlog.so.*
+%{_libdir}/libzlog_backend_ram.so.*
+%{_libdir}/libzlog_backend_lmdb.so.*
+
+%files -n libzlog-devel
+%dir %{_includedir}/zlog
 %{_includedir}/zlog/capi.h
 %{_includedir}/zlog/log.h
-%{_includedir}/zlog/slice.h
-%{_includedir}/zlog/stream.h
+%{_includedir}/zlog/options.h
+%{_includedir}/zlog/backend.h
+%{_includedir}/zlog/backend/ram.h
+%{_includedir}/zlog/backend/lmdb.h
 %{_libdir}/libzlog.so
-%{_libdir}/libzlog.so.1
-%{_libdir}/libzlog.so.1.0.0
+%{_libdir}/libzlog_backend_ram.so
 %{_libdir}/libzlog_backend_lmdb.so
-%{_libdir}/libzlog_backend_lmdb.so.1
-%{_libdir}/libzlog_backend_lmdb.so.1.0.0
-%{_libdir}/libzlog_proto.so
-%{_libdir}/libzlog_seqr.so
+
+%files -n zlog-ceph
+%{_bindir}/zlog_test_backend_ceph
+%{_bindir}/zlog_test_cls_zlog
+%{_libdir}/libcls_zlog_client.so
+%{_libdir}/libzlog_backend_ceph.so.*
+
+%files -n zlog-ceph-devel
+%{_includedir}/zlog/backend/ceph.h
+%{_libdir}/libzlog_backend_ceph.so
+
+%files -n zlog-ceph-plugin
+%{_libdir}/rados-classes/libcls_zlog.so*
