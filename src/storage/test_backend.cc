@@ -282,6 +282,29 @@ TEST_F(BackendTest, Write_TrimFill) {
   ASSERT_EQ(backend->Write("a", "", 1, 3), -EROFS);
 }
 
+TEST_F(BackendTest, Write_TrimLimitFill) {
+  ASSERT_EQ(backend->Seal("a", 1), 0);
+
+  ASSERT_EQ(backend->Write("a", "", 1, 0), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 0), -EROFS);
+
+  ASSERT_EQ(backend->Fill("a", 1, 1), 0);
+  ASSERT_EQ(backend->Write("a", "", 1, 1), -EROFS);
+
+  ASSERT_EQ(backend->Write("a", "", 1, 2), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 2, true), 0);
+
+  ASSERT_EQ(backend->Trim("a", 1, 3, true), 0);
+  ASSERT_EQ(backend->Write("a", "", 1, 3), -EROFS);
+
+  ASSERT_EQ(backend->Write("a", "", 1, 100), 0);
+  ASSERT_EQ(backend->Write("a", "", 1, 99), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 101, true), 0);
+  ASSERT_EQ(backend->Write("a", "", 1, 98), -EROFS);
+  ASSERT_EQ(backend->Write("a", "", 1, 38), -EROFS);
+  ASSERT_EQ(backend->Write("a", "", 1, 72), -EROFS);
+}
+
 TEST_F(BackendTest, Write_MaxPos) {
   bool empty;
   uint64_t pos;
@@ -416,6 +439,30 @@ TEST_F(BackendTest, Read_FillTrim) {
   ASSERT_EQ(backend->Read("a", 10, 10, &data), -ENODATA);
 }
 
+TEST_F(BackendTest, Read_FillTrimLimit) {
+  std::string data;
+  ASSERT_EQ(backend->Seal("a", 10), 0);
+
+  ASSERT_EQ(backend->Write("a", "", 10, 0), 0);
+  ASSERT_EQ(backend->Read("a", 10, 0, &data), 0);
+  ASSERT_EQ(data, "");
+
+  ASSERT_EQ(backend->Fill("a", 10, 1), 0);
+  ASSERT_EQ(backend->Read("a", 10, 1, &data), -ENODATA);
+
+  ASSERT_EQ(backend->Fill("a", 10, 19), 0);
+  ASSERT_EQ(backend->Read("a", 10, 19, &data), -ENODATA);
+
+  ASSERT_EQ(backend->Trim("a", 10, 0, true), 0);
+  ASSERT_EQ(backend->Read("a", 10, 0, &data), -ENODATA);
+
+  ASSERT_EQ(backend->Trim("a", 10, 19, true), 0);
+  ASSERT_EQ(backend->Read("a", 10, 19, &data), -ENODATA);
+
+  ASSERT_EQ(backend->Trim("a", 10, 10, true), 0);
+  ASSERT_EQ(backend->Read("a", 10, 10, &data), -ENODATA);
+}
+
 TEST_F(BackendTest, Fill_Args) {
   ASSERT_EQ(backend->Fill("", 1, 0), -EINVAL);
 
@@ -512,11 +559,21 @@ TEST_F(BackendTest, Fill_MaxPos) {
   ASSERT_EQ(pos, 5000u);
 }
 
+// single pos
 TEST_F(BackendTest, Trim_Args) {
   ASSERT_EQ(backend->Trim("", 1, 0), -EINVAL);
 
   ASSERT_EQ(backend->Seal("a", 1), 0);
   ASSERT_EQ(backend->Trim("a", 0, 0), -EINVAL);
+}
+
+// trim limit
+TEST_F(BackendTest, TrimLimit_Args) {
+  ASSERT_EQ(backend->Trim("", 1, 0, true), -EINVAL);
+
+  ASSERT_EQ(backend->Seal("a", 1), 0);
+  ASSERT_EQ(backend->Trim("a", 0, 0, true), -EINVAL);
+  ASSERT_EQ(backend->Trim("a", 1, 0, false, true), -EINVAL);
 }
 
 TEST_F(BackendTest, Trim_NoInit) {
@@ -525,6 +582,14 @@ TEST_F(BackendTest, Trim_NoInit) {
   ASSERT_EQ(backend->Seal("a", 1), 0);
   ASSERT_EQ(backend->Trim("a", 1, 0), 0);
   ASSERT_EQ(backend->Trim("a", 2, 1), 0);
+}
+
+TEST_F(BackendTest, TrimLimit_NoInit) {
+  ASSERT_EQ(backend->Trim("a", 1, 0, true), -ENOENT);
+  ASSERT_EQ(backend->Trim("a", 2, 1, true), -ENOENT);
+  ASSERT_EQ(backend->Seal("a", 1), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 0, true), 0);
+  ASSERT_EQ(backend->Trim("a", 2, 1, true), 0);
 }
 
 TEST_F(BackendTest, Trim_StaleEpoch) {
@@ -554,16 +619,71 @@ TEST_F(BackendTest, Trim_StaleEpoch) {
   ASSERT_EQ(backend->Trim("c", 1, 0), -ESPIPE);
 }
 
+TEST_F(BackendTest, TrimLimit_StaleEpoch) {
+  ASSERT_EQ(backend->Seal("a", 10), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 0, true), 0);
+  ASSERT_EQ(backend->Trim("a", 0, 0, true), -EINVAL);
+  ASSERT_EQ(backend->Trim("a", 1, 0, true), -ESPIPE);
+  ASSERT_EQ(backend->Trim("a", 2, 0, true), -ESPIPE);
+  ASSERT_EQ(backend->Trim("a", 3, 0, true), -ESPIPE);
+  ASSERT_EQ(backend->Trim("a", 9, 0, true), -ESPIPE);
+  ASSERT_EQ(backend->Trim("a", 10, 1, true), 0);
+  ASSERT_EQ(backend->Trim("a", 11, 2, true), 0);
+  ASSERT_EQ(backend->Trim("a", 110, 3, true), 0);
+  ASSERT_EQ(backend->Trim("a", 7, 0, true), -ESPIPE);
+  ASSERT_EQ(backend->Trim("a", 1, 0, true), -ESPIPE);
+  ASSERT_EQ(backend->Trim("a", 0, 0, true), -EINVAL);
+
+  ASSERT_EQ(backend->Seal("b", 1), 0);
+  ASSERT_EQ(backend->Trim("b", 10, 0, true), 0);
+  ASSERT_EQ(backend->Trim("b", 0, 0, true), -EINVAL);
+  ASSERT_EQ(backend->Trim("b", 1, 0, true), 0);
+
+  ASSERT_EQ(backend->Seal("c", 2), 0);
+  ASSERT_EQ(backend->Trim("c", 10, 0, true), 0);
+  ASSERT_EQ(backend->Trim("c", 0, 0, true), -EINVAL);
+  ASSERT_EQ(backend->Trim("c", 2, 0, true), 0);
+  ASSERT_EQ(backend->Trim("c", 1, 0, true), -ESPIPE);
+}
+
 TEST_F(BackendTest, Trim_Idempotent) {
   ASSERT_EQ(backend->Seal("a", 10), 0);
   ASSERT_EQ(backend->Trim("a", 10, 1), 0);
   ASSERT_EQ(backend->Trim("a", 10, 1), 0);
 }
 
+TEST_F(BackendTest, TrimLimit_Idempotent) {
+  ASSERT_EQ(backend->Seal("a", 10), 0);
+
+  ASSERT_EQ(backend->Trim("a", 10, 1), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 1, true), 0);
+
+  ASSERT_EQ(backend->Trim("a", 10, 2, true), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 2), 0);
+
+  ASSERT_EQ(backend->Trim("a", 10, 1), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 1, true), 0);
+
+  ASSERT_EQ(backend->Trim("a", 10, 0), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 0, true), 0);
+
+  ASSERT_EQ(backend->Trim("a", 10, 0), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 0, true), 0);
+}
+
 TEST_F(BackendTest, Trim_Overwrite) {
   ASSERT_EQ(backend->Seal("a", 10), 0);
   ASSERT_EQ(backend->Write("a", "", 10, 1), 0);
   ASSERT_EQ(backend->Trim("a", 10, 1), 0);
+}
+
+TEST_F(BackendTest, TrimLimit_Overwrite) {
+  ASSERT_EQ(backend->Seal("a", 10), 0);
+  ASSERT_EQ(backend->Write("a", "", 10, 1), 0);
+  ASSERT_EQ(backend->Write("a", "", 10, 2), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 1), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 1, true), 0);
+  ASSERT_EQ(backend->Trim("a", 10, 2, true), 0);
 }
 
 TEST_F(BackendTest, Trim_NoRead) {
@@ -581,6 +701,47 @@ TEST_F(BackendTest, Trim_NoRead) {
   ASSERT_EQ(backend->Read("a", 10, 1, &data), -ENODATA);
 }
 
+TEST_F(BackendTest, TrimLimit_NoRead) {
+  std::string data;
+  ASSERT_EQ(backend->Seal("a", 10), 0);
+
+  ASSERT_EQ(backend->Write("a", "lala", 10, 1), 0);
+  ASSERT_EQ(backend->Read("a", 10, 1, &data), 0);
+  ASSERT_EQ(data, "lala");
+
+  ASSERT_EQ(backend->Trim("a", 10, 2), 0);
+  ASSERT_EQ(backend->Read("a", 10, 2, &data), -ENODATA);
+
+  ASSERT_EQ(backend->Write("a", "lala", 10, 3), 0);
+  ASSERT_EQ(backend->Read("a", 10, 3, &data), 0);
+  ASSERT_EQ(data, "lala");
+
+  // read at 1 unaffected
+  ASSERT_EQ(backend->Read("a", 10, 1, &data), 0);
+  ASSERT_EQ(data, "lala");
+
+  // trim limit at 3
+  ASSERT_EQ(backend->Trim("a", 10, 3, true), 0);
+  ASSERT_EQ(backend->Read("a", 10, 3, &data), -ENODATA);
+  ASSERT_EQ(backend->Read("a", 10, 2, &data), -ENODATA);
+  ASSERT_EQ(backend->Read("a", 10, 1, &data), -ENODATA);
+  ASSERT_EQ(backend->Read("a", 10, 0, &data), -ENODATA);
+
+  // trimming below doesn't change anything
+  ASSERT_EQ(backend->Write("a", "lala", 10, 100), 0);
+  ASSERT_EQ(backend->Read("a", 10, 100, &data), 0);
+  ASSERT_EQ(data, "lala");
+
+  ASSERT_EQ(backend->Trim("a", 10, 100, true), 0);
+  ASSERT_EQ(backend->Read("a", 10, 100, &data), -ENODATA);
+
+  // a broken implementation might not retain the max, and may also have not
+  // changed the underlying entry metadata, so moving the trim point will let
+  // the data be read again, leading to a bug.
+  ASSERT_EQ(backend->Trim("a", 10, 90, true), 0);
+  ASSERT_EQ(backend->Read("a", 10, 100, &data), -ENODATA);
+}
+
 TEST_F(BackendTest, Trim_Fill) {
   ASSERT_EQ(backend->Seal("a", 1), 0);
   ASSERT_EQ(backend->Fill("a", 1, 10), 0);
@@ -589,6 +750,78 @@ TEST_F(BackendTest, Trim_Fill) {
   ASSERT_EQ(backend->Seal("b", 1), 0);
   ASSERT_EQ(backend->Trim("b", 1, 10), 0);
   ASSERT_EQ(backend->Fill("b", 1, 10), 0);
+}
+
+TEST_F(BackendTest, TrimLimit_Fill) {
+  ASSERT_EQ(backend->Seal("a", 1), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 10), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 10, true), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 9), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 8), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 7), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 6), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 5), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 4), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 3), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 2), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 1), 0);
+  ASSERT_EQ(backend->Fill("a", 1, 0), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 9), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 8), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 7), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 6), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 5), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 4), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 3), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 2), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 1), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 0), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 9, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 8, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 7, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 6, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 5, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 4, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 3, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 2, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 1, true), 0);
+  ASSERT_EQ(backend->Trim("a", 1, 0, true), 0);
+
+  ASSERT_EQ(backend->Seal("b", 1), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 10, true), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 10), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 9), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 8), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 7), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 6), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 5), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 4), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 3), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 2), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 1), 0);
+  ASSERT_EQ(backend->Fill("b", 1, 0), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 10), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 9), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 8), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 7), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 6), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 5), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 4), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 3), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 2), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 1), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 0), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 10, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 9, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 8, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 7, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 6, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 5, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 4, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 3, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 2, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 1, true), 0);
+  ASSERT_EQ(backend->Trim("b", 1, 0, true), 0);
 }
 
 TEST_F(BackendTest, Trim_MaxPos) {
@@ -619,6 +852,56 @@ TEST_F(BackendTest, Trim_MaxPos) {
   ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
+
+  ASSERT_EQ(backend->Write("a", "lala", 1, 10000), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 10000u);
+
+  ASSERT_EQ(backend->Trim("a", 1, 10002), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 10002u);
+}
+
+TEST_F(BackendTest, TrimLimit_MaxPos) {
+  bool empty;
+  uint64_t pos;
+  ASSERT_EQ(backend->Seal("a", 1), 0);
+
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_TRUE(empty);
+
+  ASSERT_EQ(backend->Trim("a", 1, 1, true), 0);
+
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 1u);
+
+  ASSERT_EQ(backend->Trim("a", 1, 5, true), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 5u);
+
+  ASSERT_EQ(backend->Trim("a", 1, 5000, true), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 5000u);
+
+  ASSERT_EQ(backend->Trim("a", 1, 4000, true), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 5000u);
+
+  ASSERT_EQ(backend->Write("a", "lala", 1, 10000), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 10000u);
+
+  ASSERT_EQ(backend->Trim("a", 1, 10002, true), 0);
+  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, 10002u);
 }
 
 TEST_F(BackendTest, Seal_Args) {
