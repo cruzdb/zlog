@@ -269,6 +269,10 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
   }
 
   if (lobj) {
+    if (lobj->trim_limit && position <= *lobj->trim_limit) {
+      return -ENODATA;
+    }
+
     const auto it = lobj->entries.find(position);
     if (it == lobj->entries.end())
       return -ERANGE;
@@ -309,6 +313,10 @@ int RAMBackend::Write(const std::string& oid, const std::string& data,
     lobj = &boost::get<LogObject>(ret.first->second);
   }
 
+  if (lobj->trim_limit && position <= *lobj->trim_limit) {
+    return -EROFS;
+  }
+
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {
     LogEntry entry;
@@ -326,7 +334,10 @@ int RAMBackend::Write(const std::string& oid, const std::string& data,
 int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
     uint64_t position, bool trim_limit, bool trim_full)
 {
-  assert(!trim_limit);
+  if (trim_full && !trim_limit) {
+    return -EINVAL;
+  }
+
   assert(!trim_full);
 
   if (oid.empty()) {
@@ -348,6 +359,17 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
   if (!lobj) {
     auto ret = objects_.emplace(oid, LogObject());
     lobj = &boost::get<LogObject>(ret.first->second);
+  }
+
+  if (trim_limit) {
+    if (lobj->trim_limit)
+      lobj->trim_limit = std::max(position, *lobj->trim_limit);
+    else
+      lobj->trim_limit = position;
+  }
+
+  if (lobj->trim_limit && position <= *lobj->trim_limit) {
+    return 0;
   }
 
   auto it = lobj->entries.find(position);
@@ -389,6 +411,10 @@ int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
   if (!lobj) {
     auto ret = objects_.emplace(oid, LogObject());
     lobj = &boost::get<LogObject>(ret.first->second);
+  }
+
+  if (lobj->trim_limit && position <= *lobj->trim_limit) {
+    return 0;
   }
 
   auto it = lobj->entries.find(position);
@@ -456,9 +482,19 @@ int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
 
   if (lobj) {
     bool is_empty = lobj->entries.empty();
-    if (!is_empty)
+    if (!is_empty) {
+      *empty = false;
       *pos = lobj->maxpos;
-    *empty = is_empty;
+      if (lobj->trim_limit)
+        *pos = std::max(*pos, *lobj->trim_limit);
+    } else {
+      if (lobj->trim_limit) {
+        *empty = false;
+        *pos = *lobj->trim_limit;
+      } else {
+        *empty = true;
+      }
+    }
   } else {
     *empty = true;
   }

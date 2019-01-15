@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <boost/variant.hpp>
+#include <boost/optional.hpp>
 #include <unordered_map>
 #include "zlog/backend.h"
 
@@ -85,6 +86,7 @@ class RAMBackend : public Backend {
     uint64_t epoch;
     uint64_t maxpos;
     std::unordered_map<uint64_t, LogEntry> entries;
+    boost::optional<uint64_t> trim_limit;
     LogObject() : epoch(0), maxpos(0) {}
   };
 

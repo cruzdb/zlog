@@ -234,6 +234,12 @@ class Backend {
   /**
    * Return the maximum position (if any) written to an object.
    *
+   * Note that the maximum position includes positions trimmed and filled. In
+   * addition, the maximum includes any trim limit that has been set, which may
+   * be larger than the addressable position of the object. If a trim limit has
+   * been set and no positions have been explicitly written, trimmed, or filled,
+   * the object is still reported as non-empty.
+   *
    * @param oid
    * @param epoch
    * @param pos_out
