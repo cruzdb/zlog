@@ -410,7 +410,8 @@ int TrimOp::run()
       continue;
     }
 
-    int ret = log_->backend->Trim(*oid, view->epoch(), position_);
+    int ret = log_->backend->Trim(*oid, view->epoch(), position_,
+        false, false);
 
     if (ret == -ESPIPE) {
       log_->striper.update_current_view(view->epoch());

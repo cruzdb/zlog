@@ -56,7 +56,7 @@ class LMDBBackend : public Backend {
       uint64_t position) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) override;
+      uint64_t position, bool trim_limit, bool trim_full) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;

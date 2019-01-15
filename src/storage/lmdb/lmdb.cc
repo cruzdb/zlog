@@ -472,8 +472,11 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
 }
 
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, bool trim_limit, bool trim_full)
 {
+  assert(!trim_limit);
+  assert(!trim_full);
+
   if (oid.empty()) {
     return -EINVAL;
   }

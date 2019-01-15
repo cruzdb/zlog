@@ -202,11 +202,13 @@ class Backend {
       uint64_t position) = 0;
 
   /**
-   * Mark a log position as unused.
+   * Mark positions as unused and reclaim storage space.
    *
    * @param oid
    * @param epoch
    * @param position
+   * @param trim_limit
+   * @param trim_full
    *
    * @return 0 (idempotent) or non-zero
    * -EINVAL bad input params
@@ -214,7 +216,8 @@ class Backend {
    * -ESPIPE stale epoch
    */
   virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) = 0;
+      uint64_t position, bool trim_limit = false,
+      bool trim_full = false) = 0;
 
   /**
    * Seal / initialize a log entries object.
