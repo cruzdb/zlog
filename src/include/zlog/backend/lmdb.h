@@ -81,7 +81,8 @@ class LMDBBackend : public Backend {
 
   struct LogObject {
     uint64_t epoch;
-    LogObject() : epoch(0) {}
+    int64_t trim_limit;
+    LogObject() : epoch(0), trim_limit(-1) {}
   };
 
   struct LogMaxPos {

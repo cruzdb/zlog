@@ -381,6 +381,24 @@ int LMDBBackend::Write(const std::string& oid, const std::string& data,
     return ret;
   }
 
+  {
+    MDB_val val;
+    ret = txn.Get(oid, val);
+    if (ret) {
+      txn.Abort();
+      return ret;
+    }
+
+    LogObject lobj;
+    assert(val.mv_size == sizeof(lobj));
+    lobj = *((LogObject*)val.mv_data);
+
+    if (lobj.trim_limit >= 0 && position <= uint64_t(lobj.trim_limit)) {
+      txn.Abort();
+      return -EROFS;
+    }
+  }
+
   // read max position
   uint64_t pos = 0;
   MDB_val maxval;
@@ -445,6 +463,24 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
     return ret;
   }
 
+  {
+    MDB_val val;
+    ret = txn.Get(oid, val);
+    if (ret) {
+      txn.Abort();
+      return ret;
+    }
+
+    LogObject lobj;
+    assert(val.mv_size == sizeof(lobj));
+    lobj = *((LogObject*)val.mv_data);
+
+    if (lobj.trim_limit >= 0 && position <= uint64_t(lobj.trim_limit)) {
+      txn.Abort();
+      return -ENODATA;
+    }
+  }
+
   MDB_val val;
   std::string key = LogEntryKey(oid, position);
   ret = txn.Get(key, val);
@@ -474,8 +510,9 @@ int LMDBBackend::Read(const std::string& oid, uint64_t epoch,
 int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
     uint64_t position, bool trim_limit, bool trim_full)
 {
-  assert(!trim_limit);
-  assert(!trim_full);
+  if (trim_full && !trim_limit) {
+    return -EINVAL;
+  }
 
   if (oid.empty()) {
     return -EINVAL;
@@ -491,6 +528,38 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
   if (ret) {
     txn.Abort();
     return ret;
+  }
+
+  {
+    MDB_val val;
+    ret = txn.Get(oid, val);
+    if (ret) {
+      txn.Abort();
+      return ret;
+    }
+
+    LogObject lobj;
+    assert(val.mv_size == sizeof(lobj));
+    lobj = *((LogObject*)val.mv_data);
+
+    if (trim_limit) {
+      if (lobj.trim_limit >= 0)
+        lobj.trim_limit = std::max(position, uint64_t(lobj.trim_limit));
+      else
+        lobj.trim_limit = position;
+    }
+
+    val.mv_data = &lobj;
+    val.mv_size = sizeof(lobj);
+    txn.Put(oid, val, false);
+
+    if (lobj.trim_limit >= 0 && position <= uint64_t(lobj.trim_limit)) {
+      ret = txn.Commit();
+      if (ret)
+        return ret;
+      return 0;
+    }
+
   }
 
   LogEntry entry;
@@ -655,12 +724,30 @@ int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
     return ret;
   }
 
+  LogObject lobj;
+  {
+    MDB_val val;
+    ret = txn.Get(oid, val);
+    if (ret) {
+      txn.Abort();
+      return ret;
+    }
+
+    assert(val.mv_size == sizeof(lobj));
+    lobj = *((LogObject*)val.mv_data);
+  }
+
   MDB_val val;
   auto key = MaxPosKey(oid);
   ret = txn.Get(key, val);
   if (ret < 0) {
     if (ret == -ENOENT) {
-      *empty = true;
+      if (lobj.trim_limit >= 0) {
+        *empty = false;
+        *pos = uint64_t(lobj.trim_limit);
+      } else {
+        *empty = true;
+      }
       txn.Commit();
       return 0;
     }
@@ -670,9 +757,13 @@ int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
 
   LogMaxPos *maxpos = (LogMaxPos*)val.mv_data;
   assert(val.mv_size == sizeof(*maxpos));
-  txn.Commit();
-  *pos = maxpos->maxpos;
+
   *empty = false;
+  *pos = maxpos->maxpos;
+  if (lobj.trim_limit >= 0)
+    *pos = std::max(*pos, uint64_t(lobj.trim_limit));
+
+  txn.Commit();
 
   return 0;
 }
