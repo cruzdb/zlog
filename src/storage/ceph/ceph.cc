@@ -386,22 +386,23 @@ int CephBackend::Fill(const std::string& oid, uint64_t epoch,
   }
 
   librados::ObjectWriteOperation op;
-  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, false);
+  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, false, false);
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Trim(const std::string& oid, uint64_t epoch,
     uint64_t position, bool trim_limit, bool trim_full)
 {
-  assert(!trim_limit);
-  assert(!trim_full);
+  if (trim_full && !trim_limit) {
+    return -EINVAL;
+  }
 
   if (oid.empty()) {
     return -EINVAL;
   }
 
   librados::ObjectWriteOperation op;
-  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, true);
+  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, true, trim_limit);
   return ioctx_->operate(oid, &op);
 }
 
