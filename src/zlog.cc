@@ -8,6 +8,7 @@
 #include "zlog/log.h"
 #include "zlog/options.h"
 #include "libzlog/striper.h"
+#include "libzlog/log_impl.h"
 
 namespace po = boost::program_options;
 
@@ -153,8 +154,12 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << usages.at("create") << std::endl;
       return 1;
     }
+    zlog::Options options;
+    options.error_if_exists = true;
+    options.create_if_missing = true;
     std::string hoid, prefix;
-    int ret = backend->CreateLog(command[1], "", &hoid, &prefix);
+    int ret = zlog::create_or_open(options, backend.get(), command[1],
+        &hoid, &prefix);
     switch (ret) {
       case 0:
         break;

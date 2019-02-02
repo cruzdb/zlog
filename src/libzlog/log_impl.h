@@ -242,4 +242,8 @@ class LogImpl : public Log {
   const Options options;
 };
 
+int create_or_open(const Options& options,
+    Backend *backend, const std::string& name,
+    std::string *hoid_out, std::string *prefix_out);
+
 }
