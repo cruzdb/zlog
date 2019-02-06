@@ -1,0 +1,176 @@
+// Trimming
+// ========
+//
+// Operations on single log positions (e.g. read, write, trim, fill) are
+// designed to be safe w.r.t. to changes to the log view, and handle retries
+// automatically when necessary. Trimming a single log position is identical to
+// writing a single log position--though the update in the target object may
+// remove data instead of inserting data.
+//
+// Consider a scenario in which an arbitrary set of entries in an object have
+// been trimmed. At any point in time that object may have storage space that
+// can be easily reclaimed while preserving the semantics of the trimmed
+// positions. For example, the data entries in omap can be deleted, and extents
+// in the bytestream region can be truncated/hole-punched. This generalizes to
+// trimming a range (e.g. [300, 600] or [0, 300]) in which the semantics should
+// be identical to a scenario in which each position in the range is trimmed
+// one-at-a-time, even if a more efficient object interface for bulk trimming is
+// used.
+//
+// When can space be reclaimed?
+//
+//   - data in omap: any position that is trimmed whose data is stored in omap
+//   can be immediately reclaimed (i.e. rewrite the entry without the data).
+//
+//   - data in bytestream: this is more complicated. the object class api
+//   doesn't include write_full or truncate nor does it include hole punching.
+//   this means that we can't truncate, perform a compaction + write_full, nor
+//   can we selectively reclaim space for log entries that are trimmed.
+//
+//      TODO: this should be a topic at ceph cdm.
+//
+//   this means that bytestream space reclaiming needs to be driven (at least in
+//   part) by the client that has access to operations like truncate (e.g.
+//   compound operation: truncate or exec(compact) + truncate). there are two
+//   specific scenarios to consider: (1) all positions that map to the object
+//   are trimmed or (2) a proper subset are trimmed.
+//
+//   in the case (2) that a subset are trimmed, space reclaiming could involve
+//   coordination between the object class performing compaction and then the
+//   client issuing a truncate operation guarded/protected by a version number
+//   or some other mechanism to prevent race conditions. the race conditions to
+//   avoid are where the truncation removes data written not in the range of
+//   data being trimmed.
+//
+//   in order to simplify the implementation we initially consider only the case
+//   (1) that we reclaim space in objects whose valid log position range is
+//   fully covered by an expanding trim range of 0...trimToPosition. This
+//   means that a client only needs to issue an object truncation operation and
+//   doesn't need to worry about trimming data that are not contained in the
+//   trim range.
+//
+//   this means we need to consider further two more cases.  first, we must
+//   ensure that the mapping between global log positions and an object being
+//   truncated does not change. the second is handling races between object
+//   truncation and clients accessing the same object under a view that has not
+//   been updated to indicate the new trim range (thus the object may receive a
+//   read or write request).
+//
+//   in order to ensure that the mappings do not change, the first step in
+//   trimming is to update the log view to include the new trim point. this
+//   point is only allowed to grow--it can never shrink. further more, future
+//   versions of zlog must ensure that if remapping ever occurs (as of this
+//   writing views are immutable--but it may be useful to allow certain mapping
+//   changes in the future) that the remapping does not affect objects below the
+//   trim point. this will ensure that the assumption that the object can be
+//   safely truncated remains true.
+//
+//   the second step is to mark the object as fully trimmed, or equivalently
+//   marking the minimum trim point in the object as the max position mapped to
+//   that object. this ensure that clients with out of date views have their
+//   I/Os properly rejected when accessing data in the trimmed range.
+//
+//      alternatively: force the client to retry by updating the epoch in the
+//      object? we don't do this for other per-position operations. this is one
+//      way forward, but we shouldn't do this (yet) as it really should be
+//      necessary: again, we want trimming to be semantically equiavalent to
+//      trimming each position indvidiaully, and we don't update epochs when
+//      reading/writing/trimming individual positions now.
+//
+//  finally, the object bytestream and omap data (except for the header) can be
+//  truncated / remove without any coordination or guarding.
+//
+// When can objects be deleted?
+//
+//   once the trim point has passed the maximum position of an object, the
+//   object can _also_ be deleted. in order to preserve the trimmed range
+//   semantics, client need to be able to respond to operations in the trim
+//   range using only information in the latest view (as the target object isn't
+//   capable of generating the correct response--it doesn't exist).
+//
+//   in order to accomplish this, every object operation should return enoent
+//   when an object does not exist, and zlog should always respond by refreshing
+//   the log view to see if enoent is returned because the target object was in
+//   the global trim range, prior to reporting enoent or other such error to the
+//   user.
+//
+//   finally, when reconfiguring the view, future clients should take into
+//   account that any object fully contained in a trim range may or may not
+//   exist.
+//
+// Notes on delete/truncate relationship
+//
+//   Note above that we can delete an object exactly at the time when we've
+//   derived that we can truncate the fully object. We separate these two
+//   actions in order to avoid restricting future development.
+//
+// TODO:
+//  - there is quite a bit of optimizations that can occur here such as
+//  recording progress in the view to avoid trimming from pos 0 each time this
+//  is called. this is important especially for apps that trim a lot
+//  incrementally so as to not re-trim the entire 0..trimPoint each time.
+//
+// get all the objects
+// maybe expand
+//
+// updated notes
+//
+// A expands the view for writing, but the objects in the new stripes aren't
+// yet initialized.
+//
+// B trims past this point, does it trim thing, and then skips the objects
+// in this hole region.
+//
+// A initializes one of the new objects and writes successfully.
+//
+// That's not good. So, I think without any other synchronization help from
+// rados, we need to create all those objects even if it just to trim them.
+// otherwise clients may not observe the trimmed regions for some time.
+//
+// BUT... wasn't forcing view refresh on enoent going to solve this problem?
+// I think it may, but consider object initialization: we expect the object
+// to not exist.
+//
+// A initializes objects sees enoent, refreshes view, everything is OK
+// B trims past but doesn't do anything to the objects where there are holes
+// A initializes and writes the data thinking everything is cool.
+//
+// This should work
+// -----------------
+//
+// Trim can skip holes in the view. Meaning, they don't need to be created
+// just to have their trim bit set.
+//
+// All operations refresh view on enoent before doing anything else to see
+// if they are accessing a trimmed region.
+//
+// Object initialization is a special case. If we init an object because we
+// expanded the mapping.
+//
+//   write:
+//     - init missing object -> after initialization refresh the view. if
+//     the mapping is still correct and not in trim region, then great.
+//     rerun the operation. if the object is in the trim region, then remove
+//     it. we won't necessarily know if we actually created or some other
+//     thread, but it can still be removed bc its in the trimmed region.
+//
+// This is what we'll do
+//
+// All of these cases are particularly intricate and complicated. We _know_
+// how to reclaim space with trim, but we haven't figured out exactly how to
+// safely delete objects yet. So... i think initial version of trim should
+// _not_delete objects at all--save that for object delete. this means that
+// trim will initialize object / stripe holes etc... and no changes to
+// existing rules will be made for things like enoent that do need to b
+// ehandled specially when we start deleting objects as part of the trim
+// process.
+//
+// this also means the view could become large, but we can always spill that
+// to disk and use deltas in the log. that's a problem i'd like to actually
+// have.
+//
+// make sure to keep all these notes around for the future version that
+// does actually delete the old objects.
+//
+// UGHHHH also need to trim omap from client directly too. that's super
+// annoyihg, but we can use it to drive expansion of objclass later.

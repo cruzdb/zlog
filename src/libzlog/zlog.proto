@@ -21,4 +21,5 @@ message View {
   optional uint64 next_stripe_id = 1 [default = 0];
   repeated Stripe stripes = 2;
   optional Sequencer seq = 3;
+  required uint64 min_valid_position = 4;
 }

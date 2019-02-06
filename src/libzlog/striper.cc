@@ -102,6 +102,12 @@ boost::optional<Stripe> ObjectMap::map_stripe(uint64_t position) const
   return boost::none;
 }
 
+// trim a single position vs trim from 0..N. do we fault in those objects? i
+// think that we can just trim what we find, but if we trim way past the end we
+// don't need to make new stripes? it would seem not to be necessary. but in
+// that case, perhaps we should also just skip truncating and just delete the
+// objects instead of special casing delete.
+
 std::pair<boost::optional<std::string>, bool>
 ObjectMap::map(const uint64_t position) const
 {
@@ -116,6 +122,48 @@ ObjectMap::map(const uint64_t position) const
     }
   }
   return std::make_pair(boost::none, false);
+}
+
+boost::optional<std::vector<std::pair<std::string, bool>>>
+ObjectMap::map_to(const uint64_t position) const
+{
+  // the max position is not mapped
+  if (!map(position).first) {
+    return boost::none;
+  }
+
+  // first: object name
+  // second: complete map?
+  std::vector<std::pair<std::string, bool>> objects;
+
+  for (auto it = stripes_.cbegin(); it != stripes_.cend(); it++) {
+    const auto& stripe = it->second;
+    const auto oids = stripe.oids();
+
+    const auto min_pos_base = it->first;
+
+    if (min_pos_base > position) {
+      break;
+    }
+
+    const auto max_pos_base = stripe.max_position() - stripe.width() - 1;
+
+    for (uint32_t i = 0; i < stripe.width(); i++) {
+      const auto max_pos = max_pos_base + i;
+      if (max_pos <= position) {
+        objects.push_back(std::make_pair(oids[i], true));
+        continue;
+      }
+
+      const auto min_pos = min_pos_base + i;
+      if (min_pos <= position) {
+        objects.push_back(std::make_pair(oids[i], false));
+        continue;
+      }
+    }
+  }
+
+  return objects;
 }
 
 bool ObjectMap::expand_mapping(const std::string& prefix,
@@ -193,9 +241,16 @@ void Striper::shutdown()
   stripe_init_thread_.join();
 }
 
+boost::optional<std::vector<std::pair<std::string, bool>>>
+Striper::map_to(const std::shared_ptr<const View>& view,
+    const uint64_t position)
+{
+  return view->object_map.map_to(position);
+}
+
 boost::optional<std::string> Striper::map(
     const std::shared_ptr<const View>& view,
-    uint64_t position)
+    const uint64_t position)
 {
   const auto mapping = view->object_map.map(position);
   const auto oid = mapping.first;
@@ -321,6 +376,31 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   }
 
   return 0;
+}
+
+int Striper::advance_min_valid_position(const uint64_t position)
+{
+  // read: a mutable copy of the current view
+  auto v = *view();
+  const auto next_epoch = v.epoch() + 1;
+
+  // is the invalid range expanding?
+  if (position <= v.min_valid_position) {
+    return 0;
+  }
+
+  // update the view
+  v.min_valid_position = position;
+
+  // write: the proposed new view
+  auto data = v.serialize();
+  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  if (!ret || ret == -ESPIPE) {
+    update_current_view(v.epoch());
+    return 0;
+  }
+
+  return ret;
 }
 
 int Striper::propose_sequencer()
@@ -643,6 +723,7 @@ std::string View::create_initial()
 {
   std::string blob;
   zlog_proto::View view;
+  view.set_min_valid_position(0);
   if (!view.SerializeToString(&blob)) {
     assert(0);
     exit(1);
@@ -669,6 +750,8 @@ std::string View::serialize() const
     seq->set_secret(seq_config->secret);
     seq->set_position(seq_config->position);
   }
+
+  view.set_min_valid_position(min_valid_position);
 
   std::string blob;
   if (!view.SerializeToString(&blob)) {
@@ -721,6 +804,8 @@ View::View(const std::string& prefix, uint64_t epoch,
     assert(seq_config->epoch > 0);
     assert(!seq_config->secret.empty());
   }
+
+  min_valid_position = view.min_valid_position();
 }
 
 }

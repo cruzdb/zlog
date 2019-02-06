@@ -465,6 +465,112 @@ int LogImpl::trimAsync(uint64_t position, std::function<void(int)> cb)
   return 0;
 }
 
+int TrimToOp::run()
+{
+  while (true) {
+    const auto view = log_->striper.view();
+    if (position_ >= view->min_valid_position) {
+      int ret = log_->striper.advance_min_valid_position(position_ + 1);
+      if (ret) {
+        return ret;
+      }
+      continue;
+    }
+
+    // get all objects that map positions in the trim range
+    const auto objects = log_->striper.map_to(view, position_);
+    if (!objects) {
+      // expand view may also attempt to initialize new stripes. this is
+      // correct, but inefficient. however, trimming/space reclaiming right now
+      // has a lot of ineffiencies and this can be address in a later revision
+      // that will address the problem of trimming/space reclaiming/object
+      // deletion/view trimming more completely.
+      int ret = log_->striper.try_expand_view(position_);
+      if (ret) {
+        return ret;
+      }
+      continue;
+    }
+
+    assert(objects && !objects->empty());
+
+    bool restart = false;
+    for (auto obj : *objects) {
+      const auto oid = obj.first;
+      const auto trim_full = obj.second;
+
+      // handles setting up range trim and omap/bytestream space reclaim etc..
+      int ret = log_->backend->Trim(oid, view->epoch(), position_,
+          true, trim_full);
+
+      if (ret == -ESPIPE) {
+        log_->striper.update_current_view(view->epoch());
+        // restart after view update. wildly inefficient :(
+        restart = true;
+        break;
+      }
+
+      if (ret == -ENOENT) {
+        int ret = log_->backend->Seal(oid, view->epoch());
+        if (ret && ret != -ESPIPE) {
+          return ret;
+        }
+
+        if (ret == 0)
+          continue;
+
+        // restart after view update. wildly inefficient :(
+        restart = true;
+        break;
+      }
+
+      if (ret != 0) {
+        return ret;
+      }
+    }
+
+    if (restart)
+      continue;
+  }
+
+  return 0;
+}
+
+int LogImpl::trimTo(const uint64_t position)
+{
+  struct {
+    int ret;
+    bool done = false;
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
+
+  int ret = trimToAsync(position, [&](int ret) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+      ctx.cond.notify_one();
+    }
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  return ctx.ret;
+}
+
+int LogImpl::trimToAsync(uint64_t position, std::function<void(int)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new TrimToOp(this, position, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
 void LogImpl::queue_op(std::unique_ptr<LogOp> op)
 {
   std::unique_lock<std::mutex> lk(lock);

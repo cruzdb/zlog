@@ -125,6 +125,9 @@ class ObjectMap {
   // stripe in the object map.
   std::pair<boost::optional<std::string>, bool> map(uint64_t position) const;
 
+  boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
+      uint64_t position) const;
+
   // return the stripe that maps the position.
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
@@ -156,6 +159,8 @@ struct SequencerConfig {
 
 // separate configuration from initialization. for instance, after deserializing
 // a protobuf into its view, don't immediately create and connect the sequencer.
+//
+// TODO: separate view with epoch from view without it
 class View {
  public:
   View() :
@@ -175,6 +180,7 @@ class View {
 
   ObjectMap object_map;
   boost::optional<SequencerConfig> seq_config;
+  uint64_t min_valid_position;
 
   std::shared_ptr<Sequencer> seq;
 
@@ -193,6 +199,10 @@ class Striper {
   std::shared_ptr<const View> view() const;
 
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
+      uint64_t position);
+
+  boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
+      const std::shared_ptr<const View>& view,
       uint64_t position);
 
   // proposes a new log view as a copy of the current view that has been
@@ -217,6 +227,13 @@ class Striper {
   // made active. on success, caller should check the sequencer of the current
   // view and propose again if necessary.
   int propose_sequencer();
+
+  // updates the current view's minimum valid position to be _at least_
+  // position. note that this also may expand the range of invalid entries. this
+  // method is used for trimming the log in the range [0, position-1]. this
+  // method will be return success immediately if the proposed position is <=
+  // the current minimum.
+  int advance_min_valid_position(uint64_t position);
 
  private:
   mutable std::mutex lock_;

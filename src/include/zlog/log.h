@@ -47,6 +47,16 @@ class Log {
   virtual int Trim(uint64_t position) = 0;
   virtual int trimAsync(uint64_t position, std::function<void(int)> cb) = 0;
 
+  /**
+   * trim the inclusive range [0, position].
+   *
+   * trim past tail?
+   * trime past last stripe?
+   * async_init_stripe to allocate next stripe?
+   */
+  virtual int trimTo(uint64_t position) = 0;
+  virtual int trimToAsync(uint64_t position, std::function<void(int)> cb) = 0;
+
  public:
   virtual int StripeWidth() = 0;
 
