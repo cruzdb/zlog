@@ -332,13 +332,11 @@ int RAMBackend::Write(const std::string& oid, const std::string& data,
 }
 
 int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position, bool trim_limit, bool trim_full)
+    const uint64_t position, bool trim_limit, bool trim_full)
 {
   if (trim_full && !trim_limit) {
     return -EINVAL;
   }
-
-  assert(!trim_full);
 
   if (oid.empty()) {
     return -EINVAL;
@@ -368,6 +366,16 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
       lobj->trim_limit = position;
   }
 
+  if (trim_full || trim_limit) {
+    for (auto it = lobj->entries.begin(); it != lobj->entries.end();) {
+      if (trim_full || it->first <= position) {
+        it = lobj->entries.erase(it);
+      } else {
+        it++;
+      }
+    }
+  }
+
   if (lobj->trim_limit && position <= *lobj->trim_limit) {
     return 0;
   }
@@ -384,6 +392,34 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
     entry.trimmed = true;
     entry.data.clear();
     lobj->maxpos = std::max(lobj->maxpos, position);
+  }
+
+  return 0;
+}
+
+int RAMBackend::Stat(const std::string& oid, size_t *size)
+{
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(std::numeric_limits<uint64_t>::max(), oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  assert(lobj);
+
+  size_t s = 0;
+  for (auto entry : lobj->entries) {
+    s += entry.second.data.size();
+  }
+
+  if (size) {
+    *size = s;
   }
 
   return 0;

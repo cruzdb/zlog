@@ -63,6 +63,8 @@ class RAMBackend : public Backend {
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
 
+  int Stat(const std::string& oid, size_t *size) override;
+
  private:
   struct LinkObject {
     std::string hoid;

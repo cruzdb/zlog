@@ -904,6 +904,26 @@ TEST_F(BackendTest, TrimLimit_MaxPos) {
   ASSERT_EQ(pos, 10002u);
 }
 
+TEST_F(BackendTest, TrimFull) {
+  ASSERT_EQ(backend->Seal("a", 1), 0);
+
+  size_t size1;
+  ASSERT_EQ(backend->Stat("a", &size1), 0);
+  ASSERT_EQ(size1, size_t(0));
+
+  for (int i = 0; i < 10; i++) {
+    ASSERT_EQ(backend->Write("a", "data", 1, i), 0);
+  }
+  ASSERT_EQ(backend->Stat("a", &size1), 0);
+  ASSERT_GT(size1, size_t(0));
+
+  ASSERT_EQ(backend->Trim("a", 1, 5000, true, true), 0);
+
+  size_t size2;
+  ASSERT_EQ(backend->Stat("a", &size2), 0);
+  ASSERT_GT(size1, size2);
+}
+
 TEST_F(BackendTest, Seal_Args) {
   ASSERT_EQ(backend->Seal("", 1), -EINVAL);
   ASSERT_EQ(backend->Seal("a", 0), -EINVAL);

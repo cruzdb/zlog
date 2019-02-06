@@ -64,6 +64,8 @@ class LMDBBackend : public Backend {
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
 
+  int Stat(const std::string& oid, size_t *size) override;
+
  private:
   std::map<std::string, std::string> options;
   MDB_env *env;

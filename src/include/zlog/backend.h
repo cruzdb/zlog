@@ -252,6 +252,20 @@ class Backend {
    */
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos_out, bool *empty_out) = 0;
+
+  /**
+   * Return the size of an object in bytes.
+   *
+   * Note that a backend may only return an estimate of the size, as an exact
+   * measurement may be difficult to calculate.
+   *
+   * @param oid
+   * @param size
+   *
+   * @return 0 or non-zero
+   * -ENOENT object doesn't exist / needs init
+   */
+  virtual int Stat(const std::string& oid, size_t *size) = 0;
 };
 
 }
