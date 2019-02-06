@@ -190,6 +190,8 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     }
   }
 
+  // TODO: actually free data in omap?
+
   entry.invalidate();
   ret = entry.write();
   if (ret < 0) {

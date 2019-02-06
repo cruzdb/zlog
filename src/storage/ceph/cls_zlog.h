@@ -7,12 +7,12 @@
 #include <rados/objclass.h>
 #include "storage/ceph/cls_zlog_generated.h"
 #include "fbs_helper.h"
+#include "common.h"
 
 #define ZLOG_MAX_VIEW_READS ((uint32_t)100)
 #define ZLOG_HEAD_HDR_KEY "zlog.head.header"
 #define ZLOG_VIEW_KEY_PREFIX "zlog.head.view."
 #define ZLOG_DATA_HDR_KEY "zlog.data.header"
-#define ZLOG_ENTRY_KEY_PREFIX "zlog.data.entry."
 
 namespace cls_zlog {
 
