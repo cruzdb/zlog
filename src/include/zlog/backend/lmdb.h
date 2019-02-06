@@ -94,6 +94,7 @@ class LMDBBackend : public Backend {
   struct LogEntry {
     bool trimmed;
     bool invalidated;
+    uint64_t position;
     LogEntry() : trimmed(false), invalidated(false) {}
   };
 
@@ -178,6 +179,13 @@ class LMDBBackend : public Backend {
       return Put(key, v, exclusive);
     }
 
+    int Delete(const std::string& key) {
+      MDB_val k;
+      k.mv_size = key.size();
+      k.mv_data = (void*)key.data();
+      return mdb_del(txn, be->db_obj, &k, NULL);
+    }
+
   private:
     bool startsWith(const MDB_val &val, const std::string &prefix) {
       return val.mv_size >= prefix.size()
@@ -191,7 +199,7 @@ class LMDBBackend : public Backend {
       uint64_t position)
   {
     std::stringstream ss;
-    ss << oid << "." << position;
+    ss << oid << ".entry." << position;
     return ss.str();
   }
 
