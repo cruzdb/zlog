@@ -146,7 +146,7 @@ ObjectMap::map_to(const uint64_t position) const
       break;
     }
 
-    const auto max_pos_base = stripe.max_position() - stripe.width() - 1;
+    const auto max_pos_base = stripe.max_position() - (stripe.width() - 1);
 
     for (uint32_t i = 0; i < stripe.width(); i++) {
       const auto max_pos = max_pos_base + i;
