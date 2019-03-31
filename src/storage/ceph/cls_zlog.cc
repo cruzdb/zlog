@@ -138,7 +138,7 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
 
   if (op->limit() && !op->force()) {
     CLS_ERR("ERROR: log_entry_invalidate(): limit implies force option");
-    return -EINVAL;
+    return -EIO;
   }
 
   cls_zlog::LogObjectHeader header(hctx);
