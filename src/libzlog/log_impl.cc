@@ -521,10 +521,11 @@ int TrimToOp::run()
           return ret;
         }
 
-        if (ret == 0)
-          continue;
-
-        // restart after view update. wildly inefficient :(
+        // part of trimming here means we may create objects that are
+        // immediately trimmed (holes, past eol). i suspect that there are an
+        // optimization here, but for now when we create a new object we'll
+        // restart the trim process and treat it like any other object. this is
+        // clearly, wildly, inefficient.
         restart = true;
         break;
       }
