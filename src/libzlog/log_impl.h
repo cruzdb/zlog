@@ -161,7 +161,7 @@ class TrimToOp : public LogOp {
   }
 
  private:
-  uint64_t position_;
+  const uint64_t position_;
   std::function<void(int)> cb_;
 };
 
