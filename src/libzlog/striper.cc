@@ -102,12 +102,6 @@ boost::optional<Stripe> ObjectMap::map_stripe(uint64_t position) const
   return boost::none;
 }
 
-// trim a single position vs trim from 0..N. do we fault in those objects? i
-// think that we can just trim what we find, but if we trim way past the end we
-// don't need to make new stripes? it would seem not to be necessary. but in
-// that case, perhaps we should also just skip truncating and just delete the
-// objects instead of special casing delete.
-
 std::pair<boost::optional<std::string>, bool>
 ObjectMap::map(const uint64_t position) const
 {
@@ -142,6 +136,7 @@ ObjectMap::map_to(const uint64_t position) const
 
     const auto min_pos_base = it->first;
 
+    // pos is below the minimum of this stripe. we're done
     if (min_pos_base > position) {
       break;
     }
@@ -155,6 +150,7 @@ ObjectMap::map_to(const uint64_t position) const
         continue;
       }
 
+      // pos may be the first/min position of the middle of the stripe
       const auto min_pos = min_pos_base + i;
       if (min_pos <= position) {
         objects.push_back(std::make_pair(oids[i], false));

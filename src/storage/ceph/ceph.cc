@@ -422,6 +422,7 @@ int CephBackend::Trim(const std::string& oid, uint64_t epoch,
 
   const std::string prefix(ZLOG_ENTRY_KEY_PREFIX);
 
+  // TODO: configure the batch size for deletion
   std::string start_after;
   while (true) {
     std::set<std::string> keys;

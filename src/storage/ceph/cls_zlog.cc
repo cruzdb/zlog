@@ -154,6 +154,7 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
+  // update the trim limit? actual gc is driven by the client
   if (op->limit()) {
     if (header.update_trim_limit(op->position())) {
       ret = header.write();
