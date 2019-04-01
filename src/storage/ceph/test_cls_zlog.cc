@@ -599,7 +599,7 @@ TEST_F(ClsZlogTest, InvalidateEntry_OptionCombos) {
   ASSERT_EQ(ret, 0);
 
   ret = entry_inval(2, 1, false, true);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, -EIO);
 
   ret = entry_inval(2, 2, true, false);
   ASSERT_EQ(ret, 0);
