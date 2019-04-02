@@ -1,5 +1,6 @@
 #include <numeric>
 #include <deque>
+#include "libzlog/log_impl.h"
 #include "test_libzlog.h"
 
 // TODO
@@ -245,6 +246,52 @@ TEST_P(LibZLogTest, Trim) {
   ASSERT_EQ(ret, 0);
   ret = log->Trim(70);
   ASSERT_EQ(ret, 0);
+}
+
+TEST_P(ZLogTest, TrimTo) {
+  options.stripe_width = 10;
+  options.stripe_slots = 100;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  // obj 0
+  int ret = log->Append("foo", nullptr);
+  ASSERT_EQ(ret, 0);
+
+  // obj 1
+  auto oid = li->striper.map(li->striper.view(), 1);
+  ASSERT_TRUE(oid);
+  size_t size;
+  ret = li->backend->Stat(*oid, &size);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(size, 0u);
+
+  // obj 0
+  oid = li->striper.map(li->striper.view(), 0);
+  ASSERT_TRUE(oid);
+  ret = li->backend->Stat(*oid, &size);
+  ASSERT_EQ(ret, 0);
+  ASSERT_GT(size, 0u);
+
+  ret = log->trimTo(1100);
+  ASSERT_EQ(ret, 0);
+  for (unsigned i = 0; i < 2000; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    if (i <= 1100) {
+      ASSERT_EQ(ret, -ENODATA);
+    } else {
+      // TODO: this is related to reading past eol
+      ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    }
+  }
+
+  // obj 0
+  oid = li->striper.map(li->striper.view(), 0);
+  ASSERT_TRUE(oid);
+  ret = li->backend->Stat(*oid, &size);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(size, 0u);
 }
 
 TEST_P(LibZLogCAPITest, Trim) {
