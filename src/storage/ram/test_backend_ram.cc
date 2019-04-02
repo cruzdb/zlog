@@ -18,7 +18,7 @@ void BackendTest::TearDown() {
   backend.reset();
 }
 
-void LibZLogTest::SetUp() {
+void ZLogTest::DoSetUp() {
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
     auto backend = std::unique_ptr<zlog::storage::ram::RAMBackend>(
@@ -42,17 +42,17 @@ void LibZLogTest::SetUp() {
   }
 }
 
-void LibZLogTest::TearDown() {
+void ZLogTest::TearDown() {
   if (log)
     delete log;
 }
 
-int LibZLogTest::reopen()
+int ZLogTest::reopen()
 {
   return -EOPNOTSUPP;
 }
 
-std::string LibZLogTest::backend()
+std::string ZLogTest::backend()
 {
   return "ram";
 }
@@ -74,7 +74,7 @@ void LibZLogCAPITest::TearDown() {
     zlog_destroy(log);
 }
 
-INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
+INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
     ::testing::Values(
       std::make_tuple(true, true),
       std::make_tuple(false, true)));

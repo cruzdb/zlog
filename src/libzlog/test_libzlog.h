@@ -5,11 +5,11 @@
 #include "zlog/capi.h"
 
 // C++ API
-class LibZLogTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
+class ZLogTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
  protected:
   struct Context;
 
-  void SetUp() override;
+  void DoSetUp();
   void TearDown() override;
 
   zlog::Log *log = nullptr;
@@ -26,6 +26,13 @@ class LibZLogTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
 
   bool exclusive() {
     return std::get<1>(GetParam());
+  }
+};
+
+class LibZLogTest : public ZLogTest {
+ protected:
+  void SetUp() override {
+    DoSetUp();
   }
 };
 
