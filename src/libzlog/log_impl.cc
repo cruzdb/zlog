@@ -537,6 +537,8 @@ int TrimToOp::run()
 
     if (restart)
       continue;
+
+    break;
   }
 
   return 0;
