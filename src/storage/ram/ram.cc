@@ -366,19 +366,24 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
       lobj->trim_limit = position;
   }
 
-  if (trim_full || trim_limit) {
-    for (auto it = lobj->entries.begin(); it != lobj->entries.end();) {
-      if (trim_full || it->first <= position) {
-        it = lobj->entries.erase(it);
-      } else {
-        it++;
-      }
-    }
+  /*
+   * normally we could also remove entries if _just_ trim limit was set.
+   * however, the ceph backend has an issue where we can't clear out space for
+   * partial objects (see ceph.cc for more info). in order to avoid special
+   * casing tests, we'll mimic the same limitation here.
+   */
+  if (trim_full) {
+    lobj->entries.clear();
+    return 0;
   }
 
   if (lobj->trim_limit && position <= *lobj->trim_limit) {
     return 0;
   }
+
+  // removing a single position
+  assert(!trim_limit);
+  assert(!trim_full);
 
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {

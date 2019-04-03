@@ -600,7 +600,10 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
     //
     // TODO: trim full is really redundant if we know trim_limit is correctly
     // calculated in the client.
-    if (trim_full || trim_limit) {
+    //
+    // only removing data when trim full is set to behave like ceph backend.
+    // see note on trim method in ram.cc.
+    if (trim_full) {
       std::stringstream ss;
       ss << oid << ".entry.";
       auto prefix = ss.str();
@@ -626,11 +629,8 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
         }
 
         assert(val.mv_size >= sizeof(LogEntry));
-        LogEntry *entry = (LogEntry*)val.mv_data;
 
-        if (trim_full || entry->position <= position) {
-          delete_keys.push_back(key);
-        }
+        delete_keys.push_back(key);
       }
 
       for (auto key : delete_keys) {
@@ -640,6 +640,8 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
           return ret;
         }
       }
+
+      return txn.Commit();
     }
 
     if (lobj.trim_limit >= 0 && position <= uint64_t(lobj.trim_limit)) {
@@ -649,6 +651,10 @@ int LMDBBackend::Trim(const std::string& oid, uint64_t epoch,
       return 0;
     }
   }
+
+  // removing a single position
+  assert(!trim_limit);
+  assert(!trim_full);
 
   LogEntry entry;
 
