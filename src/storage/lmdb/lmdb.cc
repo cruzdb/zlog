@@ -727,6 +727,24 @@ int LMDBBackend::Fill(const std::string& oid, uint64_t epoch,
     return ret;
   }
 
+  {
+    MDB_val val;
+    ret = txn.Get(oid, val);
+    if (ret) {
+      txn.Abort();
+      return ret;
+    }
+
+    LogObject lobj;
+    assert(val.mv_size == sizeof(lobj));
+    lobj = *((LogObject*)val.mv_data);
+
+    if (lobj.trim_limit >= 0 && position <= uint64_t(lobj.trim_limit)) {
+      txn.Abort();
+      return 0;
+    }
+  }
+
   LogEntry entry;
 
   MDB_val val;
