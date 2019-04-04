@@ -410,7 +410,8 @@ int TrimOp::run()
       continue;
     }
 
-    int ret = log_->backend->Trim(*oid, view->epoch(), position_);
+    int ret = log_->backend->Trim(*oid, view->epoch(), position_,
+        false, false);
 
     if (ret == -ESPIPE) {
       log_->striper.update_current_view(view->epoch());
@@ -460,6 +461,120 @@ int LogImpl::Trim(const uint64_t position)
 int LogImpl::trimAsync(uint64_t position, std::function<void(int)> cb)
 {
   auto op = std::unique_ptr<LogOp>(new TrimOp(this, position, cb));
+  queue_op(std::move(op));
+  return 0;
+}
+
+int TrimToOp::run()
+{
+  while (true) {
+    const auto view = log_->striper.view();
+    // note that we are invalidating the range [0, position_], inclusive. this
+    // results in a _valid_ range of [_position+1, ...) which is why we _advance
+    // the valid position_ to position_ + 1.
+    if (position_ >= view->min_valid_position) {
+      int ret = log_->striper.advance_min_valid_position(position_ + 1);
+      if (ret) {
+        return ret;
+      }
+      continue;
+    }
+
+    // get all objects that map positions in the trim range
+    // TODO: this could become large. at least make this an iterator, but better
+    // would be to also skip objects already processed.
+    const auto objects = log_->striper.map_to(view, position_);
+    if (!objects) {
+      // expand view may also attempt to initialize new stripes. this is
+      // correct, but inefficient. however, trimming/space reclaiming right now
+      // has a lot of ineffiencies and this can be address in a later revision
+      // that will address the problem of trimming/space reclaiming/object
+      // deletion/view trimming more completely.
+      int ret = log_->striper.try_expand_view(position_);
+      if (ret) {
+        return ret;
+      }
+      continue;
+    }
+
+    assert(objects && !objects->empty());
+
+    bool restart = false;
+    for (auto obj : *objects) {
+      const auto oid = obj.first;
+      const auto trim_full = obj.second;
+
+      // handles setting up range trim and omap/bytestream space reclaim etc..
+      int ret = log_->backend->Trim(oid, view->epoch(), position_,
+          true, trim_full);
+
+      if (ret == -ESPIPE) {
+        log_->striper.update_current_view(view->epoch());
+        // restart after view update. wildly inefficient :(
+        restart = true;
+        break;
+      }
+
+      if (ret == -ENOENT) {
+        int ret = log_->backend->Seal(oid, view->epoch());
+        if (ret && ret != -ESPIPE) {
+          return ret;
+        }
+
+        // part of trimming here means we may create objects that are
+        // immediately trimmed (holes, past eol). i suspect that there are an
+        // optimization here, but for now when we create a new object we'll
+        // restart the trim process and treat it like any other object. this is
+        // clearly, wildly, inefficient.
+        restart = true;
+        break;
+      }
+
+      if (ret != 0) {
+        return ret;
+      }
+    }
+
+    if (restart)
+      continue;
+
+    break;
+  }
+
+  return 0;
+}
+
+int LogImpl::trimTo(const uint64_t position)
+{
+  struct {
+    int ret;
+    bool done = false;
+    std::mutex lock;
+    std::condition_variable cond;
+  } ctx;
+
+  int ret = trimToAsync(position, [&](int ret) {
+    {
+      std::lock_guard<std::mutex> lk(ctx.lock);
+      ctx.ret = ret;
+      ctx.done = true;
+      ctx.cond.notify_one();
+    }
+  });
+
+  if (ret) {
+    return ret;
+  }
+
+  std::unique_lock<std::mutex> lk(ctx.lock);
+  ctx.cond.wait(lk, [&] { return ctx.done; });
+
+  return ctx.ret;
+}
+
+int LogImpl::trimToAsync(uint64_t position, std::function<void(int)> cb)
+{
+  auto op = std::unique_ptr<LogOp>(new TrimToOp(this, position, cb));
   queue_op(std::move(op));
   return 0;
 }

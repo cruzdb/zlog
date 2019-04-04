@@ -49,7 +49,7 @@ struct UniquePoolContext {
 };
 
 
-struct LibZLogTest::Context : public UniquePoolContext {
+struct ZLogTest::Context : public UniquePoolContext {
   librados::IoCtx ioctxpp;
   bool close_ioctxpp = false;
 
@@ -101,7 +101,7 @@ void BackendTest::TearDown() {
     delete context;
 }
 
-void LibZLogTest::SetUp() {
+void ZLogTest::DoSetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init(lowlevel()));
 
@@ -137,19 +137,19 @@ void LibZLogTest::SetUp() {
   }
 }
 
-void LibZLogTest::TearDown() {
+void ZLogTest::TearDown() {
   if (log)
     delete log;
   if (context)
     delete context;
 }
 
-int LibZLogTest::reopen()
+int ZLogTest::reopen()
 {
   return -EOPNOTSUPP;
 }
 
-std::string LibZLogTest::backend()
+std::string ZLogTest::backend()
 {
   return "ceph";
 }
@@ -184,7 +184,7 @@ void LibZLogCAPITest::TearDown() {
   if (context)
     delete context;
 }
-INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
+INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
     ::testing::Values(
       std::make_tuple(true, true),
       std::make_tuple(false, true)));

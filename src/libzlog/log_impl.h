@@ -144,6 +144,27 @@ class AppendOp : public LogOp {
   std::function<void(int, uint64_t)> cb_;
 };
 
+class TrimToOp : public LogOp {
+ public:
+  TrimToOp(LogImpl *log, uint64_t position, std::function<void(int)> cb) :
+    LogOp(log),
+    position_(position),
+    cb_(cb)
+  {}
+
+  int run() override;
+
+  void callback(int ret) override {
+    if (cb_) {
+      cb_(ret);
+    }
+  }
+
+ private:
+  const uint64_t position_;
+  std::function<void(int)> cb_;
+};
+
 class LogImpl : public Log {
  public:
   LogImpl(const LogImpl&) = delete;
@@ -187,6 +208,8 @@ class LogImpl : public Log {
       std::function<void(int, std::string&)> cb) override;
   int fillAsync(uint64_t position, std::function<void(int)> cb) override;
   int trimAsync(uint64_t position, std::function<void(int)> cb) override;
+  int trimTo(uint64_t position) override;
+  int trimToAsync(uint64_t position, std::function<void(int)> cb) override;
 
  public:
   int StripeWidth() override {
@@ -218,5 +241,9 @@ class LogImpl : public Log {
 
   const Options options;
 };
+
+int create_or_open(const Options& options,
+    Backend *backend, const std::string& name,
+    std::string *hoid_out, std::string *prefix_out);
 
 }

@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <boost/variant.hpp>
+#include <boost/optional.hpp>
 #include <unordered_map>
 #include "zlog/backend.h"
 
@@ -54,13 +55,15 @@ class RAMBackend : public Backend {
       uint64_t position) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) override;
+      uint64_t position, bool trim_limit, bool trim_full) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;
 
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
+
+  int Stat(const std::string& oid, size_t *size) override;
 
  private:
   struct LinkObject {
@@ -85,6 +88,7 @@ class RAMBackend : public Backend {
     uint64_t epoch;
     uint64_t maxpos;
     std::unordered_map<uint64_t, LogEntry> entries;
+    boost::optional<uint64_t> trim_limit;
     LogObject() : epoch(0), maxpos(0) {}
   };
 

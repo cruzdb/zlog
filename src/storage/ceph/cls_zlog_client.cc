@@ -34,11 +34,11 @@ void cls_zlog_write(librados::ObjectWriteOperation& op, uint64_t epoch,
 }
 
 void cls_zlog_invalidate(librados::ObjectWriteOperation& op,
-    uint64_t epoch, uint64_t position, bool force)
+    uint64_t epoch, uint64_t position, bool force, bool limit)
 {
   flatbuffers::FlatBufferBuilder fbb;
   auto call = cls_zlog::fbs::CreateInvalidateEntryOp(fbb,
-      epoch, position, force);
+      epoch, position, force, limit);
   fbb.Finish(call);
 
   ceph::bufferlist bl;

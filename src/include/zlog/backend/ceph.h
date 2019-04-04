@@ -44,13 +44,15 @@ class CephBackend : public Backend {
       uint64_t position) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) override;
+      uint64_t position, bool trim_limit, bool trim_full) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;
 
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
+
+  int Stat(const std::string& oid, size_t *size) override;
 
  private:
   std::map<std::string, std::string> options;

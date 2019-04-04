@@ -25,6 +25,12 @@ static int log_entry_read(cls_method_context_t hctx, ceph::bufferlist *in,
     return ret;
   }
 
+  if (header.position_trimmed(op->position())) {
+    CLS_LOG(10, "log_entry_read(): position %llu in trim range",
+        op->position());
+    return -ENODATA;
+  }
+
   cls_zlog::LogEntry entry(hctx, op->position());
   ret = entry.read();
   if (ret < 0) {
@@ -71,6 +77,12 @@ static int log_entry_write(cls_method_context_t hctx, ceph::bufferlist *in,
   if (ret < 0) {
     CLS_LOG(10, "log_entry_write(): failed epoch guard %d", ret);
     return ret;
+  }
+
+  if (header.position_trimmed(op->position())) {
+    CLS_LOG(10, "log_entry_write(): position %llu in trim range",
+        op->position());
+    return -EROFS;
   }
 
   cls_zlog::LogEntry entry(hctx, op->position());
@@ -124,6 +136,11 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
     return -EINVAL;
   }
 
+  if (op->limit() && !op->force()) {
+    CLS_ERR("ERROR: log_entry_invalidate(): limit implies force option");
+    return -EIO;
+  }
+
   cls_zlog::LogObjectHeader header(hctx);
   int ret = header.read();
   if (ret < 0) {
@@ -135,6 +152,25 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
   if (ret < 0) {
     CLS_LOG(10, "log_entry_invalidate(): failed epoch guard %d", ret);
     return ret;
+  }
+
+  // update the trim limit? actual gc is driven by the client
+  if (op->limit()) {
+    if (header.update_trim_limit(op->position())) {
+      ret = header.write();
+      if (ret < 0) {
+        CLS_ERR("ERROR: log_entry_invalidate(): error writing header %d", ret);
+        return ret;
+      }
+    }
+    CLS_LOG(10, "log_entry_invalidate(): trim limit set %llu", op->position());
+    return 0;
+  }
+
+  if (header.position_trimmed(op->position())) {
+    CLS_LOG(10, "log_entry_invalidate(): position %llu in trim range",
+        op->position());
+    return 0;
   }
 
   cls_zlog::LogEntry entry(hctx, op->position());
@@ -154,6 +190,8 @@ static int log_entry_invalidate(cls_method_context_t hctx, ceph::bufferlist *in,
       return -EROFS;
     }
   }
+
+  // TODO: actually free data in omap?
 
   entry.invalidate();
   ret = entry.write();

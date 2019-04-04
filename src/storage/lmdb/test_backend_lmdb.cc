@@ -51,10 +51,10 @@ void BackendTest::TearDown() {
     delete context;
 }
 
-struct LibZLogTest::Context : public DBPathContext {
+struct ZLogTest::Context : public DBPathContext {
 };
 
-void LibZLogTest::SetUp() {
+void ZLogTest::DoSetUp() {
   context = new Context;
 
   context->dbpath = strdup("/tmp/zlog.db.XXXXXX");
@@ -93,14 +93,14 @@ void LibZLogTest::SetUp() {
   }
 }
 
-void LibZLogTest::TearDown() {
+void ZLogTest::TearDown() {
   if (log)
     delete log;
   if (context)
     delete context;
 }
 
-int LibZLogTest::reopen()
+int ZLogTest::reopen()
 {
   // close the current log before creating a new one. otherwise civetweb
   // complains about a bunch of stuff like ports being reused.
@@ -145,7 +145,7 @@ int LibZLogTest::reopen()
   return 0;
 }
 
-std::string LibZLogTest::backend()
+std::string ZLogTest::backend()
 {
   return "lmdb";
 }
@@ -185,7 +185,7 @@ void LibZLogCAPITest::TearDown() {
     delete context;
 }
 
-INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
+INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
     ::testing::Values(
       std::make_tuple(true, true),
       std::make_tuple(false, true)));

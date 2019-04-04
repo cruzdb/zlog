@@ -56,13 +56,15 @@ class LMDBBackend : public Backend {
       uint64_t position) override;
 
   int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) override;
+      uint64_t position, bool trim_limit, bool trim_full) override;
 
   int Seal(const std::string& oid,
       uint64_t epoch) override;
 
   int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos, bool *empty) override;
+
+  int Stat(const std::string& oid, size_t *size) override;
 
  private:
   std::map<std::string, std::string> options;
@@ -81,7 +83,8 @@ class LMDBBackend : public Backend {
 
   struct LogObject {
     uint64_t epoch;
-    LogObject() : epoch(0) {}
+    int64_t trim_limit;
+    LogObject() : epoch(0), trim_limit(-1) {}
   };
 
   struct LogMaxPos {
@@ -91,6 +94,7 @@ class LMDBBackend : public Backend {
   struct LogEntry {
     bool trimmed;
     bool invalidated;
+    uint64_t position;
     LogEntry() : trimmed(false), invalidated(false) {}
   };
 
@@ -175,6 +179,13 @@ class LMDBBackend : public Backend {
       return Put(key, v, exclusive);
     }
 
+    int Delete(const std::string& key) {
+      MDB_val k;
+      k.mv_size = key.size();
+      k.mv_data = (void*)key.data();
+      return mdb_del(txn, be->db_obj, &k, NULL);
+    }
+
   private:
     bool startsWith(const MDB_val &val, const std::string &prefix) {
       return val.mv_size >= prefix.size()
@@ -188,7 +199,7 @@ class LMDBBackend : public Backend {
       uint64_t position)
   {
     std::stringstream ss;
-    ss << oid << "." << position;
+    ss << oid << ".entry." << position;
     return ss.str();
   }
 

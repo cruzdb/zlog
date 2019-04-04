@@ -13,6 +13,7 @@ table LogObjectHeader {
   empty:bool;
   max_pos:uint64;
   omap_max_size:int32;
+  trim_limit:int64;
 }
 
 table UniqueId {
@@ -67,6 +68,7 @@ table InvalidateEntryOp {
   epoch:uint64;
   position:uint64;
   force:bool;
+  limit:bool;
 }
 
 table SealOp {

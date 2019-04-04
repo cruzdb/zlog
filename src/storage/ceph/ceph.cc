@@ -8,6 +8,7 @@
 #include "cls_zlog_client.h"
 #include "storage/ceph/cls_zlog_generated.h"
 #include "fbs_helper.h"
+#include "common.h"
 
 namespace zlog {
 namespace storage {
@@ -386,20 +387,127 @@ int CephBackend::Fill(const std::string& oid, uint64_t epoch,
   }
 
   librados::ObjectWriteOperation op;
-  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, false);
+  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, false, false);
   return ioctx_->operate(oid, &op);
 }
 
 int CephBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    uint64_t position, bool trim_limit, bool trim_full)
 {
+  if (trim_full && !trim_limit) {
+    return -EINVAL;
+  }
+
   if (oid.empty()) {
     return -EINVAL;
   }
 
   librados::ObjectWriteOperation op;
-  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, true);
-  return ioctx_->operate(oid, &op);
+  cls_zlog_client::cls_zlog_invalidate(op, epoch, position, true, trim_limit);
+  int ret = ioctx_->operate(oid, &op);
+  if (ret < 0) {
+    return ret;
+  }
+
+  // we only reclaim space when we do a trim_full. the reason is that right now
+  // we can't easily rewrite the bytestream to deal with compaction / sparse
+  // trims. so we can only trim a full object. we could remove the metadata for
+  // those entries, but then we wouldn't have that data available for compaction
+  // in the future. there might be some cases where we'd want the added
+  // complexity to support some forms of partial trimming, but we'll handle
+  // these on a case by case basis for now.
+  if (!trim_full) {
+    return 0;
+  }
+
+  const std::string prefix(ZLOG_ENTRY_KEY_PREFIX);
+
+  // TODO: configure the batch size for deletion
+  std::string start_after;
+  while (true) {
+    std::set<std::string> keys;
+    ret = ioctx_->omap_get_keys(oid, start_after, 1, &keys);
+    if (ret < 0) {
+      return ret;
+    }
+
+    if (keys.empty()) {
+      break;
+    }
+
+    start_after = *keys.rbegin();
+
+    for (auto it = keys.begin(); it != keys.end();) {
+      auto pos = it->find(prefix);
+      if (pos == std::string::npos) {
+        it = keys.erase(it);
+        continue;
+      }
+      if (pos != 0) {
+        std::cerr << "invalid" << std::endl;
+        return -EIO;
+      }
+      auto spos = it->substr(prefix.length(), std::string::npos);
+      uint64_t ipos;
+      try {
+        ipos = boost::lexical_cast<uint64_t>(spos);
+      } catch (const boost::bad_lexical_cast& e) {
+        return -EIO;
+      }
+      // normally we could skip, but trim_full should imply this property
+      if (ipos > position) {
+        return -EIO;
+      }
+      it++;
+    }
+
+    if (keys.empty()) {
+      continue;
+    }
+
+    ret = ioctx_->omap_rm_keys(oid, keys);
+    if (ret) {
+      return ret;
+    }
+  }
+
+  return ioctx_->trunc(oid, 0);
+}
+
+int CephBackend::Stat(const std::string& oid, size_t *size)
+{
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  size_t s;
+  int ret = ioctx_->stat(oid, &s, NULL);
+  if (ret) {
+    return ret;
+  }
+
+  bool more = true;
+  std::string start_after = "";
+  while (more) {
+    std::map<std::string, ::ceph::bufferlist> out;
+    ret = ioctx_->omap_get_vals2(oid, start_after, 1, &out, &more);
+    if (ret) {
+      return ret;
+    }
+    if (out.empty())
+      break;
+    start_after = out.rbegin()->first;
+    for (auto& kv : out) {
+      // add in a bit for the entry header. also important if the entry is
+      // actually zero length.
+      s += size_t(20);
+      s += kv.second.length();
+    }
+  }
+
+  *size = s;
+
+  return 0;
 }
 
 int CephBackend::Seal(const std::string& oid, uint64_t epoch)

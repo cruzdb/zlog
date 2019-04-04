@@ -202,11 +202,13 @@ class Backend {
       uint64_t position) = 0;
 
   /**
-   * Mark a log position as unused.
+   * Mark positions as unused and reclaim storage space.
    *
    * @param oid
    * @param epoch
    * @param position
+   * @param trim_limit
+   * @param trim_full
    *
    * @return 0 (idempotent) or non-zero
    * -EINVAL bad input params
@@ -214,7 +216,8 @@ class Backend {
    * -ESPIPE stale epoch
    */
   virtual int Trim(const std::string& oid, uint64_t epoch,
-      uint64_t position) = 0;
+      uint64_t position, bool trim_limit = false,
+      bool trim_full = false) = 0;
 
   /**
    * Seal / initialize a log entries object.
@@ -231,6 +234,12 @@ class Backend {
   /**
    * Return the maximum position (if any) written to an object.
    *
+   * Note that the maximum position includes positions trimmed and filled. In
+   * addition, the maximum includes any trim limit that has been set, which may
+   * be larger than the addressable position of the object. If a trim limit has
+   * been set and no positions have been explicitly written, trimmed, or filled,
+   * the object is still reported as non-empty.
+   *
    * @param oid
    * @param epoch
    * @param pos_out
@@ -243,6 +252,20 @@ class Backend {
    */
   virtual int MaxPos(const std::string& oid, uint64_t epoch,
       uint64_t *pos_out, bool *empty_out) = 0;
+
+  /**
+   * Return the size of an object in bytes.
+   *
+   * Note that a backend may only return an estimate of the size, as an exact
+   * measurement may be difficult to calculate.
+   *
+   * @param oid
+   * @param size
+   *
+   * @return 0 or non-zero
+   * -ENOENT object doesn't exist / needs init
+   */
+  virtual int Stat(const std::string& oid, size_t *size) = 0;
 };
 
 }

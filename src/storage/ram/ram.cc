@@ -269,6 +269,10 @@ int RAMBackend::Read(const std::string& oid, uint64_t epoch,
   }
 
   if (lobj) {
+    if (lobj->trim_limit && position <= *lobj->trim_limit) {
+      return -ENODATA;
+    }
+
     const auto it = lobj->entries.find(position);
     if (it == lobj->entries.end())
       return -ERANGE;
@@ -309,6 +313,10 @@ int RAMBackend::Write(const std::string& oid, const std::string& data,
     lobj = &boost::get<LogObject>(ret.first->second);
   }
 
+  if (lobj->trim_limit && position <= *lobj->trim_limit) {
+    return -EROFS;
+  }
+
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {
     LogEntry entry;
@@ -324,8 +332,12 @@ int RAMBackend::Write(const std::string& oid, const std::string& data,
 }
 
 int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
-    uint64_t position)
+    const uint64_t position, bool trim_limit, bool trim_full)
 {
+  if (trim_full && !trim_limit) {
+    return -EINVAL;
+  }
+
   if (oid.empty()) {
     return -EINVAL;
   }
@@ -347,6 +359,32 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
     lobj = &boost::get<LogObject>(ret.first->second);
   }
 
+  if (trim_limit) {
+    if (lobj->trim_limit)
+      lobj->trim_limit = std::max(position, *lobj->trim_limit);
+    else
+      lobj->trim_limit = position;
+  }
+
+  /*
+   * normally we could also remove entries if _just_ trim limit was set.
+   * however, the ceph backend has an issue where we can't clear out space for
+   * partial objects (see ceph.cc for more info). in order to avoid special
+   * casing tests, we'll mimic the same limitation here.
+   */
+  if (trim_full) {
+    lobj->entries.clear();
+    return 0;
+  }
+
+  if (lobj->trim_limit && position <= *lobj->trim_limit) {
+    return 0;
+  }
+
+  // removing a single position
+  assert(!trim_limit);
+  assert(!trim_full);
+
   auto it = lobj->entries.find(position);
   if (it == lobj->entries.end()) {
     LogEntry entry;
@@ -359,6 +397,34 @@ int RAMBackend::Trim(const std::string& oid, uint64_t epoch,
     entry.trimmed = true;
     entry.data.clear();
     lobj->maxpos = std::max(lobj->maxpos, position);
+  }
+
+  return 0;
+}
+
+int RAMBackend::Stat(const std::string& oid, size_t *size)
+{
+  if (oid.empty()) {
+    return -EINVAL;
+  }
+
+  std::lock_guard<std::mutex> lk(lock_);
+
+  LogObject *lobj = nullptr;
+  int ret = CheckEpoch(std::numeric_limits<uint64_t>::max(), oid, false, lobj);
+  if (ret) {
+    return ret;
+  }
+
+  assert(lobj);
+
+  size_t s = 0;
+  for (auto entry : lobj->entries) {
+    s += entry.second.data.size();
+  }
+
+  if (size) {
+    *size = s;
   }
 
   return 0;
@@ -386,6 +452,10 @@ int RAMBackend::Fill(const std::string& oid, uint64_t epoch,
   if (!lobj) {
     auto ret = objects_.emplace(oid, LogObject());
     lobj = &boost::get<LogObject>(ret.first->second);
+  }
+
+  if (lobj->trim_limit && position <= *lobj->trim_limit) {
+    return 0;
   }
 
   auto it = lobj->entries.find(position);
@@ -453,9 +523,19 @@ int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
 
   if (lobj) {
     bool is_empty = lobj->entries.empty();
-    if (!is_empty)
+    if (!is_empty) {
+      *empty = false;
       *pos = lobj->maxpos;
-    *empty = is_empty;
+      if (lobj->trim_limit)
+        *pos = std::max(*pos, *lobj->trim_limit);
+    } else {
+      if (lobj->trim_limit) {
+        *empty = false;
+        *pos = *lobj->trim_limit;
+      } else {
+        *empty = true;
+      }
+    }
   } else {
     *empty = true;
   }

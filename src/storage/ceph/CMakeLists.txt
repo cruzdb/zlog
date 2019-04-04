@@ -1,21 +1,21 @@
 build_flatbuffers("cls_zlog.fbs" "" schemas "" "${CMAKE_CURRENT_BINARY_DIR}" "" "")
 
 if(BUILD_CEPH_BACKEND)
-add_library(cls_zlog_client SHARED cls_zlog_client.cc)
-target_link_libraries(cls_zlog_client rados)
+add_library(cls_zlog_client OBJECT cls_zlog_client.cc)
 target_include_directories(cls_zlog_client
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
     PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
 )
+set_property(TARGET cls_zlog_client PROPERTY POSITION_INDEPENDENT_CODE ON)
 add_dependencies(cls_zlog_client schemas)
-install(TARGETS cls_zlog_client DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-add_library(zlog_backend_ceph SHARED ceph.cc)
-target_link_libraries(zlog_backend_ceph
-    cls_zlog_client
-    rados)
+add_library(zlog_backend_ceph SHARED
+  ceph.cc
+  $<TARGET_OBJECTS:cls_zlog_client>)
+target_link_libraries(zlog_backend_ceph rados)
 target_include_directories(zlog_backend_ceph
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
+    PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
 )
 set_target_properties(zlog_backend_ceph PROPERTIES
   OUTPUT_NAME zlog_backend_ceph
@@ -25,13 +25,14 @@ install(TARGETS zlog_backend_ceph DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 add_executable(zlog_test_cls_zlog
   test_cls_zlog.cc
-  ../../port/stack_trace.cc)
+  ../../port/stack_trace.cc
+  $<TARGET_OBJECTS:cls_zlog_client>)
 target_link_libraries(zlog_test_cls_zlog
-    cls_zlog_client
     rados
     gtest)
 target_include_directories(zlog_test_cls_zlog
     PUBLIC ${LIBRADOS_INCLUDE_DIRS}
+    PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
 )
 install(TARGETS zlog_test_cls_zlog DESTINATION bin)
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")

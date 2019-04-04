@@ -99,7 +99,6 @@ rm -rf %{buildroot}
 %files -n zlog-ceph
 %{_bindir}/zlog_test_backend_ceph
 %{_bindir}/zlog_test_cls_zlog
-%{_libdir}/libcls_zlog_client.so
 %{_libdir}/libzlog_backend_ceph.so.*
 
 %files -n zlog-ceph-devel

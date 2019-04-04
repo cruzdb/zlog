@@ -58,9 +58,9 @@ class ClsZlogTest : public ::testing::Test {
   }
 
   int entry_inval(uint64_t epoch, uint64_t pos,
-      bool force, const std::string& oid = "obj") {
+      bool force, bool limit = false, const std::string& oid = "obj") {
     librados::ObjectWriteOperation op;
-    cls_zlog_client::cls_zlog_invalidate(op, epoch, pos, force);
+    cls_zlog_client::cls_zlog_invalidate(op, epoch, pos, force, limit);
     return ioctx.operate(oid, &op);
   }
 
@@ -365,6 +365,46 @@ TEST_F(ClsZlogTest, ReadEntry_SuccessSealed) {
   ASSERT_TRUE(memcmp(bl.c_str(), bl2.c_str(), bl.length()) == 0);
 }
 
+TEST_F(ClsZlogTest, ReadEntry_TrimLimit) {
+  int ret = entry_seal(2);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  ret = entry_write(2, 20, bl);
+  ASSERT_EQ(ret, 0);
+  bl.clear();
+  ret = entry_read(2, 20, bl);
+  ASSERT_EQ(ret, 0);
+  bl.clear();
+  ret = entry_read(2, 21, bl);
+  ASSERT_EQ(ret, -ERANGE);
+
+  ret = entry_inval(2, 100, true, true);
+  ASSERT_EQ(ret, 0);
+
+  ret = entry_read(2, 100, bl);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = entry_read(2, 99, bl);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = entry_read(2, 19, bl);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = entry_read(2, 20, bl);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = entry_read(2, 21, bl);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = entry_read(2, 1, bl);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = entry_read(2, 0, bl);
+  ASSERT_EQ(ret, -ENODATA);
+
+  bl.clear();
+  ret = entry_write(2, 120, bl);
+  ASSERT_EQ(ret, 0);
+  bl.clear();
+  ret = entry_read(2, 120, bl);
+  ASSERT_EQ(ret, 0);
+}
+
 TEST_F(ClsZlogTest, WriteEntry_BadInput) {
   ceph::bufferlist inbl, outbl;
   inbl.append("foo", strlen("foo"));
@@ -502,11 +542,70 @@ TEST_F(ClsZlogTest, WriteEntry_Exists) {
   ASSERT_EQ(ret, -EROFS);
 }
 
+TEST_F(ClsZlogTest, WriteEntry_TrimLimit) {
+  int ret = entry_seal(2);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  ret = entry_write(2, 20, bl);
+  ASSERT_EQ(ret, 0);
+  bl.clear();
+  ret = entry_read(2, 20, bl);
+  ASSERT_EQ(ret, 0);
+
+  ret = entry_inval(2, 100, true, true);
+  ASSERT_EQ(ret, 0);
+
+  bl.clear();
+  ret = entry_write(2, 100, bl);
+  ASSERT_EQ(ret, -EROFS);
+  bl.clear();
+  ret = entry_write(2, 99, bl);
+  ASSERT_EQ(ret, -EROFS);
+  bl.clear();
+  ret = entry_write(2, 20, bl);
+  ASSERT_EQ(ret, -EROFS);
+  bl.clear();
+  ret = entry_write(2, 21, bl);
+  ASSERT_EQ(ret, -EROFS);
+  bl.clear();
+  ret = entry_write(2, 1, bl);
+  ASSERT_EQ(ret, -EROFS);
+  bl.clear();
+  ret = entry_write(2, 0, bl);
+  ASSERT_EQ(ret, -EROFS);
+
+  bl.clear();
+  ret = entry_write(2, 101, bl);
+  ASSERT_EQ(ret, 0);
+  bl.clear();
+  ret = entry_write(2, 105, bl);
+  ASSERT_EQ(ret, 0);
+}
+
 TEST_F(ClsZlogTest, InvalidateEntry_BadInput) {
   ceph::bufferlist inbl, outbl;
   inbl.append("foo", strlen("foo"));
   int ret = exec("entry_invalidate", inbl, outbl);
   ASSERT_EQ(ret, -EINVAL);
+}
+
+TEST_F(ClsZlogTest, InvalidateEntry_OptionCombos) {
+  int ret = entry_seal(2);
+  ASSERT_EQ(ret, 0);
+
+  // force, limit
+  ret = entry_inval(2, 0, false, false);
+  ASSERT_EQ(ret, 0);
+
+  ret = entry_inval(2, 1, false, true);
+  ASSERT_EQ(ret, -EIO);
+
+  ret = entry_inval(2, 2, true, false);
+  ASSERT_EQ(ret, 0);
+
+  ret = entry_inval(2, 3, true, true);
+  ASSERT_EQ(ret, 0);
 }
 
 TEST_F(ClsZlogTest, InvalidateEntry_MissingHeader) {
@@ -667,6 +766,62 @@ TEST_F(ClsZlogTest, InvalidateEntry_Force) {
   ASSERT_EQ(ret, 0);
   ret = entry_inval(1, 160, false);
   ASSERT_EQ(ret, 0);
+}
+
+TEST_F(ClsZlogTest, InvalidateEntry_Range) {
+  int ret = entry_seal(2);
+  ASSERT_EQ(ret, 0);
+
+  ceph::bufferlist bl;
+  ret = entry_write(2, 20, bl);
+  ASSERT_EQ(ret, 0);
+  bl.clear();
+  ret = entry_read(2, 20, bl);
+  ASSERT_EQ(ret, 0);
+
+  ret = entry_inval(2, 100, true, true);
+  ASSERT_EQ(ret, 0);
+
+  ret = entry_inval(2, 100, true);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 100, false);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 99, true);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 99, false);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 33, true);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 33, false);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 0, true);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 0, false);
+  ASSERT_EQ(ret, 0);
+
+  bl.clear();
+  ret = entry_read(2, 40, bl);
+  ASSERT_EQ(ret, -ENODATA);
+
+  bl.clear();
+  ret = entry_read(2, 20, bl);
+  ASSERT_EQ(ret, -ENODATA);
+
+  ret = entry_inval(2, 20, false);
+  ASSERT_EQ(ret, 0);
+  ret = entry_inval(2, 20, true);
+  ASSERT_EQ(ret, 0);
+
+  bl.clear();
+  ret = entry_read(2, 160, bl);
+  ASSERT_EQ(ret, -ERANGE);
+
+  ret = entry_inval(2, 170, true, true);
+  ASSERT_EQ(ret, 0);
+
+  bl.clear();
+  ret = entry_read(2, 160, bl);
+  ASSERT_EQ(ret, -ENODATA);
 }
 
 TEST_F(ClsZlogTest, SealEntry_BadInput) {
@@ -933,6 +1088,70 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write2) {
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)11);
+}
+
+TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
+  int ret = entry_seal(1);
+  ASSERT_EQ(ret, 0);
+
+  uint64_t pos;
+  bool empty = false;
+  ret = entry_maxpos(1, &pos, &empty);
+  ASSERT_EQ(ret, 0);
+  ASSERT_TRUE(empty);
+  // pos undefined if empty
+
+  ret = entry_inval(1, 160, true, true);
+  ASSERT_EQ(ret, 0);
+
+  pos = 1;
+  empty = true;
+  ret = entry_maxpos(1, &pos, &empty);
+  ASSERT_EQ(ret, 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, (unsigned)160);
+
+  ret = entry_inval(1, 160, true, true);
+  ASSERT_EQ(ret, 0);
+
+  pos = 1;
+  empty = true;
+  ret = entry_maxpos(1, &pos, &empty);
+  ASSERT_EQ(ret, 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, (unsigned)160);
+
+  ret = entry_inval(4, 170, true, true);
+  ASSERT_EQ(ret, 0);
+
+  pos = 1;
+  empty = true;
+  ret = entry_maxpos(1, &pos, &empty);
+  ASSERT_EQ(ret, 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, (unsigned)170);
+
+  ceph::bufferlist bl;
+  bl.append("foo", strlen("foo"));
+  ret = entry_write(1, 171, bl);
+  ASSERT_EQ(ret, 0);
+
+  pos = 1;
+  empty = true;
+  ret = entry_maxpos(1, &pos, &empty);
+  ASSERT_EQ(ret, 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, (unsigned)171);
+
+  ret = entry_inval(4, 1170, true, true);
+  ASSERT_EQ(ret, 0);
+
+  pos = 1;
+  empty = true;
+  ret = entry_maxpos(1, &pos, &empty);
+  ASSERT_EQ(ret, 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(pos, (unsigned)1170);
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {

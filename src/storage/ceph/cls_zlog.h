@@ -7,12 +7,12 @@
 #include <rados/objclass.h>
 #include "storage/ceph/cls_zlog_generated.h"
 #include "fbs_helper.h"
+#include "common.h"
 
 #define ZLOG_MAX_VIEW_READS ((uint32_t)100)
 #define ZLOG_HEAD_HDR_KEY "zlog.head.header"
 #define ZLOG_VIEW_KEY_PREFIX "zlog.head.view."
 #define ZLOG_DATA_HDR_KEY "zlog.data.header"
-#define ZLOG_ENTRY_KEY_PREFIX "zlog.data.entry."
 
 namespace cls_zlog {
 
@@ -56,6 +56,9 @@ class LogObjectHeader {
     empty_ = header->empty();
     max_pos_ = header->max_pos();
     omap_max_size_ = header->omap_max_size();
+    if (header->trim_limit() >= 0) {
+      trim_limit_ = uint64_t(header->trim_limit());
+    }
 
     return 0;
   }
@@ -63,7 +66,8 @@ class LogObjectHeader {
   int write() {
     flatbuffers::FlatBufferBuilder fbb;
     auto header = fbs::CreateLogObjectHeader(fbb, epoch_,
-        empty_, max_pos_, omap_max_size_);
+        empty_, max_pos_, omap_max_size_,
+        (trim_limit_ ? int64_t(*trim_limit_) : -1));
     fbb.Finish(header);
 
     ceph::bufferlist bl;
@@ -118,12 +122,32 @@ class LogObjectHeader {
     return boost::none;
   }
 
+  // TODO: use object's _real_ max not global trim limit
+  // TODO: full trim bit from client?
+  bool update_trim_limit(uint64_t position) {
+    if (!trim_limit_ || position > *trim_limit_) {
+      trim_limit_ = position;
+      update_max_pos(*trim_limit_);
+      return true;
+    }
+    return false;
+  }
+
+  bool position_trimmed(uint64_t position) const {
+    if (trim_limit_ && position <= *trim_limit_) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
  private:
   cls_method_context_t hctx_;
   uint64_t epoch_;
   bool empty_;
   uint64_t max_pos_;
   int32_t omap_max_size_;
+  boost::optional<uint64_t> trim_limit_;
 };
 
 class LogEntry {

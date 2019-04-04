@@ -13,7 +13,7 @@ namespace zlog {
 
 Log::~Log() {}
 
-static int create_or_open(const Options& options,
+int create_or_open(const Options& options,
     Backend *backend, const std::string& name,
     std::string *hoid_out, std::string *prefix_out)
 {
