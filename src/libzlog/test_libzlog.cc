@@ -248,50 +248,1809 @@ TEST_P(LibZLogTest, Trim) {
   ASSERT_EQ(ret, 0);
 }
 
-TEST_P(ZLogTest, TrimTo) {
-  options.stripe_width = 10;
-  options.stripe_slots = 100;
+// empty log: trim to first pos first stripe
+TEST_P(ZLogTest, TrimTo_EmptyA) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(0);
+  ASSERT_EQ(ret, 0);
+
+  std::string entry;
+  ret = log->Read(0, &entry);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = log->trimTo(0);
+  ASSERT_EQ(ret, 0);
+  ret = log->Fill(0);
+  ASSERT_EQ(ret, 0);
+  ret = log->Trim(0);
+  ASSERT_EQ(ret, 0);
+}
+
+// empty log: trim to last pos first sub-stripe
+TEST_P(ZLogTest, TrimTo_EmptyB) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(4);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 4; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 5; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to first pos last sub-stripe
+TEST_P(ZLogTest, TrimTo_EmptyC) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(95);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 95; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 96; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to last pos last sub-stripe
+TEST_P(ZLogTest, TrimTo_EmptyD) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(99);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 99; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 100; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to first pos first sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_EmptyE) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(100);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 100; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 101; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to last pos first sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_EmptyF) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(104);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 104; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 105; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to first pos last sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_EmptyG) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(195);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 195; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 196; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to last pos last sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_EmptyH) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(199);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 199; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 200; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to first pos first sub-stripe 3rd stripe
+TEST_P(ZLogTest, TrimTo_EmptyI) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(200);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 200; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 201; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to mid point
+TEST_P(ZLogTest, TrimTo_EmptyJ) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(3);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 3; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 4; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// empty log: trim to mid point
+TEST_P(ZLogTest, TrimTo_EmptyK) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+
+  int ret = log->trimTo(38);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 38; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 39; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+}
+
+// log: trim to first pos first stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyA) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
   DoSetUp();
   auto *li = (zlog::LogImpl*)log;
 
-  // obj 0
-  int ret = log->Append("foo", nullptr);
+  for (unsigned i = 0; i < 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
 
-  // obj 1
-  auto oid = li->striper.map(li->striper.view(), 1);
-  ASSERT_TRUE(oid);
-  size_t size;
-  ret = li->backend->Stat(*oid, &size);
+  std::string entry;
+  ret = log->Read(0, &entry);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
-  ASSERT_EQ(size, 0u);
+  ret = log->Fill(0);
+  ASSERT_EQ(ret, 0);
+  ret = log->Trim(0);
+  ASSERT_EQ(ret, 0);
 
-  // obj 0
-  oid = li->striper.map(li->striper.view(), 0);
-  ASSERT_TRUE(oid);
-  ret = li->backend->Stat(*oid, &size);
+  ret = log->Read(1, &entry);
   ASSERT_EQ(ret, 0);
-  ASSERT_GT(size, 0u);
+  ASSERT_EQ(entry, "asdf");
 
-  ret = log->trimTo(1100);
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to last pos first sub-stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyB) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(4);
   ASSERT_EQ(ret, 0);
-  for (unsigned i = 0; i < 2000; i++) {
+
+  for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
     ret = log->Read(i, &entry);
-    if (i <= 1100) {
-      ASSERT_EQ(ret, -ENODATA);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 5; i <= 42; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 43; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to first pos last sub-stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyC) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(95);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 95; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 96; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    if (i == 0) {
+      // trimming to 95 means the first object is the stripe is fully trimmed
+      ASSERT_EQ(size, 0u);
     } else {
-      // TODO: this is related to reading past eol
-      ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+      ASSERT_GT(size, 0u);
+    }
+  }
+}
+
+// log: trim to last pos last sub-stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyD) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(99);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 99; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 100; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    // now we should have GC'd all the objects in the stripe
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to first pos first sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyE) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(100);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 100; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 101; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    // now we should have GC'd all the objects in the stripe
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to last pos first sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyF) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(104);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 104; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 105; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    // now we should have GC'd all the objects in the stripe
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to first pos last sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyG) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(195);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 195; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 196; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    // now we should have GC'd all the objects in the stripe
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to last pos last sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyH) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(199);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 199; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 200; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    // now we should have GC'd all the objects in the stripe
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to first pos first sub-stripe 3rd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyI) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(200);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 200; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 201; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    // now we should have GC'd all the objects in the stripe
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to mid point
+TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(3);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 3; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 4; i <= 42; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 43; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to mid point
+TEST_P(ZLogTest, TrimTo_NonEmptyK) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 42; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(37);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 37; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 38; i <= 42; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 43; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// appending up into second stripe before trimming
+TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i < 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(0);
+  ASSERT_EQ(ret, 0);
+
+  std::string entry;
+  ret = log->Read(0, &entry);
+  ASSERT_EQ(ret, -ENODATA);
+  ret = log->trimTo(0);
+  ASSERT_EQ(ret, 0);
+  ret = log->Fill(0);
+  ASSERT_EQ(ret, 0);
+  ret = log->Trim(0);
+  ASSERT_EQ(ret, 0);
+
+  ret = log->Read(1, &entry);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(entry, "asdf");
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to last pos first sub-stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(4);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 4; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 5; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(95);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 95; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 96; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    if (i == 0) {
+      // trimming to 95 means the first object is the stripe is fully trimmed
+      ASSERT_EQ(size, 0u);
+    } else {
+      ASSERT_GT(size, 0u);
     }
   }
 
-  // obj 0
-  oid = li->striper.map(li->striper.view(), 0);
-  ASSERT_TRUE(oid);
-  ret = li->backend->Stat(*oid, &size);
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to last pos last sub-stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(99);
   ASSERT_EQ(ret, 0);
-  ASSERT_EQ(size, 0u);
+
+  for (unsigned i = 0; i <= 99; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 100; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to first pos first sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(100);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 100; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 101; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to last pos first sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(104);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 104; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 105; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to first pos last sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(195);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 195; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 196; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    if (i == 100) {
+      ASSERT_EQ(size, 0u);
+    } else {
+      ASSERT_GT(size, 0u);
+    }
+  }
+}
+
+// log: trim to last pos last sub-stripe 2nd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(199);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 199; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 200; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to first pos first sub-stripe 3rd stripe
+TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(200);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 200; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 201; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(size, 0u);
+  }
+}
+
+// log: trim to mid point
+TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(3);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 3; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 4; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+}
+
+// log: trim to mid point
+TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
+  options.stripe_width = 5;
+  options.stripe_slots = 20;
+  DoSetUp();
+  auto *li = (zlog::LogImpl*)log;
+
+  for (unsigned i = 0; i <= 142; i++) {
+    std::string entry = "asdf";
+    int ret = log->Append(entry, nullptr);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  int ret = log->trimTo(37);
+  ASSERT_EQ(ret, 0);
+
+  for (unsigned i = 0; i <= 37; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, -ENODATA);
+    ret = log->trimTo(i);
+    ASSERT_EQ(ret, 0);
+    ret = log->Fill(i);
+    ASSERT_EQ(ret, 0);
+    // TODO: are we short circuting this without I/O?
+    ret = log->Trim(i);
+    ASSERT_EQ(ret, 0);
+  }
+
+  for (unsigned i = 38; i <= 142; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    ASSERT_EQ(ret, 0);
+    ASSERT_EQ(entry, "asdf");
+  }
+
+  for (unsigned i = 143; i < 300; i++) {
+    std::string entry;
+    ret = log->Read(i, &entry);
+    // TODO: this is related to reading past eol
+    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+  }
+
+  for (unsigned i = 0; i < 5; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
+
+  for (unsigned i = 100; i < 105; i++) {
+    auto oid = li->striper.map(li->striper.view(), i);
+    ASSERT_TRUE(oid);
+    size_t size;
+    int ret = li->backend->Stat(*oid, &size);
+    ASSERT_EQ(ret, 0);
+    ASSERT_GT(size, 0u);
+  }
 }
 
 TEST_P(LibZLogCAPITest, Trim) {
