@@ -5,11 +5,6 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
-
-static auto console = spdlog::stdout_color_mt("console");
-
 // How does a client learn about available sequencers?
 //
 //   - a dns entry with multiple records
