@@ -111,6 +111,11 @@ TEST_P(LibZLogTest, CheckTail) {
   ASSERT_EQ(pos, (unsigned)0);
 }
 
+TEST_P(LibZLogTest, TrimPastEnd) {
+  int ret = log->Trim(1000);
+  ASSERT_EQ(ret, 0);
+}
+
 TEST_P(LibZLogTest, Append) {
   // this basic test does a series and also checks if checktail is returning an
   // updated tail. we do an append here first because it may be that internally
@@ -294,7 +299,7 @@ TEST_P(ZLogTest, TrimTo_EmptyB) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -324,7 +329,7 @@ TEST_P(ZLogTest, TrimTo_EmptyC) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -354,7 +359,7 @@ TEST_P(ZLogTest, TrimTo_EmptyD) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -384,7 +389,7 @@ TEST_P(ZLogTest, TrimTo_EmptyE) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -414,7 +419,7 @@ TEST_P(ZLogTest, TrimTo_EmptyF) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -444,7 +449,7 @@ TEST_P(ZLogTest, TrimTo_EmptyG) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -474,7 +479,7 @@ TEST_P(ZLogTest, TrimTo_EmptyH) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -504,7 +509,7 @@ TEST_P(ZLogTest, TrimTo_EmptyI) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -534,7 +539,7 @@ TEST_P(ZLogTest, TrimTo_EmptyJ) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -564,7 +569,7 @@ TEST_P(ZLogTest, TrimTo_EmptyK) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 }
 
@@ -665,8 +670,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
   for (unsigned i = 43; i < 300; i++) {
     std::string entry;
     ret = log->Read(i, &entry);
-    // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -721,7 +725,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -781,7 +785,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -837,7 +841,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -893,7 +897,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -949,7 +953,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1005,7 +1009,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1061,7 +1065,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1124,7 +1128,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1186,7 +1190,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1324,7 +1328,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1403,7 +1407,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1488,7 +1492,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1568,7 +1572,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1648,7 +1652,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1721,7 +1725,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1798,7 +1802,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1871,7 +1875,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -1951,7 +1955,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
@@ -2031,7 +2035,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
     std::string entry;
     ret = log->Read(i, &entry);
     // TODO: this is related to reading past eol
-    ASSERT_TRUE(ret == -ENOENT || ret == -ERANGE);
+    ASSERT_EQ(ret, -ENOENT);
   }
 
   for (unsigned i = 0; i < 5; i++) {
