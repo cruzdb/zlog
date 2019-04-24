@@ -11,12 +11,11 @@ namespace ceph {
 class CephBackend : public Backend {
  public:
   CephBackend();
-  explicit CephBackend(librados::IoCtx *ioctx);
-
   ~CephBackend();
 
   std::map<std::string, std::string> meta() override;
 
+  int Initialize(librados::IoCtx *ioctx);
   int Initialize(const std::map<std::string, std::string>& opts) override;
 
   int uniqueId(const std::string& hoid, uint64_t *id) override;
@@ -71,6 +70,7 @@ class CephBackend : public Backend {
   int CreateLinkObject(const std::string& name,
       const std::string& hoid);
   int InitHeadObject(const std::string& hoid, const std::string& prefix);
+  int RegisterCephApp();
 };
 
 }

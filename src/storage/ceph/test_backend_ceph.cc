@@ -91,8 +91,11 @@ void BackendTest::SetUp() {
   context = new Context;
   ASSERT_NO_FATAL_FAILURE(context->Init());
 
-  backend = std::unique_ptr<zlog::Backend>(
-      new zlog::storage::ceph::CephBackend(&context->ioctxpp));
+  auto be = std::unique_ptr<zlog::storage::ceph::CephBackend>(
+      new zlog::storage::ceph::CephBackend());
+  int ret = be->Initialize(&context->ioctxpp);
+  ASSERT_EQ(ret, 0);
+  backend = std::move(be);
 }
 
 void BackendTest::TearDown() {
@@ -107,12 +110,14 @@ void ZLogTest::DoSetUp() {
 
   if (lowlevel()) {
     ASSERT_TRUE(exclusive());
-    auto backend = std::unique_ptr<zlog::Backend>(
-        new zlog::storage::ceph::CephBackend(&context->ioctxpp));
+    auto backend = std::unique_ptr<zlog::storage::ceph::CephBackend>(
+        new zlog::storage::ceph::CephBackend());
+    int ret = backend->Initialize(&context->ioctxpp);
+    ASSERT_EQ(ret, 0);
     options.create_if_missing = true;
     options.error_if_exists = true;
     options.backend = std::move(backend);
-    int ret = zlog::Log::Open(options, "mylog", &log);
+    ret = zlog::Log::Open(options, "mylog", &log);
     ASSERT_EQ(ret, 0);
   } else {
     std::string host = "";
