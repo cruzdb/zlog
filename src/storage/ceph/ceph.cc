@@ -21,17 +21,6 @@ CephBackend::CephBackend() :
 {
 }
 
-CephBackend::CephBackend(librados::IoCtx *ioctx) :
-  cluster_(nullptr),
-  ioctx_(ioctx),
-  pool_(ioctx_->get_pool_name()),
-  omap_max_size_(boost::none)
-{
-  options["scheme"] = "ceph";
-  options["conf_file"] = "";
-  options["pool"] = pool_;
-}
-
 CephBackend::~CephBackend()
 {
   // cluster_ is only non-null when it was created via Initialize() in which
@@ -42,6 +31,31 @@ CephBackend::~CephBackend()
     cluster_->shutdown();
     delete cluster_;
   }
+}
+
+int CephBackend::Initialize(librados::IoCtx *ioctx)
+{
+  cluster_ = nullptr;
+  ioctx_ = ioctx;
+  pool_ = ioctx_->get_pool_name();
+  omap_max_size_ = boost::none;
+
+  options["scheme"] = "ceph";
+  options["conf_file"] = "";
+  options["pool"] = pool_;
+
+  return RegisterCephApp();
+}
+
+int CephBackend::RegisterCephApp()
+{
+  return ioctx_->application_enable("zlog", false);
+#if 0
+  // TODO: perhaps the daemon name component should be unique?
+  librados::Rados cluster(*ioctx_);
+  std::map<std::string, std::string> md;
+  return cluster.service_daemon_register("zlog", "zlog.client", md);
+#endif
 }
 
 std::map<std::string, std::string> CephBackend::meta()
@@ -110,7 +124,7 @@ int CephBackend::Initialize(
   ioctx_ = ioctx;
   pool_ = ioctx_->get_pool_name();
 
-  return 0;
+  return RegisterCephApp();
 }
 
 int CephBackend::uniqueId(const std::string& hoid, uint64_t *id)
