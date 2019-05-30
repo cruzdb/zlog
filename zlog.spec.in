@@ -2,7 +2,7 @@ Name:		zlog
 Version:	@VERSION@
 Release:	@RELEASE@%{?dist}
 Summary:	distributed shared log
-License:	LGPL-2.1
+License:	Apache 2.0
 Source0:	@TARBALL_BASENAME@.tar.bz2
 
 BuildRequires:	boost-devel
