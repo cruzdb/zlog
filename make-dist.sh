@@ -8,6 +8,13 @@ if [ ! -d .git ]; then
   exit 1
 fi
 
+# TODO: build the tarball without making a copy of the source. zlog repo isn't
+# very big, so this isn't a big deal. much easier than editing this script :)
+if [ ! -z "$OUTDIR" ]; then
+  cp -a ${PWD} ${OUTDIR}/zlog
+  cd ${OUTDIR}/zlog
+fi
+
 # get version from git tags and the current working directory version. it will
 # show vX.Y.Z-patch_count-sha1 where X.Y.Z is the most recent reachable tag. And
 # run on a checked out version that matches a tag the version will be exactly:

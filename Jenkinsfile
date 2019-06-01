@@ -5,15 +5,31 @@ images.each { image ->
   tasks["${image}"] = {
     node {
       lock("zlog-build") {
-	stage('checkout') {
-	  checkout scm
-	}
+        stage('checkout') {
+          checkout scm
+        }
         stage('build deps image') {
           sh "ci/build_deps_image.sh ${image}"
         }
         stage('build and test') {
           sh "ci/script.sh ${image}"
         }
+      }
+    }
+  }
+}
+
+tasks["fedora:29:pkg"] = {
+  node {
+    lock("zlog-build") {
+      stage('checkout') {
+        checkout scm
+      }
+      stage('build deps image') {
+        sh "BUILD_PKG=yes ci/build_deps_image.sh fedora:29"
+      }
+      stage('build and test') {
+        sh "BUILD_PKG=yes ci/script.sh fedora:29"
       }
     }
   }
