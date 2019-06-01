@@ -2,7 +2,7 @@ Name:		zlog
 Version:	@VERSION@
 Release:	@RELEASE@%{?dist}
 Summary:	distributed shared log
-License:	LGPL-2.1
+License:	Apache 2.0
 Source0:	@TARBALL_BASENAME@.tar.bz2
 
 BuildRequires:	boost-devel
@@ -11,11 +11,16 @@ BuildRequires:	gcc-c++
 BuildRequires:	java-devel
 BuildRequires:	lcov
 BuildRequires:  libatomic
-BuildRequires:  librados-devel
 BuildRequires:  lmdb-devel
 BuildRequires:	protobuf-devel
 BuildRequires:	protobuf-compiler
+
+# these packages happen to be in fedora, but not centos. we aren't building
+# packages yet for centos, so not dealing with this yet.
+%if 0%{?fedora}
+BuildRequires:  librados-devel
 BuildRequires:  rados-objclass-devel
+%endif
 
 %description
 distributed shared log

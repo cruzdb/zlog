@@ -5,45 +5,49 @@ set -x
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZLOG_DIR=${THIS_DIR}/../
 
-# setup temp dirs
-BUILD_DIR=$(mktemp -d)
-DOCS_DIR=$(mktemp -d)
-INSTALL_DIR=$(mktemp -d)
-trap "rm -rf ${BUILD_DIR} \
-  ${DOCS_DIR} ${INSTALL_DIR}" EXIT
+if [ "x${BUILD_PKG}" == "xyes" ]; then
+  echo "assuming already installed"
+else
+  # setup temp dirs
+  BUILD_DIR=$(mktemp -d)
+  DOCS_DIR=$(mktemp -d)
+  INSTALL_DIR=$(mktemp -d)
+  trap "rm -rf ${BUILD_DIR} \
+    ${DOCS_DIR} ${INSTALL_DIR}" EXIT
 
-# build documentation
-${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
-test -r ${DOCS_DIR}/output/html/index.html
+  # build documentation
+  ${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
+  test -r ${DOCS_DIR}/output/html/index.html
 
-# build and install zlog
-CMAKE_BUILD_TYPE=Debug
-if [ "${RUN_COVERAGE}" == 1 ]; then
-  CMAKE_BUILD_TYPE=Coverage
+  # build and install zlog
+  CMAKE_BUILD_TYPE=Debug
+  if [ "${RUN_COVERAGE}" == 1 ]; then
+    CMAKE_BUILD_TYPE=Coverage
+  fi
+
+  CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+               -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
+
+  # TODO reenable java. javah not in newer jdks?
+  JNI="ON"
+  if ! [ -x "$(command -v javah)" ]; then
+    JNI="OFF"
+  fi
+
+  # TODO: renable ceph support
+  # CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_CEPH=ON -DWITH_JNI=${JNI}"
+  if [[ "$OSTYPE" != "darwin"* ]]; then
+    CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_JNI=${JNI}"
+  fi
+
+  pushd ${BUILD_DIR}
+  cmake ${CMAKE_FLAGS} ${ZLOG_DIR}
+  make -j$(nproc) VERBOSE=1
+  make install
+  popd
+
+  PATH=${INSTALL_DIR}/bin:$PATH
 fi
-
-CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-             -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
-
-# TODO reenable java. javah not in newer jdks?
-JNI="ON"
-if ! [ -x "$(command -v javah)" ]; then
-  JNI="OFF"
-fi
-
-# TODO: renable ceph support
-# CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_CEPH=ON -DWITH_JNI=${JNI}"
-if [[ "$OSTYPE" != "darwin"* ]]; then
-  CMAKE_FLAGS="${CMAKE_FLAGS} -DWITH_JNI=${JNI}"
-fi
-
-pushd ${BUILD_DIR}
-cmake ${CMAKE_FLAGS} ${ZLOG_DIR}
-make -j$(nproc) VERBOSE=1
-make install
-popd
-
-PATH=${INSTALL_DIR}/bin:$PATH
 
 # list of tests to run
 tests="zlog_test_backend_lmdb zlog_test_backend_ram"
