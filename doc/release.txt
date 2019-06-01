@@ -3,4 +3,4 @@
 * git tag -a vA.B.C (make sure this is annotated)
 * use "zlog vA.B.C" for the annotation message
 * push the commit and the annotated tag
-* add some notes to the release on github page
+* create a release on github with the existing tag and add some notes
