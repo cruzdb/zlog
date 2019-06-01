@@ -1,10 +1,15 @@
 # Pending
 
+# v0.5.0
+
 * be/ceph: added support for controlling omap vs bytestream storage
 * be/ceph: remove protocol buffers dependency from cls_zlog
 * cli: basic cli infrastructure added
 * be/lmdb: store unique id in the database to avoid duplicate ids
 * be/bench: added simple direct backend benchmark / workload generator
+* zlog clients are now registered as a rados application with ceph backend
+* switched to the apache 2.0 license
+* garbage collection for trimming
 
 # v0.4.0
 
