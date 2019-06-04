@@ -3,91 +3,106 @@
 #include "include/zlog/log.h"
 #include "include/zlog/capi.h"
 
-namespace zlog {
+extern "C" {
 
-struct zlog_log_ctx {
-  zlog::Log *log;
+struct zlog_log_t {
+  zlog::Log *rep;
 };
 
-struct zlog_stream_ctx {
-  //zlog::Stream *stream;
-  zlog_log_ctx *log_ctx;
+struct zlog_options_t {
+  zlog::Options rep;
 };
 
-extern "C" int zlog_destroy(zlog_log_t log)
+
+int zlog_open(zlog_options_t *options, const char *name, zlog_log_t **log)
 {
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  delete ctx->log;
-  delete ctx;
+  zlog::Log *l;
+  int ret = zlog::Log::Open(options->rep, name, &l);
+  if (ret) {
+    return ret;
+  }
+
+  auto result = new zlog_log_t;
+  result->rep = l;
+  *log = result;
+
   return 0;
 }
 
-extern "C" int zlog_create(zlog_options_t options, const char *scheme, const char *name,
-    char const* const* keys, char const* const* vals, size_t num,
-    const char *host, const char *port, zlog_log_t *log)
+void zlog_destroy(zlog_log_t *log)
 {
-#if 0
-  std::map<std::string, std::string> opts;
-  for (size_t i = 0; i < num; i++) {
-    opts.emplace(keys[i], vals[i]);
-  }
+  delete log->rep;
+  delete log;
+}
 
-  zlog_log_ctx *ctx = new zlog_log_ctx;
-  Options* op = (Options*)options;
-  int ret = zlog::Log::Create(*op, scheme, name,
-      opts, host, port, &ctx->log);
+int zlog_checktail(zlog_log_t *log, uint64_t *pposition)
+{
+  return log->rep->CheckTail(pposition);
+}
+
+int zlog_append(zlog_log_t *log, const char *data, size_t len, uint64_t *pposition)
+{
+  return log->rep->Append(std::string(data, len), pposition);
+}
+
+ssize_t zlog_read(zlog_log_t *log, uint64_t position, char *data, size_t len)
+{
+  std::string blob;
+  int ret = log->rep->Read(position, &blob);
   if (ret) {
-    delete ctx;
-  } else {
-    *log = ctx;
+    return ret;
   }
 
-  return ret;
-#endif
-  // FIXME: uh, options here are annyoing
-  assert(0);
-  return -1;
-}
-
-extern "C" int zlog_checktail(zlog_log_t log, uint64_t *pposition)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->CheckTail(pposition);
-}
-
-extern "C" int zlog_append(zlog_log_t log, const void *data, size_t len,
-    uint64_t *pposition)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  std::string tmp((char*)data, len);
-  return ctx->log->Append(tmp, pposition);
-}
-
-extern "C" int zlog_read(zlog_log_t log, uint64_t position, void *data,
-    size_t len)
-{
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  std::string entry;
-  int ret = ctx->log->Read(position, &entry);
-  if (ret >= 0) {
-    if (entry.size() > len)
-      return -ERANGE;
-    std::memcpy(data, entry.data(), entry.size());
-    ret = entry.size();
+  if (blob.size() > len) {
+    return -ERANGE;
   }
-  return ret;
+
+  return blob.copy(data, blob.size(), 0);
 }
 
-extern "C" int zlog_fill(zlog_log_t log, uint64_t position)
+int zlog_fill(zlog_log_t *log, uint64_t position)
 {
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->Fill(position);
+  return log->rep->Fill(position);
 }
 
-extern "C" int zlog_trim(zlog_log_t log, uint64_t position)
+int zlog_trim(zlog_log_t *log, uint64_t position)
 {
-  zlog_log_ctx *ctx = (zlog_log_ctx*)log;
-  return ctx->log->Trim(position);
+  return log->rep->Trim(position);
+}
+
+int zlog_trim_to(zlog_log_t *log, uint64_t position)
+{
+  return log->rep->trimTo(position);
+}
+
+zlog_options_t *zlog_options_create(void)
+{
+  return new zlog_options_t;
+}
+
+void zlog_options_destroy(zlog_options_t *opts)
+{
+  delete opts;
+}
+
+void zlog_options_set_backend_name(zlog_options_t *opts, const char *name)
+{
+  opts->rep.backend_name = std::string(name);
+}
+
+void zlog_options_set_backend_option(zlog_options_t *opts, const char *name, const char *value)
+{
+  opts->rep.backend_options[name] = value;
+}
+
+void zlog_options_set_create_if_missing(zlog_options_t *opts, unsigned char v)
+{
+  opts->rep.create_if_missing = v;
+}
+
+void zlog_options_set_error_if_exists(zlog_options_t *opts, unsigned char v)
+{
+  opts->rep.error_if_exists = v;
 }
 
 }

@@ -36,6 +36,8 @@ class LibZLogTest : public ZLogTest {
   }
 };
 
+#if 0
+
 // C API
 class LibZLogCAPITest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
  protected:
@@ -56,3 +58,5 @@ class LibZLogCAPITest : public ::testing::TestWithParam<std::tuple<bool, bool>> 
     return std::get<1>(GetParam());
   }
 };
+
+#endif

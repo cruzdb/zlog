@@ -149,6 +149,8 @@ std::string ZLogTest::backend()
   return "lmdb";
 }
 
+#if 0
+
 struct LibZLogCAPITest::Context : public DBPathContext {
 };
 
@@ -183,6 +185,8 @@ void LibZLogCAPITest::TearDown() {
   if (context)
     delete context;
 }
+
+#endif
 
 INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
     ::testing::Values(

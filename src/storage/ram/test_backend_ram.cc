@@ -56,6 +56,8 @@ std::string ZLogTest::backend()
   return "ram";
 }
 
+#if 0
+
 void LibZLogCAPITest::SetUp() {
   ASSERT_FALSE(lowlevel());
   ASSERT_TRUE(exclusive());
@@ -72,6 +74,8 @@ void LibZLogCAPITest::TearDown() {
   if (log)
     zlog_destroy(log);
 }
+
+#endif
 
 INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
     ::testing::Values(

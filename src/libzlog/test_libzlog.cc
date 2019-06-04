@@ -2057,6 +2057,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
   }
 }
 
+#if 0
 TEST_P(LibZLogCAPITest, Trim) {
   // can trim empty spot
   int ret = zlog_trim(log, 55);
@@ -2235,3 +2236,4 @@ TEST_P(LibZLogCAPITest, Read) {
   ret = zlog_read(log, pos, data2, sizeof(data2));
   ASSERT_EQ(ret, -ENODATA);
 }
+#endif

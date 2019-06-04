@@ -159,6 +159,8 @@ std::string ZLogTest::backend()
   return "ceph";
 }
 
+#if 0
+
 struct LibZLogCAPITest::Context : public UniquePoolContext {
 };
 
@@ -189,6 +191,8 @@ void LibZLogCAPITest::TearDown() {
   if (context)
     delete context;
 }
+#endif
+
 INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
     ::testing::Values(
       std::make_tuple(true, true),
