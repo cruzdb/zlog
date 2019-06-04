@@ -1,50 +1,17 @@
 #include <atomic>
 #include <condition_variable>
-#include <memory>
 #include <mutex>
-#include <random>
 #include <thread>
 #include <signal.h>
 #include <time.h>
-#include <unistd.h>
+#include <iostream>
+#include <string>
 #include <boost/program_options.hpp>
-#include "zlog/backend/ram.h"
 #include "zlog/options.h"
 #include "zlog/log.h"
+#include "randbytes.h"
 
 namespace po = boost::program_options;
-
-class rand_data_gen {
- public:
-  rand_data_gen(size_t buf_size, size_t samp_size) :
-    buf_size_(buf_size),
-    dist_(0, buf_size_ - samp_size - 1)
-  {}
-
-  void generate() {
-    std::uniform_int_distribution<uint64_t> d(
-        std::numeric_limits<uint64_t>::min(),
-        std::numeric_limits<uint64_t>::max());
-    buf_.reserve(buf_size_);
-    while (buf_.size() < buf_size_) {
-      uint64_t val = d(gen_);
-      buf_.append((const char *)&val, sizeof(val));
-    }
-    if (buf_.size() > buf_size_)
-      buf_.resize(buf_size_);
-  }
-
-  inline const char *sample() {
-    assert(!buf_.empty());
-    return buf_.c_str() + dist_(gen_);
-  }
-
- private:
-  const size_t buf_size_;
-  std::string buf_;
-  std::default_random_engine gen_;
-  std::uniform_int_distribution<size_t> dist_;
-};
 
 static inline uint64_t __getns(clockid_t clock)
 {
@@ -101,66 +68,56 @@ int main(int argc, char **argv)
   uint32_t slots;
   size_t entry_size;
   int qdepth;
-  bool excl_open;
-  bool verify;
   int runtime;
-  std::string backend;
-  std::string pool;
-  std::string db_path;
-  bool blackhole;
+  std::string backend_name;
+  std::vector<std::string> backend_options;
 
-  po::options_description opts("Benchmark options");
-  opts.add_options()
-    ("help", "show help message")
-    ("name", po::value<std::string>(&log_name)->default_value("bench"), "log name")
-    ("width", po::value<uint32_t>(&width)->default_value(10), "stripe width")
-    ("slots", po::value<uint32_t>(&slots)->default_value(10), "object slots")
-    ("size", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
-    ("qdepth", po::value<int>(&qdepth)->default_value(1), "queue depth")
-    ("excl", po::bool_switch(&excl_open), "exclusive open")
-    ("verify", po::bool_switch(&verify), "verify writes")
-    ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
+  {
+    namespace po = boost::program_options;
 
-    ("backend", po::value<std::string>(&backend)->required(), "backend")
-    ("pool", po::value<std::string>(&pool)->default_value("zlog"), "pool (ceph)")
-    ("db-path", po::value<std::string>(&db_path)->default_value("/tmp/zlog.bench.db"), "db path (lmdb)")
-    ("blackhole", po::bool_switch(&blackhole), "black hole (ram)")
-  ;
+    po::options_description opts("Benchmark options");
+    opts.add_options()
+      ("help", "show help message")
+      ("backend-name", po::value<std::string>(&backend_name)->required(), "backend name")
+      ("backend-opt", po::value<std::vector<std::string>>(&backend_options)->multitoken(), "backend options")
+      ("name", po::value<std::string>(&log_name)->default_value("bench"), "log name")
+      ("width", po::value<uint32_t>(&width)->default_value(10), "stripe width")
+      ("slots", po::value<uint32_t>(&slots)->default_value(10), "object slots")
+      ("size", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
+      ("qdepth", po::value<int>(&qdepth)->default_value(1), "queue depth")
+      ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
+      ;
 
-  po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, opts), vm);
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, opts), vm);
 
-  if (vm.count("help")) {
-    std::cout << opts << std::endl;
-    return 1;
+    if (vm.count("help")) {
+      std::cout << opts << std::endl;
+      return 1;
+    }
+
+    po::notify(vm);
   }
-
-  po::notify(vm);
-
-  runtime = std::max(runtime, 0);
 
   zlog::Options options;
-  options.backend_name = backend;
 
-  if (backend == "ceph") {
-    options.backend_options["pool"] = pool;
-    // zero-length string here causes default path search
-    options.backend_options["conf_file"] = "";
-  }
-
-  if (backend == "lmdb") {
-    options.backend_options["path"] = db_path;
-  }
-
-  if (backend == "ram") {
-    if (blackhole) {
-      options.backend_options["blackhole"] = "true";
+  // parse backend options from command line arguments
+  if (!backend_options.empty()) {
+    for (auto option : backend_options) {
+      auto pos = option.find(":");
+      if (pos == std::string::npos) {
+        std::cout << "invalid option " << option << std::endl;
+        exit(1);
+      }
+      auto key = option.substr(0, pos);
+      auto val = option.substr(pos+1, option.size()-key.size()-1);
+      options.backend_options[key] = val;
     }
   }
 
+  options.backend_name = backend_name;
   options.create_if_missing = true;
-  options.error_if_exists = excl_open;
-
+  options.error_if_exists = true;
   options.stripe_width = width;
   options.stripe_slots = slots;
   options.max_inflight_ops = qdepth;
@@ -172,22 +129,19 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  runtime = std::max(runtime, 0);
   signal(SIGINT, sig_handler);
   signal(SIGALRM, sig_handler);
   alarm(runtime);
 
-  rand_data_gen dgen(1ULL << 22, entry_size);
-  dgen.generate();
-
-  // TODO: by always logging the same entry data we may trigger low-level
-  // compression to take affect, if such a thing exists. something to be aware
-  // of and watch out for.
-  const auto entry_data = std::string(dgen.sample(), entry_size);
-
   std::thread stats_thread(stats_entry);
+
+  zlog::util::rand_data_gen dgen(1ULL << 22, entry_size);
+  dgen.generate();
 
   op_count = 0;
   while (!shutdown) {
+    const auto entry_data = std::string(dgen.sample(), entry_size);
     int ret = log->appendAsync(entry_data, [&](int ret, uint64_t pos) {
       if (ret && ret != -ESHUTDOWN) {
         std::cerr << "appendAsync cb failed: " << strerror(-ret) << std::endl;
@@ -206,25 +160,6 @@ int main(int argc, char **argv)
   shutdown = true;
   cond.notify_one();
   stats_thread.join();
-
-  if (verify) {
-    uint64_t tail;
-    auto ret = log->CheckTail(&tail);
-    if (ret) {
-      std::cerr << "checktail failed: " << strerror(-ret) << std::endl;
-    } else {
-      for (uint64_t pos = 0; pos < tail; pos++) {
-        std::string data;
-        ret = log->Read(pos, &data);
-        if (ret) {
-          std::cerr << "read failed at pos " << pos << ": " << strerror(-ret) << std::endl;
-        } else if (data != entry_data) {
-          std::cerr << "verify failed at pos " << pos << std::endl;
-          assert(0);
-        }
-      }
-    }
-  }
 
   delete log;
 
