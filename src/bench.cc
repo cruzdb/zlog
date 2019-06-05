@@ -71,6 +71,7 @@ int main(int argc, char **argv)
   int runtime;
   std::string backend_name;
   std::vector<std::string> backend_options;
+  int finisher_threads;
 
   {
     namespace po = boost::program_options;
@@ -86,6 +87,7 @@ int main(int argc, char **argv)
       ("size", po::value<size_t>(&entry_size)->default_value(1024), "entry size")
       ("qdepth", po::value<int>(&qdepth)->default_value(1), "queue depth")
       ("runtime", po::value<int>(&runtime)->default_value(0), "runtime")
+      ("finisher_threads", po::value<int>(&finisher_threads)->default_value(0), "finisher threads")
       ;
 
     po::variables_map vm;
@@ -121,6 +123,9 @@ int main(int argc, char **argv)
   options.stripe_width = width;
   options.stripe_slots = slots;
   options.max_inflight_ops = qdepth;
+  if (finisher_threads > 0) {
+    options.finisher_threads = finisher_threads;
+  }
 
   zlog::Log *log;
   int ret = zlog::Log::Open(options, log_name, &log);
