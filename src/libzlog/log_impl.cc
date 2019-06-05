@@ -42,6 +42,12 @@ LogImpl::LogImpl(std::shared_ptr<Backend> backend,
   for (int i = 0; i < options.finisher_threads; i++) {
     finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
   }
+
+  append_propose_sequencer = 0;
+  append_expand_view = 0;
+  append_seal = 0;
+  append_stale_view = 0;
+  append_read_only = 0;
 }
 
 LogImpl::~LogImpl()
@@ -229,6 +235,7 @@ int AppendOp::run()
       assert(*position_epoch_ > 0);
       assert(*position_epoch_ == view->seq->epoch());
     } else {
+      log_->append_propose_sequencer++;
       int ret = log_->striper.propose_sequencer();
       if (ret) {
         return ret;
@@ -238,6 +245,7 @@ int AppendOp::run()
 
     const auto oid = log_->striper.map(view, position_);
     if (!oid) {
+      log_->append_expand_view++;
       int ret = log_->striper.try_expand_view(position_);
       if (ret) {
         return ret;
@@ -250,6 +258,7 @@ int AppendOp::run()
       if (!ret) {
         return ret;
       } else if (ret == -ENOENT) {
+        log_->append_seal++;
         // this can happen if a new stripe has been created but not initialized,
         // either because we are racing with initialization, or due to a fault in
         // the process performing the initialization.
@@ -274,9 +283,11 @@ int AppendOp::run()
         // changing the epoch <= test in the backend.
         break;
       } else if (ret == -ESPIPE) {
+        log_->append_stale_view++;
         log_->striper.update_current_view(view->epoch());
         break;
       } else if (ret == -EROFS) {
+        log_->append_read_only++;
         position_epoch_.reset(); // make sure to get a new position
         break;
       } else {
@@ -638,6 +649,17 @@ void LogImpl::finisher_entry_()
       queue_op_waiters_.back().second->notify_one();
     }
   }
+}
+
+void LogImpl::PrintStats()
+{
+  std::cout << "==== stats ===========================" << std::endl;
+  std::cout << "append_propose_sequencer = " << append_propose_sequencer << std::endl;
+  std::cout << "append_expand_view = " << append_expand_view << std::endl;
+  std::cout << "append_seal = " << append_seal << std::endl;
+  std::cout << "append_stale_view = " << append_stale_view << std::endl;
+  std::cout << "append_read_only = " << append_read_only << std::endl;
+  std::cout << "======================================" << std::endl;
 }
 
 }

@@ -166,6 +166,8 @@ int main(int argc, char **argv)
   cond.notify_one();
   stats_thread.join();
 
+  log->PrintStats();
+
   delete log;
 
   return 0;

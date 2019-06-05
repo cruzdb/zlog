@@ -57,6 +57,9 @@ class Log {
   virtual int StripeWidth() = 0;
 
  public:
+  virtual void PrintStats() = 0;
+
+ public:
   static int Open(const Options& options,
       const std::string& name, Log **log);
 

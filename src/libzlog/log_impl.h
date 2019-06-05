@@ -219,6 +219,15 @@ class LogImpl : public Log {
   }
 
  public:
+  std::atomic<uint64_t> append_propose_sequencer;
+  std::atomic<uint64_t> append_expand_view;
+  std::atomic<uint64_t> append_seal;
+  std::atomic<uint64_t> append_stale_view;
+  std::atomic<uint64_t> append_read_only;
+
+  void PrintStats() override;
+
+ public:
   bool shutdown;
   std::mutex lock;
 
