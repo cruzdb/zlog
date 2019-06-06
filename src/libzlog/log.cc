@@ -104,6 +104,9 @@ int Log::Open(const Options& options,
   auto impl = std::unique_ptr<LogImpl>(
       new LogImpl(backend, name, hoid, prefix, secret.str(), options));
 
+  // TODO: initialize the first stripe so that cost isn't incurred by clients
+  // when they start performing I/O.
+
   *logpp = impl.release();
 
   return 0;

@@ -280,6 +280,11 @@ int Striper::try_expand_view(const uint64_t position)
   auto v = *view();
   const auto next_epoch = v.epoch() + 1;
 
+  // TODO: what is the initial state of the view/object_map for brand new logs?
+  // there is a view created in stable storage for new logs, but it doesn't
+  // appear the actualy log instance has it loaded initially. are we just
+  // getting lucky that it's read up before hitting this?
+
   // modify: the object map to contain the position
   auto changed = v.object_map.expand_mapping(log_->prefix, position,
       log_->options.stripe_width, log_->options.stripe_slots);
@@ -764,6 +769,7 @@ View::View(const std::string& prefix, uint64_t epoch,
     auto res = stripes.emplace(stripe.min_position(),
         Stripe(prefix, stripe.id(), stripe.width(), stripe.max_position()));
     assert(res.second);
+    (void)res;
   }
 
   if (!stripes.empty()) {
@@ -775,9 +781,10 @@ View::View(const std::string& prefix, uint64_t epoch,
       assert(it->second.width() > 0);
       auto res = ids.emplace(it->second.id());
       assert(res.second);
+      (void)res;
       if (it2 != stripes.cend()) {
         assert(it->second.max_position() < it2->first);
-	it2++;
+        it2++;
       }
     }
     assert(ids.find(view.next_stripe_id()) == ids.end());
