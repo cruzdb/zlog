@@ -262,6 +262,7 @@ int main(int argc, char **argv)
       auto oid = objects[row][col];
       std::string data;
       int ret = backend->Read(oid, 1, pos, &data);
+      (void)ret;
       assert(ret == 0);
       assert(it.second == data);
       std::cout << "verify " << pos << std::endl;

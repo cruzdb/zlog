@@ -769,6 +769,7 @@ View::View(const std::string& prefix, uint64_t epoch,
     auto res = stripes.emplace(stripe.min_position(),
         Stripe(prefix, stripe.id(), stripe.width(), stripe.max_position()));
     assert(res.second);
+    (void)res;
   }
 
   if (!stripes.empty()) {
@@ -780,6 +781,7 @@ View::View(const std::string& prefix, uint64_t epoch,
       assert(it->second.width() > 0);
       auto res = ids.emplace(it->second.id());
       assert(res.second);
+      (void)res;
       if (it2 != stripes.cend()) {
         assert(it->second.max_position() < it2->first);
 	it2++;
