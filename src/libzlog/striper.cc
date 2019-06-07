@@ -239,6 +239,8 @@ Striper::map_to(const std::shared_ptr<const View>& view,
   return view->object_map.map_to(position);
 }
 
+// TODO: should the min_valid_position used for trim be taken into account in
+// this method?
 boost::optional<std::string> Striper::map(
     const std::shared_ptr<const View>& view,
     const uint64_t position)
@@ -260,18 +262,24 @@ boost::optional<std::string> Striper::map(
   }
 
   // none, true   -> not a valid combination
-  // none, false  -> expand(position)
+  // none, false  -> need to expand the mapping
   assert(!oid);
   assert(!last_stripe);
 
-  // the position mapped past the view's maximum position. the caller can't make
-  // progress, so we can immediately try to create a new view. since the
-  // position will by definition map into a new stripe that is also the last
-  // stripe in the new view, go ahead and create the target stripe and the
-  // following stripe. XXX: this is a future enhancement. returning boost::none
-  // here will cause the caller to expand the view to map the position, but
-  // won't add an extra stripe until the next I/O occurs.
+  // the position mapped past the view's maximum position, so the caller likely
+  // can't make progress (e.g. if it is trying to append). at this point the
+  // caller should attempt to expand the view / mapping.
   return boost::none;
+
+  // TODO: since by definition the next stripe will be the last stripe in the
+  // view, and because the striper attempts to "double buffer" stripe creation
+  // to avoid faulting on a mapping in the hot path, it would make sense here as
+  // a minor optimization for the caller to add two stripe: the target for this
+  // mapping and the following. this is a minor optimization beacuse once the
+  // view is extended the normal asynchronous double buffering will kick in
+  // during the next I/O operation. this can be a flag on try_expand_view that's
+  // true (2x expand) when faulting or false (1x expand) when its normal async
+  // expanding.
 }
 
 int Striper::try_expand_view(const uint64_t position)
