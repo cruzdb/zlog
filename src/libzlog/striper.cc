@@ -626,9 +626,9 @@ void Striper::refresh_entry_()
       }
       for (auto it = waiters.begin(); it != waiters.end();) {
         const auto waiter = *it;
-	// trying to make this locking fine grained to avoid blocking clients
-	// is admirable, but really we probably just need a finger grained lock
-	// to protect the waiters list rather than lock/unlock/lock/unlock/...
+        // trying to make this locking fine grained to avoid blocking clients
+        // is admirable, but really we probably just need a finger grained lock
+        // to protect the waiters list rather than lock/unlock/lock/unlock/...
         std::lock_guard<std::mutex> lk(lock_);
         if (current_epoch > waiter->epoch) {
           waiter->done = true;
