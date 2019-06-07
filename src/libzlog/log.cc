@@ -40,7 +40,7 @@ int create_or_open(const Options& options,
     }
 
     if (!view) {
-      view = View::create_initial();
+      view = View::create_initial(options);
     }
 
     ret = backend->CreateLog(name, *view, &hoid, &prefix);

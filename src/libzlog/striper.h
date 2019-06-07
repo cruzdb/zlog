@@ -170,7 +170,8 @@ class View {
   View(const std::string& prefix, uint64_t epoch,
       const zlog_proto::View& view);
 
-  static std::string create_initial();
+  // construct the initial view for a new log.
+  static std::string create_initial(const Options& options);
 
   uint64_t epoch() const {
     return epoch_;

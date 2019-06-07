@@ -572,6 +572,10 @@ void Striper::async_expand_view(uint64_t position)
   }
 }
 
+// TODO
+//   * anywhere it is appropriate we should crash and burn if a log contains no
+//   views in order to reenforce the rule that new logs are created with an
+//   initial view.
 void Striper::refresh_entry_()
 {
   while (true) {
@@ -715,11 +719,14 @@ void Striper::update_current_view(const uint64_t epoch)
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
 }
 
-std::string View::create_initial()
+std::string View::create_initial(const Options& options)
 {
   std::string blob;
   zlog_proto::View view;
   view.set_min_valid_position(0);
+  if (options.create_initial_view_stripes) {
+    // TODO: implement
+  }
   if (!view.SerializeToString(&blob)) {
     assert(0);
     exit(1);
