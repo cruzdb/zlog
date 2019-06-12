@@ -1,6 +1,7 @@
 #include "striper.h"
 #include "log_impl.h"
 #include <iterator>
+#include <numeric>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -68,30 +69,49 @@
 
 namespace zlog {
 
-std::vector<std::string> Stripe::make_oids(
-    const std::string& prefix, uint64_t id, uint32_t width)
+std::string Stripe::make_oid(const std::string& prefix,
+    uint64_t stripe_id, uint32_t index)
+{
+  std::stringstream oid;
+  oid << prefix << "." << stripe_id << "." << index;
+  return oid.str();
+}
+
+std::string Stripe::make_oid(const std::string& prefix,
+    uint64_t stripe_id, uint32_t width, uint64_t position)
+{
+  auto index = position % width;
+  return make_oid(prefix, stripe_id, index);
+}
+
+std::vector<std::string> Stripe::make_oids()
 {
   std::vector<std::string> oids;
-  oids.reserve(width);
+  oids.reserve(width_);
 
-  for (uint32_t i = 0; i < width; i++) {
-    std::stringstream oid;
-    oid << prefix << "." << id << "." << i;
-    oids.emplace_back(oid.str());
+  for (uint32_t i = 0; i < width_; i++) {
+    oids.emplace_back(make_oid(prefix_, stripe_id_, i));
   }
 
   return oids;
 }
 
-// TODO: refactor this with ObjectMap::map
 boost::optional<Stripe> ObjectMap::map_stripe(uint64_t position) const
 {
-  if (!stripes_.empty()) {
-    auto it = stripes_.upper_bound(position);
+  if (!stripes_by_pos_.empty()) {
+    auto it = stripes_by_pos_.upper_bound(position);
     it = std::prev(it);
     assert(it->first <= position);
     if (position <= it->second.max_position()) {
-      return it->second;
+      // position relative to the stripe
+      const auto stripe_pos = position - it->first;
+      // number of positions mapped by each stripe instance
+      const auto stripe_size = it->second.width() * it->second.slots();
+      // 0-based stripe instance mapping the position
+      const auto stripe_instance = stripe_pos / stripe_size;
+      // stripe id is the instance relative to the stripe base id
+      const auto stripe_id = it->second.base_id() + stripe_instance;
+      return stripe_by_id(stripe_id);
     }
   }
   return boost::none;
@@ -100,13 +120,24 @@ boost::optional<Stripe> ObjectMap::map_stripe(uint64_t position) const
 std::pair<boost::optional<std::string>, bool>
 ObjectMap::map(const uint64_t position) const
 {
-  if (!stripes_.empty()) {
-    auto it = stripes_.upper_bound(position);
+  if (!stripes_by_pos_.empty()) {
+    auto it = stripes_by_pos_.upper_bound(position);
     it = std::prev(it);
     assert(it->first <= position);
     if (position <= it->second.max_position()) {
-      auto oid = it->second.map(position);
-      auto last_stripe = std::next(it) == stripes_.end();
+      // position relative to the stripe
+      const auto stripe_pos = position - it->first;
+      // number of positions mapped by each stripe instance
+      const auto stripe_size = it->second.width() * it->second.slots();
+      // 0-based stripe instance mapping the position
+      const auto stripe_instance = stripe_pos / stripe_size;
+      // stripe id is the instance relative to the stripe base id
+      const auto stripe_id = it->second.base_id() + stripe_instance;
+      // generate the target object id
+      auto oid = it->second.map(stripe_id, position);
+      // the last stripe must also be the last instance
+      auto last_stripe = std::next(it) == stripes_by_pos_.end() &&
+        stripe_id == it->second.max_stripe_id();
       return std::make_pair(oid, last_stripe);
     }
   }
@@ -125,17 +156,19 @@ ObjectMap::map_to(const uint64_t position) const
   // second: complete map?
   std::vector<std::pair<std::string, bool>> objects;
 
-  for (auto it = stripes_.cbegin(); it != stripes_.cend(); it++) {
-    const auto& stripe = it->second;
+  for (auto stripe_id = 0u; stripe_id < num_stripes(); stripe_id++) {
+    const auto stripe = stripe_by_id(stripe_id);
     const auto oids = stripe.oids();
 
-    const auto min_pos_base = it->first;
+    const auto min_pos_base = stripe.min_position();
 
     // pos is below the minimum of this stripe. we're done
     if (min_pos_base > position) {
       break;
     }
 
+    // TODO: does this handle cases where we might slice off a stripe before its
+    // max_position()?
     const auto max_pos_base = stripe.max_position() - (stripe.width() - 1);
 
     for (uint32_t i = 0; i < stripe.width(); i++) {
@@ -158,23 +191,27 @@ ObjectMap::map_to(const uint64_t position) const
 }
 
 bool ObjectMap::expand_mapping(const std::string& prefix,
-    const uint64_t position, uint32_t stripe_width, uint32_t stripe_slots)
+    const uint64_t position, const Options& options)
 {
   if (map(position).first) {
     return false;
   }
 
-  const uint64_t num_stripe_entries = (uint64_t)stripe_width * stripe_slots;
-  assert(num_stripe_entries > 0);
-
   do {
-    const auto it = stripes_.crbegin();
-    const auto empty = it == stripes_.crend();
-    const auto min_position = empty ? 0 : (it->second.max_position() + 1);
-    const auto max_position = min_position + num_stripe_entries - 1;
     const auto stripe_id = next_stripe_id_++;
-    stripes_.emplace(min_position,
-        Stripe{prefix, stripe_id, stripe_width, max_position});
+    const auto it = stripes_by_pos_.rbegin();
+    if (it != stripes_by_pos_.rend()) {
+      it->second.extend();
+      assert(it->second.max_stripe_id() == stripe_id);
+    } else {
+      const auto width = options.stripe_width;
+      const auto slots = options.stripe_slots;
+      const uint64_t max_position = width * slots - 1;
+      auto res = stripes_by_pos_.emplace(0,
+          MultiStripe{prefix, stripe_id, width, slots, 0, 1, max_position});
+      assert(res.second);
+      stripes_by_id_.emplace(stripe_id, res.first);
+    }
   } while (!map(position).first);
 
   return true;
@@ -182,9 +219,19 @@ bool ObjectMap::expand_mapping(const std::string& prefix,
 
 uint64_t ObjectMap::max_position() const
 {
-  auto stripe = stripes_.crbegin();
-  assert(stripe != stripes_.crend());
+  auto stripe = stripes_by_pos_.crbegin();
+  assert(stripe != stripes_by_pos_.crend());
   return stripe->second.max_position();
+}
+
+Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
+{
+  assert(!stripes_by_id_.empty());
+  auto it = stripes_by_id_.upper_bound(stripe_id);
+  it = std::prev(it);
+  assert(it->first <= stripe_id);
+  assert(stripe_id <= it->second->second.max_stripe_id());
+  return it->second->second.stripe_by_id(stripe_id);
 }
 
 Striper::Striper(LogImpl *log, const std::string& secret) :
@@ -295,7 +342,7 @@ int Striper::try_expand_view(const uint64_t position)
 
   // modify: the object map to contain the position
   auto changed = v.object_map.expand_mapping(log_->prefix, position,
-      log_->options.stripe_width, log_->options.stripe_slots);
+      log_->options);
   if (!changed) {
     return 0;
   }
@@ -420,10 +467,13 @@ int Striper::propose_sequencer()
   // find the maximum position written. the maximum position written is
   // contained in the first non-empty stripe scanning in reverse, beginning with
   // the stripe that maps the maximum possible position for the current view.
-  const auto stripes = v.object_map.stripes();
-  auto it = stripes.crbegin();
-  for (; it != stripes.crend(); it++) {
-    auto& stripe = it->second;
+
+  std::vector<uint64_t> stripe_ids(v.object_map.num_stripes());
+  std::iota(std::begin(stripe_ids), std::end(stripe_ids), 0);
+
+  auto it = stripe_ids.crbegin();
+  for (; it != stripe_ids.crend(); it++) {
+    const auto stripe = v.object_map.stripe_by_id(*it);
     int ret = seal_stripe(stripe, next_epoch, &max_pos, &empty);
     if (ret < 0) {
       if (ret == -ESPIPE) {
@@ -441,13 +491,13 @@ int Striper::propose_sequencer()
     break;
   }
 
-  assert(!empty || it == stripes.crend());
+  assert(!empty || it == stripe_ids.crend());
 
   // seal all other stripes. this is not to guarantee that the max is valid, but
   // rather to signal to clients connected / using other sequencers that they
   // should grab a new view to see the new sequencer.
-  for (; it != stripes.crend(); it++) {
-    auto& stripe = it->second;
+  for (; it != stripe_ids.crend(); it++) {
+    const auto stripe = v.object_map.stripe_by_id(*it);
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
     if (ret < 0) {
       if (ret == -ESPIPE) {
@@ -746,10 +796,13 @@ std::string View::serialize() const
 {
   zlog_proto::View view;
 
-  for (const auto& stripe : object_map.stripes()) {
+  // TODO: good reason for object_map serializing itself
+  for (const auto& stripe : object_map.multi_stripes()) {
     auto pb_stripe = view.add_stripes();
-    pb_stripe->set_id(stripe.second.id());
+    pb_stripe->set_base_id(stripe.second.base_id());
     pb_stripe->set_width(stripe.second.width());
+    pb_stripe->set_slots(stripe.second.slots());
+    pb_stripe->set_instances(stripe.second.instances());
     pb_stripe->set_min_position(stripe.first);
     pb_stripe->set_max_position(stripe.second.max_position());
   }
@@ -779,10 +832,11 @@ View::View(const std::string& prefix, uint64_t epoch,
     const zlog_proto::View& view) :
   epoch_(epoch)
 {
-  std::map<uint64_t, Stripe> stripes;
+  std::map<uint64_t, MultiStripe> stripes;
   for (auto stripe : view.stripes()) {
     auto res = stripes.emplace(stripe.min_position(),
-        Stripe(prefix, stripe.id(), stripe.width(), stripe.max_position()));
+        MultiStripe(prefix, stripe.base_id(), stripe.width(), stripe.slots(),
+          stripe.min_position(), stripe.instances(), stripe.max_position()));
     assert(res.second);
     (void)res;
   }
@@ -794,7 +848,8 @@ View::View(const std::string& prefix, uint64_t epoch,
     for (; it != stripes.cend(); it++) {
       assert(it->first <= it->second.max_position());
       assert(it->second.width() > 0);
-      auto res = ids.emplace(it->second.id());
+      // TODO assert ids with instance counts, too
+      auto res = ids.emplace(it->second.base_id());
       assert(res.second);
       (void)res;
       if (it2 != stripes.cend()) {

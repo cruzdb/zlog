@@ -28,7 +28,22 @@
   //
   // i think the other really good option is to just define object map to always
   // be initialized from a proto view from the log.
+  //
+  //
 
+// remove prefix from multistripe/stripe and pass around log reference when
+// generating object names?
+//
+// document locking around data structures like objectmap/stripe. i think its as
+// simple as noting that all operations are on copies of the view.
+//
+// should MultiStripe have its own serializatio method?
+//
+// TODO check assumptions about disjoint ranges in objectmap/multistripe
+//
+// record any notes about how to change the stripe configuration
+// const auto min_position = empty_map ? 0 : (it->second.max_position() + 1);
+// const auto max_position = min_position + num_stripe_entries - 1;
 
 namespace zlog_proto {
   class View;
@@ -65,24 +80,21 @@ class Sequencer {
 
 class Stripe {
  public:
-  Stripe(const std::string& prefix, uint64_t id,
-      uint32_t width, uint64_t max_position) :
-    id_(id),
+  Stripe(const std::string& prefix,
+      uint64_t stripe_id,
+      uint32_t width,
+      uint64_t min_position,
+      uint64_t max_position) :
+    prefix_(prefix),
+    stripe_id_(stripe_id),
+    width_(width),
+    min_position_(min_position),
     max_position_(max_position),
-    oids_(make_oids(prefix, id_, width))
-  {
-    assert(width > 0);
-    assert(!prefix.empty());
-    assert(!oids_.empty());
-  }
+    oids_(make_oids())
+  {}
 
-  std::string map(uint64_t position) const {
-    const auto index = position % oids_.size();
-    return oids_.at(index);
-  }
-
-  uint64_t id() const {
-    return id_;
+  uint64_t min_position() const {
+    return min_position_;
   }
 
   uint64_t max_position() const {
@@ -90,20 +102,116 @@ class Stripe {
   }
 
   uint32_t width() const {
-    return oids_.size();
+    return width_;
   }
 
   const std::vector<std::string>& oids() const {
     return oids_;
   }
 
- private:
-  static std::vector<std::string> make_oids(
-      const std::string& prefix, uint64_t id, uint32_t width);
+  static std::string make_oid(const std::string& prefix,
+      uint64_t stripe_id, uint32_t width, uint64_t position);
 
-  const uint64_t id_;
-  uint64_t max_position_;
+ private:
+  static std::string make_oid(const std::string& prefix,
+      uint64_t stripe_id, uint32_t index);
+
+  std::vector<std::string> make_oids();
+
+  const std::string prefix_;
+  const uint64_t stripe_id_;
+  const uint32_t width_;
+  const uint64_t min_position_;
+  const uint64_t max_position_;
   const std::vector<std::string> oids_;
+};
+
+class MultiStripe {
+ public:
+  MultiStripe(const std::string& prefix,
+      uint64_t base_id,
+      uint32_t width,
+      uint32_t slots,
+      uint64_t min_position,
+      uint64_t instances,
+      uint64_t max_position) :
+    prefix_(prefix),
+    base_id_(base_id),
+    width_(width),
+    slots_(slots),
+    min_position_(min_position),
+    instances_(instances),
+    max_position_(max_position)
+  {
+    assert(!prefix_.empty());
+    assert(base_id_ >= 0);
+    assert(width_ > 0);
+    assert(slots_ > 0);
+    assert(min_position_ >= 0);
+    assert(instances_ > 0);
+    assert(max_position_ > 0);
+  }
+
+  std::string map(uint64_t stripe_id, uint64_t position) const {
+    return Stripe::make_oid(prefix_, stripe_id, width_, position);
+  }
+
+  uint64_t base_id() const {
+    return base_id_;
+  }
+
+  uint64_t max_stripe_id() const {
+    return base_id_ + instances_ - 1;
+  }
+
+  uint64_t max_position() const {
+    return max_position_;
+  }
+
+  uint32_t width() const {
+    return width_;
+  }
+
+  uint32_t slots() const {
+    return slots_;
+  }
+
+  uint32_t instances() const {
+    return instances_;
+  }
+
+  Stripe stripe_by_id(uint64_t stripe_id) const {
+    assert(base_id() <= stripe_id);
+    assert(stripe_id <= max_stripe_id());
+    const uint64_t stripe_offset = stripe_id - base_id();
+    const uint64_t entries_per_stripe = (uint64_t)width_ * slots_;
+    const uint64_t min_pos = min_position_ + (stripe_offset * entries_per_stripe);
+    const uint64_t max_pos = min_pos + entries_per_stripe - 1;
+    assert(stripe_offset < instances_);
+    assert(entries_per_stripe > 0);
+    assert(min_pos >= min_position_);
+    assert(max_pos <= max_position_);
+    return Stripe(
+        prefix_,
+        stripe_id,
+        width_,
+        min_pos,
+        max_pos);
+  }
+
+  void extend() {
+    instances_++;
+    max_position_ += (uint64_t)width_ * slots_;
+  }
+
+ private:
+  const std::string prefix_;
+  const uint64_t base_id_;
+  const uint32_t width_;
+  const uint32_t slots_;
+  const uint64_t min_position_;
+  uint64_t instances_;
+  uint64_t max_position_;
 };
 
 class ObjectMap {
@@ -112,43 +220,64 @@ class ObjectMap {
     next_stripe_id_(0)
   {}
 
+  // TODO we should be able to deduce the next stripe id, right?
   ObjectMap(uint64_t next_stripe_id,
-      const std::map<uint64_t, Stripe>& stripes) :
+      const std::map<uint64_t, MultiStripe>& stripes) :
     next_stripe_id_(next_stripe_id),
-    stripes_(stripes)
-  {}
+    stripes_by_pos_(stripes)
+  {
+    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
+      stripes_by_id_.emplace(it->second.base_id(), it);
+    }
+  }
 
  public:
-  // returns a pair where the first element is either boost::none if the
-  // position doesn't map, or it is the name of the object that the position
-  // maps to. The second element is true iff the position maps to the last
-  // stripe in the object map.
+  // returns the object name that maps the position, if it exists. the second
+  // element is true iff the position maps to the last stripe in the object map.
   std::pair<boost::optional<std::string>, bool> map(uint64_t position) const;
 
+  // expand the mapping to include the given position. true is returned when the
+  // mapping changed, and false if the position is already mapped.
+  bool expand_mapping(const std::string& prefix, const uint64_t position,
+      const Options& options);
+
+  // returns the stripe with the given stripe id.
+  Stripe stripe_by_id(uint64_t stripe_id) const;
+
+  // returns the id of the next stripe in the object map.
+  uint64_t next_stripe_id() const {
+    return next_stripe_id_;
+  }
+
+  // returns the maximum position mapped by the object map.
+  uint64_t max_position() const;
+
+  // returns true if the object map contains no stripes.
+  bool empty() const {
+    return stripes_by_pos_.empty();
+  }
+
+  // returns the number of stripes.
+  uint64_t num_stripes() const {
+    return next_stripe_id_;
+  }
+
+  const std::map<uint64_t, MultiStripe>& multi_stripes() const {
+    return stripes_by_pos_;
+  }
+
+  // TODO iterate over these stripes rather than creating a large data
+  // structure with all the stripes materialized.
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
       uint64_t position) const;
 
   // return the stripe that maps the position.
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
-  // expand the mapping to include the given position. true is returned when the
-  // mapping changed, and false if the position is already mapped.
-  bool expand_mapping(const std::string& prefix, uint64_t position,
-      uint32_t stripe_width, uint32_t stripe_slots);
-
-  const std::map<uint64_t, Stripe>& stripes() const {
-    return stripes_;
-  }
-
-  uint64_t next_stripe_id() const {
-    return next_stripe_id_;
-  }
-
-  uint64_t max_position() const;
-
  private:
   uint64_t next_stripe_id_;
-  std::map<uint64_t, Stripe> stripes_;
+  std::map<uint64_t, MultiStripe> stripes_by_pos_;
+  std::map<uint64_t, std::map<uint64_t, MultiStripe>::const_iterator> stripes_by_id_;
 };
 
 struct SequencerConfig {
