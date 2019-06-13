@@ -104,6 +104,17 @@ int Log::Open(const Options& options,
   auto impl = std::unique_ptr<LogImpl>(
       new LogImpl(backend, name, hoid, prefix, secret.str(), options));
 
+  // wait for the striper to be initialized with the initial view. this
+  // initialization is required as many interfaces assume the first view has
+  // been loaded / initailized and assert/fail otherwise.
+  //
+  // TODO: i would rather factor out the striper and initialize it and then pass
+  // it into the logimpl constructor. that way we don't have so many checks in
+  // the striper for the uninitialized case.
+  //
+  // OR pass in the view we created or the latest read?
+  impl->striper.update_current_view(0);
+
   // TODO: initialize the first stripe so that cost isn't incurred by clients
   // when they start performing I/O.
 

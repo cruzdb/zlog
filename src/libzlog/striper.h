@@ -216,20 +216,8 @@ class MultiStripe {
 
 class ObjectMap {
  public:
-  ObjectMap() :
-    next_stripe_id_(0)
-  {}
-
-  // TODO we should be able to deduce the next stripe id, right?
-  ObjectMap(uint64_t next_stripe_id,
-      const std::map<uint64_t, MultiStripe>& stripes) :
-    next_stripe_id_(next_stripe_id),
-    stripes_by_pos_(stripes)
-  {
-    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
-      stripes_by_id_.emplace(it->second.base_id(), it);
-    }
-  }
+  static ObjectMap from_view(const std::string& prefix,
+      const zlog_proto::View& view);
 
  public:
   // returns the object name that maps the position, if it exists. the second
@@ -238,8 +226,8 @@ class ObjectMap {
 
   // expand the mapping to include the given position. true is returned when the
   // mapping changed, and false if the position is already mapped.
-  bool expand_mapping(const std::string& prefix, const uint64_t position,
-      const Options& options);
+  boost::optional<ObjectMap> expand_mapping(const std::string& prefix,
+      const uint64_t position, const Options& options) const;
 
   // returns the stripe with the given stripe id.
   Stripe stripe_by_id(uint64_t stripe_id) const;
@@ -275,6 +263,20 @@ class ObjectMap {
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
  private:
+  // TODO we should be able to deduce the next stripe id, right?
+  ObjectMap(uint64_t next_stripe_id,
+      const std::map<uint64_t, MultiStripe>& stripes) :
+    next_stripe_id_(next_stripe_id),
+    stripes_by_pos_(stripes)
+  {
+    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
+      stripes_by_id_.emplace(it->second.base_id(), it);
+    }
+  }
+
+  void expand_mapping(const std::string& prefix, const uint64_t position,
+      const Options& options);
+
   uint64_t next_stripe_id_;
   std::map<uint64_t, MultiStripe> stripes_by_pos_;
   std::map<uint64_t, std::map<uint64_t, MultiStripe>::const_iterator> stripes_by_id_;
@@ -284,34 +286,60 @@ struct SequencerConfig {
   uint64_t epoch;
   std::string secret;
   uint64_t position;
+
+  static boost::optional<SequencerConfig> from_view(
+      const zlog_proto::View& view);
 };
 
-// separate configuration from initialization. for instance, after deserializing
-// a protobuf into its view, don't immediately create and connect the sequencer.
-//
-// TODO: separate view with epoch from view without it
 class View {
  public:
-  View() :
-    epoch_(0)
-  {}
+  View(const std::string& prefix, const zlog_proto::View& view);
 
-  View(const std::string& prefix, uint64_t epoch,
-      const zlog_proto::View& view);
+  // returns a copy of this view that maps the given position. if the position
+  // is already mapped then boost::none is returned.
+  virtual boost::optional<View> expand_mapping(const std::string& prefix,
+      const uint64_t position, const Options& options) const;
 
-  // construct the initial view for a new log.
+  // returns a copy of this view with a strictly larger min_valid_position.
+  // otherwise boost::none is returned.
+  virtual boost::optional<View> advance_min_valid_position(
+      uint64_t position) const;
+
+  // TODO: detect idempotent case?
+  View set_sequencer_config(SequencerConfig seq_config) const;
+
   static std::string create_initial(const Options& options);
+
+  std::string serialize() const;
+
+  const ObjectMap object_map;
+  const uint64_t min_valid_position;
+  const boost::optional<SequencerConfig> seq_config;
+
+ private:
+  View(const ObjectMap object_map, const uint64_t min_valid_position,
+      const boost::optional<SequencerConfig> seq_config) :
+    object_map(object_map),
+    min_valid_position(min_valid_position),
+    seq_config(seq_config)
+  {}
+};
+
+// view with an associated epoch
+// TODO: avoid type mistakes by encapsulating View?
+class VersionedView : public View {
+ public:
+  VersionedView(const std::string& prefix, const uint64_t epoch,
+      const zlog_proto::View& view) :
+    View(prefix, view),
+    epoch_(epoch)
+  {}
 
   uint64_t epoch() const {
     return epoch_;
   }
 
-  std::string serialize() const;
-
-  ObjectMap object_map;
-  boost::optional<SequencerConfig> seq_config;
-  uint64_t min_valid_position;
-
+  // TODO: should this be const? should this be in non-epoch View?
   std::shared_ptr<Sequencer> seq;
 
  private:
@@ -326,7 +354,7 @@ class Striper {
 
   void shutdown();
 
-  std::shared_ptr<const View> view() const;
+  std::shared_ptr<const VersionedView> view() const;
 
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
       uint64_t position);
@@ -379,7 +407,9 @@ class Striper {
   int seal_stripe(const Stripe& stripe, uint64_t epoch,
       uint64_t *pposition, bool *pempty) const;
 
-  std::shared_ptr<const View> view_;
+  // the current view. any view itself is immutable, but as new views are
+  // created and discovered the current view is replaced with newer views.
+  std::shared_ptr<const VersionedView> view_;
 
  private:
   struct RefreshWaiter {

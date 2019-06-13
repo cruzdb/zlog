@@ -63,6 +63,9 @@
 
 // Log open in seq should use hoid
 
+// split into multiple flies
+//
+// chill on the const
 
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
@@ -190,12 +193,10 @@ ObjectMap::map_to(const uint64_t position) const
   return objects;
 }
 
-bool ObjectMap::expand_mapping(const std::string& prefix,
+void ObjectMap::expand_mapping(const std::string& prefix,
     const uint64_t position, const Options& options)
 {
-  if (map(position).first) {
-    return false;
-  }
+  assert(!map(position).first);
 
   do {
     const auto stripe_id = next_stripe_id_++;
@@ -213,8 +214,18 @@ bool ObjectMap::expand_mapping(const std::string& prefix,
       stripes_by_id_.emplace(stripe_id, res.first);
     }
   } while (!map(position).first);
+}
 
-  return true;
+boost::optional<ObjectMap> ObjectMap::expand_mapping(const std::string& prefix,
+    const uint64_t position, const Options& options) const
+{
+  if (map(position).first) {
+    return boost::none;
+  }
+
+  auto new_object_map = *this;
+  new_object_map.expand_mapping(prefix, position, options);
+  return new_object_map;
 }
 
 uint64_t ObjectMap::max_position() const
@@ -234,11 +245,25 @@ Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
   return it->second->second.stripe_by_id(stripe_id);
 }
 
+// TODO: view_ initialization: initialize to either (1) the nullptr or (2) a
+// valid view. using some sort of default initialization is error prone, and
+// effectively the same as using one of the other two approaches but is far more
+// clear in the semantics. i'd lean towards using the nullptr because it allows
+// us to _really_ have just one place where views are updated: reading from the
+// projection object. the trick here is then to make the initialization of the
+// striper part of the log instance creation / open procecure. something like
+// "wait_for_view_init()"... or whatever.
+//
+// the other option would be to factor out view initialization from the log so
+// we could construct the view then pass it in during creation
+//
+// was the zero epoch init view special? did it solve an initialization issue
+// when comparing against views--like it always sorted before...?
 Striper::Striper(LogImpl *log, const std::string& secret) :
   shutdown_(false),
   log_(log),
   secret_(secret),
-  view_(std::make_shared<const View>()),
+  view_(nullptr),
   expand_pos_(boost::none)
 {
   refresh_thread_ = std::thread(&Striper::refresh_entry_, this);
@@ -258,7 +283,7 @@ Striper::~Striper()
   assert(!stripe_init_thread_.joinable());
 }
 
-std::shared_ptr<const View> Striper::view() const
+std::shared_ptr<const VersionedView> Striper::view() const
 {
   std::lock_guard<std::mutex> lk(lock_);
   assert(view_);
@@ -331,21 +356,21 @@ boost::optional<std::string> Striper::map(
 
 int Striper::try_expand_view(const uint64_t position)
 {
-  // read: the view into a mutable copy
-  auto v = *view();
-  const auto next_epoch = v.epoch() + 1;
+  // read: the current view
+  auto curr_view = view();
 
   // TODO: what is the initial state of the view/object_map for brand new logs?
   // there is a view created in stable storage for new logs, but it doesn't
   // appear the actualy log instance has it loaded initially. are we just
   // getting lucky that it's read up before hitting this?
 
-  // modify: the object map to contain the position
-  auto changed = v.object_map.expand_mapping(log_->prefix, position,
+  // modify: a new view that maps the position
+  auto new_view = curr_view->expand_mapping(log_->prefix, position,
       log_->options);
-  if (!changed) {
+  if (!new_view) {
     return 0;
   }
+
 
   // TODO: it would be good track information that let us identify scenarios
   // when lots of threads or async ops are producing a thundering herd to
@@ -353,11 +378,12 @@ int Striper::try_expand_view(const uint64_t position)
   // deduplicating the requests. this shouldn't be an issue when double
   // buffering view creation is working well.
 
-  // write: the serialized view as a new epoch view
-  auto data = v.serialize();
+  // write: the new view as the next epoch
+  auto data = new_view->serialize();
+  const auto next_epoch = curr_view->epoch() + 1;
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
-    update_current_view(v.epoch());
+    update_current_view(curr_view->epoch());
     if (!ret) {
       // we successfully proposed the new stripe, so schedule an initialization
       // job for the objects in the new stripe. it's possible that in the case
@@ -431,23 +457,21 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
 
 int Striper::advance_min_valid_position(const uint64_t position)
 {
-  // read: a mutable copy of the current view
-  auto v = *view();
-  const auto next_epoch = v.epoch() + 1;
+  // read: the current view
+  auto curr_view = view();
 
-  // is the invalid range expanding?
-  if (position <= v.min_valid_position) {
+  // update: is the invalid range expanding?
+  auto new_view = curr_view->advance_min_valid_position(position);
+  if (!new_view) {
     return 0;
   }
 
-  // update the view
-  v.min_valid_position = position;
-
   // write: the proposed new view
-  auto data = v.serialize();
+  auto data = new_view->serialize();
+  const auto next_epoch = curr_view->epoch() + 1;
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
-    update_current_view(v.epoch());
+    update_current_view(curr_view->epoch());
     return 0;
   }
 
@@ -456,9 +480,9 @@ int Striper::advance_min_valid_position(const uint64_t position)
 
 int Striper::propose_sequencer()
 {
-  // read: a mutable copy of the current view
-  auto v = *view();
-  const auto next_epoch = v.epoch() + 1;
+  // read: the current view
+  auto curr_view = view();
+  const auto next_epoch = curr_view->epoch() + 1;
 
   bool empty = true;
   // max pos only defined for non-empty log
@@ -468,16 +492,16 @@ int Striper::propose_sequencer()
   // contained in the first non-empty stripe scanning in reverse, beginning with
   // the stripe that maps the maximum possible position for the current view.
 
-  std::vector<uint64_t> stripe_ids(v.object_map.num_stripes());
+  std::vector<uint64_t> stripe_ids(curr_view->object_map.num_stripes());
   std::iota(std::begin(stripe_ids), std::end(stripe_ids), 0);
 
   auto it = stripe_ids.crbegin();
   for (; it != stripe_ids.crend(); it++) {
-    const auto stripe = v.object_map.stripe_by_id(*it);
+    const auto stripe = curr_view->object_map.stripe_by_id(*it);
     int ret = seal_stripe(stripe, next_epoch, &max_pos, &empty);
     if (ret < 0) {
       if (ret == -ESPIPE) {
-        update_current_view(v.epoch());
+        update_current_view(curr_view->epoch());
         return 0;
       }
       return ret;
@@ -497,11 +521,11 @@ int Striper::propose_sequencer()
   // rather to signal to clients connected / using other sequencers that they
   // should grab a new view to see the new sequencer.
   for (; it != stripe_ids.crend(); it++) {
-    const auto stripe = v.object_map.stripe_by_id(*it);
+    const auto stripe = curr_view->object_map.stripe_by_id(*it);
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
     if (ret < 0) {
       if (ret == -ESPIPE) {
-        update_current_view(v.epoch());
+        update_current_view(curr_view->epoch());
         return 0;
       }
       return ret;
@@ -522,13 +546,13 @@ int Striper::propose_sequencer()
   seq_config.epoch = next_epoch;
 
   // modify: the view by setting a new sequencer configuration
-  v.seq_config = seq_config;
+  auto new_view = curr_view->set_sequencer_config(seq_config);
 
   // write: the proposed new view
-  auto data = v.serialize();
+  auto data = new_view.serialize();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
-    update_current_view(v.epoch());
+    update_current_view(curr_view->epoch());
     return 0;
   }
 
@@ -655,7 +679,7 @@ void Striper::refresh_entry_()
         break;
       }
 
-      current_epoch = view_->epoch();
+      current_epoch = view_ ? view_->epoch() : 0;
     }
 
     // from which epoch should we start reading updates? note that in the
@@ -728,7 +752,7 @@ void Striper::refresh_entry_()
       exit(1);
     }
 
-    auto new_view = std::make_shared<View>(log_->prefix, it->first, view_src);
+    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, view_src);
 
     if (new_view->seq_config) {
       if (new_view->seq_config->secret == secret_) { // we should be the active seq
@@ -736,8 +760,11 @@ void Striper::refresh_entry_()
           new_view->seq = std::make_shared<Sequencer>(it->first,
               new_view->seq_config->position);
         } else {
+          // TODO: need to provide an explanation for how this path is never
+          // taken on a new log where view_ is initially nullptr;
           assert(new_view->seq_config->epoch < it->first);
           std::lock_guard<std::mutex> lk(lock_);
+          assert(view_);
           assert(view_->seq);
           assert(view_->seq_config);
           assert(view_->seq_config->epoch == new_view->seq_config->epoch);
@@ -828,9 +855,8 @@ std::string View::serialize() const
   return blob;
 }
 
-View::View(const std::string& prefix, uint64_t epoch,
-    const zlog_proto::View& view) :
-  epoch_(epoch)
+ObjectMap ObjectMap::from_view(const std::string& prefix,
+    const zlog_proto::View& view)
 {
   std::map<uint64_t, MultiStripe> stripes;
   for (auto stripe : view.stripes()) {
@@ -860,20 +886,54 @@ View::View(const std::string& prefix, uint64_t epoch,
     assert(ids.find(view.next_stripe_id()) == ids.end());
   }
 
-  object_map = ObjectMap(view.next_stripe_id(), stripes);
+  return ObjectMap(view.next_stripe_id(), stripes);
+}
 
+boost::optional<SequencerConfig> SequencerConfig::from_view(
+      const zlog_proto::View& view)
+{
   if (view.has_seq()) {
     auto seq = view.seq();
+    assert(seq.epoch() > 0);
+    assert(!seq.secret().empty());
     SequencerConfig conf;
     conf.epoch = seq.epoch();
     conf.secret = seq.secret();
     conf.position = seq.position();
-    seq_config = conf;
-    assert(seq_config->epoch > 0);
-    assert(!seq_config->secret.empty());
+    return conf;
   }
+  return boost::none;
+}
 
-  min_valid_position = view.min_valid_position();
+View::View(const std::string& prefix, const zlog_proto::View& view) :
+  object_map(ObjectMap::from_view(prefix, view)),
+  min_valid_position(view.min_valid_position()),
+  seq_config(SequencerConfig::from_view(view))
+{}
+
+boost::optional<View> View::expand_mapping(const std::string& prefix,
+    const uint64_t position, const Options& options) const
+{
+  const auto new_object_map = object_map.expand_mapping(prefix, position,
+      options);
+  if (new_object_map) {
+    return View(*new_object_map, min_valid_position, seq_config);
+  }
+  return boost::none;
+}
+
+
+boost::optional<View> View::advance_min_valid_position(uint64_t position) const
+{
+  if (position <= min_valid_position) {
+    return boost::none;
+  }
+  return View(object_map, position, seq_config);
+}
+
+View View::set_sequencer_config(SequencerConfig seq_config) const
+{
+  return View(object_map, min_valid_position, seq_config);
 }
 
 }
