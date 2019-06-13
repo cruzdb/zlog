@@ -7,6 +7,7 @@ set(libzlog_sources
   log.cc
   backend.cc
   cache.cc
+  stripe.cc
   ../eviction/lru.cc
   ../eviction/arc.cc
   ../port/stack_trace.cc
