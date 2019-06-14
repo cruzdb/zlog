@@ -20,7 +20,7 @@ class View {
   // returns a copy of this view that maps the given position. if the position
   // is already mapped then boost::none is returned.
   virtual boost::optional<View> expand_mapping(const std::string& prefix,
-      const uint64_t position, const Options& options) const;
+      uint64_t position, const Options& options) const;
 
   // returns a copy of this view with a strictly larger min_valid_position.
   // otherwise boost::none is returned.
