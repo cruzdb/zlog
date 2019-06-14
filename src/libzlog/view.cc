@@ -1,4 +1,5 @@
 #include "view.h"
+#include <iostream>
 #include "include/zlog/options.h"
 #include "libzlog/zlog.pb.h"
 
