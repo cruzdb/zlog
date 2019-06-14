@@ -1,15 +1,11 @@
 #pragma once
-#include "stripe.h"
-#include "object_map.h"
-#include <atomic>
-#include <map>
 #include <mutex>
 #include <thread>
-#include <sstream>
 #include <list>
 #include <condition_variable>
 #include <boost/optional.hpp>
-#include "libzlog/zlog.pb.h"
+#include "stripe.h"
+#include "view.h"
 
   // don't want to expand mappings on an empty object map (like the zero state)
   // need to figure that out. as it stands map would send caller to
@@ -47,102 +43,9 @@
 // const auto min_position = empty_map ? 0 : (it->second.max_position() + 1);
 // const auto max_position = min_position + num_stripe_entries - 1;
 
-namespace zlog_proto {
-  class View;
-}
-
 namespace zlog {
 
 class LogImpl;
-struct Options;
-
-class Sequencer {
- public:
-  explicit Sequencer(uint64_t epoch, uint64_t position) :
-    epoch_(epoch),
-    position_(position)
-  {}
-
-  uint64_t check_tail(bool next) {
-    if (next) {
-      return position_.fetch_add(1);
-    } else {
-      return position_.load();
-    }
-  }
-
-  uint64_t epoch() const {
-    return epoch_;
-  }
-
- private:
-  const uint64_t epoch_;
-  std::atomic<uint64_t> position_;
-};
-
-struct SequencerConfig {
-  uint64_t epoch;
-  std::string secret;
-  uint64_t position;
-
-  static boost::optional<SequencerConfig> from_view(
-      const zlog_proto::View& view);
-};
-
-class View {
- public:
-  View(const std::string& prefix, const zlog_proto::View& view);
-
-  // returns a copy of this view that maps the given position. if the position
-  // is already mapped then boost::none is returned.
-  virtual boost::optional<View> expand_mapping(const std::string& prefix,
-      const uint64_t position, const Options& options) const;
-
-  // returns a copy of this view with a strictly larger min_valid_position.
-  // otherwise boost::none is returned.
-  virtual boost::optional<View> advance_min_valid_position(
-      uint64_t position) const;
-
-  // TODO: detect idempotent case?
-  View set_sequencer_config(SequencerConfig seq_config) const;
-
-  static std::string create_initial(const Options& options);
-
-  std::string serialize() const;
-
-  const ObjectMap object_map;
-  const uint64_t min_valid_position;
-  const boost::optional<SequencerConfig> seq_config;
-
- private:
-  View(const ObjectMap object_map, const uint64_t min_valid_position,
-      const boost::optional<SequencerConfig> seq_config) :
-    object_map(object_map),
-    min_valid_position(min_valid_position),
-    seq_config(seq_config)
-  {}
-};
-
-// view with an associated epoch
-// TODO: avoid type mistakes by encapsulating View?
-class VersionedView : public View {
- public:
-  VersionedView(const std::string& prefix, const uint64_t epoch,
-      const zlog_proto::View& view) :
-    View(prefix, view),
-    epoch_(epoch)
-  {}
-
-  uint64_t epoch() const {
-    return epoch_;
-  }
-
-  // TODO: should this be const? should this be in non-epoch View?
-  std::shared_ptr<Sequencer> seq;
-
- private:
-  const uint64_t epoch_;
-};
 
 class Striper {
  public:
