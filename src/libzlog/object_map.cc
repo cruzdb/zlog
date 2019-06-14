@@ -76,8 +76,8 @@ ObjectMap::map_to(const uint64_t position) const
       break;
     }
 
-    // TODO: does this handle cases where we might slice off a stripe before its
-    // max_position()?
+    // this (likely) doesn't handle the future scenario where we chop off
+    // stripes before they fill up.
     const auto max_pos_base = stripe.max_position() - (stripe.width() - 1);
 
     for (uint32_t i = 0; i < stripe.width(); i++) {

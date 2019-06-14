@@ -26,22 +26,6 @@
   //
   // i think the other really good option is to just define object map to always
   // be initialized from a proto view from the log.
-  //
-  //
-
-// remove prefix from multistripe/stripe and pass around log reference when
-// generating object names?
-//
-// document locking around data structures like objectmap/stripe. i think its as
-// simple as noting that all operations are on copies of the view.
-//
-// should MultiStripe have its own serializatio method?
-//
-// TODO check assumptions about disjoint ranges in objectmap/multistripe
-//
-// record any notes about how to change the stripe configuration
-// const auto min_position = empty_map ? 0 : (it->second.max_position() + 1);
-// const auto max_position = min_position + num_stripe_entries - 1;
 
 namespace zlog {
 

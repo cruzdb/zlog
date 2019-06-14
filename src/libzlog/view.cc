@@ -24,7 +24,6 @@ std::string View::serialize() const
 {
   zlog_proto::View view;
 
-  // TODO: good reason for object_map serializing itself
   for (const auto& stripe : object_map.multi_stripes()) {
     auto pb_stripe = view.add_stripes();
     pb_stripe->set_base_id(stripe.second.base_id());

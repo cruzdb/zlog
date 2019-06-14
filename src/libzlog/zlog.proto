@@ -37,6 +37,9 @@ message Sequencer {
 }
 
 message View {
+  // the stripe id could be deduced from the set of stripes, but this would
+  // restrict stripe management in the future, coupling the serialized stripes
+  // to unique stripe id generation.
   optional uint64 next_stripe_id = 1 [default = 0];
   repeated MultiStripe stripes = 2;
   optional Sequencer seq = 3;

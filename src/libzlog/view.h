@@ -27,7 +27,6 @@ class View {
   virtual boost::optional<View> advance_min_valid_position(
       uint64_t position) const;
 
-  // TODO: detect idempotent case?
   View set_sequencer_config(SequencerConfig seq_config) const;
 
   static std::string create_initial(const Options& options);
@@ -47,8 +46,6 @@ class View {
   {}
 };
 
-// view with an associated epoch
-// TODO: avoid type mistakes by encapsulating View?
 class VersionedView : public View {
  public:
   VersionedView(const std::string& prefix, const uint64_t epoch,
@@ -61,7 +58,6 @@ class VersionedView : public View {
     return epoch_;
   }
 
-  // TODO: should this be const? should this be in non-epoch View?
   std::shared_ptr<Sequencer> seq;
 
  private:

@@ -64,29 +64,11 @@
 
 // Log open in seq should use hoid
 
-// split into multiple flies
-//
-// chill on the const
-
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 
 namespace zlog {
 
-// TODO: view_ initialization: initialize to either (1) the nullptr or (2) a
-// valid view. using some sort of default initialization is error prone, and
-// effectively the same as using one of the other two approaches but is far more
-// clear in the semantics. i'd lean towards using the nullptr because it allows
-// us to _really_ have just one place where views are updated: reading from the
-// projection object. the trick here is then to make the initialization of the
-// striper part of the log instance creation / open procecure. something like
-// "wait_for_view_init()"... or whatever.
-//
-// the other option would be to factor out view initialization from the log so
-// we could construct the view then pass it in during creation
-//
-// was the zero epoch init view special? did it solve an initialization issue
-// when comparing against views--like it always sorted before...?
 Striper::Striper(LogImpl *log, const std::string& secret) :
   shutdown_(false),
   log_(log),
@@ -139,8 +121,6 @@ Striper::map_to(const std::shared_ptr<const View>& view,
   return view->object_map.map_to(position);
 }
 
-// TODO: should the min_valid_position used for trim be taken into account in
-// this method?
 boost::optional<std::string> Striper::map(
     const std::shared_ptr<const View>& view,
     const uint64_t position)
@@ -198,7 +178,6 @@ int Striper::try_expand_view(const uint64_t position)
   if (!new_view) {
     return 0;
   }
-
 
   // TODO: it would be good track information that let us identify scenarios
   // when lots of threads or async ops are producing a thundering herd to
@@ -482,10 +461,6 @@ void Striper::async_expand_view(uint64_t position)
   }
 }
 
-// TODO
-//   * anywhere it is appropriate we should crash and burn if a log contains no
-//   views in order to reenforce the rule that new logs are created with an
-//   initial view.
 void Striper::refresh_entry_()
 {
   while (true) {
@@ -588,8 +563,6 @@ void Striper::refresh_entry_()
           new_view->seq = std::make_shared<Sequencer>(it->first,
               new_view->seq_config->position);
         } else {
-          // TODO: need to provide an explanation for how this path is never
-          // taken on a new log where view_ is initially nullptr;
           assert(new_view->seq_config->epoch < it->first);
           std::lock_guard<std::mutex> lk(lock_);
           assert(view_);

@@ -51,8 +51,6 @@ class ObjectMap {
     return stripes_by_pos_;
   }
 
-  // TODO iterate over these stripes rather than creating a large data
-  // structure with all the stripes materialized.
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
       uint64_t position) const;
 
@@ -60,7 +58,6 @@ class ObjectMap {
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
  private:
-  // TODO we should be able to deduce the next stripe id, right?
   ObjectMap(uint64_t next_stripe_id,
       const std::map<uint64_t, MultiStripe>& stripes) :
     next_stripe_id_(next_stripe_id),
