@@ -39,7 +39,8 @@ class Backend {
    *
    * The name of the head object, and a prefix that should be used when
    * constructing data objects, are returned through @hoid_out and @prefix_out,
-   * respectively.
+   * respectively. The prefix created by a backend must be unique and stable
+   * such that when a log is opened in the future the same prefix is available.
    *
    * @param name       name of the log
    * @param view       initial log view
@@ -59,7 +60,8 @@ class Backend {
    * The name of the head object, and a prefix that should be used when
    * constructing data objects, are returned through @hoid_out and @prefix_out,
    * respectively. When a log is created, the view for epoch 1 is written, so
-   * clients should start with epoch 2 when using this interface.
+   * clients should start with epoch 2 when using this interface. The prefix
+   * returned must be the same prefix returned when the log was created.
    *
    * @param name       name of the log
    * @param hoid_out   name of the head object

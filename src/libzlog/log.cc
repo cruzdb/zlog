@@ -40,7 +40,7 @@ int create_or_open(const Options& options,
     }
 
     if (!view) {
-      view = View::create_initial();
+      view = View::create_initial(options);
     }
 
     ret = backend->CreateLog(name, *view, &hoid, &prefix);
@@ -103,6 +103,12 @@ int Log::Open(const Options& options,
 
   auto impl = std::unique_ptr<LogImpl>(
       new LogImpl(backend, name, hoid, prefix, secret.str(), options));
+
+  // wait for the striper to be initialized with the initial view. this
+  // initialization is required as many interfaces assume the first view has
+  // been loaded / initailized and assert/fail otherwise.
+  // gh#343
+  impl->striper.update_current_view(0);
 
   // TODO: initialize the first stripe so that cost isn't incurred by clients
   // when they start performing I/O.

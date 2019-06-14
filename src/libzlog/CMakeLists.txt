@@ -7,6 +7,10 @@ set(libzlog_sources
   log.cc
   backend.cc
   cache.cc
+  stripe.cc
+  object_map.cc
+  view.cc
+  sequencer.cc
   ../eviction/lru.cc
   ../eviction/arc.cc
   ../port/stack_trace.cc

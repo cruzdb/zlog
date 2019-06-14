@@ -37,6 +37,8 @@ struct Options {
 
   uint32_t max_inflight_ops = 1024;
 
+  bool create_initial_view_stripes = true;
+
   ///////////////////////////////////////////////////////////////////
 
   // number of I/O threads
