@@ -91,6 +91,10 @@ class MultiStripe {
     return base_id_ + instances_ - 1;
   }
 
+  uint64_t min_position() const {
+    return min_position_;
+  }
+
   uint64_t max_position() const {
     return max_position_;
   }
@@ -126,9 +130,15 @@ class MultiStripe {
         max_pos);
   }
 
-  void extend() {
-    instances_++;
-    max_position_ += (uint64_t)width_ * slots_;
+  MultiStripe extend() const {
+    return MultiStripe(
+        prefix_,
+        base_id_,
+        width_,
+        slots_,
+        min_position_,
+        instances_ + 1,
+        max_position_ + (uint64_t)width_ * slots_);
   }
 
  private:
@@ -137,8 +147,8 @@ class MultiStripe {
   const uint32_t width_;
   const uint32_t slots_;
   const uint64_t min_position_;
-  uint64_t instances_;
-  uint64_t max_position_;
+  const uint64_t instances_;
+  const uint64_t max_position_;
 };
 
 }

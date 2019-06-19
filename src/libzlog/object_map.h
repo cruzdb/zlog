@@ -58,22 +58,28 @@ class ObjectMap {
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
  private:
-  ObjectMap(uint64_t next_stripe_id,
-      const std::map<uint64_t, MultiStripe>& stripes) :
+  typedef std::map<uint64_t, MultiStripe> stripes_by_pos_t;
+  typedef std::map<uint64_t, stripes_by_pos_t::const_iterator> stripes_by_id_t;
+
+  ObjectMap(uint64_t next_stripe_id, const stripes_by_pos_t& stripes) :
     next_stripe_id_(next_stripe_id),
-    stripes_by_pos_(stripes)
-  {
-    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
-      stripes_by_id_.emplace(it->second.base_id(), it);
+    stripes_by_pos_(stripes),
+    // compute over the instance variable so the iterators are valid!
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+  {}
+
+  // helper to initialize the computed const member
+  static stripes_by_id_t compute_stripes_by_id(const stripes_by_pos_t& stripes) {
+    stripes_by_id_t res;
+    for (auto it = stripes.cbegin(); it != stripes.cend(); it++) {
+      res.emplace(it->second.base_id(), it);
     }
+    return res;
   }
 
-  void expand_mapping(const std::string& prefix, uint64_t position,
-      const Options& options);
-
-  uint64_t next_stripe_id_;
-  std::map<uint64_t, MultiStripe> stripes_by_pos_;
-  std::map<uint64_t, std::map<uint64_t, MultiStripe>::const_iterator> stripes_by_id_;
+  const uint64_t next_stripe_id_;
+  const stripes_by_pos_t stripes_by_pos_;
+  const stripes_by_id_t stripes_by_id_;
 };
 
 }
