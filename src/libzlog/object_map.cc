@@ -1,7 +1,7 @@
 #include "object_map.h"
 #include <set>
-#include "libzlog/zlog.pb.h"
 #include "include/zlog/options.h"
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
@@ -162,15 +162,19 @@ Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
 }
 
 ObjectMap ObjectMap::from_view(const std::string& prefix,
-    const zlog_proto::View& view)
+    const zlog::fbs::View *view)
 {
   std::map<uint64_t, MultiStripe> stripes;
-  for (auto stripe : view.stripes()) {
-    auto res = stripes.emplace(stripe.min_position(),
-        MultiStripe(prefix, stripe.base_id(), stripe.width(), stripe.slots(),
-          stripe.min_position(), stripe.instances(), stripe.max_position()));
-    assert(res.second);
-    (void)res;
+
+  if (view->stripes()) {
+    const auto vs = view->stripes();
+    for (auto it = vs->begin(); it != vs->end(); it++) {
+      auto res = stripes.emplace(it->min_position(),
+          MultiStripe(prefix, it->base_id(), it->width(), it->slots(),
+            it->min_position(), it->instances(), it->max_position()));
+      assert(res.second);
+      (void)res;
+    }
   }
 
   if (!stripes.empty()) {
@@ -189,10 +193,10 @@ ObjectMap ObjectMap::from_view(const std::string& prefix,
         it2++;
       }
     }
-    assert(ids.find(view.next_stripe_id()) == ids.end());
+    assert(ids.find(view->next_stripe_id()) == ids.end());
   }
 
-  return ObjectMap(view.next_stripe_id(), stripes);
+  return ObjectMap(view->next_stripe_id(), stripes);
 }
 
 }

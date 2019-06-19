@@ -5,7 +5,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "libzlog/zlog.pb.h"
+#include "libzlog/zlog_generated.h"
 
 // How does a client learn about available sequencers?
 //
@@ -549,11 +549,15 @@ void Striper::refresh_entry_()
     const auto it = views.crbegin();
     assert(it != views.crend());
 
-    zlog_proto::View view_src;
-    if (!view_src.ParseFromString(it->second)) {
+    // move into View factory?
+    flatbuffers::Verifier verifier(
+        reinterpret_cast<const uint8_t*>(it->second.data()), it->second.size());
+    if (!verifier.VerifyBuffer<zlog::fbs::View>(nullptr)) {
       assert(0);
       exit(1);
     }
+    const auto view_src = flatbuffers::GetRoot<zlog::fbs::View>(
+        reinterpret_cast<const uint8_t*>(it->second.data()));
 
     auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, view_src);
 

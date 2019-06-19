@@ -1,22 +1,27 @@
 #include "sequencer.h"
 #include <boost/optional.hpp>
-#include "libzlog/zlog.pb.h"
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
 boost::optional<SequencerConfig> SequencerConfig::from_view(
-      const zlog_proto::View& view)
+      const zlog::fbs::View *view)
 {
-  if (view.has_seq()) {
-    auto seq = view.seq();
-    assert(seq.epoch() > 0);
-    assert(!seq.secret().empty());
+  if (view->sequencer()) {
+    const auto seq = view->sequencer();
+
+    assert(seq->epoch() > 0);
+    const auto secret = flatbuffers::GetString(seq->secret());
+    assert(!secret.empty());
+
     SequencerConfig conf;
-    conf.epoch = seq.epoch();
-    conf.secret = seq.secret();
-    conf.position = seq.position();
+    conf.epoch = seq->epoch();
+    conf.secret = secret;
+    conf.position = seq->position();
+
     return conf;
   }
+
   return boost::none;
 }
 

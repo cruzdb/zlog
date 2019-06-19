@@ -2,7 +2,7 @@
 #include <atomic>
 #include <boost/optional.hpp>
 
-namespace zlog_proto {
+namespace zlog::fbs {
   class View;
 }
 
@@ -38,7 +38,7 @@ struct SequencerConfig {
   uint64_t position;
 
   static boost::optional<SequencerConfig> from_view(
-      const zlog_proto::View& view);
+      const zlog::fbs::View *view);
 };
 
 }

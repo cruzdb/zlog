@@ -3,7 +3,7 @@
 #include <boost/optional.hpp>
 #include "stripe.h"
 
-namespace zlog_proto {
+namespace zlog::fbs {
   class View;
 }
 
@@ -14,7 +14,7 @@ struct Options;
 class ObjectMap {
  public:
   static ObjectMap from_view(const std::string& prefix,
-      const zlog_proto::View& view);
+      const zlog::fbs::View *view);
 
  public:
   // returns the object name that maps the position, if it exists. the second

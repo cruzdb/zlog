@@ -6,7 +6,7 @@ set -e
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   brew update || true
-  brew install boost protobuf cmake lmdb || true
+  brew install boost cmake lmdb || true
   exit 0
 fi
 
@@ -92,7 +92,7 @@ function pacman() {
 
   $SUDO pacman -Su
 
-  $SUDO pacman -S boost protobuf cmake lmdb
+  $SUDO pacman -S boost cmake lmdb
 
   exit 0
 }

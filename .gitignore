@@ -45,6 +45,7 @@ src/zlog
 src/physical-design
 src/zlog-bench
 src/storage/ceph/cls_zlog_generated.h
+src/libzlog/zlog_generated.h
 
 CMakeCache.txt
 CMakeFiles

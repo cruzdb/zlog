@@ -1,63 +1,68 @@
 #include "view.h"
 #include <iostream>
 #include "include/zlog/options.h"
-#include "libzlog/zlog.pb.h"
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
 std::string View::create_initial(const Options& options)
 {
-  std::string blob;
-  zlog_proto::View view;
-  view.set_min_valid_position(0);
+  flatbuffers::FlatBufferBuilder fbb;
+  auto builder = zlog::fbs::ViewBuilder(fbb);
+
+  builder.add_next_stripe_id(0);
+  builder.add_min_valid_position(0);
   if (options.create_initial_view_stripes) {
     // TODO: implement
   }
-  if (!view.SerializeToString(&blob)) {
-    assert(0);
-    exit(1);
-  }
-  return blob;
+
+  auto view = builder.Finish();
+  fbb.Finish(view);
+
+  return std::string(
+      reinterpret_cast<const char*>(fbb.GetBufferPointer()), fbb.GetSize());
 }
 
 std::string View::serialize() const
 {
-  zlog_proto::View view;
+  flatbuffers::FlatBufferBuilder fbb;
 
+  // serialize the multi-stripes
+  std::vector<flatbuffers::Offset<zlog::fbs::MultiStripe>> stripes;
   for (const auto& stripe : object_map.multi_stripes()) {
-    auto pb_stripe = view.add_stripes();
-    pb_stripe->set_base_id(stripe.second.base_id());
-    pb_stripe->set_width(stripe.second.width());
-    pb_stripe->set_slots(stripe.second.slots());
-    pb_stripe->set_instances(stripe.second.instances());
-    pb_stripe->set_min_position(stripe.first);
-    pb_stripe->set_max_position(stripe.second.max_position());
+    auto s = zlog::fbs::CreateMultiStripe(fbb,
+        stripe.second.base_id(),
+        stripe.second.width(),
+        stripe.second.slots(),
+        stripe.second.instances(),
+        stripe.first,
+        stripe.second.max_position());
+    stripes.push_back(s);
   }
-  view.set_next_stripe_id(object_map.next_stripe_id());
 
+  // serialize sequencer config
+  flatbuffers::Offset<zlog::fbs::Sequencer> sequencer_config = 0;
   if (seq_config) {
-    auto seq = view.mutable_seq();
-    seq->set_epoch(seq_config->epoch);
-    seq->set_secret(seq_config->secret);
-    seq->set_position(seq_config->position);
+    sequencer_config = zlog::fbs::CreateSequencerDirect(fbb,
+        seq_config->epoch,
+        seq_config->secret.c_str(),
+        seq_config->position);
   }
 
-  view.set_min_valid_position(min_valid_position);
+  auto view = zlog::fbs::CreateViewDirect(fbb,
+      object_map.next_stripe_id(),
+      &stripes,
+      sequencer_config,
+      min_valid_position);
+  fbb.Finish(view);
 
-  std::string blob;
-  if (!view.SerializeToString(&blob)) {
-    std::cerr << "invalid proto" << std::endl << std::flush;
-    assert(0);
-    exit(1);
-    return "";
-  }
-
-  return blob;
+  return std::string(
+      reinterpret_cast<const char*>(fbb.GetBufferPointer()), fbb.GetSize());
 }
 
-View::View(const std::string& prefix, const zlog_proto::View& view) :
+View::View(const std::string& prefix, const zlog::fbs::View *view) :
   object_map(ObjectMap::from_view(prefix, view)),
-  min_valid_position(view.min_valid_position()),
+  min_valid_position(view->min_valid_position()),
   seq_config(SequencerConfig::from_view(view))
 {}
 

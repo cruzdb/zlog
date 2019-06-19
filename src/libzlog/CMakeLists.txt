@@ -1,4 +1,4 @@
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS zlog.proto)
+build_flatbuffers("zlog.fbs" "" zlog_schemas "" "${CMAKE_CURRENT_BINARY_DIR}" "" "")
 
 set(libzlog_sources
   log_impl.cc
@@ -19,22 +19,22 @@ set(libzlog_sources
   ../util/thread_local.cc
   ../monitoring/statistics.cc
   ../monitoring/histogram.cc
-  ../util/mempool.cc
-  ${PROTO_SRCS}
-  ${PROTO_HDRS})
+  ../util/mempool.cc)
 
 add_definitions("-DZLOG_LIBDIR=\"${CMAKE_INSTALL_FULL_LIBDIR}\"")
 add_definitions("-DCMAKE_SHARED_LIBRARY_SUFFIX=\"${CMAKE_SHARED_LIBRARY_SUFFIX}\"")
 add_definitions("-DCMAKE_SHARED_LIBRARY_PREFIX=\"${CMAKE_SHARED_LIBRARY_PREFIX}\"")
 
 add_library(libzlog SHARED ${libzlog_sources})
+add_dependencies(libzlog zlog_schemas)
 
 target_include_directories(libzlog
-  PRIVATE ${PROTOBUF_INCLUDE_DIR})
+    PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
+)
 
 target_link_libraries(libzlog
     dl
-    ${PROTOBUF_LIBRARIES}
+    pthread
     ${Boost_SYSTEM_LIBRARY}
     ${Backtrace_LIBRARIES}
 )

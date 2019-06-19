@@ -6,8 +6,6 @@ Vcs-Git: git://github.com/cruzdb/zlog.git
 Vcs-Browser: https://github.com/cruzdb/zlog
 Maintainer: Noah Watkins <noahwatkins@gmail.com>
 Build-Depends: cmake,
-  libprotobuf-dev,
-  protobuf-compiler,
   libboost-system-dev,
   libboost-program-options-dev,
   lcov,

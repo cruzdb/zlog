@@ -5,7 +5,7 @@
 #include "object_map.h"
 #include "sequencer.h"
 
-namespace zlog_proto {
+namespace zlog::fbs {
   class View;
 }
 
@@ -15,7 +15,7 @@ struct Options;
 
 class View {
  public:
-  View(const std::string& prefix, const zlog_proto::View& view);
+  View(const std::string& prefix, const zlog::fbs::View *view);
 
   // returns a copy of this view that maps the given position. if the position
   // is already mapped then boost::none is returned.
@@ -33,6 +33,7 @@ class View {
 
   std::string serialize() const;
 
+  // TODO: wrap in accessors?
   const ObjectMap object_map;
   const uint64_t min_valid_position;
   const boost::optional<SequencerConfig> seq_config;
@@ -49,7 +50,7 @@ class View {
 class VersionedView : public View {
  public:
   VersionedView(const std::string& prefix, const uint64_t epoch,
-      const zlog_proto::View& view) :
+      const zlog::fbs::View *view) :
     View(prefix, view),
     epoch_(epoch)
   {}

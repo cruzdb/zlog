@@ -2,7 +2,6 @@
 #include "libzlog/test_libzlog.h"
 #include "include/zlog/backend/ram.h"
 #include "port/stack_trace.h"
-#include <google/protobuf/stubs/common.h>
 
 std::unique_ptr<zlog::Backend> BackendTest::create_minimal_backend()
 {
@@ -88,6 +87,5 @@ int main(int argc, char **argv)
   rocksdb::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   int ret = RUN_ALL_TESTS();
-  google::protobuf::ShutdownProtobufLibrary();
   return ret;
 }

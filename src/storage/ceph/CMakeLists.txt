@@ -1,4 +1,4 @@
-build_flatbuffers("cls_zlog.fbs" "" schemas "" "${CMAKE_CURRENT_BINARY_DIR}" "" "")
+build_flatbuffers("cls_zlog.fbs" "" cls_zlog_schemas "" "${CMAKE_CURRENT_BINARY_DIR}" "" "")
 
 if(BUILD_CEPH_BACKEND)
 add_library(cls_zlog_client OBJECT cls_zlog_client.cc)
@@ -7,7 +7,7 @@ target_include_directories(cls_zlog_client
     PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
 )
 set_property(TARGET cls_zlog_client PROPERTY POSITION_INDEPENDENT_CODE ON)
-add_dependencies(cls_zlog_client schemas)
+add_dependencies(cls_zlog_client cls_zlog_schemas)
 
 add_library(zlog_backend_ceph SHARED
   ceph.cc
@@ -57,7 +57,7 @@ endif(BUILD_CEPH_BACKEND)
 
 if(HAVE_RADOS_OBJECT_CLASS_H)
   add_library(cls_zlog SHARED cls_zlog.cc)
-  add_dependencies(cls_zlog schemas)
+  add_dependencies(cls_zlog cls_zlog_schemas)
   target_include_directories(cls_zlog
     PRIVATE ${CMAKE_SOURCE_DIR}/src/CRoaringUnityBuild
     PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include)

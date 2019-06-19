@@ -12,8 +12,6 @@ BuildRequires:	java-devel
 BuildRequires:	lcov
 BuildRequires:  libatomic
 BuildRequires:  lmdb-devel
-BuildRequires:	protobuf-devel
-BuildRequires:	protobuf-compiler
 
 # these packages happen to be in fedora, but not centos. we aren't building
 # packages yet for centos, so not dealing with this yet.

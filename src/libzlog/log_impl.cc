@@ -11,7 +11,6 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 
-#include "libzlog/zlog.pb.h"
 #include "include/zlog/log.h"
 #include "include/zlog/backend.h"
 #include "include/zlog/cache.h"

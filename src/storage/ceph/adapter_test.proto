@@ -1,9 +1,0 @@
-syntax = "proto2";
-option optimize_for = SPEED;
-
-package adapter_test;
-
-message TestMessage {
-  required uint64 num = 1;
-  optional bytes data = 2;
-}
