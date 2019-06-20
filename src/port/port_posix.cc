@@ -176,7 +176,7 @@ int GetMaxOpenFiles() {
     return -1;
   }
   // protect against overflow
-  if (no_files_limit.rlim_cur >= std::numeric_limits<int>::max()) {
+  if (no_files_limit.rlim_cur >= (rlim_t)std::numeric_limits<int>::max()) {
     return std::numeric_limits<int>::max();
   }
   return static_cast<int>(no_files_limit.rlim_cur);
