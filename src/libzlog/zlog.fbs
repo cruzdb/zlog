@@ -26,6 +26,11 @@ table MultiStripe {
   max_position:uint64;
 }
 
+table ObjectMap {
+  next_stripe_id:uint64;
+  stripes:[MultiStripe];
+}
+
 table Sequencer {
   epoch:uint64;
   secret:string;
@@ -33,8 +38,7 @@ table Sequencer {
 }
 
 table View {
-  next_stripe_id:uint64;
-  stripes:[MultiStripe];
+  object_map:ObjectMap;
   sequencer:Sequencer;
   min_valid_position:uint64;
 }

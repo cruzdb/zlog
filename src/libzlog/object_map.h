@@ -2,10 +2,7 @@
 #include <map>
 #include <boost/optional.hpp>
 #include "stripe.h"
-
-namespace zlog::fbs {
-  class View;
-}
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
@@ -13,8 +10,11 @@ struct Options;
 
 class ObjectMap {
  public:
-  static ObjectMap from_view(const std::string& prefix,
-      const zlog::fbs::View *view);
+  flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
+      flatbuffers::FlatBufferBuilder& fbb) const;
+
+  static ObjectMap decode(const std::string& prefix,
+      const zlog::fbs::ObjectMap *object_map);
 
  public:
   // returns the object name that maps the position, if it exists. the second
@@ -45,10 +45,6 @@ class ObjectMap {
   // returns the number of stripes.
   uint64_t num_stripes() const {
     return next_stripe_id_;
-  }
-
-  const std::map<uint64_t, MultiStripe>& multi_stripes() const {
-    return stripes_by_pos_;
   }
 
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(

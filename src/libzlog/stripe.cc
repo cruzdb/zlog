@@ -30,4 +30,30 @@ std::vector<std::string> Stripe::make_oids()
   return oids;
 }
 
+MultiStripe MultiStripe::decode(const std::string& prefix,
+    const flatbuffers::VectorIterator<
+      flatbuffers::Offset<zlog::fbs::MultiStripe>,
+      const zlog::fbs::MultiStripe*>& it)
+{
+  return MultiStripe(prefix,
+      it->base_id(),
+      it->width(),
+      it->slots(),
+      it->min_position(),
+      it->instances(),
+      it->max_position());
+}
+
+flatbuffers::Offset<zlog::fbs::MultiStripe> MultiStripe::encode(
+    flatbuffers::FlatBufferBuilder& fbb) const
+{
+  return zlog::fbs::CreateMultiStripe(fbb,
+      base_id_,
+      width_,
+      slots_,
+      instances_,
+      min_position_,
+      max_position_);
+}
+
 }

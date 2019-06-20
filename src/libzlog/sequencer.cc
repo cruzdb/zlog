@@ -1,15 +1,12 @@
 #include "sequencer.h"
 #include <boost/optional.hpp>
-#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
-boost::optional<SequencerConfig> SequencerConfig::from_view(
-      const zlog::fbs::View *view)
+boost::optional<SequencerConfig> SequencerConfig::decode(
+      const zlog::fbs::Sequencer *seq)
 {
-  if (view->sequencer()) {
-    const auto seq = view->sequencer();
-
+  if (seq) {
     assert(seq->epoch() > 0);
     const auto secret = flatbuffers::GetString(seq->secret());
     assert(!secret.empty());
@@ -23,6 +20,16 @@ boost::optional<SequencerConfig> SequencerConfig::from_view(
   }
 
   return boost::none;
+}
+
+
+flatbuffers::Offset<zlog::fbs::Sequencer> SequencerConfig::encode(
+    flatbuffers::FlatBufferBuilder& fbb) const
+{
+  return zlog::fbs::CreateSequencerDirect(fbb,
+      epoch,
+      secret.c_str(),
+      position);
 }
 
 }

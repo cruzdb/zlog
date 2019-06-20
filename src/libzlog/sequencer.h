@@ -1,10 +1,7 @@
 #pragma once
 #include <atomic>
 #include <boost/optional.hpp>
-
-namespace zlog::fbs {
-  class View;
-}
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
@@ -37,8 +34,11 @@ struct SequencerConfig {
   std::string secret;
   uint64_t position;
 
-  static boost::optional<SequencerConfig> from_view(
-      const zlog::fbs::View *view);
+  static boost::optional<SequencerConfig> decode(
+      const zlog::fbs::Sequencer *seq);
+
+  flatbuffers::Offset<zlog::fbs::Sequencer> encode(
+      flatbuffers::FlatBufferBuilder& fbb) const;
 };
 
 }

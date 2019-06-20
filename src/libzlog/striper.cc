@@ -186,7 +186,7 @@ int Striper::try_expand_view(const uint64_t position)
   // buffering view creation is working well.
 
   // write: the new view as the next epoch
-  auto data = new_view->serialize();
+  auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
@@ -274,7 +274,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   }
 
   // write: the proposed new view
-  auto data = new_view->serialize();
+  auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
@@ -356,7 +356,7 @@ int Striper::propose_sequencer()
   auto new_view = curr_view->set_sequencer_config(seq_config);
 
   // write: the proposed new view
-  auto data = new_view.serialize();
+  auto data = new_view.encode();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());

@@ -15,7 +15,14 @@ struct Options;
 
 class View {
  public:
+  // deserialize a view into a new instance
   View(const std::string& prefix, const zlog::fbs::View *view);
+
+  // create a view serialization suitable as an initial view
+  static std::string create_initial(const Options& options);
+
+  // serialize this view instance
+  std::string encode() const;
 
   // returns a copy of this view that maps the given position. if the position
   // is already mapped then boost::none is returned.
@@ -28,10 +35,6 @@ class View {
       uint64_t position) const;
 
   View set_sequencer_config(SequencerConfig seq_config) const;
-
-  static std::string create_initial(const Options& options);
-
-  std::string serialize() const;
 
   // TODO: wrap in accessors?
   const ObjectMap object_map;

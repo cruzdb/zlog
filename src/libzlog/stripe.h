@@ -2,6 +2,7 @@
 #include <cassert>
 #include <string>
 #include <vector>
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
@@ -79,6 +80,16 @@ class MultiStripe {
     assert(max_position_ > 0);
   }
 
+ public:
+  static MultiStripe decode(const std::string& prefix,
+      const flatbuffers::VectorIterator<
+        flatbuffers::Offset<zlog::fbs::MultiStripe>,
+        const zlog::fbs::MultiStripe*>& it);
+
+  flatbuffers::Offset<zlog::fbs::MultiStripe> encode(
+          flatbuffers::FlatBufferBuilder& fbb) const;
+
+ public:
   std::string map(uint64_t stripe_id, uint64_t position) const {
     return Stripe::make_oid(prefix_, stripe_id, width_, position);
   }

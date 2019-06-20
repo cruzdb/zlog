@@ -1,7 +1,6 @@
 #include "object_map.h"
 #include <set>
 #include "include/zlog/options.h"
-#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
@@ -161,17 +160,18 @@ Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
   return it->second->second.stripe_by_id(stripe_id);
 }
 
-ObjectMap ObjectMap::from_view(const std::string& prefix,
-    const zlog::fbs::View *view)
+ObjectMap ObjectMap::decode(const std::string& prefix,
+    const zlog::fbs::ObjectMap *object_map)
 {
+  assert(object_map);
+
   std::map<uint64_t, MultiStripe> stripes;
 
-  if (view->stripes()) {
-    const auto vs = view->stripes();
+  if (object_map->stripes()) {
+    const auto vs = object_map->stripes();
     for (auto it = vs->begin(); it != vs->end(); it++) {
-      auto res = stripes.emplace(it->min_position(),
-          MultiStripe(prefix, it->base_id(), it->width(), it->slots(),
-            it->min_position(), it->instances(), it->max_position()));
+      const auto stripe = MultiStripe::decode(prefix, it);
+      auto res = stripes.emplace(stripe.min_position(), stripe);
       assert(res.second);
       (void)res;
     }
@@ -193,10 +193,26 @@ ObjectMap ObjectMap::from_view(const std::string& prefix,
         it2++;
       }
     }
-    assert(ids.find(view->next_stripe_id()) == ids.end());
+    assert(ids.find(object_map->next_stripe_id()) == ids.end());
   }
 
-  return ObjectMap(view->next_stripe_id(), stripes);
+  return ObjectMap(object_map->next_stripe_id(), stripes);
+}
+
+flatbuffers::Offset<zlog::fbs::ObjectMap> ObjectMap::encode(
+    flatbuffers::FlatBufferBuilder& fbb) const
+{
+  std::vector<flatbuffers::Offset<zlog::fbs::MultiStripe>> stripes;
+
+  for (const auto& stripe : stripes_by_pos_) {
+    assert(stripe.second.min_position() == stripe.first);
+    const auto s = stripe.second.encode(fbb);
+    stripes.push_back(s);
+  }
+
+  return zlog::fbs::CreateObjectMapDirect(fbb,
+      next_stripe_id_,
+      &stripes);
 }
 
 }

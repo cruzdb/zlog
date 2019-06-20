@@ -49,4 +49,7 @@ install(TARGETS libzlog LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 add_library(test_libzlog OBJECT test_libzlog.cc)
 target_include_directories(test_libzlog
   PUBLIC ${Boost_INCLUDE_DIRS}
+  # TODO: flatbuffers should be included from libzlog. if we can fix that, we
+  # also want that to only apply to internal binaries.
+  PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
   PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)
