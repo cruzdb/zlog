@@ -11,10 +11,10 @@ boost::optional<SequencerConfig> SequencerConfig::decode(
     const auto secret = flatbuffers::GetString(seq->secret());
     assert(!secret.empty());
 
-    SequencerConfig conf;
-    conf.epoch = seq->epoch();
-    conf.secret = secret;
-    conf.position = seq->position();
+    SequencerConfig conf(
+        seq->epoch(),
+        secret,
+        seq->position());
 
     return conf;
   }

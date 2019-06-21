@@ -24,6 +24,7 @@ class View {
   // serialize this view instance
   std::string encode() const;
 
+ public:
   // returns a copy of this view that maps the given position. if the position
   // is already mapped then boost::none is returned.
   virtual boost::optional<View> expand_mapping(const std::string& prefix,

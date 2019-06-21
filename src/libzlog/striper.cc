@@ -339,18 +339,16 @@ int Striper::propose_sequencer()
     }
   }
 
-  // new sequencer configuration
-  SequencerConfig seq_config;
-  seq_config.secret = secret_;
-  seq_config.position = empty ? 0 : (max_pos + 1);
-
-  // this is the epoch at which the new seq takes affect. this controls the
-  // validitiy of seq_config.position since the sequencer info is copied into
-  // new views. that is, a sequencer is only initialized once when the initial
-  // epoch and view epoch are equal. XXX: maybe we could solve this odd scenario
-  // by clearing the initial seq position on copy, or breaking out into
-  // different data structures?
-  seq_config.epoch = next_epoch;
+  // new sequencer configuration.  the epoch used here is the epoch at which the
+  // new seq takes affect. this controls the validitiy of seq_config.position
+  // since the sequencer info is copied into new views. that is, a sequencer is
+  // only initialized once when the initial epoch and view epoch are equal. XXX:
+  // maybe we could solve this odd scenario by clearing the initial seq position
+  // on copy, or breaking out into different data structures?
+  SequencerConfig seq_config(
+      next_epoch,
+      secret_,
+      empty ? 0 : (max_pos + 1));
 
   // modify: the view by setting a new sequencer configuration
   auto new_view = curr_view->set_sequencer_config(seq_config);

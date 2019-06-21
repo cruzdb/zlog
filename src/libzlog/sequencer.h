@@ -29,16 +29,26 @@ class Sequencer {
   std::atomic<uint64_t> position_;
 };
 
-struct SequencerConfig {
-  uint64_t epoch;
-  std::string secret;
-  uint64_t position;
+class SequencerConfig {
+ public:
+  SequencerConfig(uint64_t epoch, const std::string& secret,
+      uint64_t position) :
+    epoch(epoch),
+    secret(secret),
+    position(position)
+  {}
 
+ public:
   static boost::optional<SequencerConfig> decode(
       const zlog::fbs::Sequencer *seq);
 
   flatbuffers::Offset<zlog::fbs::Sequencer> encode(
       flatbuffers::FlatBufferBuilder& fbb) const;
+
+ public:
+  const uint64_t epoch;
+  const std::string secret;
+  const uint64_t position;
 };
 
 }
