@@ -2,10 +2,7 @@
 #include <map>
 #include <boost/optional.hpp>
 #include "stripe.h"
-
-namespace zlog_proto {
-  class View;
-}
+#include "libzlog/zlog_generated.h"
 
 namespace zlog {
 
@@ -13,8 +10,29 @@ struct Options;
 
 class ObjectMap {
  public:
-  static ObjectMap from_view(const std::string& prefix,
-      const zlog_proto::View& view);
+  ObjectMap(const ObjectMap& other) :
+    next_stripe_id_(other.next_stripe_id_),
+    stripes_by_pos_(other.stripes_by_pos_),
+    // compute over the instance variable so the iterators are valid!
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+  {}
+
+  ObjectMap(const ObjectMap&& other) :
+    next_stripe_id_(other.next_stripe_id_),
+    stripes_by_pos_(std::move(other.stripes_by_pos_)),
+    // compute over the instance variable so the iterators are valid. it doesn't
+    // appear to be valid to also move the container with the iterators...
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+  {}
+
+  ObjectMap& operator=(const ObjectMap& other) = delete;
+  ObjectMap& operator=(const ObjectMap&& other) = delete;
+
+  flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
+      flatbuffers::FlatBufferBuilder& fbb) const;
+
+  static ObjectMap decode(const std::string& prefix,
+      const zlog::fbs::ObjectMap *object_map);
 
  public:
   // returns the object name that maps the position, if it exists. the second
@@ -47,10 +65,6 @@ class ObjectMap {
     return next_stripe_id_;
   }
 
-  const std::map<uint64_t, MultiStripe>& multi_stripes() const {
-    return stripes_by_pos_;
-  }
-
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
       uint64_t position) const;
 
@@ -58,22 +72,28 @@ class ObjectMap {
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
  private:
-  ObjectMap(uint64_t next_stripe_id,
-      const std::map<uint64_t, MultiStripe>& stripes) :
+  typedef std::map<uint64_t, MultiStripe> stripes_by_pos_t;
+  typedef std::map<uint64_t, stripes_by_pos_t::const_iterator> stripes_by_id_t;
+
+  ObjectMap(uint64_t next_stripe_id, const stripes_by_pos_t& stripes) :
     next_stripe_id_(next_stripe_id),
-    stripes_by_pos_(stripes)
-  {
-    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
-      stripes_by_id_.emplace(it->second.base_id(), it);
+    stripes_by_pos_(stripes),
+    // compute over the instance variable so the iterators are valid!
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+  {}
+
+  // helper to initialize the computed const member
+  static stripes_by_id_t compute_stripes_by_id(const stripes_by_pos_t& stripes) {
+    stripes_by_id_t res;
+    for (auto it = stripes.cbegin(); it != stripes.cend(); it++) {
+      res.emplace(it->second.base_id(), it);
     }
+    return res;
   }
 
-  void expand_mapping(const std::string& prefix, uint64_t position,
-      const Options& options);
-
-  uint64_t next_stripe_id_;
-  std::map<uint64_t, MultiStripe> stripes_by_pos_;
-  std::map<uint64_t, std::map<uint64_t, MultiStripe>::const_iterator> stripes_by_id_;
+  const uint64_t next_stripe_id_;
+  const stripes_by_pos_t stripes_by_pos_;
+  const stripes_by_id_t stripes_by_id_;
 };
 
 }

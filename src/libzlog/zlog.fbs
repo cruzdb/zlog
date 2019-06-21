@@ -1,47 +1,44 @@
-syntax = "proto2";
+namespace zlog.fbs;
 
-package zlog_proto;
-
-option optimize_for = SPEED;
-
-message MultiStripe {
+table MultiStripe {
   // the base stripe id. the id of the i^th stripe instance is base_id + (i-1).
   // the next_stripe_id that is tracked in the view structure is updated to
   // reflect the existence of the implicit stripe instances.
-  required uint64 base_id = 1;
+  base_id:uint64;
 
   // number of objects per stripe
-  required uint32 width = 2;
+  width:uint32;
 
   // number of log entries per object
-  required uint32 slots = 3;
+  slots:uint32;
 
   // the number of consecutive repeats of this stripe. for example if the value
   // is two, then the configuration of the containing view behaves as if this
   // stripe is explicitly represented twice. this is used to collapse / compress
   // the view as the log and space of mapped positions grow. increasing the
   // number of instances increases the "max_position" (below).
-  required uint32 instances = 4;
+  instances:uint64;
 
   // the min position mapped by this stripe (inclusive)
-  required uint64 min_position = 5;
+  min_position:uint64;
 
   // the max position mapped by this stripe (inclusive)
-  required uint64 max_position = 6;
+  max_position:uint64;
 }
 
-message Sequencer {
-  required uint64 epoch = 1;
-  required string secret = 2;
-  required uint64 position = 3;
+table ObjectMap {
+  next_stripe_id:uint64;
+  stripes:[MultiStripe];
 }
 
-message View {
-  // the stripe id could be deduced from the set of stripes, but this would
-  // restrict stripe management in the future, coupling the serialized stripes
-  // to unique stripe id generation.
-  optional uint64 next_stripe_id = 1 [default = 0];
-  repeated MultiStripe stripes = 2;
-  optional Sequencer seq = 3;
-  required uint64 min_valid_position = 4;
+table Sequencer {
+  epoch:uint64;
+  secret:string;
+  position:uint64;
+}
+
+table View {
+  object_map:ObjectMap;
+  sequencer:Sequencer;
+  min_valid_position:uint64;
 }

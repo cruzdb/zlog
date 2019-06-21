@@ -5,7 +5,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "libzlog/zlog.pb.h"
+#include "libzlog/zlog_generated.h"
 
 // How does a client learn about available sequencers?
 //
@@ -186,7 +186,7 @@ int Striper::try_expand_view(const uint64_t position)
   // buffering view creation is working well.
 
   // write: the new view as the next epoch
-  auto data = new_view->serialize();
+  auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
@@ -274,7 +274,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   }
 
   // write: the proposed new view
-  auto data = new_view->serialize();
+  auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
@@ -339,24 +339,22 @@ int Striper::propose_sequencer()
     }
   }
 
-  // new sequencer configuration
-  SequencerConfig seq_config;
-  seq_config.secret = secret_;
-  seq_config.position = empty ? 0 : (max_pos + 1);
-
-  // this is the epoch at which the new seq takes affect. this controls the
-  // validitiy of seq_config.position since the sequencer info is copied into
-  // new views. that is, a sequencer is only initialized once when the initial
-  // epoch and view epoch are equal. XXX: maybe we could solve this odd scenario
-  // by clearing the initial seq position on copy, or breaking out into
-  // different data structures?
-  seq_config.epoch = next_epoch;
+  // new sequencer configuration.  the epoch used here is the epoch at which the
+  // new seq takes affect. this controls the validitiy of seq_config.position
+  // since the sequencer info is copied into new views. that is, a sequencer is
+  // only initialized once when the initial epoch and view epoch are equal. XXX:
+  // maybe we could solve this odd scenario by clearing the initial seq position
+  // on copy, or breaking out into different data structures?
+  SequencerConfig seq_config(
+      next_epoch,
+      secret_,
+      empty ? 0 : (max_pos + 1));
 
   // modify: the view by setting a new sequencer configuration
   auto new_view = curr_view->set_sequencer_config(seq_config);
 
   // write: the proposed new view
-  auto data = new_view.serialize();
+  auto data = new_view.encode();
   int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
@@ -549,13 +547,7 @@ void Striper::refresh_entry_()
     const auto it = views.crbegin();
     assert(it != views.crend());
 
-    zlog_proto::View view_src;
-    if (!view_src.ParseFromString(it->second)) {
-      assert(0);
-      exit(1);
-    }
-
-    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, view_src);
+    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, it->second);
 
     if (new_view->seq_config) {
       if (new_view->seq_config->secret == secret_) { // we should be the active seq

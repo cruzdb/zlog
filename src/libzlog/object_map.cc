@@ -1,6 +1,5 @@
 #include "object_map.h"
 #include <set>
-#include "libzlog/zlog.pb.h"
 #include "include/zlog/options.h"
 
 namespace zlog {
@@ -99,29 +98,6 @@ ObjectMap::map_to(const uint64_t position) const
   return objects;
 }
 
-void ObjectMap::expand_mapping(const std::string& prefix,
-    const uint64_t position, const Options& options)
-{
-  assert(!map(position).first);
-
-  do {
-    const auto stripe_id = next_stripe_id_++;
-    const auto it = stripes_by_pos_.rbegin();
-    if (it != stripes_by_pos_.rend()) {
-      it->second.extend();
-      assert(it->second.max_stripe_id() == stripe_id);
-    } else {
-      const auto width = options.stripe_width;
-      const auto slots = options.stripe_slots;
-      const uint64_t max_position = width * slots - 1;
-      auto res = stripes_by_pos_.emplace(0,
-          MultiStripe{prefix, stripe_id, width, slots, 0, 1, max_position});
-      assert(res.second);
-      stripes_by_id_.emplace(stripe_id, res.first);
-    }
-  } while (!map(position).first);
-}
-
 boost::optional<ObjectMap> ObjectMap::expand_mapping(const std::string& prefix,
     const uint64_t position, const Options& options) const
 {
@@ -129,9 +105,42 @@ boost::optional<ObjectMap> ObjectMap::expand_mapping(const std::string& prefix,
     return boost::none;
   }
 
-  auto new_object_map = *this;
-  new_object_map.expand_mapping(prefix, position, options);
-  return new_object_map;
+  // state for next object map instance
+  auto stripes = stripes_by_pos_;
+  auto next_stripe_id = next_stripe_id_;
+
+  while (true) {
+    const auto stripe_id = next_stripe_id++;
+    const auto it = stripes.rbegin();
+    if (it != stripes.rend()) {
+      // extend the last stripe. when extending, the new stripe id is implicit
+      // in the expansion through an increase in the number of instances
+      // (maintained in the MultiStripe structure). However we still treat it
+      // like a new stripe, so track the next stripe id at the higher level of
+      // the object map / view.
+      const auto new_stripe = it->second.extend();
+      assert(new_stripe.min_position() == it->first);
+      assert(new_stripe.max_stripe_id() == stripe_id);
+      stripes.erase(std::prev(it.base()));
+      stripes.emplace(new_stripe.min_position(), new_stripe);
+    } else {
+      const auto width = options.stripe_width;
+      const auto slots = options.stripe_slots;
+      const uint64_t max_position = width * slots - 1;
+      stripes.emplace(0,
+          MultiStripe{prefix, stripe_id, width, slots, 0, 1, max_position});
+      // this assumptino could change in the future. for example if a log is
+      // completely trimmed then its view might be empty, but its next stripe id
+      // is greater than 0.
+      assert(stripe_id == 0);
+    }
+
+    // build the new object map and check if it now maps the target position
+    const auto new_object_map = ObjectMap(next_stripe_id, stripes);
+    if (new_object_map.map(position).first) {
+      return new_object_map;
+    }
+  }
 }
 
 uint64_t ObjectMap::max_position() const
@@ -151,16 +160,21 @@ Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
   return it->second->second.stripe_by_id(stripe_id);
 }
 
-ObjectMap ObjectMap::from_view(const std::string& prefix,
-    const zlog_proto::View& view)
+ObjectMap ObjectMap::decode(const std::string& prefix,
+    const zlog::fbs::ObjectMap *object_map)
 {
+  assert(object_map);
+
   std::map<uint64_t, MultiStripe> stripes;
-  for (auto stripe : view.stripes()) {
-    auto res = stripes.emplace(stripe.min_position(),
-        MultiStripe(prefix, stripe.base_id(), stripe.width(), stripe.slots(),
-          stripe.min_position(), stripe.instances(), stripe.max_position()));
-    assert(res.second);
-    (void)res;
+
+  if (object_map->stripes()) {
+    const auto vs = object_map->stripes();
+    for (auto it = vs->begin(); it != vs->end(); it++) {
+      const auto stripe = MultiStripe::decode(prefix, it);
+      auto res = stripes.emplace(stripe.min_position(), stripe);
+      assert(res.second);
+      (void)res;
+    }
   }
 
   if (!stripes.empty()) {
@@ -179,10 +193,26 @@ ObjectMap ObjectMap::from_view(const std::string& prefix,
         it2++;
       }
     }
-    assert(ids.find(view.next_stripe_id()) == ids.end());
+    assert(ids.find(object_map->next_stripe_id()) == ids.end());
   }
 
-  return ObjectMap(view.next_stripe_id(), stripes);
+  return ObjectMap(object_map->next_stripe_id(), stripes);
+}
+
+flatbuffers::Offset<zlog::fbs::ObjectMap> ObjectMap::encode(
+    flatbuffers::FlatBufferBuilder& fbb) const
+{
+  std::vector<flatbuffers::Offset<zlog::fbs::MultiStripe>> stripes;
+
+  for (const auto& stripe : stripes_by_pos_) {
+    assert(stripe.second.min_position() == stripe.first);
+    const auto s = stripe.second.encode(fbb);
+    stripes.push_back(s);
+  }
+
+  return zlog::fbs::CreateObjectMapDirect(fbb,
+      next_stripe_id_,
+      &stripes);
 }
 
 }

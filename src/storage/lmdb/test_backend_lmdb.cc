@@ -6,7 +6,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <limits.h>
-#include <google/protobuf/stubs/common.h>
 
 struct DBPathContext {
   char *dbpath = nullptr;
@@ -201,6 +200,5 @@ int main(int argc, char **argv)
   rocksdb::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   int ret = RUN_ALL_TESTS();
-  google::protobuf::ShutdownProtobufLibrary();
   return ret;
 }
