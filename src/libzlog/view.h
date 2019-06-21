@@ -5,8 +5,10 @@
 #include "object_map.h"
 #include "sequencer.h"
 
-namespace zlog::fbs {
-  class View;
+namespace zlog {
+  namespace fbs {
+    class View;
+  }
 }
 
 namespace zlog {
