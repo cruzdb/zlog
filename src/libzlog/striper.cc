@@ -547,17 +547,7 @@ void Striper::refresh_entry_()
     const auto it = views.crbegin();
     assert(it != views.crend());
 
-    // move into View factory?
-    flatbuffers::Verifier verifier(
-        reinterpret_cast<const uint8_t*>(it->second.data()), it->second.size());
-    if (!verifier.VerifyBuffer<zlog::fbs::View>(nullptr)) {
-      assert(0);
-      exit(1);
-    }
-    const auto view_src = flatbuffers::GetRoot<zlog::fbs::View>(
-        reinterpret_cast<const uint8_t*>(it->second.data()));
-
-    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, view_src);
+    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, it->second);
 
     if (new_view->seq_config) {
       if (new_view->seq_config->secret == secret_) { // we should be the active seq

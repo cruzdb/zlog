@@ -15,8 +15,9 @@ struct Options;
 
 class View {
  public:
-  // deserialize a view into a new instance
-  View(const std::string& prefix, const zlog::fbs::View *view);
+  // deserialize view
+  static View decode(const std::string& prefix,
+      const std::string& view_data);
 
   // create a view serialization suitable as an initial view
   static std::string create_initial(const Options& options);
@@ -37,14 +38,13 @@ class View {
 
   View set_sequencer_config(SequencerConfig seq_config) const;
 
-  // TODO: wrap in accessors?
   const ObjectMap object_map;
   const uint64_t min_valid_position;
   const boost::optional<SequencerConfig> seq_config;
 
  private:
-  View(const ObjectMap object_map, const uint64_t min_valid_position,
-      const boost::optional<SequencerConfig> seq_config) :
+  View(ObjectMap object_map, uint64_t min_valid_position,
+      boost::optional<SequencerConfig> seq_config) :
     object_map(object_map),
     min_valid_position(min_valid_position),
     seq_config(seq_config)
@@ -54,8 +54,8 @@ class View {
 class VersionedView : public View {
  public:
   VersionedView(const std::string& prefix, const uint64_t epoch,
-      const zlog::fbs::View *view) :
-    View(prefix, view),
+      const std::string& view_data) :
+    View(View::decode(prefix, view_data)),
     epoch_(epoch)
   {}
 

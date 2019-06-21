@@ -5,6 +5,25 @@
 
 namespace zlog {
 
+View View::decode(const std::string& prefix,
+    const std::string& view_data)
+{
+  flatbuffers::Verifier verifier(
+      reinterpret_cast<const uint8_t*>(view_data.data()), view_data.size());
+  if (!verifier.VerifyBuffer<zlog::fbs::View>(nullptr)) {
+    assert(0);
+    exit(1);
+  }
+
+  const auto view = flatbuffers::GetRoot<zlog::fbs::View>(
+      reinterpret_cast<const uint8_t*>(view_data.data()));
+
+  return View(
+      ObjectMap::decode(prefix, view->object_map()),
+      view->min_valid_position(),
+      SequencerConfig::decode(view->sequencer()));
+}
+
 std::string View::create_initial(const Options& options)
 {
   flatbuffers::FlatBufferBuilder fbb;
@@ -45,12 +64,6 @@ std::string View::encode() const
   return std::string(
       reinterpret_cast<const char*>(fbb.GetBufferPointer()), fbb.GetSize());
 }
-
-View::View(const std::string& prefix, const zlog::fbs::View *view) :
-  object_map(ObjectMap::decode(prefix, view->object_map())),
-  min_valid_position(view->min_valid_position()),
-  seq_config(SequencerConfig::decode(view->sequencer()))
-{}
 
 boost::optional<View> View::expand_mapping(const std::string& prefix,
     const uint64_t position, const Options& options) const

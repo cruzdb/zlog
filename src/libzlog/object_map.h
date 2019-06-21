@@ -10,6 +10,24 @@ struct Options;
 
 class ObjectMap {
  public:
+  ObjectMap(const ObjectMap& other) :
+    next_stripe_id_(other.next_stripe_id_),
+    stripes_by_pos_(other.stripes_by_pos_),
+    // compute over the instance variable so the iterators are valid!
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+  {}
+
+  ObjectMap(const ObjectMap&& other) :
+    next_stripe_id_(other.next_stripe_id_),
+    stripes_by_pos_(std::move(other.stripes_by_pos_)),
+    // compute over the instance variable so the iterators are valid. it doesn't
+    // appear to be valid to also move the container with the iterators...
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+  {}
+
+  ObjectMap& operator=(const ObjectMap& other) = delete;
+  ObjectMap& operator=(const ObjectMap&& other) = delete;
+
   flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
       flatbuffers::FlatBufferBuilder& fbb) const;
 
