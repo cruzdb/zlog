@@ -24,7 +24,7 @@ class Stripe {
     width_(width),
     min_position_(min_position),
     max_position_(max_position),
-    oids_(make_oids())
+    oids_(make_oids(prefix_, stripe_id_, width_))
   {
     assert(!prefix_.empty());
     assert(stripe_id_ >= 0);
@@ -64,7 +64,8 @@ class Stripe {
   static std::string make_oid(const std::string& prefix,
       uint64_t stripe_id, uint32_t index);
 
-  std::vector<std::string> make_oids();
+  static std::vector<std::string> make_oids(const std::string& prefix,
+    uint64_t stripe_id, uint32_t width);
 
   const std::string prefix_;
   const uint64_t stripe_id_;
