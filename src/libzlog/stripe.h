@@ -59,6 +59,20 @@ class Stripe {
     return oids_;
   }
 
+  bool operator==(const Stripe& other) const {
+    return
+      prefix_       == other.prefix_ &&
+      stripe_id_    == other.stripe_id_ &&
+      width_        == other.width_ &&
+      min_position_ == other.min_position_ &&
+      max_position_ == other.max_position_ &&
+      oids_         == other.oids_;
+  }
+
+  bool operator!=(const Stripe& other) const {
+    return !this->operator==(other);
+  }
+
  private:
   // index is the pre-computed value: position % stripe-width
   static std::string make_oid(const std::string& prefix,
@@ -79,6 +93,14 @@ class Stripe {
 // log position address space. Two adjacent Stripe objects can be represented by
 // a single MultiStripe object if they are compatible---they have the same
 // configuration (e.g. width and number of slots).
+//
+// Notes:
+//   - it would seem that max position could always be derived from
+//   min_position, instances, width, and slots. this is true if stripes are
+//   allowed to always map their full range. i believe that in the future we may
+//   want the ability to preemptively slice off an unused high-end range of a
+//   stripe in order to deal with issues like fixing stripe configurations. so
+//   instead we choose to explicitly specify the max position.
 class MultiStripe {
  public:
   MultiStripe(const std::string& prefix,
@@ -101,6 +123,12 @@ class MultiStripe {
     assert(width_ > 0);
     assert(slots_ > 0);
     assert(instances_ > 0);
+    // XXX: note that these restrictions are true currently as we do not allow
+    // stripes to be empty. this assumption may not hold in the future.
+    //
+    // TODO: use tighter bounds for assertions. if stripes are not allowed to be
+    // empty, we can add an assert that ties the min/max positions to the
+    // base_id and instances.
     if (base_id_ > 0) {
       assert(min_position_ > 0);
       assert(max_position_ > 0);
@@ -113,6 +141,7 @@ class MultiStripe {
       }
     }
     assert(min_position_ <= max_position_);
+    assert(max_position_ <= (min_position_ + (instances_ * width_ * slots_) - 1));
   }
 
  public:
@@ -132,6 +161,8 @@ class MultiStripe {
   std::string map(uint64_t stripe_id, uint64_t position) const {
     assert(base_id_ <= stripe_id);
     assert(stripe_id <= max_stripe_id());
+    assert(min_position_ <= position);
+    assert(position <= max_position_);
     return Stripe::make_oid(prefix_, stripe_id, width_, position);
   }
 
@@ -199,6 +230,21 @@ class MultiStripe {
         width_,
         min_pos,
         max_pos);
+  }
+
+  bool operator==(const MultiStripe& other) const {
+    return
+      prefix_       == other.prefix_ &&
+      base_id_      == other.base_id_ &&
+      width_        == other.width_ &&
+      slots_        == other.slots_ &&
+      min_position_ == other.min_position_ &&
+      instances_    == other.instances_ &&
+      max_position_ == other.max_position_;
+  }
+
+  bool operator !=(const MultiStripe& other) const {
+    return !this->operator==(other);
   }
 
  private:

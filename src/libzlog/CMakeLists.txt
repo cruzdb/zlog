@@ -46,7 +46,9 @@ set_target_properties(libzlog PROPERTIES
 
 install(TARGETS libzlog LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-add_library(test_libzlog OBJECT test_libzlog.cc)
+add_library(test_libzlog OBJECT
+    test_libzlog.cc
+    stripe_test.cc)
 target_include_directories(test_libzlog
   PUBLIC ${Boost_INCLUDE_DIRS}
   # TODO: flatbuffers should be included from libzlog. if we can fix that, we
