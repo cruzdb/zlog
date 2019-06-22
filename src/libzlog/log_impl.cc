@@ -482,7 +482,7 @@ int TrimToOp::run()
     // note that we are invalidating the range [0, position_], inclusive. this
     // results in a _valid_ range of [_position+1, ...) which is why we _advance
     // the valid position_ to position_ + 1.
-    if (position_ >= view->min_valid_position) {
+    if (position_ >= view->min_valid_position()) {
       int ret = log_->striper.advance_min_valid_position(position_ + 1);
       if (ret) {
         return ret;

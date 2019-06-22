@@ -136,11 +136,24 @@ boost::optional<ObjectMap> ObjectMap::expand_mapping(const std::string& prefix,
     }
 
     // build the new object map and check if it now maps the target position
-    const auto new_object_map = ObjectMap(next_stripe_id, stripes);
+    const auto new_object_map = ObjectMap(
+        next_stripe_id,
+        stripes,
+        min_valid_position_);
+
     if (new_object_map.map(position).first) {
       return new_object_map;
     }
   }
+}
+
+boost::optional<ObjectMap> ObjectMap::advance_min_valid_position(
+    uint64_t position) const
+{
+  if (position <= min_valid_position_) {
+    return boost::none;
+  }
+  return ObjectMap(next_stripe_id_, stripes_by_pos_, position);
 }
 
 uint64_t ObjectMap::max_position() const
@@ -196,7 +209,10 @@ ObjectMap ObjectMap::decode(const std::string& prefix,
     assert(ids.find(object_map->next_stripe_id()) == ids.end());
   }
 
-  return ObjectMap(object_map->next_stripe_id(), stripes);
+  return ObjectMap(
+      object_map->next_stripe_id(),
+      stripes,
+      object_map->min_valid_position());
 }
 
 flatbuffers::Offset<zlog::fbs::ObjectMap> ObjectMap::encode(
@@ -212,7 +228,8 @@ flatbuffers::Offset<zlog::fbs::ObjectMap> ObjectMap::encode(
 
   return zlog::fbs::CreateObjectMapDirect(fbb,
       next_stripe_id_,
-      &stripes);
+      &stripes,
+      min_valid_position_);
 }
 
 }

@@ -29,6 +29,7 @@ table MultiStripe {
 table ObjectMap {
   next_stripe_id:uint64;
   stripes:[MultiStripe];
+  min_valid_position:uint64;
 }
 
 table Sequencer {
@@ -40,5 +41,4 @@ table Sequencer {
 table View {
   object_map:ObjectMap;
   sequencer:Sequencer;
-  min_valid_position:uint64;
 }

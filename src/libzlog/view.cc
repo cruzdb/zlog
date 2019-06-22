@@ -20,7 +20,6 @@ View View::decode(const std::string& prefix,
 
   return View(
       ObjectMap::decode(prefix, view->object_map()),
-      view->min_valid_position(),
       SequencerConfig::decode(view->sequencer()));
 }
 
@@ -31,11 +30,10 @@ std::string View::create_initial(const Options& options)
   // - next_stripe_id = 0
   // - no stripes
   // TODO: if (options.create_initial_view_stripes) ...
-  const auto object_map = zlog::fbs::CreateObjectMapDirect(fbb, 0, nullptr);
+  const auto object_map = zlog::fbs::CreateObjectMapDirect(fbb, 0, nullptr, 0);
 
   auto builder = zlog::fbs::ViewBuilder(fbb);
   builder.add_object_map(object_map);
-  builder.add_min_valid_position(0);
 
   auto view = builder.Finish();
   fbb.Finish(view);
@@ -56,7 +54,6 @@ std::string View::encode() const
   auto builder = zlog::fbs::ViewBuilder(fbb);
   builder.add_object_map(encoded_object_map);
   builder.add_sequencer(seq);
-  builder.add_min_valid_position(min_valid_position);
 
   auto view = builder.Finish();
   fbb.Finish(view);
@@ -71,7 +68,7 @@ boost::optional<View> View::expand_mapping(const std::string& prefix,
   const auto new_object_map = object_map.expand_mapping(prefix, position,
       options);
   if (new_object_map) {
-    return View(*new_object_map, min_valid_position, seq_config);
+    return View(*new_object_map, seq_config);
   }
   return boost::none;
 }
@@ -79,15 +76,16 @@ boost::optional<View> View::expand_mapping(const std::string& prefix,
 
 boost::optional<View> View::advance_min_valid_position(uint64_t position) const
 {
-  if (position <= min_valid_position) {
-    return boost::none;
+  const auto new_object_map = object_map.advance_min_valid_position(position);
+  if (new_object_map) {
+    return View(*new_object_map, seq_config);
   }
-  return View(object_map, position, seq_config);
+  return boost::none;
 }
 
 View View::set_sequencer_config(SequencerConfig seq_config) const
 {
-  return View(object_map, min_valid_position, seq_config);
+  return View(object_map, seq_config);
 }
 
 }

@@ -40,15 +40,17 @@ class View {
 
   View set_sequencer_config(SequencerConfig seq_config) const;
 
+  // returns the minimum (inclusive) valid log position.
+  uint64_t min_valid_position() const {
+    return object_map.min_valid_position();
+  }
+
   const ObjectMap object_map;
-  const uint64_t min_valid_position;
   const boost::optional<SequencerConfig> seq_config;
 
  private:
-  View(ObjectMap object_map, uint64_t min_valid_position,
-      boost::optional<SequencerConfig> seq_config) :
+  View(ObjectMap object_map, boost::optional<SequencerConfig> seq_config) :
     object_map(object_map),
-    min_valid_position(min_valid_position),
     seq_config(seq_config)
   {}
 };

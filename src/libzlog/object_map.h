@@ -14,7 +14,8 @@ class ObjectMap {
     next_stripe_id_(other.next_stripe_id_),
     stripes_by_pos_(other.stripes_by_pos_),
     // compute over the instance variable so the iterators are valid!
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_)),
+    min_valid_position_(other.min_valid_position_)
   {}
 
   ObjectMap(const ObjectMap&& other) :
@@ -22,7 +23,8 @@ class ObjectMap {
     stripes_by_pos_(std::move(other.stripes_by_pos_)),
     // compute over the instance variable so the iterators are valid. it doesn't
     // appear to be valid to also move the container with the iterators...
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_)),
+    min_valid_position_(other.min_valid_position_)
   {}
 
   ObjectMap& operator=(const ObjectMap& other) = delete;
@@ -44,6 +46,10 @@ class ObjectMap {
   boost::optional<ObjectMap> expand_mapping(const std::string& prefix,
       uint64_t position, const Options& options) const;
 
+  // returns a copy of this object map with a strictly larger
+  // min_valid_position. otherwise boost::none is returned.
+  boost::optional<ObjectMap> advance_min_valid_position(uint64_t position) const;
+
   // returns the stripe with the given stripe id.
   Stripe stripe_by_id(uint64_t stripe_id) const;
 
@@ -54,6 +60,11 @@ class ObjectMap {
 
   // returns the maximum position mapped by the object map.
   uint64_t max_position() const;
+
+  // returns the minimum (inclusive) valid log position
+  uint64_t min_valid_position() const {
+    return min_valid_position_;
+  }
 
   // returns true if the object map contains no stripes.
   bool empty() const {
@@ -75,11 +86,13 @@ class ObjectMap {
   typedef std::map<uint64_t, MultiStripe> stripes_by_pos_t;
   typedef std::map<uint64_t, stripes_by_pos_t::const_iterator> stripes_by_id_t;
 
-  ObjectMap(uint64_t next_stripe_id, const stripes_by_pos_t& stripes) :
+  ObjectMap(uint64_t next_stripe_id, const stripes_by_pos_t& stripes,
+      uint64_t min_valid_position) :
     next_stripe_id_(next_stripe_id),
     stripes_by_pos_(stripes),
     // compute over the instance variable so the iterators are valid!
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
+    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_)),
+    min_valid_position_(min_valid_position)
   {}
 
   // helper to initialize the computed const member
@@ -94,6 +107,7 @@ class ObjectMap {
   const uint64_t next_stripe_id_;
   const stripes_by_pos_t stripes_by_pos_;
   const stripes_by_id_t stripes_by_id_;
+  const uint64_t min_valid_position_;
 };
 
 }
