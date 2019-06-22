@@ -6,6 +6,12 @@
 
 namespace zlog {
 
+// Stripe describes the storage layout of a contiguous range of log positions.
+// It also serves as the granularity at which log configuration changes are
+// managed. Because a log may have an unbounded number of stripes it is not
+// feasible to explicitly represent each stripe in memory. Therefore, the
+// MultiStripe object below is used to manage a compact representation of
+// stripes.
 class Stripe {
  public:
   Stripe(const std::string& prefix,
@@ -19,7 +25,23 @@ class Stripe {
     min_position_(min_position),
     max_position_(max_position),
     oids_(make_oids())
-  {}
+  {
+    assert(!prefix_.empty());
+    assert(stripe_id_ >= 0);
+    assert(width_ > 0);
+    if (stripe_id_ > 0) {
+      assert(min_position_ > 0);
+      assert(max_position_ > 0);
+    } else {
+      assert(min_position_ >= 0);
+      assert(max_position_ >= 0);
+    }
+    assert(min_position_ <= max_position_);
+  }
+
+ public:
+  static std::string make_oid(const std::string& prefix,
+      uint64_t stripe_id, uint32_t width, uint64_t position);
 
   uint64_t min_position() const {
     return min_position_;
@@ -37,10 +59,8 @@ class Stripe {
     return oids_;
   }
 
-  static std::string make_oid(const std::string& prefix,
-      uint64_t stripe_id, uint32_t width, uint64_t position);
-
  private:
+  // index is the pre-computed value: position % stripe-width
   static std::string make_oid(const std::string& prefix,
       uint64_t stripe_id, uint32_t index);
 
@@ -54,6 +74,10 @@ class Stripe {
   const std::vector<std::string> oids_;
 };
 
+// MultiStripe is a compact representation of adjancent Stripe objects in the
+// log position address space. Two adjacent Stripe objects can be represented by
+// a single MultiStripe object if they are compatible---they have the same
+// configuration (e.g. width and number of slots).
 class MultiStripe {
  public:
   MultiStripe(const std::string& prefix,
@@ -75,29 +99,49 @@ class MultiStripe {
     assert(base_id_ >= 0);
     assert(width_ > 0);
     assert(slots_ > 0);
-    assert(min_position_ >= 0);
     assert(instances_ > 0);
-    assert(max_position_ > 0);
+    if (base_id_ > 0) {
+      assert(min_position_ > 0);
+      assert(max_position_ > 0);
+    } else {
+      assert(min_position_ >= 0);
+      if (instances_ > 1) {
+        assert(max_position_ > 0);
+      } {
+        assert(max_position_ >= 0);
+      }
+    }
+    assert(min_position_ <= max_position_);
   }
 
  public:
+  // construct a MultiStripe from a flatbuffer
   static MultiStripe decode(const std::string& prefix,
       const flatbuffers::VectorIterator<
         flatbuffers::Offset<zlog::fbs::MultiStripe>,
         const zlog::fbs::MultiStripe*>& it);
 
+  // encode this MultiStripe object into a flatbuffer
   flatbuffers::Offset<zlog::fbs::MultiStripe> encode(
           flatbuffers::FlatBufferBuilder& fbb) const;
 
  public:
+  // given a stripe id and a position, compute the name of the object that the
+  // position maps to. the stripe id _must_ be represented by this MultiStripe.
   std::string map(uint64_t stripe_id, uint64_t position) const {
+    assert(base_id_ <= stripe_id);
+    assert(stripe_id <= max_stripe_id());
     return Stripe::make_oid(prefix_, stripe_id, width_, position);
   }
 
+  // the (fixed) smallest stripe id represented by this MultiStripe
   uint64_t base_id() const {
     return base_id_;
   }
 
+  // the maximum stripe id represented by this MultiStripe. this is fixed per
+  // instance of the MultiStripe, but increases when a new MultiStripe is
+  // created by expanding an existing instance.
   uint64_t max_stripe_id() const {
     return base_id_ + instances_ - 1;
   }
@@ -122,6 +166,21 @@ class MultiStripe {
     return instances_;
   }
 
+  // construct a new MultiStripe by extending the current MultiStripe to
+  // represent one additional adjacent Stripe.
+  MultiStripe extend() const {
+    return MultiStripe(
+        prefix_,
+        base_id_,
+        width_,
+        slots_,
+        min_position_,
+        instances_ + 1,
+        max_position_ + (uint64_t)width_ * slots_);
+  }
+
+  // construct a stripe object given its stripe id. this is an expensive
+  // operation since it pre-computes all of the object names.
   Stripe stripe_by_id(uint64_t stripe_id) const {
     assert(base_id() <= stripe_id);
     assert(stripe_id <= max_stripe_id());
@@ -139,17 +198,6 @@ class MultiStripe {
         width_,
         min_pos,
         max_pos);
-  }
-
-  MultiStripe extend() const {
-    return MultiStripe(
-        prefix_,
-        base_id_,
-        width_,
-        slots_,
-        min_position_,
-        instances_ + 1,
-        max_position_ + (uint64_t)width_ * slots_);
   }
 
  private:
