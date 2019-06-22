@@ -490,59 +490,70 @@ int TrimToOp::run()
       continue;
     }
 
-    // get all objects that map positions in the trim range
-    // TODO: this could become large. at least make this an iterator, but better
-    // would be to also skip objects already processed.
-    const auto objects = log_->striper.map_to(view, position_);
-    if (!objects) {
-      // expand view may also attempt to initialize new stripes. this is
-      // correct, but inefficient. however, trimming/space reclaiming right now
-      // has a lot of ineffiencies and this can be address in a later revision
-      // that will address the problem of trimming/space reclaiming/object
-      // deletion/view trimming more completely.
-      int ret = log_->striper.try_expand_view(position_);
-      if (ret) {
-        return ret;
-      }
-      continue;
-    }
-
-    assert(objects && !objects->empty());
-
+    uint64_t stripe_id = 0;
+    bool done = false;
     bool restart = false;
-    for (auto obj : *objects) {
-      const auto oid = obj.first;
-      const auto trim_full = obj.second;
 
-      // handles setting up range trim and omap/bytestream space reclaim etc..
-      int ret = log_->backend->Trim(oid, view->epoch(), position_,
-          true, trim_full);
-
-      if (ret == -ESPIPE) {
-        log_->striper.update_current_view(view->epoch());
-        // restart after view update. wildly inefficient :(
-        restart = true;
+    // drives the iterator over the map_to range
+    while (true) {
+      // get all objects that map positions in the trim range
+      // TODO: would be good to skip objects already processed
+      const auto objects = log_->striper.map_to(view, position_, stripe_id, done);
+      if (done) {
         break;
       }
 
-      if (ret == -ENOENT) {
-        int ret = log_->backend->Seal(oid, view->epoch());
-        if (ret && ret != -ESPIPE) {
+      if (!objects) {
+        // expand view may also attempt to initialize new stripes. this is
+        // correct, but inefficient. however, trimming/space reclaiming right now
+        // has a lot of ineffiencies and this can be address in a later revision
+        // that will address the problem of trimming/space reclaiming/object
+        // deletion/view trimming more completely.
+        int ret = log_->striper.try_expand_view(position_);
+        if (ret) {
           return ret;
         }
-
-        // part of trimming here means we may create objects that are
-        // immediately trimmed (holes, past eol). i suspect that there are an
-        // optimization here, but for now when we create a new object we'll
-        // restart the trim process and treat it like any other object. this is
-        // clearly, wildly, inefficient.
         restart = true;
         break;
       }
 
-      if (ret != 0) {
-        return ret;
+      for (auto obj : *objects) {
+        const auto oid = obj.first;
+        const auto trim_full = obj.second;
+
+        // handles setting up range trim and omap/bytestream space reclaim etc..
+        int ret = log_->backend->Trim(oid, view->epoch(), position_,
+            true, trim_full);
+
+        if (ret == -ESPIPE) {
+          log_->striper.update_current_view(view->epoch());
+          // restart after view update. wildly inefficient :(
+          restart = true;
+          break;
+        }
+
+        if (ret == -ENOENT) {
+          int ret = log_->backend->Seal(oid, view->epoch());
+          if (ret && ret != -ESPIPE) {
+            return ret;
+          }
+
+          // part of trimming here means we may create objects that are
+          // immediately trimmed (holes, past eol). i suspect that there are an
+          // optimization here, but for now when we create a new object we'll
+          // restart the trim process and treat it like any other object. this is
+          // clearly, wildly, inefficient.
+          restart = true;
+          break;
+        }
+
+        if (ret != 0) {
+          return ret;
+        }
       }
+
+      if (restart)
+        break;
     }
 
     if (restart)

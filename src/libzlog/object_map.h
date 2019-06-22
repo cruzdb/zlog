@@ -76,8 +76,11 @@ class ObjectMap {
     return next_stripe_id_;
   }
 
+  // iterate over objects that map from the beginning of the log up to the
+  // position given. initialize stripe_id to 0, and done to false. when done
+  // returns true, the return value can be ignored.
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
-      uint64_t position) const;
+      uint64_t position, uint64_t& stripe_id, bool& done) const;
 
   // return the stripe that maps the position.
   boost::optional<Stripe> map_stripe(uint64_t position) const;

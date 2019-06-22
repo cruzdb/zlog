@@ -115,10 +115,10 @@ void Striper::shutdown()
 }
 
 boost::optional<std::vector<std::pair<std::string, bool>>>
-Striper::map_to(const std::shared_ptr<const View>& view,
-    const uint64_t position)
+Striper::map_to(const std::shared_ptr<const View>& view, const uint64_t position,
+    uint64_t& stripe_id, bool& done) const
 {
-  return view->object_map.map_to(position);
+  return view->object_map.map_to(position, stripe_id, done);
 }
 
 boost::optional<std::string> Striper::map(

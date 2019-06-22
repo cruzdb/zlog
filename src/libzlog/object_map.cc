@@ -53,10 +53,16 @@ ObjectMap::map(const uint64_t position) const
 }
 
 boost::optional<std::vector<std::pair<std::string, bool>>>
-ObjectMap::map_to(const uint64_t position) const
+ObjectMap::map_to(const uint64_t position, uint64_t& stripe_id, bool& done) const
 {
   // the max position is not mapped
   if (!map(position).first) {
+    return boost::none;
+  }
+
+  assert(!done);
+  if (stripe_id >= num_stripes()) {
+    done = true;
     return boost::none;
   }
 
@@ -64,37 +70,37 @@ ObjectMap::map_to(const uint64_t position) const
   // second: complete map?
   std::vector<std::pair<std::string, bool>> objects;
 
-  for (auto stripe_id = 0u; stripe_id < num_stripes(); stripe_id++) {
-    const auto stripe = stripe_by_id(stripe_id);
-    const auto oids = stripe.oids();
+  const auto stripe = stripe_by_id(stripe_id);
+  const auto oids = stripe.oids();
 
-    const auto min_pos_base = stripe.min_position();
+  const auto min_pos_base = stripe.min_position();
 
-    // pos is below the minimum of this stripe. we're done
-    if (min_pos_base > position) {
-      break;
+  // pos is below the minimum of this stripe. we're done
+  if (min_pos_base > position) {
+    stripe_id++;
+    return objects;
+  }
+
+  // this (likely) doesn't handle the future scenario where we chop off
+  // stripes before they fill up.
+  const auto max_pos_base = stripe.max_position() - (stripe.width() - 1);
+
+  for (uint32_t i = 0; i < stripe.width(); i++) {
+    const auto max_pos = max_pos_base + i;
+    if (max_pos <= position) {
+      objects.push_back(std::make_pair(oids[i], true));
+      continue;
     }
 
-    // this (likely) doesn't handle the future scenario where we chop off
-    // stripes before they fill up.
-    const auto max_pos_base = stripe.max_position() - (stripe.width() - 1);
-
-    for (uint32_t i = 0; i < stripe.width(); i++) {
-      const auto max_pos = max_pos_base + i;
-      if (max_pos <= position) {
-        objects.push_back(std::make_pair(oids[i], true));
-        continue;
-      }
-
-      // pos may be the first/min position of the middle of the stripe
-      const auto min_pos = min_pos_base + i;
-      if (min_pos <= position) {
-        objects.push_back(std::make_pair(oids[i], false));
-        continue;
-      }
+    // pos may be the first/min position of the middle of the stripe
+    const auto min_pos = min_pos_base + i;
+    if (min_pos <= position) {
+      objects.push_back(std::make_pair(oids[i], false));
+      continue;
     }
   }
 
+  stripe_id++;
   return objects;
 }
 
