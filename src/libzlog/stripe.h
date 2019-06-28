@@ -39,6 +39,11 @@ class Stripe {
     assert(min_position_ <= max_position_);
   }
 
+  Stripe(const Stripe& other) = delete;
+  Stripe(Stripe&& other) = default;
+  Stripe& operator=(const Stripe& other) = delete;
+  Stripe& operator=(Stripe&& other) = delete;
+
  public:
   static std::string make_oid(const std::string& prefix,
       uint64_t stripe_id, uint32_t width, uint64_t position);
@@ -81,12 +86,12 @@ class Stripe {
   static std::vector<std::string> make_oids(const std::string& prefix,
     uint64_t stripe_id, uint32_t width);
 
-  const std::string prefix_;
-  const uint64_t stripe_id_;
-  const uint32_t width_;
-  const uint64_t min_position_;
-  const uint64_t max_position_;
-  const std::vector<std::string> oids_;
+  std::string prefix_;
+  uint64_t stripe_id_;
+  uint32_t width_;
+  uint64_t min_position_;
+  uint64_t max_position_;
+  std::vector<std::string> oids_;
 };
 
 // MultiStripe is a compact representation of adjancent Stripe objects in the
@@ -143,6 +148,11 @@ class MultiStripe {
     assert(min_position_ <= max_position_);
     assert(max_position_ <= (min_position_ + (instances_ * width_ * slots_) - 1));
   }
+
+  MultiStripe(const MultiStripe& other) = default;
+  MultiStripe(MultiStripe&& other) = default;
+  MultiStripe& operator=(const MultiStripe& other) = delete;
+  MultiStripe& operator=(MultiStripe&& other) = delete;
 
  public:
   // construct a MultiStripe from a flatbuffer
@@ -248,13 +258,13 @@ class MultiStripe {
   }
 
  private:
-  const std::string prefix_;
-  const uint64_t base_id_;
-  const uint32_t width_;
-  const uint32_t slots_;
-  const uint64_t min_position_;
-  const uint64_t instances_;
-  const uint64_t max_position_;
+  std::string prefix_;
+  uint64_t base_id_;
+  uint32_t width_;
+  uint32_t slots_;
+  uint64_t min_position_;
+  uint64_t instances_;
+  uint64_t max_position_;
 };
 
 }
