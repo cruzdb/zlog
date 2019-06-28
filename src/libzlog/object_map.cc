@@ -175,8 +175,8 @@ Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
   auto it = stripes_by_id_.upper_bound(stripe_id);
   it = std::prev(it);
   assert(it->first <= stripe_id);
-  assert(stripe_id <= it->second->second.max_stripe_id());
-  return it->second->second.stripe_by_id(stripe_id);
+  assert(stripe_id <= it->second.max_stripe_id());
+  return it->second.stripe_by_id(stripe_id);
 }
 
 ObjectMap ObjectMap::decode(const std::string& prefix,
@@ -194,25 +194,6 @@ ObjectMap ObjectMap::decode(const std::string& prefix,
       assert(res.second);
       (void)res;
     }
-  }
-
-  if (!stripes.empty()) {
-    std::set<uint64_t> ids;
-    auto it = stripes.cbegin();
-    auto it2 = std::next(it);
-    for (; it != stripes.cend(); it++) {
-      assert(it->first <= it->second.max_position());
-      assert(it->second.width() > 0);
-      // TODO assert ids with instance counts, too
-      auto res = ids.emplace(it->second.base_id());
-      assert(res.second);
-      (void)res;
-      if (it2 != stripes.cend()) {
-        assert(it->second.max_position() < it2->first);
-        it2++;
-      }
-    }
-    assert(ids.find(object_map->next_stripe_id()) == ids.end());
   }
 
   return ObjectMap(
@@ -237,5 +218,27 @@ flatbuffers::Offset<zlog::fbs::ObjectMap> ObjectMap::encode(
       &stripes,
       min_valid_position_);
 }
+
+// reference for validation routine
+//
+// if (!stripes.empty()) {
+//   std::set<uint64_t> ids;
+//   auto it = stripes.cbegin();
+//   auto it2 = std::next(it);
+//   for (; it != stripes.cend(); it++) {
+//     assert(it->first <= it->second.max_position());
+//     assert(it->second.width() > 0);
+//     // TODO assert ids with instance counts, too
+//     auto res = ids.emplace(it->second.base_id());
+//     assert(res.second);
+//     (void)res;
+//     if (it2 != stripes.cend()) {
+//       assert(it->second.max_position() < it2->first);
+//       it2++;
+//     }
+//   }
+//   assert(ids.find(object_map->next_stripe_id()) == ids.end());
+// }
+
 
 }

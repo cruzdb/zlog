@@ -10,26 +10,12 @@ struct Options;
 
 class ObjectMap {
  public:
-  ObjectMap(const ObjectMap& other) :
-    next_stripe_id_(other.next_stripe_id_),
-    stripes_by_pos_(other.stripes_by_pos_),
-    // compute over the instance variable so the iterators are valid!
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_)),
-    min_valid_position_(other.min_valid_position_)
-  {}
-
-  ObjectMap(const ObjectMap&& other) :
-    next_stripe_id_(other.next_stripe_id_),
-    stripes_by_pos_(std::move(other.stripes_by_pos_)),
-    // compute over the instance variable so the iterators are valid. it doesn't
-    // appear to be valid to also move the container with the iterators...
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_)),
-    min_valid_position_(other.min_valid_position_)
-  {}
-
+  ObjectMap(const ObjectMap& other) = default;
+  ObjectMap(ObjectMap&& other) = default;
   ObjectMap& operator=(const ObjectMap& other) = delete;
-  ObjectMap& operator=(const ObjectMap&& other) = delete;
+  ObjectMap& operator=(ObjectMap&& other) = delete;
 
+ public:
   flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
       flatbuffers::FlatBufferBuilder& fbb) const;
 
@@ -86,31 +72,27 @@ class ObjectMap {
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
  private:
-  typedef std::map<uint64_t, MultiStripe> stripes_by_pos_t;
-  typedef std::map<uint64_t, stripes_by_pos_t::const_iterator> stripes_by_id_t;
-
-  ObjectMap(uint64_t next_stripe_id, const stripes_by_pos_t& stripes,
+  ObjectMap(uint64_t next_stripe_id,
+      const std::map<uint64_t, MultiStripe>& stripes,
       uint64_t min_valid_position) :
     next_stripe_id_(next_stripe_id),
     stripes_by_pos_(stripes),
-    // compute over the instance variable so the iterators are valid!
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_)),
     min_valid_position_(min_valid_position)
-  {}
-
-  // helper to initialize the computed const member
-  static stripes_by_id_t compute_stripes_by_id(const stripes_by_pos_t& stripes) {
-    stripes_by_id_t res;
-    for (auto it = stripes.cbegin(); it != stripes.cend(); it++) {
-      res.emplace(it->second.base_id(), it);
+  {
+    // compute the stripes-by-id secondary index. if the set of stripes become
+    // large enough that not using a secondary index is important, then it could
+    // be restructured to store iterators into the primary index. when doing
+    // this, make sure to recompute the iterators to avoid issues with copy/move
+    // constructors.
+    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
+      stripes_by_id_.emplace(it->second.base_id(), it->second);
     }
-    return res;
   }
 
-  const uint64_t next_stripe_id_;
-  const stripes_by_pos_t stripes_by_pos_;
-  const stripes_by_id_t stripes_by_id_;
-  const uint64_t min_valid_position_;
+  uint64_t next_stripe_id_;
+  std::map<uint64_t, MultiStripe> stripes_by_pos_;
+  std::map<uint64_t, MultiStripe> stripes_by_id_;
+  uint64_t min_valid_position_;
 };
 
 }
