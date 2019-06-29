@@ -132,35 +132,31 @@ class MultiStripe {
     max_position_(max_position)
   {
     assert(!prefix_.empty());
-    assert(base_id_ >= 0);
     assert(width_ > 0);
     assert(slots_ > 0);
     assert(instances_ > 0);
-    // XXX: note that these restrictions are true currently as we do not allow
-    // stripes to be empty. this assumption may not hold in the future.
-    //
-    // TODO: use tighter bounds for assertions. if stripes are not allowed to be
-    // empty, we can add an assert that ties the min/max positions to the
-    // base_id and instances.
+
+    // these restrictions aren't fundamental, but they happen to be true for the
+    // current design.
     if (base_id_ > 0) {
       assert(min_position_ > 0);
-      assert(max_position_ > 0);
     } else {
-      assert(min_position_ >= 0);
-      if (instances_ > 1) {
-        assert(max_position_ > 0);
-      } {
-        assert(max_position_ >= 0);
-      }
+      assert(min_position_ == 0);
     }
+
     assert(min_position_ <= max_position_);
-    assert(max_position_ <= (min_position_ + (instances_ * width_ * slots_) - 1));
+
+    // this relationship is true when we assume that the address space of a
+    // stripe is always used / valid. that is, we don't cause part of a view
+    // (e.g. the high end of the address range) to be remapped. this might not
+    // hold in the future, but it does now for now.
+    assert(max_position_ == (min_position_ + (instances_ * width_ * slots_) - 1));
   }
 
   MultiStripe(const MultiStripe& other) = default;
   MultiStripe(MultiStripe&& other) = default;
   MultiStripe& operator=(const MultiStripe& other) = delete;
-  MultiStripe& operator=(MultiStripe&& other) = delete;
+  MultiStripe& operator=(MultiStripe&& other) = default;
 
  public:
   // construct a MultiStripe from a flatbuffer
