@@ -1,9 +1,10 @@
 #include "gtest/gtest.h"
 #include "libzlog/stripe.h"
 
-// Stripe TODO
+// TODO
+//
+// Stripe
 //  - test private members
-//  - equality operators
 //
 // MultiStripe
 //  - encode/decode
@@ -13,58 +14,127 @@ TEST(StripeDeathTest, Constructor) {
   // empty prefix
   ASSERT_DEATH({
     zlog::Stripe("", 0, 1, 0, 0);
-  }, "prefix.+failed");
+  }, "prefix_\\.empty.+failed");
 
   // width == 0
   ASSERT_DEATH({
     zlog::Stripe("p", 0, 0, 0, 0);
-  }, "width.+failed");
+  }, "width_ > 0.+failed");
+
+  // stripe id > 0 -> min pos > 0
+  ASSERT_DEATH({
+    zlog::Stripe("p", 1, 1, 0, 0);
+  }, "min_position_ > 0.+failed");
+
+  // stripe id == 0 -> min pos == 0
+  ASSERT_DEATH({
+    zlog::Stripe("p", 0, 1, 1, 0);
+  }, "min_position_ == 0.+failed");
 
   // min pos > max pos
   ASSERT_DEATH({
-    zlog::Stripe("p", 0, 1, 1, 0);
-  }, "min_pos.+max_pos.+failed");
-
-  // stripe id > 0 -> positive min/max pos
-  ASSERT_DEATH({
-    zlog::Stripe("p", 1, 1, 0, 1);
-  }, "min_pos.+failed");
-  ASSERT_DEATH({
     zlog::Stripe("p", 1, 1, 1, 0);
-  }, "max_pos.+failed");
+  }, "min_position_ <= max_position_.+failed");
+
+  // max pos isn't at least `width` larger than min pos
+  ASSERT_DEATH({
+    zlog::Stripe("p", 0, 10, 0, 0);
+  }, "max_position_ >= \\(min_position_ \\+ width_ - 1\\).+failed");
+  ASSERT_DEATH({
+    zlog::Stripe("p", 1, 10, 8, 12);
+  }, "max_position_ >= \\(min_position_ \\+ width_ - 1\\).+failed");
+
+  // max pos is big enough, but isn't a multiple of width
+  ASSERT_DEATH({
+    zlog::Stripe("p", 0, 10, 0, 10);
+  }, "\\(max_position_ - min_position_ \\+ 1\\) % width_ == 0.+failed");
+  ASSERT_DEATH({
+    zlog::Stripe("p", 1, 10, 7, 19);
+  }, "\\(max_position_ - min_position_ \\+ 1\\) % width_ == 0.+failed");
 }
 
 TEST(StripeTest, Basic) {
-  {
-    auto s = zlog::Stripe("p", 0, 1, 2, 3);
-    ASSERT_EQ(s.width(), 1u);
-    ASSERT_EQ(s.min_position(), 2u);
-    ASSERT_EQ(s.max_position(), 3u);
-    ASSERT_EQ(s.oids(), std::vector<std::string>{"p.0.0"});
-  }
+  auto s = zlog::Stripe("p", 0, 1, 0, 3);
+  ASSERT_EQ(s.width(), 1u);
+  ASSERT_EQ(s.min_position(), 0u);
+  ASSERT_EQ(s.max_position(), 3u);
+  ASSERT_EQ(s.oids(), std::vector<std::string>{"p.0.0"});
 
-  // allocate in new scope: Stripe doesn't define move assignment
-  {
-    auto s = zlog::Stripe("p", 0, 2, 3, 4);
-    ASSERT_EQ(s.width(), 2u);
-    ASSERT_EQ(s.min_position(), 3u);
-    ASSERT_EQ(s.max_position(), 4u);
-    ASSERT_EQ(s.oids(), std::vector<std::string>({"p.0.0","p.0.1"}));
-  }
+  s = zlog::Stripe("p", 1, 2, 3, 4);
+  ASSERT_EQ(s.width(), 2u);
+  ASSERT_EQ(s.min_position(), 3u);
+  ASSERT_EQ(s.max_position(), 4u);
+  ASSERT_EQ(s.oids(), std::vector<std::string>({"p.1.0","p.1.1"}));
 
-  {
-    auto s = zlog::Stripe("p", 6, 3, 4, 5);
-    ASSERT_EQ(s.width(), 3u);
-    ASSERT_EQ(s.min_position(), 4u);
-    ASSERT_EQ(s.max_position(), 5u);
-    ASSERT_EQ(s.oids(), std::vector<std::string>({"p.6.0", "p.6.1", "p.6.2"}));
-  }
+  s = zlog::Stripe("p", 6, 3, 4, 9);
+  ASSERT_EQ(s.width(), 3u);
+  ASSERT_EQ(s.min_position(), 4u);
+  ASSERT_EQ(s.max_position(), 9u);
+  ASSERT_EQ(s.oids(), std::vector<std::string>({"p.6.0", "p.6.1", "p.6.2"}));
 }
 
 TEST(StripeTest, MakeOID) {
   ASSERT_EQ(
       zlog::Stripe::make_oid("asdf", 33, 44, 101),
       "asdf.33.13");
+}
+
+TEST(StripeTest, Equality) {
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 1, 1, 1) ==
+      zlog::Stripe("p", 1, 1, 1, 1));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 1, 1, 3) ==
+      zlog::Stripe("p", 1, 1, 1, 3));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 1, 2, 3) ==
+      zlog::Stripe("p", 1, 1, 2, 3));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 2, 2, 3) ==
+      zlog::Stripe("p", 1, 2, 2, 3));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 2, 2, 2, 3) ==
+      zlog::Stripe("p", 2, 2, 2, 3));
+
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 1, 1, 1) !=
+      zlog::Stripe("x", 1, 1, 1, 1));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 1, 1, 3) !=
+      zlog::Stripe("p", 2, 1, 1, 3));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 1, 2, 3) !=
+      zlog::Stripe("p", 1, 2, 2, 3));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 1, 2, 2, 5) !=
+      zlog::Stripe("p", 1, 2, 4, 5));
+  ASSERT_TRUE(
+      zlog::Stripe("p", 2, 2, 2, 3) !=
+      zlog::Stripe("p", 2, 2, 2, 5));
+}
+
+TEST(StripeTest, Range) {
+  for (auto p : std::vector<std::string>{"a", "b"}) {
+    for (uint64_t stripe_id = 0; stripe_id < 10; stripe_id++) {
+      for (uint32_t width = 1; width < 10; width++) {
+        for (uint32_t slots = 1; slots < 10; slots++) {
+          for (uint64_t min_position = 0; min_position < 10; min_position++) {
+
+            // basic assumption about how stripes are built. not necessarily
+            // fundamental and might change in the future.
+            if (stripe_id == 0 && min_position > 0) {
+              continue;
+            } else if (stripe_id > 0 && min_position == 0) {
+              continue;
+            }
+
+            zlog::Stripe(p, stripe_id, width, min_position,
+                (min_position + width * slots - 1));
+          }
+        }
+      }
+    }
+  }
 }
 
 TEST(MultiStripeDeathTest, Constructor) {

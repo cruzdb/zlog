@@ -27,22 +27,30 @@ class Stripe {
     oids_(make_oids(prefix_, stripe_id_, width_))
   {
     assert(!prefix_.empty());
-    assert(stripe_id_ >= 0);
     assert(width_ > 0);
+
+    // these restrictions aren't fundamental, but they happen to be true for the
+    // current design.
     if (stripe_id_ > 0) {
       assert(min_position_ > 0);
-      assert(max_position_ > 0);
     } else {
-      assert(min_position_ >= 0);
-      assert(max_position_ >= 0);
+      assert(min_position_ == 0);
     }
+
     assert(min_position_ <= max_position_);
+
+    // these relationships are true when we assume that the address space of a
+    // stripe is always used / valid. that is, we don't cause part of a view
+    // (e.g. the high end of the address range) to be remapped. this might not
+    // hold in the future, but it does now for now.
+    assert(max_position_ >= (min_position_ + width_ - 1));
+    assert((max_position_ - min_position_ + 1) % width_ == 0);
   }
 
   Stripe(const Stripe& other) = delete;
   Stripe(Stripe&& other) = default;
   Stripe& operator=(const Stripe& other) = delete;
-  Stripe& operator=(Stripe&& other) = delete;
+  Stripe& operator=(Stripe&& other) = default;
 
  public:
   static std::string make_oid(const std::string& prefix,
