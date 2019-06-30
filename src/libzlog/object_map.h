@@ -10,10 +10,29 @@ struct Options;
 
 class ObjectMap {
  public:
+  ObjectMap(uint64_t next_stripe_id,
+      const std::map<uint64_t, MultiStripe>& stripes,
+      uint64_t min_valid_position) :
+    next_stripe_id_(next_stripe_id),
+    stripes_by_pos_(stripes),
+    min_valid_position_(min_valid_position)
+  {
+    // compute the stripes-by-id secondary index. if the set of stripes become
+    // large enough that not using a secondary index is important, then it could
+    // be restructured to store iterators into the primary index. when doing
+    // this, make sure to recompute the iterators to avoid issues with copy/move
+    // constructors.
+    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
+      stripes_by_id_.emplace(it->second.base_id(), it->second);
+    }
+
+    assert(valid());
+  }
+
   ObjectMap(const ObjectMap& other) = default;
   ObjectMap(ObjectMap&& other) = default;
-  ObjectMap& operator=(const ObjectMap& other) = delete;
-  ObjectMap& operator=(ObjectMap&& other) = delete;
+  ObjectMap& operator=(const ObjectMap& other) = default;
+  ObjectMap& operator=(ObjectMap&& other) = default;
 
  public:
   flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
@@ -21,6 +40,8 @@ class ObjectMap {
 
   static ObjectMap decode(const std::string& prefix,
       const zlog::fbs::ObjectMap *object_map);
+
+  bool valid() const;
 
  public:
   // returns the object name that maps the position, if it exists. the second
@@ -44,7 +65,8 @@ class ObjectMap {
     return next_stripe_id_;
   }
 
-  // returns the maximum position mapped by the object map.
+  // returns the maximum position mapped by the object map. do not call this
+  // method if the object map is empty.
   uint64_t max_position() const;
 
   // returns the minimum (inclusive) valid log position
@@ -72,23 +94,6 @@ class ObjectMap {
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
  private:
-  ObjectMap(uint64_t next_stripe_id,
-      const std::map<uint64_t, MultiStripe>& stripes,
-      uint64_t min_valid_position) :
-    next_stripe_id_(next_stripe_id),
-    stripes_by_pos_(stripes),
-    min_valid_position_(min_valid_position)
-  {
-    // compute the stripes-by-id secondary index. if the set of stripes become
-    // large enough that not using a secondary index is important, then it could
-    // be restructured to store iterators into the primary index. when doing
-    // this, make sure to recompute the iterators to avoid issues with copy/move
-    // constructors.
-    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
-      stripes_by_id_.emplace(it->second.base_id(), it->second);
-    }
-  }
-
   uint64_t next_stripe_id_;
   std::map<uint64_t, MultiStripe> stripes_by_pos_;
   std::map<uint64_t, MultiStripe> stripes_by_id_;

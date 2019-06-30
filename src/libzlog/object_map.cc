@@ -60,19 +60,18 @@ ObjectMap::map_to(const uint64_t position, uint64_t& stripe_id, bool& done) cons
     return boost::none;
   }
 
-  assert(!done);
-  if (stripe_id >= num_stripes()) {
-    done = true;
-    return boost::none;
-  }
-
   // first: object name
   // second: complete map?
   std::vector<std::pair<std::string, bool>> objects;
 
+  assert(!done);
+  if (stripe_id >= num_stripes()) {
+    done = true;
+    return objects;
+  }
+
   const auto stripe = stripe_by_id(stripe_id);
   const auto oids = stripe.oids();
-
   const auto min_pos_base = stripe.min_position();
 
   // pos is below the minimum of this stripe. we're done
@@ -219,26 +218,64 @@ flatbuffers::Offset<zlog::fbs::ObjectMap> ObjectMap::encode(
       min_valid_position_);
 }
 
-// reference for validation routine
-//
-// if (!stripes.empty()) {
-//   std::set<uint64_t> ids;
-//   auto it = stripes.cbegin();
-//   auto it2 = std::next(it);
-//   for (; it != stripes.cend(); it++) {
-//     assert(it->first <= it->second.max_position());
-//     assert(it->second.width() > 0);
-//     // TODO assert ids with instance counts, too
-//     auto res = ids.emplace(it->second.base_id());
-//     assert(res.second);
-//     (void)res;
-//     if (it2 != stripes.cend()) {
-//       assert(it->second.max_position() < it2->first);
-//       it2++;
-//     }
-//   }
-//   assert(ids.find(object_map->next_stripe_id()) == ids.end());
-// }
+bool ObjectMap::valid() const
+{
+  {
+    std::map<uint64_t, MultiStripe> tmp;
+    for (const auto s : stripes_by_pos_) {
+      auto res = tmp.emplace(s.second.base_id(), s.second);
+      if (!res.second) {
+        return false;
+      }
+      if (s.first != s.second.min_position()) {
+        return false;
+      }
+    }
+    if (stripes_by_id_ != tmp) {
+      return false;
+    }
+  }
 
+  {
+    auto it = stripes_by_pos_.crbegin();
+    if (it != stripes_by_pos_.crend()) {
+      if (next_stripe_id_ != (it->second.max_stripe_id() + 1)) {
+        return false;
+      }
+    } else {
+      assert(stripes_by_pos_.empty());
+      if (next_stripe_id_ != 0) {
+        return false;
+      }
+    }
+  }
+
+  {
+    auto it = stripes_by_pos_.cbegin();
+    if (it != stripes_by_pos_.cend()) {
+      if (it->first != 0) {
+        return false;
+      }
+      if (it->second.base_id() != 0) {
+        return false;
+      }
+    }
+  }
+
+  if (stripes_by_pos_.size() > 1) {
+    auto prev = stripes_by_pos_.cbegin();
+    auto it = std::next(prev);
+    for (; it != stripes_by_pos_.cend(); it++, prev++) {
+      if ((prev->second.max_position() + 1) != it->first) {
+        return false;
+      }
+      if ((prev->second.max_stripe_id() + 1) != it->second.base_id()) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
 
 }

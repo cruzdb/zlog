@@ -136,7 +136,9 @@ boost::optional<std::string> Striper::map(
 
   // oid, true -> expand(max view pos + 1)
   if (oid && last_stripe) {
-    // asynchronsouly expand the view to map the next stripe
+    // asynchronsouly expand the view to map the next stripe. note that the
+    // existence of a mapping for the position implies the objectmap is not
+    // empty. calling max_position on a empty object map is undefined behavior.
     async_expand_view(view->object_map.max_position() + 1);
     return oid;
   }
