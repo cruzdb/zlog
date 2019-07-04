@@ -51,11 +51,6 @@ class View {
 
   View set_sequencer_config(SequencerConfig seq_config) const;
 
-  // returns the minimum (inclusive) valid log position.
-  uint64_t min_valid_position() const {
-    return object_map_.min_valid_position();
-  }
-
   const ObjectMap& object_map() const {
     return object_map_;
   }
