@@ -15,7 +15,8 @@ Log::~Log() {}
 
 int create_or_open(const Options& options,
     Backend *backend, const std::string& name,
-    std::string *hoid_out, std::string *prefix_out)
+    std::string *hoid_out, std::string *prefix_out,
+    bool *created)
 {
   std::string hoid;
   std::string prefix;
@@ -54,7 +55,9 @@ int create_or_open(const Options& options,
         return ret;
       }
     }
-
+    if (created) {
+      *created = true;
+    }
     break;
   }
 
@@ -81,10 +84,11 @@ int Log::Open(const Options& options,
     }
   }
 
+  bool created = false;
   std::string hoid;
   std::string prefix;
   int ret = create_or_open(options, backend.get(),
-      name, &hoid, &prefix);
+      name, &hoid, &prefix, &created);
   if (ret) {
     return ret;
   }
@@ -110,8 +114,14 @@ int Log::Open(const Options& options,
   // gh#343
   impl->striper.update_current_view(0);
 
-  // TODO: initialize the first stripe so that cost isn't incurred by clients
-  // when they start performing I/O.
+  // kick start initialization of the first stripe
+  if (options.init_stripe_on_create && created) {
+    // if there actually is a stripe. this is controlled by the
+    // create_init_view_stripes option
+    if (!impl->striper.view()->object_map().empty()) {
+      impl->striper.async_init_stripe(0);
+    }
+  }
 
   *logpp = impl.release();
 

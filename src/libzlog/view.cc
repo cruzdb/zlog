@@ -27,10 +27,27 @@ std::string View::create_initial(const Options& options)
 {
   flatbuffers::FlatBufferBuilder fbb;
 
-  // - next_stripe_id = 0
-  // - no stripes
-  // TODO: if (options.create_initial_view_stripes) ...
-  const auto object_map = zlog::fbs::CreateObjectMapDirect(fbb, 0, nullptr, 0);
+  // below the prefix is discarded when the object map is encoded
+  // TODO: it would be nice to reformulate the abstractions to avoid needing to
+  // use a placeholder prefix here. the multistripe defines a layout, but
+  // shouldn't define a static object naming implied by requiring this prefix
+  // parameter.
+  std::map<uint64_t, MultiStripe> stripes;
+  if (options.create_initial_view_stripes) {
+    stripes.emplace(0,
+        MultiStripe(
+          "<<UNUSED PREFIX>>",
+          0,
+          options.stripe_width,
+          options.stripe_slots,
+          0,
+          1,
+          options.stripe_width * options.stripe_slots - 1));
+  }
+
+  const auto object_map = stripes.empty() ?
+    zlog::fbs::CreateObjectMapDirect(fbb, 0, nullptr, 0) :
+    ObjectMap(1, stripes, 0).encode(fbb);
 
   auto builder = zlog::fbs::ViewBuilder(fbb);
   builder.add_object_map(object_map);

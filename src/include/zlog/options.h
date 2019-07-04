@@ -26,6 +26,9 @@ struct Options {
   bool create_if_missing = false;
   bool error_if_exists = false;
 
+  // add stripes to the initial view for new logs.
+  bool create_initial_view_stripes = true;
+
   // schedule a background task to initialize stripe objects whenever a new
   // stripe is created. this should always be set to true, and is only false for
   // in testing scenarios (e.g. synchronous object init in i/o path).
@@ -36,8 +39,6 @@ struct Options {
   uint32_t stripe_slots = 5;
 
   uint32_t max_inflight_ops = 1024;
-
-  bool create_initial_view_stripes = true;
 
   ///////////////////////////////////////////////////////////////////
 

@@ -159,7 +159,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
     options.create_if_missing = true;
     std::string hoid, prefix;
     int ret = zlog::create_or_open(options, backend.get(), command[1],
-        &hoid, &prefix);
+        &hoid, &prefix, nullptr);
     switch (ret) {
       case 0:
         break;
