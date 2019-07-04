@@ -1,5 +1,10 @@
 # Pending
 
+* separate view and epoch-versioned-view abstractions
+* use a scalable view / objectmap implementation
+* moved away from protocol buffers to use only flatbuffers
+* implemented a large set of unit test coverage for views
+
 # v0.5.0
 
 * be/ceph: added support for controlling omap vs bytestream storage
