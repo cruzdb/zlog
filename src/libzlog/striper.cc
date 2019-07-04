@@ -552,18 +552,18 @@ void Striper::refresh_entry_()
     auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, it->second);
 
     if (new_view->seq_config()) {
-      if (new_view->seq_config()->secret == secret_) { // we should be the active seq
-        if (new_view->seq_config()->epoch == it->first) {
+      if (new_view->seq_config()->secret() == secret_) { // we should be the active seq
+        if (new_view->seq_config()->epoch() == it->first) {
           new_view->seq = std::make_shared<Sequencer>(it->first,
-              new_view->seq_config()->position);
+              new_view->seq_config()->position());
         } else {
-          assert(new_view->seq_config()->epoch < it->first);
+          assert(new_view->seq_config()->epoch() < it->first);
           std::lock_guard<std::mutex> lk(lock_);
           assert(view_);
           assert(view_->seq);
           assert(view_->seq_config());
-          assert(view_->seq_config()->epoch == new_view->seq_config()->epoch);
-          assert(view_->seq->epoch() == view_->seq_config()->epoch);
+          assert(view_->seq_config()->epoch() == new_view->seq_config()->epoch());
+          assert(view_->seq->epoch() == view_->seq_config()->epoch());
           // be careful that this isn't copying the state of the sequencer. when
           // this comment was written, this was copying a shared_ptr to the
           // state which is fine. the issue that other threads may be

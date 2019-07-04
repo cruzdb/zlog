@@ -27,9 +27,9 @@ flatbuffers::Offset<zlog::fbs::Sequencer> SequencerConfig::encode(
     flatbuffers::FlatBufferBuilder& fbb) const
 {
   return zlog::fbs::CreateSequencerDirect(fbb,
-      epoch,
-      secret.c_str(),
-      position);
+      epoch_,
+      secret_.c_str(),
+      position_);
 }
 
 }

@@ -33,9 +33,9 @@ class SequencerConfig {
  public:
   SequencerConfig(uint64_t epoch, const std::string& secret,
       uint64_t position) :
-    epoch(epoch),
-    secret(secret),
-    position(position)
+    epoch_(epoch),
+    secret_(secret),
+    position_(position)
   {}
 
  public:
@@ -46,9 +46,22 @@ class SequencerConfig {
       flatbuffers::FlatBufferBuilder& fbb) const;
 
  public:
-  const uint64_t epoch;
-  const std::string secret;
-  const uint64_t position;
+  uint64_t epoch() const {
+    return epoch_;
+  }
+
+  std::string secret() const {
+    return secret_;
+  }
+
+  uint64_t position() const {
+    return position_;
+  }
+
+ private:
+  uint64_t epoch_;
+  std::string secret_;
+  uint64_t position_;
 };
 
 }
