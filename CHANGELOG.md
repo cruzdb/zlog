@@ -1,5 +1,7 @@
 # Pending
 
+# v0.6.0
+
 * separate view and epoch-versioned-view abstractions
 * use a scalable view / objectmap implementation
 * moved away from protocol buffers to use only flatbuffers
