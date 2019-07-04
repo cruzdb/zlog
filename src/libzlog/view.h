@@ -22,7 +22,7 @@ class View {
     seq_config_(seq_config)
   {}
 
-  View(const View& other) = delete;
+  View(const View& other) = default;
   View(View&& other) = default;
   View& operator=(const View& other) = default;
   View& operator=(View&& other) = default;

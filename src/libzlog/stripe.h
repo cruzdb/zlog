@@ -47,7 +47,7 @@ class Stripe {
     assert((max_position_ - min_position_ + 1) % width_ == 0);
   }
 
-  Stripe(const Stripe& other) = delete;
+  Stripe(const Stripe& other) = default;
   Stripe(Stripe&& other) = default;
   Stripe& operator=(const Stripe& other) = delete;
   Stripe& operator=(Stripe&& other) = default;
