@@ -17,6 +17,17 @@ struct Options;
 
 class View {
  public:
+  View(ObjectMap object_map, boost::optional<SequencerConfig> seq_config) :
+    object_map_(object_map),
+    seq_config_(seq_config)
+  {}
+
+  View(const View& other) = delete;
+  View(View&& other) = default;
+  View& operator=(const View& other) = delete;
+  View& operator=(View&& other) = delete;
+
+ public:
   // deserialize view
   static View decode(const std::string& prefix,
       const std::string& view_data);
@@ -42,19 +53,23 @@ class View {
 
   // returns the minimum (inclusive) valid log position.
   uint64_t min_valid_position() const {
-    return object_map.min_valid_position();
+    return object_map_.min_valid_position();
   }
 
-  const ObjectMap object_map;
-  const boost::optional<SequencerConfig> seq_config;
+  const ObjectMap& object_map() const {
+    return object_map_;
+  }
+
+  const boost::optional<SequencerConfig>& seq_config() const {
+    return seq_config_;
+  }
 
  private:
-  View(ObjectMap object_map, boost::optional<SequencerConfig> seq_config) :
-    object_map(object_map),
-    seq_config(seq_config)
-  {}
+  ObjectMap object_map_;
+  boost::optional<SequencerConfig> seq_config_;
 };
 
+// can make const?
 class VersionedView : public View {
  public:
   VersionedView(const std::string& prefix, const uint64_t epoch,

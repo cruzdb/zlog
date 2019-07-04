@@ -118,14 +118,14 @@ boost::optional<std::vector<std::pair<std::string, bool>>>
 Striper::map_to(const std::shared_ptr<const View>& view, const uint64_t position,
     uint64_t& stripe_id, bool& done) const
 {
-  return view->object_map.map_to(position, stripe_id, done);
+  return view->object_map().map_to(position, stripe_id, done);
 }
 
 boost::optional<std::string> Striper::map(
     const std::shared_ptr<const View>& view,
     const uint64_t position)
 {
-  const auto mapping = view->object_map.map(position);
+  const auto mapping = view->object_map().map(position);
   const auto oid = mapping.first;
   const auto last_stripe = mapping.second;
 
@@ -139,7 +139,7 @@ boost::optional<std::string> Striper::map(
     // asynchronsouly expand the view to map the next stripe. note that the
     // existence of a mapping for the position implies the objectmap is not
     // empty. calling max_position on a empty object map is undefined behavior.
-    async_expand_view(view->object_map.max_position() + 1);
+    async_expand_view(view->object_map().max_position() + 1);
     return oid;
   }
 
@@ -301,12 +301,12 @@ int Striper::propose_sequencer()
   // contained in the first non-empty stripe scanning in reverse, beginning with
   // the stripe that maps the maximum possible position for the current view.
 
-  std::vector<uint64_t> stripe_ids(curr_view->object_map.num_stripes());
+  std::vector<uint64_t> stripe_ids(curr_view->object_map().num_stripes());
   std::iota(std::begin(stripe_ids), std::end(stripe_ids), 0);
 
   auto it = stripe_ids.crbegin();
   for (; it != stripe_ids.crend(); it++) {
-    const auto stripe = curr_view->object_map.stripe_by_id(*it);
+    const auto stripe = curr_view->object_map().stripe_by_id(*it);
     int ret = seal_stripe(stripe, next_epoch, &max_pos, &empty);
     if (ret < 0) {
       if (ret == -ESPIPE) {
@@ -330,7 +330,7 @@ int Striper::propose_sequencer()
   // rather to signal to clients connected / using other sequencers that they
   // should grab a new view to see the new sequencer.
   for (; it != stripe_ids.crend(); it++) {
-    const auto stripe = curr_view->object_map.stripe_by_id(*it);
+    const auto stripe = curr_view->object_map().stripe_by_id(*it);
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
     if (ret < 0) {
       if (ret == -ESPIPE) {
@@ -399,7 +399,7 @@ void Striper::stripe_init_entry_()
     }
 
     auto v = view();
-    auto stripe = v->object_map.map_stripe(position);
+    auto stripe = v->object_map().map_stripe(position);
     if (!stripe) {
       continue;
     }
@@ -437,7 +437,7 @@ void Striper::expander_entry_()
     lk.unlock();
 
     const auto v = view();
-    const auto mapping = v->object_map.map(position);
+    const auto mapping = v->object_map().map(position);
     if (!mapping.first) {
       try_expand_view(position);
       continue;
@@ -551,19 +551,19 @@ void Striper::refresh_entry_()
 
     auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, it->second);
 
-    if (new_view->seq_config) {
-      if (new_view->seq_config->secret == secret_) { // we should be the active seq
-        if (new_view->seq_config->epoch == it->first) {
+    if (new_view->seq_config()) {
+      if (new_view->seq_config()->secret == secret_) { // we should be the active seq
+        if (new_view->seq_config()->epoch == it->first) {
           new_view->seq = std::make_shared<Sequencer>(it->first,
-              new_view->seq_config->position);
+              new_view->seq_config()->position);
         } else {
-          assert(new_view->seq_config->epoch < it->first);
+          assert(new_view->seq_config()->epoch < it->first);
           std::lock_guard<std::mutex> lk(lock_);
           assert(view_);
           assert(view_->seq);
-          assert(view_->seq_config);
-          assert(view_->seq_config->epoch == new_view->seq_config->epoch);
-          assert(view_->seq->epoch() == view_->seq_config->epoch);
+          assert(view_->seq_config());
+          assert(view_->seq_config()->epoch == new_view->seq_config()->epoch);
+          assert(view_->seq->epoch() == view_->seq_config()->epoch);
           // be careful that this isn't copying the state of the sequencer. when
           // this comment was written, this was copying a shared_ptr to the
           // state which is fine. the issue that other threads may be

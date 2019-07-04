@@ -46,10 +46,10 @@ std::string View::encode() const
 {
   flatbuffers::FlatBufferBuilder fbb;
 
-  const auto encoded_object_map = object_map.encode(fbb);
+  const auto encoded_object_map = object_map_.encode(fbb);
 
   flatbuffers::Offset<zlog::fbs::Sequencer> seq =
-    seq_config ? seq_config->encode(fbb) : 0;
+    seq_config_ ? seq_config_->encode(fbb) : 0;
 
   auto builder = zlog::fbs::ViewBuilder(fbb);
   builder.add_object_map(encoded_object_map);
@@ -65,10 +65,10 @@ std::string View::encode() const
 boost::optional<View> View::expand_mapping(const std::string& prefix,
     const uint64_t position, const Options& options) const
 {
-  const auto new_object_map = object_map.expand_mapping(prefix, position,
+  const auto new_object_map = object_map_.expand_mapping(prefix, position,
       options);
   if (new_object_map) {
-    return View(*new_object_map, seq_config);
+    return View(*new_object_map, seq_config_);
   }
   return boost::none;
 }
@@ -76,16 +76,16 @@ boost::optional<View> View::expand_mapping(const std::string& prefix,
 
 boost::optional<View> View::advance_min_valid_position(uint64_t position) const
 {
-  const auto new_object_map = object_map.advance_min_valid_position(position);
+  const auto new_object_map = object_map_.advance_min_valid_position(position);
   if (new_object_map) {
-    return View(*new_object_map, seq_config);
+    return View(*new_object_map, seq_config_);
   }
   return boost::none;
 }
 
 View View::set_sequencer_config(SequencerConfig seq_config) const
 {
-  return View(object_map, seq_config);
+  return View(object_map_, seq_config);
 }
 
 }
