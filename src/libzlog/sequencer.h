@@ -58,6 +58,13 @@ class SequencerConfig {
     return position_;
   }
 
+  bool operator==(const SequencerConfig& other) const {
+    return
+      epoch_ == other.epoch_ &&
+      secret_ == other.secret_ &&
+      position_ == other.position_;
+  }
+
  private:
   uint64_t epoch_;
   std::string secret_;

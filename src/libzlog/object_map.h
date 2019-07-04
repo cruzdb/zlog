@@ -93,6 +93,14 @@ class ObjectMap {
   // return the stripe that maps the position.
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
+  bool operator==(const ObjectMap& other) const {
+    return
+      next_stripe_id_ == other.next_stripe_id_ &&
+      stripes_by_pos_ == other.stripes_by_pos_ &&
+      stripes_by_id_ == other.stripes_by_id_ &&
+      min_valid_position_ == other.min_valid_position_;
+  }
+
  private:
   uint64_t next_stripe_id_;
   std::map<uint64_t, MultiStripe> stripes_by_pos_;

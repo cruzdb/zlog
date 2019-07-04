@@ -24,8 +24,8 @@ class View {
 
   View(const View& other) = delete;
   View(View&& other) = default;
-  View& operator=(const View& other) = delete;
-  View& operator=(View&& other) = delete;
+  View& operator=(const View& other) = default;
+  View& operator=(View&& other) = default;
 
  public:
   // deserialize view
@@ -64,7 +64,7 @@ class View {
   boost::optional<SequencerConfig> seq_config_;
 };
 
-// can make const?
+// TODO: give seq the const treatment
 class VersionedView : public View {
  public:
   VersionedView(const std::string& prefix, const uint64_t epoch,
