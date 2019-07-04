@@ -46,10 +46,19 @@ set_target_properties(libzlog PROPERTIES
 
 install(TARGETS libzlog LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-add_library(test_libzlog OBJECT test_libzlog.cc)
+add_library(test_libzlog OBJECT
+    test_libzlog.cc
+    stripe_test.cc
+    object_map_test.cc
+    view_test.cc)
 target_include_directories(test_libzlog
   PUBLIC ${Boost_INCLUDE_DIRS}
   # TODO: flatbuffers should be included from libzlog. if we can fix that, we
   # also want that to only apply to internal binaries.
   PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
   PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)
+
+# needs the generated flatbuffers headers. but this object file isn't linked
+# against libzlog (that is done by the per-backend targets) so it doesn't get
+# this dependency automatically.
+add_dependencies(test_libzlog zlog_schemas)

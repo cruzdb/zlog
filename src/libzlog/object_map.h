@@ -10,29 +10,38 @@ struct Options;
 
 class ObjectMap {
  public:
-  ObjectMap(const ObjectMap& other) :
-    next_stripe_id_(other.next_stripe_id_),
-    stripes_by_pos_(other.stripes_by_pos_),
-    // compute over the instance variable so the iterators are valid!
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
-  {}
+  ObjectMap(uint64_t next_stripe_id,
+      const std::map<uint64_t, MultiStripe>& stripes,
+      uint64_t min_valid_position) :
+    next_stripe_id_(next_stripe_id),
+    stripes_by_pos_(stripes),
+    min_valid_position_(min_valid_position)
+  {
+    // compute the stripes-by-id secondary index. if the set of stripes become
+    // large enough that not using a secondary index is important, then it could
+    // be restructured to store iterators into the primary index. when doing
+    // this, make sure to recompute the iterators to avoid issues with copy/move
+    // constructors.
+    for (auto it = stripes_by_pos_.cbegin(); it != stripes_by_pos_.cend(); it++) {
+      stripes_by_id_.emplace(it->second.base_id(), it->second);
+    }
 
-  ObjectMap(const ObjectMap&& other) :
-    next_stripe_id_(other.next_stripe_id_),
-    stripes_by_pos_(std::move(other.stripes_by_pos_)),
-    // compute over the instance variable so the iterators are valid. it doesn't
-    // appear to be valid to also move the container with the iterators...
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
-  {}
+    assert(valid());
+  }
 
-  ObjectMap& operator=(const ObjectMap& other) = delete;
-  ObjectMap& operator=(const ObjectMap&& other) = delete;
+  ObjectMap(const ObjectMap& other) = default;
+  ObjectMap(ObjectMap&& other) = default;
+  ObjectMap& operator=(const ObjectMap& other) = default;
+  ObjectMap& operator=(ObjectMap&& other) = default;
 
+ public:
   flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
       flatbuffers::FlatBufferBuilder& fbb) const;
 
   static ObjectMap decode(const std::string& prefix,
       const zlog::fbs::ObjectMap *object_map);
+
+  bool valid() const;
 
  public:
   // returns the object name that maps the position, if it exists. the second
@@ -44,6 +53,10 @@ class ObjectMap {
   boost::optional<ObjectMap> expand_mapping(const std::string& prefix,
       uint64_t position, const Options& options) const;
 
+  // returns a copy of this object map with a strictly larger
+  // min_valid_position. otherwise boost::none is returned.
+  boost::optional<ObjectMap> advance_min_valid_position(uint64_t position) const;
+
   // returns the stripe with the given stripe id.
   Stripe stripe_by_id(uint64_t stripe_id) const;
 
@@ -52,8 +65,14 @@ class ObjectMap {
     return next_stripe_id_;
   }
 
-  // returns the maximum position mapped by the object map.
+  // returns the maximum position mapped by the object map. do not call this
+  // method if the object map is empty.
   uint64_t max_position() const;
+
+  // returns the minimum (inclusive) valid log position
+  uint64_t min_valid_position() const {
+    return min_valid_position_;
+  }
 
   // returns true if the object map contains no stripes.
   bool empty() const {
@@ -65,35 +84,28 @@ class ObjectMap {
     return next_stripe_id_;
   }
 
+  // iterate over objects that map from the beginning of the log up to the
+  // position given. initialize stripe_id to 0, and done to false. when done
+  // returns true, the return value can be ignored.
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
-      uint64_t position) const;
+      uint64_t position, uint64_t& stripe_id, bool& done) const;
 
   // return the stripe that maps the position.
   boost::optional<Stripe> map_stripe(uint64_t position) const;
 
- private:
-  typedef std::map<uint64_t, MultiStripe> stripes_by_pos_t;
-  typedef std::map<uint64_t, stripes_by_pos_t::const_iterator> stripes_by_id_t;
-
-  ObjectMap(uint64_t next_stripe_id, const stripes_by_pos_t& stripes) :
-    next_stripe_id_(next_stripe_id),
-    stripes_by_pos_(stripes),
-    // compute over the instance variable so the iterators are valid!
-    stripes_by_id_(compute_stripes_by_id(stripes_by_pos_))
-  {}
-
-  // helper to initialize the computed const member
-  static stripes_by_id_t compute_stripes_by_id(const stripes_by_pos_t& stripes) {
-    stripes_by_id_t res;
-    for (auto it = stripes.cbegin(); it != stripes.cend(); it++) {
-      res.emplace(it->second.base_id(), it);
-    }
-    return res;
+  bool operator==(const ObjectMap& other) const {
+    return
+      next_stripe_id_ == other.next_stripe_id_ &&
+      stripes_by_pos_ == other.stripes_by_pos_ &&
+      stripes_by_id_ == other.stripes_by_id_ &&
+      min_valid_position_ == other.min_valid_position_;
   }
 
-  const uint64_t next_stripe_id_;
-  const stripes_by_pos_t stripes_by_pos_;
-  const stripes_by_id_t stripes_by_id_;
+ private:
+  uint64_t next_stripe_id_;
+  std::map<uint64_t, MultiStripe> stripes_by_pos_;
+  std::map<uint64_t, MultiStripe> stripes_by_id_;
+  uint64_t min_valid_position_;
 };
 
 }

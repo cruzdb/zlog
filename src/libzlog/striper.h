@@ -45,8 +45,8 @@ class Striper {
       uint64_t position);
 
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
-      const std::shared_ptr<const View>& view,
-      uint64_t position);
+      const std::shared_ptr<const View>& view, const uint64_t position,
+      uint64_t& stripe_id, bool& done) const;
 
   // proposes a new log view as a copy of the current view that has been
   // expanded to map the position. no proposal is made if the current view maps

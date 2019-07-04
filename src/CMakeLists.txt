@@ -24,7 +24,7 @@ set(FLATBUFFERS_FLATLIB OFF CACHE BOOL INTERNAL FORCE)
 set(FLATBUFFERS_FLATHASH OFF CACHE BOOL INTERNAL FORCE)
 add_subdirectory(flatbuffers EXCLUDE_FROM_ALL)
 
-add_subdirectory(googletest/googlemock)
+add_subdirectory(googletest)
 add_subdirectory(include)
 #add_subdirectory(libseq)
 add_subdirectory(libzlog)

@@ -18,13 +18,14 @@ std::string Stripe::make_oid(const std::string& prefix,
   return make_oid(prefix, stripe_id, index);
 }
 
-std::vector<std::string> Stripe::make_oids()
+std::vector<std::string> Stripe::make_oids(const std::string& prefix,
+    const uint64_t stripe_id, const uint32_t width)
 {
   std::vector<std::string> oids;
-  oids.reserve(width_);
+  oids.reserve(width);
 
-  for (uint32_t i = 0; i < width_; i++) {
-    oids.emplace_back(make_oid(prefix_, stripe_id_, i));
+  for (uint32_t i = 0; i < width; i++) {
+    oids.emplace_back(make_oid(prefix, stripe_id, i));
   }
 
   return oids;

@@ -17,6 +17,17 @@ struct Options;
 
 class View {
  public:
+  View(ObjectMap object_map, boost::optional<SequencerConfig> seq_config) :
+    object_map_(object_map),
+    seq_config_(seq_config)
+  {}
+
+  View(const View& other) = default;
+  View(View&& other) = default;
+  View& operator=(const View& other) = default;
+  View& operator=(View&& other) = default;
+
+ public:
   // deserialize view
   static View decode(const std::string& prefix,
       const std::string& view_data);
@@ -40,19 +51,20 @@ class View {
 
   View set_sequencer_config(SequencerConfig seq_config) const;
 
-  const ObjectMap object_map;
-  const uint64_t min_valid_position;
-  const boost::optional<SequencerConfig> seq_config;
+  const ObjectMap& object_map() const {
+    return object_map_;
+  }
+
+  const boost::optional<SequencerConfig>& seq_config() const {
+    return seq_config_;
+  }
 
  private:
-  View(ObjectMap object_map, uint64_t min_valid_position,
-      boost::optional<SequencerConfig> seq_config) :
-    object_map(object_map),
-    min_valid_position(min_valid_position),
-    seq_config(seq_config)
-  {}
+  ObjectMap object_map_;
+  boost::optional<SequencerConfig> seq_config_;
 };
 
+// TODO: give seq the const treatment
 class VersionedView : public View {
  public:
   VersionedView(const std::string& prefix, const uint64_t epoch,
