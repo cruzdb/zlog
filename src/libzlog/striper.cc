@@ -7,6 +7,9 @@
 #include <boost/uuid/uuid_io.hpp>
 #include "libzlog/zlog_generated.h"
 
+// TODO
+//  - add primitive for getting latest view
+
 // How does a client learn about available sequencers?
 //
 //   - a dns entry with multiple records
@@ -69,14 +72,28 @@
 
 namespace zlog {
 
-Striper::Striper(LogImpl *log, const std::string& secret) :
+Striper::Striper(std::shared_ptr<Backend> backend,
+    std::unique_ptr<ViewReader> view_reader,
+    const std::string& hoid,
+    const std::string& prefix,
+    const std::string& secret,
+    const Options& options) :
   shutdown_(false),
-  log_(log),
+  backend_(backend),
+  hoid_(hoid),
+  prefix_(prefix),
   secret_(secret),
-  view_(nullptr),
+  options_(options),
+  view_reader_(std::move(view_reader)),
   expand_pos_(boost::none)
 {
-  refresh_thread_ = std::thread(&Striper::refresh_entry_, this);
+  assert(backend_);
+  assert(!hoid_.empty());
+  assert(!prefix_.empty());
+  assert(!secret_.empty());
+  assert(view_reader_);
+
+  // startup viewreader
   expander_thread_ = std::thread(&Striper::expander_entry_, this);
   stripe_init_thread_ = std::thread(&Striper::stripe_init_entry_, this);
 }
@@ -86,18 +103,9 @@ Striper::~Striper()
   {
     std::lock_guard<std::mutex> lk(lock_);
     assert(shutdown_);
-    assert(refresh_waiters_.empty());
   }
-  assert(!refresh_thread_.joinable());
   assert(!expander_thread_.joinable());
   assert(!stripe_init_thread_.joinable());
-}
-
-std::shared_ptr<const VersionedView> Striper::view() const
-{
-  std::lock_guard<std::mutex> lk(lock_);
-  assert(view_);
-  return view_;
 }
 
 void Striper::shutdown()
@@ -106,10 +114,14 @@ void Striper::shutdown()
     std::lock_guard<std::mutex> lk(lock_);
     shutdown_ = true;
   }
-  refresh_cond_.notify_one();
+
+  // shutdown the view reader first to make sure that other helper threads
+  // aren't blocked waiting on a new view when they are shutdown and joined.
+  view_reader_->shutdown();
+
   expander_cond_.notify_one();
   stripe_init_cond_.notify_one();
-  refresh_thread_.join();
+
   expander_thread_.join();
   stripe_init_thread_.join();
 }
@@ -175,8 +187,7 @@ int Striper::try_expand_view(const uint64_t position)
   // getting lucky that it's read up before hitting this?
 
   // modify: a new view that maps the position
-  auto new_view = curr_view->expand_mapping(log_->prefix, position,
-      log_->options);
+  auto new_view = curr_view->expand_mapping(prefix_, position, options_);
   if (!new_view) {
     return 0;
   }
@@ -190,7 +201,7 @@ int Striper::try_expand_view(const uint64_t position)
   // write: the new view as the next epoch
   auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
-  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  int ret = backend_->ProposeView(hoid_, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     if (!ret) {
@@ -204,7 +215,7 @@ int Striper::try_expand_view(const uint64_t position)
       // for correctness: client I/O path will do its own synchronous
       // initialization to make progress. the optimization is future work if
       // necessary: keeping stats on these scenarios would be useful.
-      if (log_->options.init_stripe_on_create) {
+      if (options_.init_stripe_on_create) {
         async_init_stripe(position);
       }
     }
@@ -225,7 +236,7 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   assert(!oids.empty());
 
   for (auto& oid : oids) {
-    int ret = log_->backend->Seal(oid, epoch);
+    int ret = backend_->Seal(oid, epoch);
     if (ret < 0) {
       return ret;
     }
@@ -238,7 +249,7 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   for (auto& oid : oids) {
     bool empty;
     uint64_t max_pos;
-    int ret = log_->backend->MaxPos(oid, epoch, &max_pos, &empty);
+    int ret = backend_->MaxPos(oid, epoch, &max_pos, &empty);
     if (ret < 0) {
       return ret;
     }
@@ -278,7 +289,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   // write: the proposed new view
   auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
-  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  int ret = backend_->ProposeView(hoid_, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     return 0;
@@ -357,7 +368,7 @@ int Striper::propose_sequencer()
 
   // write: the proposed new view
   auto data = new_view.encode();
-  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  int ret = backend_->ProposeView(hoid_, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     return 0;
@@ -414,7 +425,7 @@ void Striper::stripe_init_entry_()
     // even though all we really wanted to do is initialize if not already
     // initialized.
     for (auto& oid : oids) {
-      log_->backend->Seal(oid, v->epoch());
+      backend_->Seal(oid, v->epoch());
     }
   }
 }
@@ -459,144 +470,6 @@ void Striper::async_expand_view(uint64_t position)
     expand_pos_ = position;
     expander_cond_.notify_one();
   }
-}
-
-void Striper::refresh_entry_()
-{
-  while (true) {
-    uint64_t current_epoch;
-
-    {
-      std::unique_lock<std::mutex> lk(lock_);
-
-      refresh_cond_.wait(lk, [&] {
-        return !refresh_waiters_.empty() || shutdown_;
-      });
-
-      if (shutdown_) {
-        for (auto waiter : refresh_waiters_) {
-          waiter->done = true;
-          waiter->cond.notify_one();
-        }
-        refresh_waiters_.clear();
-        break;
-      }
-
-      current_epoch = view_ ? view_->epoch() : 0;
-    }
-
-    // from which epoch should we start reading updates? note that in the
-    // current version of zlog there are no incremental view updates, so it
-    // would be sufficient to add an interface to retrieve the latest view.
-    // however adding incremental updates is future work, so for now we just eat
-    // the overhead of reading old views and tossing them away since that
-    // machinary will eventually be needed.
-    uint64_t epoch = current_epoch + 1;
-
-    // read views at or after epoch
-    std::map<uint64_t, std::string> views;
-    int ret = log_->backend->ReadViews(log_->hoid, epoch,
-        log_->options.max_refresh_views_read, &views);
-    if (ret) {
-      std::cerr << "read views error " << ret << std::endl;
-      continue;
-    }
-
-    // no newer views were found. notify the waiters.
-    if (views.empty()) {
-      std::list<RefreshWaiter*> waiters;
-      {
-        std::lock_guard<std::mutex> lk(lock_);
-        waiters.swap(refresh_waiters_);
-      }
-      for (auto it = waiters.begin(); it != waiters.end();) {
-        const auto waiter = *it;
-        // trying to make this locking fine grained to avoid blocking clients
-        // is admirable, but really we probably just need a finger grained lock
-        // to protect the waiters list rather than lock/unlock/lock/unlock/...
-        std::lock_guard<std::mutex> lk(lock_);
-        if (current_epoch > waiter->epoch) {
-          waiter->done = true;
-          waiter->cond.notify_one();
-          it = waiters.erase(it);
-        } else {
-          it++;
-        }
-      }
-      if (!waiters.empty()) {
-        std::lock_guard<std::mutex> lk(lock_);
-        refresh_waiters_.splice(refresh_waiters_.begin(), waiters);
-      }
-      // XXX: if a new waiter showed up while we were waking up waiters from the
-      // copy made above, then when we continue we'll loop back around if there
-      // are still waiters. however, when we move to a notify/watch method that
-      // avoids spinning, be careful here to make sure that new waiters are
-      // handled before blocking to wait on updates.
-      continue;
-    }
-
-    // sanity check that there are no missing views
-    for (const auto& view : views) {
-      if (view.first != epoch) {
-        assert(0);
-        exit(0);
-        return;
-      }
-      epoch++;
-    }
-
-    // grab the newest view in the batch
-    const auto it = views.crbegin();
-    assert(it != views.crend());
-
-    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, it->second);
-
-    if (new_view->seq_config()) {
-      if (new_view->seq_config()->secret() == secret_) { // we should be the active seq
-        if (new_view->seq_config()->epoch() == it->first) {
-          new_view->seq = std::make_shared<Sequencer>(it->first,
-              new_view->seq_config()->position());
-        } else {
-          assert(new_view->seq_config()->epoch() < it->first);
-          std::lock_guard<std::mutex> lk(lock_);
-          assert(view_);
-          assert(view_->seq);
-          assert(view_->seq_config());
-          assert(view_->seq_config()->epoch() == new_view->seq_config()->epoch());
-          assert(view_->seq->epoch() == view_->seq_config()->epoch());
-          // be careful that this isn't copying the state of the sequencer. when
-          // this comment was written, this was copying a shared_ptr to the
-          // state which is fine. the issue that other threads may be
-          // simultaneously incrementing the sequencer and we don't want to miss
-          // those increments when setting up the new view.
-          new_view->seq = view_->seq;
-        }
-      } else {
-        new_view->seq = nullptr;
-      }
-    } else {
-      new_view->seq = nullptr;
-    }
-
-    std::lock_guard<std::mutex> lk(lock_);
-    view_ = std::move(new_view);
-  }
-}
-
-void Striper::update_current_view(const uint64_t epoch)
-{
-  std::unique_lock<std::mutex> lk(lock_);
-  if (shutdown_) {
-    return;
-  }
-  RefreshWaiter waiter(epoch);
-  // XXX: is it necessary to hold the lock here to ensure that the epoch set
-  // above in waiter is always seen by by the refresh thread, even though the
-  // refresh thread will always grab the lock too to discover the waiter?  need
-  // to go do a quick refresher on the memory consistency semantics.
-  refresh_waiters_.emplace_back(&waiter);
-  refresh_cond_.notify_one();
-  waiter.cond.wait(lk, [&waiter] { return waiter.done; });
 }
 
 }

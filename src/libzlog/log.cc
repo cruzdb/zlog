@@ -9,6 +9,13 @@
 #include "zlog/backend.h"
 #include "log_impl.h"
 
+// TODO
+//  - it might be useful to create a wrapper to hold state like hoid, prefix,
+//  etc.. and pass that around rather than each individual piece of state. since
+//  we are building up the class hierachy from the bottom now, it's more
+//  annoying to pass that state downward. but lets hold off, because it might
+//  end up being the case that there isn't much sharing after the restructuring.
+
 namespace zlog {
 
 Log::~Log() {}
@@ -105,23 +112,27 @@ int Log::Open(const Options& options,
          << boost::asio::ip::host_name() << "."
          << unique_id;
 
-  auto impl = std::unique_ptr<LogImpl>(
-      new LogImpl(backend, name, hoid, prefix, secret.str(), options));
+  // initialize the view reader with the latest view
+  auto view_reader = ViewReader::open(backend, hoid, prefix,
+      secret.str(), options);
+  if (!view_reader) {
+    return -EIO;
+  }
 
-  // wait for the striper to be initialized with the initial view. this
-  // initialization is required as many interfaces assume the first view has
-  // been loaded / initailized and assert/fail otherwise.
-  // gh#343
-  impl->striper.update_current_view(0);
+  auto striper = std::unique_ptr<Striper>(new Striper(backend,
+        std::move(view_reader), hoid, prefix, secret.str(), options));
 
-  // kick start initialization of the first stripe
+  // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {
-    // if there actually is a stripe. this is controlled by the
+    // is there actually is a stripe? this is controlled by the
     // create_init_view_stripes option
-    if (!impl->striper.view()->object_map().empty()) {
-      impl->striper.async_init_stripe(0);
+    if (!striper->view()->object_map().empty()) {
+      striper->async_init_stripe(0);
     }
   }
+
+  auto impl = std::unique_ptr<LogImpl>(new LogImpl(backend, name, hoid, prefix,
+        std::move(striper), options));
 
   *logpp = impl.release();
 

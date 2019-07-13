@@ -176,7 +176,7 @@ class LogImpl : public Log {
       const std::string& name,
       const std::string& hoid,
       const std::string& prefix,
-      const std::string& secret,
+      std::unique_ptr<Striper> striper,
       const Options& opts);
 
   ~LogImpl();
@@ -238,7 +238,7 @@ class LogImpl : public Log {
   const std::string hoid;
   const std::string prefix;
 
-  Striper striper;
+  const std::unique_ptr<Striper> striper;
 
   std::string exclusive_cookie;
   uint64_t exclusive_position;
