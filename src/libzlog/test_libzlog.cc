@@ -587,7 +587,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -613,7 +613,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA) {
   ASSERT_EQ(entry, "asdf");
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -636,7 +636,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -674,7 +674,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -697,7 +697,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -729,7 +729,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -757,7 +757,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -789,7 +789,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -813,7 +813,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -845,7 +845,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -869,7 +869,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -901,7 +901,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -925,7 +925,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -957,7 +957,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -981,7 +981,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1013,7 +1013,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1037,7 +1037,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1069,7 +1069,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1093,7 +1093,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1132,7 +1132,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1155,7 +1155,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1194,7 +1194,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1217,7 +1217,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1226,7 +1226,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1252,7 +1252,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
   ASSERT_EQ(entry, "asdf");
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1261,7 +1261,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1284,7 +1284,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1293,7 +1293,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1332,7 +1332,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1341,7 +1341,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1363,7 +1363,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1372,7 +1372,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1411,7 +1411,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1425,7 +1425,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1448,7 +1448,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1457,7 +1457,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1496,7 +1496,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1505,7 +1505,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1528,7 +1528,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1537,7 +1537,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1576,7 +1576,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1585,7 +1585,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1608,7 +1608,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1617,7 +1617,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1656,7 +1656,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1665,7 +1665,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1688,7 +1688,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1697,7 +1697,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1729,7 +1729,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1738,7 +1738,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1765,7 +1765,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1774,7 +1774,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1806,7 +1806,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1815,7 +1815,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1838,7 +1838,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1847,7 +1847,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1879,7 +1879,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1888,7 +1888,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1911,7 +1911,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1920,7 +1920,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1959,7 +1959,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1968,7 +1968,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -1991,7 +1991,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -2000,7 +2000,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -2039,7 +2039,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
   }
 
   for (unsigned i = 0; i < 5; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);
@@ -2048,7 +2048,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
   }
 
   for (unsigned i = 100; i < 105; i++) {
-    auto oid = li->striper.map(li->striper.view(), i);
+    auto oid = li->striper->map(li->striper->view(), i);
     ASSERT_TRUE(oid);
     size_t size;
     int ret = li->backend->Stat(*oid, &size);

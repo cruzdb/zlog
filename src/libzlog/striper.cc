@@ -7,6 +7,9 @@
 #include <boost/uuid/uuid_io.hpp>
 #include "libzlog/zlog_generated.h"
 
+// TODO
+//  - add primitive for getting latest view
+
 // How does a client learn about available sequencers?
 //
 //   - a dns entry with multiple records
@@ -69,13 +72,27 @@
 
 namespace zlog {
 
-Striper::Striper(LogImpl *log, const std::string& secret) :
+Striper::Striper(std::shared_ptr<Backend> backend,
+    std::unique_ptr<VersionedView> view,
+    const std::string& hoid,
+    const std::string& prefix,
+    const std::string& secret,
+    const Options& options) :
   shutdown_(false),
-  log_(log),
+  backend_(backend),
+  hoid_(hoid),
+  prefix_(prefix),
   secret_(secret),
-  view_(nullptr),
+  options_(options),
+  view_(std::move(view)),
   expand_pos_(boost::none)
 {
+  assert(backend_);
+  assert(!hoid_.empty());
+  assert(!prefix_.empty());
+  assert(!secret_.empty());
+  assert(view_);
+
   refresh_thread_ = std::thread(&Striper::refresh_entry_, this);
   expander_thread_ = std::thread(&Striper::expander_entry_, this);
   stripe_init_thread_ = std::thread(&Striper::stripe_init_entry_, this);
@@ -91,6 +108,45 @@ Striper::~Striper()
   assert(!refresh_thread_.joinable());
   assert(!expander_thread_.joinable());
   assert(!stripe_init_thread_.joinable());
+}
+
+std::unique_ptr<Striper> Striper::open(
+    const std::shared_ptr<Backend> backend,
+    const std::string& hoid,
+    const std::string& prefix,
+    const std::string& secret,
+    const Options& options)
+{
+  std::unique_ptr<VersionedView> latest_view; 
+
+  while (true) {
+    const auto epoch = (latest_view ? latest_view->epoch() : 0) + 1;
+
+    std::map<uint64_t, std::string> views;
+    int ret = backend->ReadViews(hoid, epoch, 1, &views);
+    if (ret) {
+      return nullptr;
+    }
+
+    if (views.empty()) {
+      break;
+    }
+
+    const auto it = views.crbegin();
+    if (it == views.crend()) {
+      return nullptr;
+    }
+
+    latest_view = std::unique_ptr<VersionedView>(
+        new VersionedView(prefix, it->first, it->second));
+  }
+
+  if (!latest_view) {
+    return nullptr;
+  }
+
+  return std::unique_ptr<Striper>(
+      new Striper(backend, std::move(latest_view), hoid, prefix, secret, options));
 }
 
 std::shared_ptr<const VersionedView> Striper::view() const
@@ -175,8 +231,7 @@ int Striper::try_expand_view(const uint64_t position)
   // getting lucky that it's read up before hitting this?
 
   // modify: a new view that maps the position
-  auto new_view = curr_view->expand_mapping(log_->prefix, position,
-      log_->options);
+  auto new_view = curr_view->expand_mapping(prefix_, position, options_);
   if (!new_view) {
     return 0;
   }
@@ -190,7 +245,7 @@ int Striper::try_expand_view(const uint64_t position)
   // write: the new view as the next epoch
   auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
-  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  int ret = backend_->ProposeView(hoid_, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     if (!ret) {
@@ -204,7 +259,7 @@ int Striper::try_expand_view(const uint64_t position)
       // for correctness: client I/O path will do its own synchronous
       // initialization to make progress. the optimization is future work if
       // necessary: keeping stats on these scenarios would be useful.
-      if (log_->options.init_stripe_on_create) {
+      if (options_.init_stripe_on_create) {
         async_init_stripe(position);
       }
     }
@@ -225,7 +280,7 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   assert(!oids.empty());
 
   for (auto& oid : oids) {
-    int ret = log_->backend->Seal(oid, epoch);
+    int ret = backend_->Seal(oid, epoch);
     if (ret < 0) {
       return ret;
     }
@@ -238,7 +293,7 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   for (auto& oid : oids) {
     bool empty;
     uint64_t max_pos;
-    int ret = log_->backend->MaxPos(oid, epoch, &max_pos, &empty);
+    int ret = backend_->MaxPos(oid, epoch, &max_pos, &empty);
     if (ret < 0) {
       return ret;
     }
@@ -278,7 +333,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   // write: the proposed new view
   auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
-  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  int ret = backend_->ProposeView(hoid_, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     return 0;
@@ -357,7 +412,7 @@ int Striper::propose_sequencer()
 
   // write: the proposed new view
   auto data = new_view.encode();
-  int ret = log_->backend->ProposeView(log_->hoid, next_epoch, data);
+  int ret = backend_->ProposeView(hoid_, next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     return 0;
@@ -414,7 +469,7 @@ void Striper::stripe_init_entry_()
     // even though all we really wanted to do is initialize if not already
     // initialized.
     for (auto& oid : oids) {
-      log_->backend->Seal(oid, v->epoch());
+      backend_->Seal(oid, v->epoch());
     }
   }
 }
@@ -482,7 +537,8 @@ void Striper::refresh_entry_()
         break;
       }
 
-      current_epoch = view_ ? view_->epoch() : 0;
+      assert(view_);
+      current_epoch = view_->epoch();
     }
 
     // from which epoch should we start reading updates? note that in the
@@ -495,8 +551,8 @@ void Striper::refresh_entry_()
 
     // read views at or after epoch
     std::map<uint64_t, std::string> views;
-    int ret = log_->backend->ReadViews(log_->hoid, epoch,
-        log_->options.max_refresh_views_read, &views);
+    int ret = backend_->ReadViews(hoid_, epoch,
+        options_.max_refresh_views_read, &views);
     if (ret) {
       std::cerr << "read views error " << ret << std::endl;
       continue;
@@ -549,7 +605,7 @@ void Striper::refresh_entry_()
     const auto it = views.crbegin();
     assert(it != views.crend());
 
-    auto new_view = std::make_shared<VersionedView>(log_->prefix, it->first, it->second);
+    auto new_view = std::make_shared<VersionedView>(prefix_, it->first, it->second);
 
     if (new_view->seq_config()) {
       if (new_view->seq_config()->secret() == secret_) { // we should be the active seq

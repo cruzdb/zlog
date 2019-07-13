@@ -4,8 +4,13 @@
 #include <list>
 #include <condition_variable>
 #include <boost/optional.hpp>
+#include "include/zlog/options.h"
 #include "stripe.h"
 #include "view.h"
+
+// TODO
+//  - ViewReader - log replay
+//  - ViewManager - Striper
 
   // don't want to expand mappings on an empty object map (like the zero state)
   // need to figure that out. as it stands map would send caller to
@@ -29,14 +34,28 @@
 
 namespace zlog {
 
+class Backend;
+
 class LogImpl;
 
 class Striper {
  public:
-  Striper(LogImpl *log, const std::string& secret);
+  // Striper factory that initializes the instance with the latest view.
+  static std::unique_ptr<Striper> open(
+    const std::shared_ptr<Backend> backend,
+    const std::string& hoid,
+    const std::string& prefix,
+    const std::string& secret,
+    const Options& options);
+
+  Striper(const Striper& other) = delete;
+  Striper(Striper&& other) = delete;
+  Striper& operator=(const Striper& other) = delete;
+  Striper& operator=(Striper&& other) = delete;
 
   ~Striper();
 
+ public:
   void shutdown();
 
   std::shared_ptr<const VersionedView> view() const;
@@ -79,10 +98,21 @@ class Striper {
   int advance_min_valid_position(uint64_t position);
 
  private:
+  Striper(std::shared_ptr<Backend> backend,
+    std::unique_ptr<VersionedView> view,
+    const std::string& hoid,
+    const std::string& prefix,
+    const std::string& secret,
+    const Options& options);
+
+ private:
   mutable std::mutex lock_;
   bool shutdown_;
-  LogImpl * const log_;
+  const std::shared_ptr<Backend> backend_;
+  const std::string hoid_;
+  const std::string prefix_;
   const std::string secret_;
+  const Options options_;
 
  private:
   // seals the given stripe with the given epoch. on success, *pempty will be
