@@ -5,8 +5,9 @@
 #include <condition_variable>
 #include <boost/optional.hpp>
 #include "include/zlog/options.h"
+#include "libzlog/view_reader.h"
 #include "stripe.h"
-#include "view.h"
+#include "libzlog/view.h"
 
 // TODO
 //  - ViewReader - log replay
@@ -35,10 +36,9 @@
 namespace zlog {
 
 class Backend;
-
 class LogImpl;
 
-class Striper {
+class Striper final {
  public:
   // Striper factory that initializes the instance with the latest view.
   static std::unique_ptr<Striper> open(
@@ -53,13 +53,20 @@ class Striper {
   Striper& operator=(const Striper& other) = delete;
   Striper& operator=(Striper&& other) = delete;
 
+  void shutdown();
+
   ~Striper();
 
  public:
-  void shutdown();
+  std::shared_ptr<const VersionedView> view() const {
+    return view_reader_->view();
+  }
 
-  std::shared_ptr<const VersionedView> view() const;
+  void update_current_view(uint64_t epoch) {
+    return view_reader_->update_current_view(epoch);
+  }
 
+ public:
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
       uint64_t position);
 
@@ -78,12 +85,6 @@ class Striper {
   // schedule initialization of the stripe that maps the position.
   void async_init_stripe(uint64_t position);
 
-  // wait until a view that is newer than the given epoch is read and made
-  // active. this is typically used when a backend method (e.g. read, write)
-  // returns -ESPIPE indicating that I/O was tagged with an out-of-date epoch,
-  // and the caller should retrieve the latest view.
-  void update_current_view(uint64_t epoch);
-
   // proposes a new view with this log instance configured as the active
   // sequencer. this method waits until the propsoed view (or a newer view) is
   // made active. on success, caller should check the sequencer of the current
@@ -99,7 +100,7 @@ class Striper {
 
  private:
   Striper(std::shared_ptr<Backend> backend,
-    std::unique_ptr<VersionedView> view,
+    std::unique_ptr<ViewReader> view_reader,
     const std::string& hoid,
     const std::string& prefix,
     const std::string& secret,
@@ -114,6 +115,8 @@ class Striper {
   const std::string secret_;
   const Options options_;
 
+  const std::unique_ptr<ViewReader> view_reader_;
+
  private:
   // seals the given stripe with the given epoch. on success, *pempty will be
   // set to true if the stripe is empty (no positions have been written, filled,
@@ -122,28 +125,7 @@ class Striper {
   int seal_stripe(const Stripe& stripe, uint64_t epoch,
       uint64_t *pposition, bool *pempty) const;
 
-  // the current view. any view itself is immutable, but as new views are
-  // created and discovered the current view is replaced with newer views.
-  std::shared_ptr<const VersionedView> view_;
-
  private:
-  struct RefreshWaiter {
-    explicit RefreshWaiter(uint64_t epoch) :
-      done(false),
-      epoch(epoch)
-    {}
-
-    bool done;
-    const uint64_t epoch;
-    std::condition_variable cond;
-  };
-
-  // log replay (read and activate views)
-  void refresh_entry_();
-  std::list<RefreshWaiter*> refresh_waiters_;
-  std::condition_variable refresh_cond_;
-  std::thread refresh_thread_;
-
   // async view expansion
   boost::optional<uint64_t> expand_pos_;
   std::condition_variable expander_cond_;

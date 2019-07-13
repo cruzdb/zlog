@@ -238,7 +238,7 @@ class LogImpl : public Log {
   const std::string hoid;
   const std::string prefix;
 
-  std::unique_ptr<Striper> striper;
+  const std::unique_ptr<Striper> striper;
 
   std::string exclusive_cookie;
   uint64_t exclusive_position;

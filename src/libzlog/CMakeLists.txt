@@ -11,6 +11,7 @@ set(libzlog_sources
   object_map.cc
   view.cc
   sequencer.cc
+  view_reader.cc
   ../eviction/lru.cc
   ../eviction/arc.cc
   ../port/stack_trace.cc
