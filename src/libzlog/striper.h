@@ -40,9 +40,8 @@ class LogImpl;
 
 class Striper final {
  public:
-  // Striper factory that initializes the instance with the latest view.
-  static std::unique_ptr<Striper> open(
-    const std::shared_ptr<Backend> backend,
+  Striper(std::shared_ptr<Backend> backend,
+    std::unique_ptr<ViewReader> view_reader,
     const std::string& hoid,
     const std::string& prefix,
     const std::string& secret,
@@ -97,14 +96,6 @@ class Striper final {
   // method will be return success immediately if the proposed position is <=
   // the current minimum.
   int advance_min_valid_position(uint64_t position);
-
- private:
-  Striper(std::shared_ptr<Backend> backend,
-    std::unique_ptr<ViewReader> view_reader,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
-    const Options& options);
 
  private:
   mutable std::mutex lock_;

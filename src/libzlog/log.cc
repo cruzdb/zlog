@@ -112,11 +112,15 @@ int Log::Open(const Options& options,
          << boost::asio::ip::host_name() << "."
          << unique_id;
 
-  // initialize the striper with the latest view
-  auto striper = Striper::open(backend, hoid, prefix, secret.str(), options);
-  if (!striper) {
+  // initialize the view reader with the latest view
+  auto view_reader = ViewReader::open(backend, hoid, prefix,
+      secret.str(), options);
+  if (!view_reader) {
     return -EIO;
   }
+
+  auto striper = std::unique_ptr<Striper>(new Striper(backend,
+        std::move(view_reader), hoid, prefix, secret.str(), options));
 
   // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {

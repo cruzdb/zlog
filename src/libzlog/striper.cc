@@ -108,22 +108,6 @@ Striper::~Striper()
   assert(!stripe_init_thread_.joinable());
 }
 
-std::unique_ptr<Striper> Striper::open(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
-    const Options& options)
-{
-  auto view_reader = ViewReader::open(backend, hoid, prefix, secret, options);
-  if (!view_reader) {
-    return nullptr;
-  }
-
-  return std::unique_ptr<Striper>(
-      new Striper(backend, std::move(view_reader), hoid, prefix, secret, options));
-}
-
 void Striper::shutdown()
 {
   {

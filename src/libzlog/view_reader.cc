@@ -14,6 +14,7 @@ std::unique_ptr<ViewReader> ViewReader::open(
   std::unique_ptr<VersionedView> latest_view;
 
   // TODO factor out and share with refresh thread
+  // TODO backend wrapper for hoid, prefix, log name
 
   while (true) {
     const auto epoch = (latest_view ? latest_view->epoch() : 0) + 1;
