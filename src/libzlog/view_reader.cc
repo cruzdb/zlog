@@ -12,39 +12,21 @@
 
 namespace zlog {
 
-std::unique_ptr<ViewReader> ViewReader::open(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
-    const Options& options)
-{
-  auto latest_view = get_latest_view(backend, hoid, prefix);
-  if (!latest_view) {
-    return nullptr;
-  }
-
-  return std::unique_ptr<ViewReader>(
-      new ViewReader(backend, hoid, prefix, secret, options, std::move(latest_view)));
-}
-
 ViewReader::ViewReader(
     const std::shared_ptr<Backend> backend,
     const std::string& hoid,
     const std::string& prefix,
     const std::string& secret,
-    const Options& options,
-    std::unique_ptr<const VersionedView> view) :
+    const Options& options) :
   shutdown_(false),
   backend_(backend),
   hoid_(hoid),
   prefix_(prefix),
   secret_(secret),
   options_(options),
-  view_(std::move(view)),
+  view_(nullptr),
   refresh_thread_(std::thread(&ViewReader::refresh_entry_, this))
 {
-  assert(view_);
 }
 
 ViewReader::~ViewReader()
@@ -127,7 +109,6 @@ void ViewReader::refresh_entry_()
 std::shared_ptr<const VersionedView> ViewReader::view() const
 {
   std::lock_guard<std::mutex> lk(lock_);
-  assert(view_);
   return view_;
 }
 
@@ -147,10 +128,7 @@ void ViewReader::update_current_view(const uint64_t epoch)
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
 }
 
-std::unique_ptr<VersionedView> ViewReader::get_latest_view(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix)
+std::unique_ptr<VersionedView> ViewReader::get_latest_view() const
 {
   std::unique_ptr<VersionedView> latest_view;
 
@@ -158,7 +136,7 @@ std::unique_ptr<VersionedView> ViewReader::get_latest_view(
     const auto epoch = (latest_view ? latest_view->epoch() : 0) + 1;
 
     std::map<uint64_t, std::string> views;
-    int ret = backend->ReadViews(hoid, epoch, 1, &views);
+    int ret = backend_->ReadViews(hoid_, epoch, 1, &views);
     if (ret) {
       return nullptr;
     }
@@ -173,7 +151,7 @@ std::unique_ptr<VersionedView> ViewReader::get_latest_view(
     }
 
     latest_view = std::unique_ptr<VersionedView>(
-        new VersionedView(prefix, it->first, it->second));
+        new VersionedView(prefix_, it->first, it->second));
   }
 
   return latest_view;
@@ -181,7 +159,7 @@ std::unique_ptr<VersionedView> ViewReader::get_latest_view(
 
 void ViewReader::refresh_view()
 {
-  auto latest_view = get_latest_view(backend_, hoid_, prefix_);
+  auto latest_view = get_latest_view();
   if (!latest_view) {
     return;
   }

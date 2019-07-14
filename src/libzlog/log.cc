@@ -15,6 +15,10 @@
 //  we are building up the class hierachy from the bottom now, it's more
 //  annoying to pass that state downward. but lets hold off, because it might
 //  end up being the case that there isn't much sharing after the restructuring.
+//
+//  - become sequencer if relevant when the log instance is first created
+//  instead of waiting for an appender. might even be worth while adding it to
+//  the very first view.
 
 namespace zlog {
 
@@ -112,10 +116,12 @@ int Log::Open(const Options& options,
          << boost::asio::ip::host_name() << "."
          << unique_id;
 
-  // initialize the view reader with the latest view
-  auto view_reader = ViewReader::open(backend, hoid, prefix,
-      secret.str(), options);
-  if (!view_reader) {
+  auto view_reader = std::unique_ptr<ViewReader>(new ViewReader(
+        backend, hoid, prefix, secret.str(), options));
+
+  // initialize the reader with the latest view
+  view_reader->refresh_view();
+  if (!view_reader->view()) {
     return -EIO;
   }
 

@@ -13,7 +13,7 @@ class Backend;
 
 class ViewReader final {
  public:
-  static std::unique_ptr<ViewReader> open(
+  ViewReader(
     const std::shared_ptr<Backend> backend,
     const std::string& hoid,
     const std::string& prefix,
@@ -30,7 +30,13 @@ class ViewReader final {
   ~ViewReader();
 
  public:
+  // return the current view. this will return nullptr until the first view is
+  // installed (e.g. via `refresh_view`). after the first view is installed,
+  // this method will always return a valid view.
   std::shared_ptr<const VersionedView> view() const;
+
+  // ensure that the latest view is being used.
+  void refresh_view();
 
   // wait until a view that is newer than the given epoch is read and made
   // active. this is typically used when a backend method (e.g. read, write)
@@ -39,20 +45,7 @@ class ViewReader final {
   void update_current_view(uint64_t epoch);
 
  private:
-  ViewReader(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
-    const Options& options,
-    std::unique_ptr<const VersionedView> view);
-
-  static std::unique_ptr<VersionedView> get_latest_view(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix);
-
-  void refresh_view();
+  std::unique_ptr<VersionedView> get_latest_view() const;
 
  private:
   struct RefreshWaiter {
