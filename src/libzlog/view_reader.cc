@@ -7,7 +7,6 @@
 // TODO efficient get_latest_view method
 // TODO: use a smarter index for epoch waiters
 // TODO backend wrapper for hoid, prefix, log name
-// TODO: rename update_current_view
 // TODO build a log's initial view for exclusive sequencers
 
 namespace zlog {
@@ -112,7 +111,7 @@ std::shared_ptr<const VersionedView> ViewReader::view() const
   return view_;
 }
 
-void ViewReader::update_current_view(const uint64_t epoch)
+void ViewReader::wait_for_newer_view(const uint64_t epoch)
 {
   std::unique_lock<std::mutex> lk(lock_);
   if (shutdown_) {

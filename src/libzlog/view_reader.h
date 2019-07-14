@@ -42,7 +42,7 @@ class ViewReader final {
   // active. this is typically used when a backend method (e.g. read, write)
   // returns -ESPIPE indicating that I/O was tagged with an out-of-date epoch,
   // and the caller should retrieve the latest view.
-  void update_current_view(uint64_t epoch);
+  void wait_for_newer_view(uint64_t epoch);
 
  private:
   std::unique_ptr<VersionedView> get_latest_view() const;
