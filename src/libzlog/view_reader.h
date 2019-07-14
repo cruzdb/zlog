@@ -47,6 +47,13 @@ class ViewReader final {
     const Options& options,
     std::unique_ptr<const VersionedView> view);
 
+  static std::unique_ptr<VersionedView> get_latest_view(
+    const std::shared_ptr<Backend> backend,
+    const std::string& hoid,
+    const std::string& prefix);
+
+  void refresh_view();
+
  private:
   struct RefreshWaiter {
     explicit RefreshWaiter(uint64_t epoch) :

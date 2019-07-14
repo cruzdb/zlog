@@ -66,6 +66,7 @@ class Striper final {
   }
 
  public:
+  // versioned view?
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
       uint64_t position);
 

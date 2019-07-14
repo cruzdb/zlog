@@ -2,6 +2,14 @@
 #include "include/zlog/backend.h"
 #include <iostream>
 
+// TODO: client requests that see a nullptr sequencer shoudl block and wait for
+// updates
+// TODO efficient get_latest_view method
+// TODO: use a smarter index for epoch waiters
+// TODO backend wrapper for hoid, prefix, log name
+// TODO: rename update_current_view
+// TODO build a log's initial view for exclusive sequencers
+
 namespace zlog {
 
 std::unique_ptr<ViewReader> ViewReader::open(
@@ -11,33 +19,7 @@ std::unique_ptr<ViewReader> ViewReader::open(
     const std::string& secret,
     const Options& options)
 {
-  std::unique_ptr<VersionedView> latest_view;
-
-  // TODO factor out and share with refresh thread
-  // TODO backend wrapper for hoid, prefix, log name
-
-  while (true) {
-    const auto epoch = (latest_view ? latest_view->epoch() : 0) + 1;
-
-    std::map<uint64_t, std::string> views;
-    int ret = backend->ReadViews(hoid, epoch, 1, &views);
-    if (ret) {
-      return nullptr;
-    }
-
-    if (views.empty()) {
-      break;
-    }
-
-    const auto it = views.crbegin();
-    if (it == views.crend()) {
-      return nullptr;
-    }
-
-    latest_view = std::unique_ptr<VersionedView>(
-        new VersionedView(prefix, it->first, it->second));
-  }
-
+  auto latest_view = get_latest_view(backend, hoid, prefix);
   if (!latest_view) {
     return nullptr;
   }
@@ -88,8 +70,6 @@ void ViewReader::shutdown()
 void ViewReader::refresh_entry_()
 {
   while (true) {
-    uint64_t current_epoch;
-
     {
       std::unique_lock<std::mutex> lk(lock_);
 
@@ -105,106 +85,42 @@ void ViewReader::refresh_entry_()
         refresh_waiters_.clear();
         break;
       }
-
-      assert(view_);
-      current_epoch = view_->epoch();
     }
 
-    // from which epoch should we start reading updates? note that in the
-    // current version of zlog there are no incremental view updates, so it
-    // would be sufficient to add an interface to retrieve the latest view.
-    // however adding incremental updates is future work, so for now we just eat
-    // the overhead of reading old views and tossing them away since that
-    // machinary will eventually be needed.
-    uint64_t epoch = current_epoch + 1;
+    refresh_view();
 
-    // read views at or after epoch
-    std::map<uint64_t, std::string> views;
-    int ret = backend_->ReadViews(hoid_, epoch,
-        options_.max_refresh_views_read, &views);
-    if (ret) {
-      std::cerr << "read views error " << ret << std::endl;
+    const auto current_view = view();
+    if (!current_view) {
       continue;
     }
 
-    // no newer views were found. notify the waiters.
-    if (views.empty()) {
-      std::list<RefreshWaiter*> waiters;
-      {
-        std::lock_guard<std::mutex> lk(lock_);
-        waiters.swap(refresh_waiters_);
-      }
-      for (auto it = waiters.begin(); it != waiters.end();) {
-        const auto waiter = *it;
-        // trying to make this locking fine grained to avoid blocking clients
-        // is admirable, but really we probably just need a finger grained lock
-        // to protect the waiters list rather than lock/unlock/lock/unlock/...
-        std::lock_guard<std::mutex> lk(lock_);
-        if (current_epoch > waiter->epoch) {
-          waiter->done = true;
-          waiter->cond.notify_one();
-          it = waiters.erase(it);
-        } else {
-          it++;
-        }
-      }
-      if (!waiters.empty()) {
-        std::lock_guard<std::mutex> lk(lock_);
-        refresh_waiters_.splice(refresh_waiters_.begin(), waiters);
-      }
-      // XXX: if a new waiter showed up while we were waking up waiters from the
-      // copy made above, then when we continue we'll loop back around if there
-      // are still waiters. however, when we move to a notify/watch method that
-      // avoids spinning, be careful here to make sure that new waiters are
-      // handled before blocking to wait on updates.
-      continue;
+    std::list<RefreshWaiter*> waiters;
+    {
+      std::lock_guard<std::mutex> lk(lock_);
+      waiters.swap(refresh_waiters_);
     }
 
-    // sanity check that there are no missing views
-    for (const auto& view : views) {
-      if (view.first != epoch) {
-        assert(0);
-        exit(0);
-        return;
-      }
-      epoch++;
-    }
-
-    // grab the newest view in the batch
-    const auto it = views.crbegin();
-    assert(it != views.crend());
-
-    auto new_view = std::make_shared<VersionedView>(prefix_, it->first, it->second);
-
-    if (new_view->seq_config()) {
-      if (new_view->seq_config()->secret() == secret_) { // we should be the active seq
-        if (new_view->seq_config()->epoch() == it->first) {
-          new_view->seq = std::make_shared<Sequencer>(it->first,
-              new_view->seq_config()->position());
-        } else {
-          assert(new_view->seq_config()->epoch() < it->first);
-          std::lock_guard<std::mutex> lk(lock_);
-          assert(view_);
-          assert(view_->seq);
-          assert(view_->seq_config());
-          assert(view_->seq_config()->epoch() == new_view->seq_config()->epoch());
-          assert(view_->seq->epoch() == view_->seq_config()->epoch());
-          // be careful that this isn't copying the state of the sequencer. when
-          // this comment was written, this was copying a shared_ptr to the
-          // state which is fine. the issue that other threads may be
-          // simultaneously incrementing the sequencer and we don't want to miss
-          // those increments when setting up the new view.
-          new_view->seq = view_->seq;
-        }
+    for (auto it = waiters.begin(); it != waiters.end();) {
+      const auto waiter = *it;
+      // trying to make this locking fine grained to avoid blocking clients
+      // is admirable, but really we probably just need a finger grained lock
+      // to protect the waiters list rather than lock/unlock/lock/unlock/...
+      std::lock_guard<std::mutex> lk(lock_);
+      if (current_view->epoch() > waiter->epoch) {
+        waiter->done = true;
+        waiter->cond.notify_one();
+        it = waiters.erase(it);
       } else {
-        new_view->seq = nullptr;
+        it++;
       }
-    } else {
-      new_view->seq = nullptr;
     }
 
-    std::lock_guard<std::mutex> lk(lock_);
-    view_ = std::move(new_view);
+    // add any waiters that weren't notified back into the master list. don't
+    // naively replace the list as other waiters may have shown up recently.
+    if (!waiters.empty()) {
+      std::lock_guard<std::mutex> lk(lock_);
+      refresh_waiters_.splice(refresh_waiters_.begin(), waiters);
+    }
   }
 }
 
@@ -229,6 +145,104 @@ void ViewReader::update_current_view(const uint64_t epoch)
   refresh_waiters_.emplace_back(&waiter);
   refresh_cond_.notify_one();
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
+}
+
+std::unique_ptr<VersionedView> ViewReader::get_latest_view(
+    const std::shared_ptr<Backend> backend,
+    const std::string& hoid,
+    const std::string& prefix)
+{
+  std::unique_ptr<VersionedView> latest_view;
+
+  while (true) {
+    const auto epoch = (latest_view ? latest_view->epoch() : 0) + 1;
+
+    std::map<uint64_t, std::string> views;
+    int ret = backend->ReadViews(hoid, epoch, 1, &views);
+    if (ret) {
+      return nullptr;
+    }
+
+    if (views.empty()) {
+      break;
+    }
+
+    const auto it = views.crbegin();
+    if (it == views.crend()) {
+      return nullptr;
+    }
+
+    latest_view = std::unique_ptr<VersionedView>(
+        new VersionedView(prefix, it->first, it->second));
+  }
+
+  return latest_view;
+}
+
+void ViewReader::refresh_view()
+{
+  auto latest_view = get_latest_view(backend_, hoid_, prefix_);
+  if (!latest_view) {
+    return;
+  }
+  assert(!latest_view->seq);
+
+  std::lock_guard<std::mutex> lk(lock_);
+
+  if (view_) {
+    assert(latest_view->epoch() >= view_->epoch());
+    if (latest_view->epoch() == view_->epoch()) {
+      return;
+    }
+  }
+
+  // if the latest view has a sequencer config and secret that matches this log
+  // client instance, then we will become a sequencer / exclusive writer.
+  if (latest_view->seq_config() &&
+      latest_view->seq_config()->secret() == secret_) {
+
+    // there are two cases for initializing the new view's sequencer:
+    //
+    //   1) reuse sequencer from previous view
+    //   2) create a new sequencer instance
+    //
+    // if a previous view has a sequencer with the same secret, then we might be
+    // able to reuse it. however, if the previous view that we have and the
+    // latest view are separated by views with _other_ sequencers in the log,
+    // but which we haven't observed, then we need to take that into account.
+    // in order to catch this scenario, we also check that the previous view has
+    // an initialization epoch that matches the epoch in the latest view's
+    // sequencer config.
+    //
+    // the sequencer config in a view either copied or a new sequencer config is
+    // proposed. whenver a sequencer config is successfully proposed, it's
+    // initialization epoch will be unique (even for different proposals from
+    // the same log client). so, if the secret and the initialization epoch are
+    // equal, then we can be assured that the sequencer hasn't changed and we
+    // can reuse the state.
+    //
+    if (view_ &&
+        view_->seq_config() &&
+        view_->seq_config()->secret() == secret_ &&
+        view_->seq_config()->epoch() == latest_view->seq_config()->epoch()) {
+      //
+      // note about thread safety. here we copy the pointer to the existing
+      // sequencer which may be in-use concurrently. it wouldn't be sufficient
+      // to create a new sequencer object initialized with the existing state
+      // (we could miss updates to the seq state until all new threads saw the
+      // new view) unless concurrent updates were blocked by a lock, but that
+      // would introduce a lock on the i/o path.
+      //
+      assert(view_->seq);
+      latest_view->seq = view_->seq;
+    } else {
+      // create a new instance for this sequencer
+      latest_view->seq = std::make_shared<Sequencer>(latest_view->epoch(),
+          latest_view->seq_config()->position());
+    }
+  }
+
+  view_ = std::move(latest_view);
 }
 
 }

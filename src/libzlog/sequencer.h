@@ -20,6 +20,7 @@ class Sequencer {
     }
   }
 
+  // TODO: why?
   uint64_t epoch() const {
     return epoch_;
   }
