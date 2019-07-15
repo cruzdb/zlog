@@ -78,6 +78,11 @@ INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
       std::make_tuple(true, true),
       std::make_tuple(false, true)));
 
+INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
+    ::testing::Values(
+      std::make_tuple(true, true),
+      std::make_tuple(false, true)));
+
 //INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
 //    ::testing::Values(
 //      std::make_tuple(false, true)));
