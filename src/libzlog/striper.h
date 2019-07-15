@@ -62,10 +62,11 @@ class Striper final {
   }
 
   void update_current_view(uint64_t epoch) {
-    return view_reader_->update_current_view(epoch);
+    return view_reader_->wait_for_newer_view(epoch);
   }
 
  public:
+  // versioned view?
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
       uint64_t position);
 
