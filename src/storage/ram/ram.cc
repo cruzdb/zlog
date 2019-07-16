@@ -165,10 +165,6 @@ int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   if (hoid.empty())
     return -EINVAL;
 
-  if (epoch == 0) {
-    return -EINVAL;
-  }
-
   std::lock_guard<std::mutex> lk(lock_);
 
   auto it = objects_.find(hoid);
@@ -179,6 +175,18 @@ int RAMBackend::ReadViews(const std::string& hoid, uint64_t epoch,
   std::map<uint64_t, std::string> views;
   auto& proj_obj = boost::get<ProjectionObject>(it->second);
   if (epoch > proj_obj.epoch) {
+    views_out->swap(views);
+    return 0;
+  }
+
+  // epoch = 0 -> get latest view
+  if (epoch == 0) {
+    auto it2 = proj_obj.projections.crbegin();
+    if (it2 == proj_obj.projections.crend()) {
+      views_out->swap(views);
+      return 0;
+    }
+    views.emplace(it2->first, it2->second);
     views_out->swap(views);
     return 0;
   }
