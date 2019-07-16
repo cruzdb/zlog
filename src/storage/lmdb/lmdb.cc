@@ -279,10 +279,6 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
     return -EINVAL;
   }
 
-  if (epoch == 0) {
-    return -EINVAL;
-  }
-
   auto txn = NewTransaction(true);
 
   MDB_val val;
@@ -297,6 +293,30 @@ int LMDBBackend::ReadViews(const std::string& hoid, uint64_t epoch,
 
   std::map<uint64_t, std::string> views;
   if (epoch > proj_obj->epoch) {
+    views_out->swap(views);
+    txn.Abort();
+    return 0;
+  }
+
+  if (epoch == 0) {
+    if (proj_obj->epoch == 0) {
+      views_out->swap(views);
+      txn.Abort();
+      return 0;
+    }
+
+    std::string proj_key = ProjectionKey(hoid, proj_obj->epoch);
+    ret = txn.Get(proj_key, val);
+    if (ret) {
+      if (ret == -ENOENT) {
+        ret = -EIO;
+      }
+      txn.Abort();
+      return ret;
+    }
+
+    views.emplace(proj_obj->epoch,
+        std::string((const char *)val.mv_data, val.mv_size));
     views_out->swap(views);
     txn.Abort();
     return 0;
