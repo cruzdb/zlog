@@ -102,7 +102,9 @@ class Backend {
    * the given epoch (inclusive). The maximum number of views returned per call
    * is controlled by the backend implementation.
    *
-   * The staring epoch should be > 0.
+   * If the epoch requested is 0 then the returned views will contain the view
+   * with the latest epoch, provided that the head object contains at least one
+   * view.
    *
    * @param hoid      name of the head object
    * @param epoch     starting epoch (inclusive)

@@ -407,9 +407,17 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
   }
 
   uint64_t epoch = op->epoch();
-  if (epoch < 1) {
-    CLS_ERR("ERROR: view_read(): bad start epoch %llu", epoch);
-    return -EINVAL;
+  if (epoch == 0) {
+    epoch = head.epoch();
+    if (epoch == 0) {
+      CLS_LOG(10, "view_read(): head contains no views");
+    } else {
+      CLS_LOG(10, "view_read(): requested latest epoch %llu",
+          (unsigned long long)epoch);
+    }
+  } else {
+    CLS_LOG(10, "view_read(): requested epoch %llu",
+        (unsigned long long)epoch);
   }
 
   uint32_t max_views = std::min(((uint32_t)op->max_views()),
@@ -417,9 +425,11 @@ static int view_read(cls_method_context_t hctx, ceph::bufferlist *in,
 
   flatbuffers::FlatBufferBuilder fbb;
 
+  // if epoch == 0 then there are no views and execution falls through to return
+  // an empty set of views.
   uint32_t count = 0;
   std::vector<flatbuffers::Offset<cls_zlog::fbs::View>> views;
-  while (epoch <= head.epoch() && count < max_views) {
+  while (epoch > 0 && epoch <= head.epoch() && count < max_views) {
     ceph::bufferlist bl;
     ret = head.read_view(epoch, &bl);
     if (ret < 0) {

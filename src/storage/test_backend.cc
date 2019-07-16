@@ -151,13 +151,14 @@ TEST_F(BackendTest, ReadViews_Args) {
 
   std::string hoid, prefix;
   ASSERT_EQ(backend->CreateLog("a", "", &hoid, &prefix), 0);
-  ASSERT_EQ(backend->ReadViews(hoid, 0, 1, &views), -EINVAL);
+  ASSERT_EQ(backend->ReadViews(hoid, 0, 1, &views), 0);
   ASSERT_EQ(backend->ReadViews(hoid, 1, 1, &views), 0);
 }
 
 TEST_F(BackendTest, ReadViews_NoInit) {
   std::map<uint64_t, std::string> views;
   ASSERT_EQ(backend->ReadViews("a", 1, 1, &views), -ENOENT);
+  ASSERT_EQ(backend->ReadViews("a", 0, 1, &views), -ENOENT);
 }
 
 TEST_F(BackendTest, ReadViews_ZeroMax) {
@@ -175,18 +176,33 @@ TEST_F(BackendTest, ReadViews_ZeroMax) {
 
 TEST_F(BackendTest, ReadViews) {
   std::string hoid, prefix;
-  ASSERT_EQ(backend->CreateLog("a", "", &hoid, &prefix), 0);
+  ASSERT_EQ(backend->CreateLog("a", "v", &hoid, &prefix), 0);
 
   std::map<uint64_t, std::string> views;
   ASSERT_EQ(backend->ReadViews(hoid, 1, 1, &views), 0);
   ASSERT_EQ(views.size(), 1u);
+  ASSERT_EQ(views.crbegin()->first, (uint64_t)1);
+  ASSERT_EQ(views.crbegin()->second, "v");
+
+  // gets the latest with epoch=0
+  ASSERT_EQ(backend->ReadViews(hoid, 0, 1, &views), 0);
+  ASSERT_EQ(views.size(), 1u);
+  ASSERT_EQ(views.crbegin()->first, (uint64_t)1);
+  ASSERT_EQ(views.crbegin()->second, "v");
 
   std::map<uint64_t, std::string> truth_views;
+  truth_views[1] = "v";
+
   for (int i = 2; i <= 10; i++) {
     std::stringstream ss;
     ss << i;
     truth_views[i] = ss.str();
     ASSERT_EQ(backend->ProposeView(hoid, i, ss.str()), 0);
+
+    ASSERT_EQ(backend->ReadViews(hoid, 0, 1, &views), 0);
+    ASSERT_EQ(views.size(), 1u);
+    ASSERT_EQ(views.crbegin()->first, (uint64_t)i);
+    ASSERT_EQ(views.crbegin()->second, ss.str());
   }
 
   ASSERT_EQ(backend->ReadViews(hoid, 1, 20, &views), 0);
@@ -213,7 +229,10 @@ TEST_F(BackendTest, ReadViews) {
   ASSERT_EQ(views.size(), 10u);
   ASSERT_EQ(views, truth_views);
 
-  ASSERT_EQ(backend->ReadViews(hoid, 0, 1, &views), -EINVAL);
+  ASSERT_EQ(backend->ReadViews(hoid, 0, 1, &views), 0);
+  ASSERT_EQ(views.size(), 1u);
+  ASSERT_EQ(views.crbegin()->first, (uint64_t)10);
+  ASSERT_EQ(views.crbegin()->second, "10");
 }
 
 TEST_F(BackendTest, Write_Args) {

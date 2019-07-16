@@ -1385,19 +1385,27 @@ TEST_F(ClsZlogTest, ReadView_CorruptHeader) {
   ASSERT_EQ(ret, -EIO);
 }
 
-TEST_F(ClsZlogTest, ReadView_InvalidEpoch) {
+TEST_F(ClsZlogTest, ReadView_LatestEpoch) {
   librados::ObjectWriteOperation op;
   cls_zlog_client::cls_zlog_init_head(op, "prefix");
   int ret = ioctx.operate("obj", &op);
   ASSERT_EQ(ret, 0);
 
+  // requesting epoch=0 returns the latest view (or an empty set of views if
+  // there are no views in the object)
+  std::map<uint64_t, std::string> views;
   ceph::bufferlist bl;
   ret = view_read(0, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, 0);
+  decode_views(bl, views);
+  ASSERT_TRUE(views.empty());
 
+  views.clear();
   bl.clear();
   ret = view_read(1, bl);
   ASSERT_EQ(ret, 0);
+  decode_views(bl, views);
+  ASSERT_TRUE(views.empty());
 
   std::stringstream ss;
   ss << "foo";
@@ -1413,19 +1421,44 @@ TEST_F(ClsZlogTest, ReadView_InvalidEpoch) {
   ret = view_create(1, bl_input);
   ASSERT_EQ(ret, 0);
 
+  views.clear();
   bl.clear();
   ret = view_read(0, bl);
-  ASSERT_EQ(ret, -EINVAL);
+  ASSERT_EQ(ret, 0);
+  decode_views(bl, views);
+  ASSERT_EQ(views.size(), 1u);
+  ASSERT_EQ(views.cbegin()->first, 1u);
+  ASSERT_EQ(views.cbegin()->second, std::string(bl_input.c_str(), bl_input.length()));
 
   bl.clear();
   ret = view_read(1, bl);
   ASSERT_EQ(ret, 0);
 
-  std::map<uint64_t, std::string> views;
+  views.clear();
   decode_views(bl, views);
   ASSERT_EQ(views[1], std::string(bl_input.c_str(), bl_input.length()));
   ASSERT_TRUE(views.find(0) == views.end());
   ASSERT_EQ(views.size(), 1u);
+
+  for (uint64_t e = 2; e <= 33; e++) {
+    std::stringstream ss;
+    ss << "foo" << e;
+    std::string data = ss.str();
+    ceph::bufferlist bl;
+    bl.append(data.c_str(), data.size());
+
+    ret = view_create(e, bl);
+    ASSERT_EQ(ret, 0);
+
+    std::map<uint64_t, std::string> views;
+    ceph::bufferlist bl_return;
+    ret = view_read(0, bl_return);
+    ASSERT_EQ(ret, 0);
+    decode_views(bl_return, views);
+    ASSERT_EQ(views.size(), 1u);
+    ASSERT_EQ(views.cbegin()->first, e);
+    ASSERT_EQ(views.cbegin()->second, std::string(bl.c_str(), bl.length()));
+  }
 }
 
 TEST_F(ClsZlogTest, ReadView_EmptyRange) {

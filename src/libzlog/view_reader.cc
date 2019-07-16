@@ -4,7 +4,6 @@
 
 // TODO: client requests that see a nullptr sequencer shoudl block and wait for
 // updates
-// TODO efficient get_latest_view method
 // TODO: use a smarter index for epoch waiters
 // TODO backend wrapper for hoid, prefix, log name
 // TODO build a log's initial view for exclusive sequencers
@@ -32,9 +31,18 @@ ViewReader::~ViewReader()
 {
   {
     std::lock_guard<std::mutex> lk(lock_);
-    assert(shutdown_);
-    assert(refresh_waiters_.empty());
+    if (shutdown_) {
+      assert(refresh_waiters_.empty());
+      assert(!refresh_thread_.joinable());
+      return;
+    }
   }
+
+  shutdown();
+
+  std::lock_guard<std::mutex> lk(lock_);
+  assert(shutdown_);
+  assert(refresh_waiters_.empty());
   assert(!refresh_thread_.joinable());
 }
 
@@ -129,31 +137,20 @@ void ViewReader::wait_for_newer_view(const uint64_t epoch)
 
 std::unique_ptr<VersionedView> ViewReader::get_latest_view() const
 {
-  std::unique_ptr<VersionedView> latest_view;
-
-  while (true) {
-    const auto epoch = (latest_view ? latest_view->epoch() : 0) + 1;
-
-    std::map<uint64_t, std::string> views;
-    int ret = backend_->ReadViews(hoid_, epoch, 1, &views);
-    if (ret) {
-      return nullptr;
-    }
-
-    if (views.empty()) {
-      break;
-    }
-
-    const auto it = views.crbegin();
-    if (it == views.crend()) {
-      return nullptr;
-    }
-
-    latest_view = std::unique_ptr<VersionedView>(
-        new VersionedView(prefix_, it->first, it->second));
+  std::map<uint64_t, std::string> views;
+  int ret = backend_->ReadViews(hoid_, 0, 1, &views);
+  if (ret) {
+    return nullptr;
   }
 
-  return latest_view;
+  const auto it = views.crbegin();
+  if (it == views.crend()) {
+    // this would happen if there are no views
+    return nullptr;
+  }
+
+  return std::unique_ptr<VersionedView>(
+      new VersionedView(prefix_, it->first, it->second));
 }
 
 void ViewReader::refresh_view()

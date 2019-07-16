@@ -11,6 +11,13 @@ namespace zlog {
 
 class Backend;
 
+/**
+ * ViewReader provides access to the latest log view.
+ *
+ * ViewReader reads and instantiates the log's latest view from the storage
+ * backend, and notifies any threads that are waiting on a view with a minimum
+ * epoch to become active.
+ */
 class ViewReader final {
  public:
   ViewReader(
@@ -30,12 +37,17 @@ class ViewReader final {
   ~ViewReader();
 
  public:
-  // return the current view. this will return nullptr until the first view is
-  // installed (e.g. via `refresh_view`). after the first view is installed,
-  // this method will always return a valid view.
+  // Return the current view. Until a view is set, nullptr will be returned.
+  // After a view is set, a valid view will always be returned. The intended use
+  // of these semantics is:
+  //
+  //   1) Create a ViewReader
+  //   2) Call `refresh_view()`
+  //   3) If `view()` returns a view, then the ViewReader can be used by a
+  //      consumer that assumes `view()` always returns a valid view.
   std::shared_ptr<const VersionedView> view() const;
 
-  // ensure that the latest view is being used.
+  // Ensure that the current view is up to date.
   void refresh_view();
 
   // wait until a view that is newer than the given epoch is read and made
