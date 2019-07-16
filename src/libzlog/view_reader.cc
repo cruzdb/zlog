@@ -32,9 +32,18 @@ ViewReader::~ViewReader()
 {
   {
     std::lock_guard<std::mutex> lk(lock_);
-    assert(shutdown_);
-    assert(refresh_waiters_.empty());
+    if (shutdown_) {
+      assert(refresh_waiters_.empty());
+      assert(!refresh_thread_.joinable());
+      return;
+    }
   }
+
+  shutdown();
+
+  std::lock_guard<std::mutex> lk(lock_);
+  assert(shutdown_);
+  assert(refresh_waiters_.empty());
   assert(!refresh_thread_.joinable());
 }
 
