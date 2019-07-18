@@ -57,4 +57,17 @@ flatbuffers::Offset<zlog::fbs::MultiStripe> MultiStripe::encode(
       max_position_);
 }
 
+nlohmann::json MultiStripe::dump() const
+{
+  nlohmann::json j;
+  j["prefix"] = prefix_;
+  j["base_id"] = base_id_;
+  j["width"] = width_;
+  j["slots"] = slots_;
+  j["min_position"] = min_position_;
+  j["instances"] = instances_;
+  j["max_position"] = max_position_;
+  return j;
+}
+
 }

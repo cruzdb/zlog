@@ -3,6 +3,7 @@
 #include <boost/optional.hpp>
 #include "stripe.h"
 #include "libzlog/zlog_generated.h"
+#include <nlohmann/json.hpp>
 
 namespace zlog {
 
@@ -40,6 +41,8 @@ class ObjectMap {
 
   static ObjectMap decode(const std::string& prefix,
       const zlog::fbs::ObjectMap *object_map);
+
+  nlohmann::json dump() const;
 
   bool valid() const;
 

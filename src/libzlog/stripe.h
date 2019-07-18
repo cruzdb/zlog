@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "libzlog/zlog_generated.h"
+#include <nlohmann/json.hpp>
 
 namespace zlog {
 
@@ -168,6 +169,8 @@ class MultiStripe {
   // encode this MultiStripe object into a flatbuffer
   flatbuffers::Offset<zlog::fbs::MultiStripe> encode(
           flatbuffers::FlatBufferBuilder& fbb) const;
+
+  nlohmann::json dump() const;
 
  public:
   // given a stripe id and a position, compute the name of the object that the

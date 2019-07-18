@@ -31,6 +31,7 @@ add_dependencies(libzlog zlog_schemas)
 
 target_include_directories(libzlog
     PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
+    PUBLIC ${PROJECT_SOURCE_DIR}/src/json/single_include
 )
 
 target_link_libraries(libzlog
@@ -57,6 +58,7 @@ target_include_directories(test_libzlog
   # TODO: flatbuffers should be included from libzlog. if we can fix that, we
   # also want that to only apply to internal binaries.
   PUBLIC ${PROJECT_SOURCE_DIR}/src/flatbuffers/include
+  PUBLIC ${PROJECT_SOURCE_DIR}/src/json/single_include
   PRIVATE $<TARGET_PROPERTY:gtest,INTERFACE_INCLUDE_DIRECTORIES>)
 
 # needs the generated flatbuffers headers. but this object file isn't linked

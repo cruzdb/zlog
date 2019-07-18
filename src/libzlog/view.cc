@@ -2,6 +2,7 @@
 #include <iostream>
 #include "include/zlog/options.h"
 #include "libzlog/zlog_generated.h"
+#include <nlohmann/json.hpp>
 
 namespace zlog {
 
@@ -103,6 +104,24 @@ boost::optional<View> View::advance_min_valid_position(uint64_t position) const
 View View::set_sequencer_config(SequencerConfig seq_config) const
 {
   return View(object_map_, seq_config);
+}
+
+void View::dump(nlohmann::json& out) const
+{
+  out["object_map"] = object_map_.dump();
+  if (seq_config_) {
+    out["seq_config"] = seq_config_->dump();
+  } else {
+    out["seq_config"] = nullptr;
+  }
+}
+
+void VersionedView::dump(nlohmann::json& out) const
+{
+  nlohmann::json j;
+  j["epoch"] = epoch_;
+  ((View*)this)->dump(j);
+  out.push_back(j);
 }
 
 }

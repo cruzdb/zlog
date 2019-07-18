@@ -278,4 +278,15 @@ bool ObjectMap::valid() const
   return true;
 }
 
+nlohmann::json ObjectMap::dump() const
+{
+  nlohmann::json j;
+  j["next_stripe_id"] = next_stripe_id_;
+  for (auto it : stripes_by_pos_) {
+    j["stripes"].push_back(it.second.dump());
+  }
+  j["min_valid_position"] = min_valid_position_;
+  return j;
+}
+
 }

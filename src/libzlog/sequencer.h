@@ -2,6 +2,7 @@
 #include <atomic>
 #include <boost/optional.hpp>
 #include "libzlog/zlog_generated.h"
+#include <nlohmann/json.hpp>
 
 namespace zlog {
 
@@ -45,6 +46,8 @@ class SequencerConfig {
 
   flatbuffers::Offset<zlog::fbs::Sequencer> encode(
       flatbuffers::FlatBufferBuilder& fbb) const;
+
+  nlohmann::json dump() const;
 
  public:
   uint64_t epoch() const {

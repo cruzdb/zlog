@@ -9,10 +9,44 @@
 #include "zlog/options.h"
 #include "libzlog/striper.h"
 #include "libzlog/log_impl.h"
+#include <nlohmann/json.hpp>
 
 namespace po = boost::program_options;
 
 int handle_log(std::vector<std::string>, std::shared_ptr<zlog::Backend>, std::string);
+
+namespace zlog {
+
+static int print_views(LogImpl& log)
+{
+  auto j = nlohmann::json::array();
+  uint64_t epoch = 1;
+
+  while (true) {
+    std::map<uint64_t, std::string> views;
+    int ret = log.backend->ReadViews(log.hoid, epoch, 2, &views);
+    if (ret) {
+      return ret;
+    }
+
+    if (views.empty()) {
+      break;
+    }
+
+    for (const auto it : views) {
+      const auto view = VersionedView(log.prefix, it.first, it.second);
+      view.dump(j);
+    }
+
+    epoch = views.crbegin()->first + 1;
+  }
+
+  std::cout << j.dump(2) << std::endl;
+
+  return 0;
+}
+
+}
 
 int main(int argc, char **argv)
 {
@@ -131,6 +165,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           { "read", "zlog log read <log name> <position>" },
           { "trim", "zlog log trim <log name> <position>" },
           { "fill", "zlog log fill <log name> <position>" },
+          { "views", "zlog log views <log name>" },
   };
 
   if (command.size() > 0 && usages.find(command[0]) == usages.end()) {
@@ -194,7 +229,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << "error: unknown error " << ret << std::endl;
       return ret;
   }
-  std::unique_ptr<zlog::Log> log(plog);
+  std::unique_ptr<zlog::LogImpl> log((zlog::LogImpl*)plog);
 
   if (command[0] == "append") {
     uint64_t tail;
@@ -226,6 +261,8 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << usages.at("append") << std::endl;
       return 1;
     }
+  } else if (command[0] == "views") {
+    return print_views(*log.get());
   } else if (command[0] == "dump") {
     if (command.size() != 2) { // dump <log name>
       std::cerr << usages.at("dump") << std::endl;

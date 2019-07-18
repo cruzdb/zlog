@@ -4,6 +4,7 @@
 #include <boost/optional.hpp>
 #include "object_map.h"
 #include "sequencer.h"
+#include <nlohmann/json.hpp>
 
 namespace zlog {
   namespace fbs {
@@ -37,6 +38,8 @@ class View {
 
   // serialize this view instance
   std::string encode() const;
+
+  void dump(nlohmann::json& out) const;
 
  public:
   // returns a copy of this view that maps the given position. if the position
@@ -78,6 +81,9 @@ class VersionedView : public View {
   }
 
   std::shared_ptr<Sequencer> seq;
+
+ public:
+  void dump(nlohmann::json& out) const;
 
  private:
   const uint64_t epoch_;
