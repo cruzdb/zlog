@@ -19,24 +19,18 @@
 
 namespace zlog {
 
-LogImpl::LogImpl(std::shared_ptr<Backend> backend,
+LogImpl::LogImpl(std::shared_ptr<LogBackend> backend,
     const std::string& name,
-    const std::string& hoid,
-    const std::string& prefix,
     std::unique_ptr<Striper> striper,
     const Options& opts) :
   shutdown(false),
   backend(backend),
   name(name),
-  hoid(hoid),
-  prefix(prefix),
   striper(std::move(striper)),
   num_inflight_ops_(0),
   options(opts)
 {
   assert(!this->name.empty());
-  assert(!this->hoid.empty());
-  assert(!this->prefix.empty());
   assert(this->striper);
 
   for (int i = 0; i < options.finisher_threads; i++) {

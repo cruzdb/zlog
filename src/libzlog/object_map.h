@@ -39,8 +39,7 @@ class ObjectMap {
   flatbuffers::Offset<zlog::fbs::ObjectMap> encode(
       flatbuffers::FlatBufferBuilder& fbb) const;
 
-  static ObjectMap decode(const std::string& prefix,
-      const zlog::fbs::ObjectMap *object_map);
+  static ObjectMap decode(const zlog::fbs::ObjectMap *object_map);
 
   nlohmann::json dump() const;
 
@@ -53,8 +52,8 @@ class ObjectMap {
 
   // expand the mapping to include the given position. true is returned when the
   // mapping changed, and false if the position is already mapped.
-  boost::optional<ObjectMap> expand_mapping(const std::string& prefix,
-      uint64_t position, const Options& options) const;
+  boost::optional<ObjectMap> expand_mapping(uint64_t position,
+      const Options& options) const;
 
   // returns a copy of this object map with a strictly larger
   // min_valid_position. otherwise boost::none is returned.

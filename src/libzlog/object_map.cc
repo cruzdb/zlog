@@ -103,8 +103,8 @@ ObjectMap::map_to(const uint64_t position, uint64_t& stripe_id, bool& done) cons
   return objects;
 }
 
-boost::optional<ObjectMap> ObjectMap::expand_mapping(const std::string& prefix,
-    const uint64_t position, const Options& options) const
+boost::optional<ObjectMap> ObjectMap::expand_mapping(const uint64_t position,
+    const Options& options) const
 {
   if (map(position).first) {
     return boost::none;
@@ -133,7 +133,7 @@ boost::optional<ObjectMap> ObjectMap::expand_mapping(const std::string& prefix,
       const auto slots = options.stripe_slots;
       const uint64_t max_position = width * slots - 1;
       stripes.emplace(0,
-          MultiStripe{prefix, stripe_id, width, slots, 0, 1, max_position});
+          MultiStripe{stripe_id, width, slots, 0, 1, max_position});
       // this assumptino could change in the future. for example if a log is
       // completely trimmed then its view might be empty, but its next stripe id
       // is greater than 0.
@@ -178,8 +178,7 @@ Stripe ObjectMap::stripe_by_id(uint64_t stripe_id) const
   return it->second.stripe_by_id(stripe_id);
 }
 
-ObjectMap ObjectMap::decode(const std::string& prefix,
-    const zlog::fbs::ObjectMap *object_map)
+ObjectMap ObjectMap::decode(const zlog::fbs::ObjectMap *object_map)
 {
   assert(object_map);
 
@@ -188,7 +187,7 @@ ObjectMap ObjectMap::decode(const std::string& prefix,
   if (object_map->stripes()) {
     const auto vs = object_map->stripes();
     for (auto it = vs->begin(); it != vs->end(); it++) {
-      const auto stripe = MultiStripe::decode(prefix, it);
+      const auto stripe = MultiStripe::decode(it);
       auto res = stripes.emplace(stripe.min_position(), stripe);
       assert(res.second);
       (void)res;

@@ -24,15 +24,28 @@ namespace zlog {
 
 Log::~Log() {}
 
-int create_or_open(const Options& options,
-    Backend *backend, const std::string& name,
-    std::string *hoid_out, std::string *prefix_out,
-    bool *created)
+int create_or_open(const Options& options, const std::string& name,
+    std::shared_ptr<LogBackend>& log_backend_out, bool& created_out)
 {
+  if (name.empty()) {
+    return -EINVAL;
+  }
+
+  // open the backend
+  std::shared_ptr<Backend> backend = options.backend;
+  if (!backend) {
+    int ret = Backend::Load(options.backend_name,
+        options.backend_options, backend);
+    if (ret) {
+      return ret;
+    }
+  }
+  assert(backend);
+
+  // create or open the log
   std::string hoid;
   std::string prefix;
   boost::optional<std::string> view;
-
   while (true) {
     int ret = backend->OpenLog(name, &hoid, &prefix);
     if (ret && ret != -ENOENT) {
@@ -66,14 +79,11 @@ int create_or_open(const Options& options,
         return ret;
       }
     }
-    if (created) {
-      *created = true;
-    }
+    created_out = true;
     break;
   }
 
-  hoid_out->swap(hoid);
-  prefix_out->swap(prefix);
+  log_backend_out = std::make_shared<LogBackend>(backend, hoid, prefix);
 
   return 0;
 }
@@ -81,43 +91,29 @@ int create_or_open(const Options& options,
 int Log::Open(const Options& options,
     const std::string& name, Log **logpp)
 {
-  if (name.empty()) {
-    return -EINVAL;
-  }
-
-  std::shared_ptr<Backend> backend = options.backend;
-
-  if (!backend) {
-    int ret = Backend::Load(options.backend_name,
-        options.backend_options, backend);
-    if (ret) {
-      return ret;
-    }
-  }
-
+  // create or open the log -> log backend
   bool created = false;
-  std::string hoid;
-  std::string prefix;
-  int ret = create_or_open(options, backend.get(),
-      name, &hoid, &prefix, &created);
+  std::shared_ptr<LogBackend> log_backend;
+  int ret = create_or_open(options, name, log_backend, created);
   if (ret) {
     return ret;
   }
+  assert(log_backend);
 
   uint64_t unique_id;
-  ret = backend->uniqueId(hoid, &unique_id);
+  ret = log_backend->uniqueId(&unique_id);
   if (ret) {
     return ret;
   }
 
   std::stringstream secret;
   secret << "zlog.secret."
-         << name << "." << hoid << "."
+         << name << "." << log_backend->hoid() << "."
          << boost::asio::ip::host_name() << "."
          << unique_id;
 
   auto view_reader = std::unique_ptr<ViewReader>(new ViewReader(
-        backend, hoid, prefix, secret.str(), options));
+        log_backend, secret.str(), options));
 
   // initialize the reader with the latest view
   view_reader->refresh_view();
@@ -125,8 +121,8 @@ int Log::Open(const Options& options,
     return -EIO;
   }
 
-  auto striper = std::unique_ptr<Striper>(new Striper(backend,
-        std::move(view_reader), hoid, prefix, secret.str(), options));
+  auto striper = std::unique_ptr<Striper>(new Striper(log_backend,
+        std::move(view_reader), secret.str(), options));
 
   // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {
@@ -137,7 +133,7 @@ int Log::Open(const Options& options,
     }
   }
 
-  auto impl = std::unique_ptr<LogImpl>(new LogImpl(backend, name, hoid, prefix,
+  auto impl = std::unique_ptr<LogImpl>(new LogImpl(log_backend, name,
         std::move(striper), options));
 
   *logpp = impl.release();

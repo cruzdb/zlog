@@ -6,8 +6,7 @@
 
 namespace zlog {
 
-View View::decode(const std::string& prefix,
-    const std::string& view_data)
+View View::decode(const std::string& view_data)
 {
   flatbuffers::Verifier verifier(
       reinterpret_cast<const uint8_t*>(view_data.data()), view_data.size());
@@ -20,7 +19,7 @@ View View::decode(const std::string& prefix,
       reinterpret_cast<const uint8_t*>(view_data.data()));
 
   return View(
-      ObjectMap::decode(prefix, view->object_map()),
+      ObjectMap::decode(view->object_map()),
       SequencerConfig::decode(view->sequencer()));
 }
 
@@ -28,16 +27,10 @@ std::string View::create_initial(const Options& options)
 {
   flatbuffers::FlatBufferBuilder fbb;
 
-  // below the prefix is discarded when the object map is encoded
-  // TODO: it would be nice to reformulate the abstractions to avoid needing to
-  // use a placeholder prefix here. the multistripe defines a layout, but
-  // shouldn't define a static object naming implied by requiring this prefix
-  // parameter.
   std::map<uint64_t, MultiStripe> stripes;
   if (options.create_initial_view_stripes) {
     stripes.emplace(0,
         MultiStripe(
-          "<<UNUSED PREFIX>>",
           0,
           options.stripe_width,
           options.stripe_slots,
@@ -80,10 +73,10 @@ std::string View::encode() const
       reinterpret_cast<const char*>(fbb.GetBufferPointer()), fbb.GetSize());
 }
 
-boost::optional<View> View::expand_mapping(const std::string& prefix,
-    const uint64_t position, const Options& options) const
+boost::optional<View> View::expand_mapping(const uint64_t position,
+    const Options& options) const
 {
-  const auto new_object_map = object_map_.expand_mapping(prefix, position,
+  const auto new_object_map = object_map_.expand_mapping(position,
       options);
   if (new_object_map) {
     return View(*new_object_map, seq_config_);

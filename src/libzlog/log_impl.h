@@ -9,6 +9,7 @@
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
 #include "striper.h"
+#include "log_backend.h"
 
 #define DEFAULT_STRIPE_SIZE 100
 
@@ -172,10 +173,8 @@ class LogImpl : public Log {
   LogImpl& operator=(const LogImpl&) = delete;
   LogImpl& operator=(const LogImpl&&) = delete;
 
-  LogImpl(std::shared_ptr<Backend> backend,
+  LogImpl(std::shared_ptr<LogBackend> backend,
       const std::string& name,
-      const std::string& hoid,
-      const std::string& prefix,
       std::unique_ptr<Striper> striper,
       const Options& opts);
 
@@ -232,11 +231,9 @@ class LogImpl : public Log {
   std::mutex lock;
 
   // thread-safe
-  const std::shared_ptr<Backend> backend;
+  const std::shared_ptr<LogBackend> backend;
 
   const std::string name;
-  const std::string hoid;
-  const std::string prefix;
 
   const std::unique_ptr<Striper> striper;
 
@@ -252,8 +249,8 @@ class LogImpl : public Log {
 };
 
 int create_or_open(const Options& options,
-    Backend *backend, const std::string& name,
-    std::string *hoid_out, std::string *prefix_out,
-    bool *created);
+    const std::string& name,
+    std::shared_ptr<LogBackend>& log_backend_out,
+    bool& created_out);
 
 }

@@ -6,6 +6,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include "libzlog/zlog_generated.h"
+#include "log_backend.h"
 
 // TODO
 //  - add primitive for getting latest view
@@ -72,24 +73,18 @@
 
 namespace zlog {
 
-Striper::Striper(std::shared_ptr<Backend> backend,
+Striper::Striper(std::shared_ptr<LogBackend> backend,
     std::unique_ptr<ViewReader> view_reader,
-    const std::string& hoid,
-    const std::string& prefix,
     const std::string& secret,
     const Options& options) :
   shutdown_(false),
   backend_(backend),
-  hoid_(hoid),
-  prefix_(prefix),
   secret_(secret),
   options_(options),
   view_reader_(std::move(view_reader)),
   expand_pos_(boost::none)
 {
   assert(backend_);
-  assert(!hoid_.empty());
-  assert(!prefix_.empty());
   assert(!secret_.empty());
   assert(view_reader_);
 
@@ -187,7 +182,7 @@ int Striper::try_expand_view(const uint64_t position)
   // getting lucky that it's read up before hitting this?
 
   // modify: a new view that maps the position
-  auto new_view = curr_view->expand_mapping(prefix_, position, options_);
+  auto new_view = curr_view->expand_mapping(position, options_);
   if (!new_view) {
     return 0;
   }
@@ -201,7 +196,7 @@ int Striper::try_expand_view(const uint64_t position)
   // write: the new view as the next epoch
   auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
-  int ret = backend_->ProposeView(hoid_, next_epoch, data);
+  int ret = backend_->ProposeView(next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     if (!ret) {
@@ -289,7 +284,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   // write: the proposed new view
   auto data = new_view->encode();
   const auto next_epoch = curr_view->epoch() + 1;
-  int ret = backend_->ProposeView(hoid_, next_epoch, data);
+  int ret = backend_->ProposeView(next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     return 0;
@@ -368,7 +363,7 @@ int Striper::propose_sequencer()
 
   // write: the proposed new view
   auto data = new_view.encode();
-  int ret = backend_->ProposeView(hoid_, next_epoch, data);
+  int ret = backend_->ProposeView(next_epoch, data);
   if (!ret || ret == -ESPIPE) {
     update_current_view(curr_view->epoch());
     return 0;

@@ -3,40 +3,38 @@
 
 namespace zlog {
 
-std::string Stripe::make_oid(const std::string& prefix,
-    uint64_t stripe_id, uint32_t index)
+std::string Stripe::make_oid(uint64_t stripe_id, uint32_t index)
 {
   std::stringstream oid;
-  oid << prefix << "." << stripe_id << "." << index;
+  oid << stripe_id << "." << index;
   return oid.str();
 }
 
-std::string Stripe::make_oid(const std::string& prefix,
-    uint64_t stripe_id, uint32_t width, uint64_t position)
+std::string Stripe::make_oid(uint64_t stripe_id, uint32_t width, uint64_t position)
 {
   auto index = position % width;
-  return make_oid(prefix, stripe_id, index);
+  return make_oid(stripe_id, index);
 }
 
-std::vector<std::string> Stripe::make_oids(const std::string& prefix,
-    const uint64_t stripe_id, const uint32_t width)
+std::vector<std::string> Stripe::make_oids(const uint64_t stripe_id,
+    const uint32_t width)
 {
   std::vector<std::string> oids;
   oids.reserve(width);
 
   for (uint32_t i = 0; i < width; i++) {
-    oids.emplace_back(make_oid(prefix, stripe_id, i));
+    oids.emplace_back(make_oid(stripe_id, i));
   }
 
   return oids;
 }
 
-MultiStripe MultiStripe::decode(const std::string& prefix,
+MultiStripe MultiStripe::decode(
     const flatbuffers::VectorIterator<
       flatbuffers::Offset<zlog::fbs::MultiStripe>,
       const zlog::fbs::MultiStripe*>& it)
 {
-  return MultiStripe(prefix,
+  return MultiStripe(
       it->base_id(),
       it->width(),
       it->slots(),
@@ -60,7 +58,6 @@ flatbuffers::Offset<zlog::fbs::MultiStripe> MultiStripe::encode(
 nlohmann::json MultiStripe::dump() const
 {
   nlohmann::json j;
-  j["prefix"] = prefix_;
   j["base_id"] = base_id_;
   j["width"] = width_;
   j["slots"] = slots_;

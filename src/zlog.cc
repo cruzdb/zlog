@@ -24,7 +24,7 @@ static int print_views(LogImpl& log)
 
   while (true) {
     std::map<uint64_t, std::string> views;
-    int ret = log.backend->ReadViews(log.hoid, epoch, 2, &views);
+    int ret = log.backend->ReadViews(epoch, 2, &views);
     if (ret) {
       return ret;
     }
@@ -34,7 +34,7 @@ static int print_views(LogImpl& log)
     }
 
     for (const auto it : views) {
-      const auto view = VersionedView(log.prefix, it.first, it.second);
+      const auto view = VersionedView(it.first, it.second);
       view.dump(j);
     }
 
@@ -189,12 +189,12 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << usages.at("create") << std::endl;
       return 1;
     }
+    zlog::Log *log;
     zlog::Options options;
+    options.backend = backend;
     options.error_if_exists = true;
     options.create_if_missing = true;
-    std::string hoid, prefix;
-    int ret = zlog::create_or_open(options, backend.get(), command[1],
-        &hoid, &prefix, nullptr);
+    int ret = zlog::Log::Open(options, command[1], &log);
     switch (ret) {
       case 0:
         break;
@@ -208,7 +208,6 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
         std::cerr << "error: unknown error" << std::endl;
         return ret;
     }
-    std::cout << hoid << std::endl << prefix << std::endl;
     return 0;
   }
 
