@@ -212,7 +212,7 @@ TEST_F(BackendTest, ReadViews) {
     ASSERT_EQ(backend->ReadViews(hoid, i, 20, &views), 0);
     ASSERT_EQ(views.size(), (10u - i + 1));
     for (auto it : views) {
-      ASSERT_EQ(it.second, truth_views[it.first]);
+      ASSERT_EQ(it.second, truth_views.at(it.first));
     }
   }
 

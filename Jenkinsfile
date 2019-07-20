@@ -1,4 +1,4 @@
-def images = ["ubuntu:bionic", "ubuntu:xenial", "debian:stretch", "fedora:29", "centos:7"]
+def images = ["ubuntu:bionic", "ubuntu:xenial", "debian:stretch", "fedora:30", "centos:7"]
 def tasks = [:]
 
 images.each { image ->
@@ -19,17 +19,17 @@ images.each { image ->
   }
 }
 
-tasks["fedora:29:pkg"] = {
+tasks["fedora:30:pkg"] = {
   node {
     lock("zlog-build") {
       stage('checkout') {
         checkout scm
       }
       stage('build deps image') {
-        sh "BUILD_PKG=yes ci/build_deps_image.sh fedora:29"
+        sh "BUILD_PKG=yes ci/build_deps_image.sh fedora:30"
       }
       stage('build and test') {
-        sh "BUILD_PKG=yes ci/script.sh fedora:29"
+        sh "BUILD_PKG=yes ci/script.sh fedora:30"
       }
     }
   }

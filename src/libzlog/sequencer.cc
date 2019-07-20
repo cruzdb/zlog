@@ -32,4 +32,13 @@ flatbuffers::Offset<zlog::fbs::Sequencer> SequencerConfig::encode(
       position_);
 }
 
+nlohmann::json SequencerConfig::dump() const
+{
+  nlohmann::json j;
+  j["epoch"] = epoch_;
+  j["secret"] = secret_;
+  j["position"] = position_;
+  return j;
+}
+
 }

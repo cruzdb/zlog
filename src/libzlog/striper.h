@@ -35,16 +35,13 @@
 
 namespace zlog {
 
-class Backend;
+class LogBackend;
 class LogImpl;
 
 class Striper final {
  public:
-  Striper(std::shared_ptr<Backend> backend,
+  Striper(std::shared_ptr<LogBackend> backend,
     std::unique_ptr<ViewReader> view_reader,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
     const Options& options);
 
   Striper(const Striper& other) = delete;
@@ -101,10 +98,7 @@ class Striper final {
  private:
   mutable std::mutex lock_;
   bool shutdown_;
-  const std::shared_ptr<Backend> backend_;
-  const std::string hoid_;
-  const std::string prefix_;
-  const std::string secret_;
+  const std::shared_ptr<LogBackend> backend_;
   const Options options_;
 
   const std::unique_ptr<ViewReader> view_reader_;

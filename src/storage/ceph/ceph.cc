@@ -83,6 +83,7 @@ int CephBackend::Initialize(
     auto conf_file = it->second.empty() ? nullptr : it->second.c_str();
     ret = cluster->conf_read_file(conf_file);
     if (ret) {
+      std::cerr << "failed to read config file" << std::endl;
       delete cluster;
       return ret;
     }
@@ -90,6 +91,7 @@ int CephBackend::Initialize(
 
   ret = cluster->connect();
   if (ret) {
+    std::cerr << "failed to connect to cluster" << std::endl;
     delete cluster;
     return ret;
   }
@@ -101,6 +103,7 @@ int CephBackend::Initialize(
   auto ioctx = new librados::IoCtx;
   ret = cluster->ioctx_create(pool.c_str(), *ioctx);
   if (ret) {
+    std::cerr << "failed to open ioctx" << std::endl;
     delete ioctx;
     cluster->shutdown();
     delete cluster;

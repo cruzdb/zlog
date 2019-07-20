@@ -6,3 +6,6 @@
 [submodule "src/flatbuffers"]
 	path = src/flatbuffers
 	url = https://github.com/google/flatbuffers
+[submodule "src/json"]
+	path = src/json
+	url = https://github.com/nlohmann/json

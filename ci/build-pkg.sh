@@ -31,7 +31,7 @@ esac
 mkdir /tmp/zlog_staging
 OUTDIR=/tmp/zlog_staging ./make-dist.sh
 cd /tmp/zlog_staging/zlog
-fedpkg --release f29 local
+fedpkg --release f30 local
 
 # copy into the docker volume
 cp -a /tmp/zlog_staging/zlog/x86_64/*.rpm /tmp/zlog_build/

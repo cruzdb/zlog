@@ -9,7 +9,7 @@
 
 namespace zlog {
 
-class Backend;
+class LogBackend;
 
 /**
  * ViewReader provides access to the latest log view.
@@ -21,10 +21,7 @@ class Backend;
 class ViewReader final {
  public:
   ViewReader(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
+    const std::shared_ptr<LogBackend> backend,
     const Options& options);
 
   ViewReader(const ViewReader& other) = delete;
@@ -74,10 +71,7 @@ class ViewReader final {
  private:
   mutable std::mutex lock_;
   bool shutdown_;
-  const std::shared_ptr<Backend> backend_;
-  const std::string hoid_;
-  const std::string prefix_;
-  const std::string secret_;
+  const std::shared_ptr<LogBackend> backend_;
   const Options options_;
 
   std::shared_ptr<const VersionedView> view_;

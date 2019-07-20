@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "libzlog/zlog_generated.h"
+#include <nlohmann/json.hpp>
 
 namespace zlog {
 
@@ -14,19 +15,17 @@ namespace zlog {
 // stripes.
 class Stripe {
  public:
-  Stripe(const std::string& prefix,
+  Stripe(
       uint64_t stripe_id,
       uint32_t width,
       uint64_t min_position,
       uint64_t max_position) :
-    prefix_(prefix),
     stripe_id_(stripe_id),
     width_(width),
     min_position_(min_position),
     max_position_(max_position),
-    oids_(make_oids(prefix_, stripe_id_, width_))
+    oids_(make_oids(stripe_id_, width_))
   {
-    assert(!prefix_.empty());
     assert(width_ > 0);
 
     // these restrictions aren't fundamental, but they happen to be true for the
@@ -53,8 +52,8 @@ class Stripe {
   Stripe& operator=(Stripe&& other) = default;
 
  public:
-  static std::string make_oid(const std::string& prefix,
-      uint64_t stripe_id, uint32_t width, uint64_t position);
+  static std::string make_oid(uint64_t stripe_id, uint32_t width,
+      uint64_t position);
 
   uint64_t min_position() const {
     return min_position_;
@@ -74,7 +73,6 @@ class Stripe {
 
   bool operator==(const Stripe& other) const {
     return
-      prefix_       == other.prefix_ &&
       stripe_id_    == other.stripe_id_ &&
       width_        == other.width_ &&
       min_position_ == other.min_position_ &&
@@ -88,13 +86,10 @@ class Stripe {
 
  private:
   // index is the pre-computed value: position % stripe-width
-  static std::string make_oid(const std::string& prefix,
-      uint64_t stripe_id, uint32_t index);
+  static std::string make_oid(uint64_t stripe_id, uint32_t index);
 
-  static std::vector<std::string> make_oids(const std::string& prefix,
-    uint64_t stripe_id, uint32_t width);
+  static std::vector<std::string> make_oids(uint64_t stripe_id, uint32_t width);
 
-  std::string prefix_;
   uint64_t stripe_id_;
   uint32_t width_;
   uint64_t min_position_;
@@ -116,14 +111,13 @@ class Stripe {
 //   instead we choose to explicitly specify the max position.
 class MultiStripe {
  public:
-  MultiStripe(const std::string& prefix,
+  MultiStripe(
       uint64_t base_id,
       uint32_t width,
       uint32_t slots,
       uint64_t min_position,
       uint64_t instances,
       uint64_t max_position) :
-    prefix_(prefix),
     base_id_(base_id),
     width_(width),
     slots_(slots),
@@ -131,7 +125,6 @@ class MultiStripe {
     instances_(instances),
     max_position_(max_position)
   {
-    assert(!prefix_.empty());
     assert(width_ > 0);
     assert(slots_ > 0);
     assert(instances_ > 0);
@@ -160,7 +153,7 @@ class MultiStripe {
 
  public:
   // construct a MultiStripe from a flatbuffer
-  static MultiStripe decode(const std::string& prefix,
+  static MultiStripe decode(
       const flatbuffers::VectorIterator<
         flatbuffers::Offset<zlog::fbs::MultiStripe>,
         const zlog::fbs::MultiStripe*>& it);
@@ -168,6 +161,8 @@ class MultiStripe {
   // encode this MultiStripe object into a flatbuffer
   flatbuffers::Offset<zlog::fbs::MultiStripe> encode(
           flatbuffers::FlatBufferBuilder& fbb) const;
+
+  nlohmann::json dump() const;
 
  public:
   // given a stripe id and a position, compute the name of the object that the
@@ -177,7 +172,7 @@ class MultiStripe {
     assert(stripe_id <= max_stripe_id());
     assert(min_position_ <= position);
     assert(position <= max_position_);
-    return Stripe::make_oid(prefix_, stripe_id, width_, position);
+    return Stripe::make_oid(stripe_id, width_, position);
   }
 
   // the (fixed) smallest stripe id represented by this MultiStripe
@@ -216,7 +211,6 @@ class MultiStripe {
   // represent one additional adjacent Stripe.
   MultiStripe extend() const {
     return MultiStripe(
-        prefix_,
         base_id_,
         width_,
         slots_,
@@ -239,7 +233,6 @@ class MultiStripe {
     assert(min_pos >= min_position_);
     assert(max_pos <= max_position_);
     return Stripe(
-        prefix_,
         stripe_id,
         width_,
         min_pos,
@@ -248,7 +241,6 @@ class MultiStripe {
 
   bool operator==(const MultiStripe& other) const {
     return
-      prefix_       == other.prefix_ &&
       base_id_      == other.base_id_ &&
       width_        == other.width_ &&
       slots_        == other.slots_ &&
@@ -262,7 +254,6 @@ class MultiStripe {
   }
 
  private:
-  std::string prefix_;
   uint64_t base_id_;
   uint32_t width_;
   uint32_t slots_;

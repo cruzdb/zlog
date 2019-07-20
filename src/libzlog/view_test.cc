@@ -35,7 +35,7 @@ TEST(ViewTest, ExpandMapping) {
   options.stripe_width = 11;
   options.stripe_slots = 20;
 
-  auto maybe_view = view.expand_mapping("p", 0, options);
+  auto maybe_view = view.expand_mapping(0, options);
   ASSERT_TRUE(maybe_view);
   view = *maybe_view;
   ASSERT_EQ(view.object_map().num_stripes(), 1u);
@@ -43,7 +43,7 @@ TEST(ViewTest, ExpandMapping) {
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);
 
-  maybe_view = view.expand_mapping("p", 230, options);
+  maybe_view = view.expand_mapping(230, options);
   ASSERT_TRUE(maybe_view);
   view = *maybe_view;
   ASSERT_EQ(view.object_map().num_stripes(), 2u);
@@ -52,19 +52,19 @@ TEST(ViewTest, ExpandMapping) {
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);
 
-  maybe_view = view.expand_mapping("p", 0, options);
+  maybe_view = view.expand_mapping(0, options);
   ASSERT_FALSE(maybe_view);
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);
-  maybe_view = view.expand_mapping("p", 219, options);
+  maybe_view = view.expand_mapping(219, options);
   ASSERT_FALSE(maybe_view);
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);
-  maybe_view = view.expand_mapping("p", 220, options);
+  maybe_view = view.expand_mapping(220, options);
   ASSERT_FALSE(maybe_view);
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);
-  maybe_view = view.expand_mapping("p", 250, options);
+  maybe_view = view.expand_mapping(250, options);
   ASSERT_FALSE(maybe_view);
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);

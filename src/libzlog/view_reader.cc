@@ -1,26 +1,20 @@
 #include "libzlog/view_reader.h"
 #include "include/zlog/backend.h"
+#include "log_backend.h"
 #include <iostream>
 
 // TODO: client requests that see a nullptr sequencer shoudl block and wait for
 // updates
 // TODO: use a smarter index for epoch waiters
-// TODO backend wrapper for hoid, prefix, log name
 // TODO build a log's initial view for exclusive sequencers
 
 namespace zlog {
 
 ViewReader::ViewReader(
-    const std::shared_ptr<Backend> backend,
-    const std::string& hoid,
-    const std::string& prefix,
-    const std::string& secret,
+    const std::shared_ptr<LogBackend> backend,
     const Options& options) :
   shutdown_(false),
   backend_(backend),
-  hoid_(hoid),
-  prefix_(prefix),
-  secret_(secret),
   options_(options),
   view_(nullptr),
   refresh_thread_(std::thread(&ViewReader::refresh_entry_, this))
@@ -138,25 +132,28 @@ void ViewReader::wait_for_newer_view(const uint64_t epoch)
 std::unique_ptr<VersionedView> ViewReader::get_latest_view() const
 {
   std::map<uint64_t, std::string> views;
-  int ret = backend_->ReadViews(hoid_, 0, 1, &views);
+  int ret = backend_->ReadViews(0, 1, &views);
   if (ret) {
+    std::cerr << "get_latest_view failed to read view " << ret << std::endl;
     return nullptr;
   }
 
   const auto it = views.crbegin();
   if (it == views.crend()) {
+    std::cerr << "get_latest_view no views found" << std::endl;
     // this would happen if there are no views
     return nullptr;
   }
 
   return std::unique_ptr<VersionedView>(
-      new VersionedView(prefix_, it->first, it->second));
+      new VersionedView(it->first, it->second));
 }
 
 void ViewReader::refresh_view()
 {
   auto latest_view = get_latest_view();
   if (!latest_view) {
+    std::cerr << "refresh_view failed to get latest view" << std::endl;
     return;
   }
   assert(!latest_view->seq);
@@ -173,7 +170,7 @@ void ViewReader::refresh_view()
   // if the latest view has a sequencer config and secret that matches this log
   // client instance, then we will become a sequencer / exclusive writer.
   if (latest_view->seq_config() &&
-      latest_view->seq_config()->secret() == secret_) {
+      latest_view->seq_config()->secret() == backend_->secret()) {
 
     // there are two cases for initializing the new view's sequencer:
     //
@@ -197,7 +194,7 @@ void ViewReader::refresh_view()
     //
     if (view_ &&
         view_->seq_config() &&
-        view_->seq_config()->secret() == secret_ &&
+        view_->seq_config()->secret() == backend_->secret() &&
         view_->seq_config()->epoch() == latest_view->seq_config()->epoch()) {
       //
       // note about thread safety. here we copy the pointer to the existing

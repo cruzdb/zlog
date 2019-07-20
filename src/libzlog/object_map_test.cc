@@ -13,36 +13,36 @@ TEST(ObjectMapDeathTest, Constructor) {
   // first stripe isn't zero
   ASSERT_DEATH({
     zlog::ObjectMap(1,
-        {{1, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)}},
+        {{1, zlog::MultiStripe(0, 1, 1, 0, 1, 0)}},
         0);
   }, "valid.+failed");
 
   // invalid next_stripe_id
   ASSERT_DEATH({
     zlog::ObjectMap(2,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)}},
         0);
   }, "valid.+failed");
 
   // second stripe min pos doesn't equal 1 / the index key
   ASSERT_DEATH({
     zlog::ObjectMap(2,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)},
-         {1, zlog::MultiStripe("p", 1, 1, 2, 2, 1, 3)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)},
+         {1, zlog::MultiStripe(1, 1, 2, 2, 1, 3)}},
         0);
   }, "valid.+failed");
 
   // base id of next stripe doesn't follow prev stripe
   ASSERT_DEATH({
     zlog::ObjectMap(2,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)},
-         {1, zlog::MultiStripe("p", 2, 1, 1, 1, 1, 1)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)},
+         {1, zlog::MultiStripe(2, 1, 1, 1, 1, 1)}},
         0);
   }, "valid.+failed");
   ASSERT_DEATH({
     zlog::ObjectMap(3,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)},
-         {1, zlog::MultiStripe("p", 2, 1, 1, 1, 1, 1)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)},
+         {1, zlog::MultiStripe(2, 1, 1, 1, 1, 1)}},
         0);
   }, "valid.+failed");
 }
@@ -65,30 +65,30 @@ TEST(ObjectMapDeathTest, StripeById) {
 
   {
     auto om = zlog::ObjectMap(1,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)}},
         0);
     om.stripe_by_id(0);
   }
 
   ASSERT_DEATH({
     auto om = zlog::ObjectMap(1,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)}},
         0);
     om.stripe_by_id(1);
   }, "stripe_id <= it->second.max_stripe_id.+failed");
 
   ASSERT_DEATH({
     auto om = zlog::ObjectMap(1,
-        {{0, zlog::MultiStripe("p", 0, 1, 1, 0, 1, 0)}},
+        {{0, zlog::MultiStripe(0, 1, 1, 0, 1, 0)}},
         0);
     om.stripe_by_id(2);
   }, "stripe_id <= it->second.max_stripe_id.+failed");
 
   {
     auto om = zlog::ObjectMap(6,
-        {{0, zlog::MultiStripe("p", 0, 10, 10, 0, 1, 99)},
-         {100, zlog::MultiStripe("p", 1, 20, 30, 100, 2, 1299)},
-         {1300, zlog::MultiStripe("p", 3, 5, 6, 1300, 3, 1389)}},
+        {{0, zlog::MultiStripe(0, 10, 10, 0, 1, 99)},
+         {100, zlog::MultiStripe(1, 20, 30, 100, 2, 1299)},
+         {1300, zlog::MultiStripe(3, 5, 6, 1300, 3, 1389)}},
         0);
     om.stripe_by_id(0);
     om.stripe_by_id(1);
@@ -100,18 +100,18 @@ TEST(ObjectMapDeathTest, StripeById) {
 
   ASSERT_DEATH({
     auto om = zlog::ObjectMap(6,
-        {{0, zlog::MultiStripe("p", 0, 10, 10, 0, 1, 99)},
-         {100, zlog::MultiStripe("p", 1, 20, 30, 100, 2, 1299)},
-         {1300, zlog::MultiStripe("p", 3, 5, 6, 1300, 3, 1389)}},
+        {{0, zlog::MultiStripe(0, 10, 10, 0, 1, 99)},
+         {100, zlog::MultiStripe(1, 20, 30, 100, 2, 1299)},
+         {1300, zlog::MultiStripe(3, 5, 6, 1300, 3, 1389)}},
         0);
     om.stripe_by_id(6);
   }, "stripe_id <= it->second.max_stripe_id.+failed");
 
   ASSERT_DEATH({
     auto om = zlog::ObjectMap(6,
-        {{0, zlog::MultiStripe("p", 0, 10, 10, 0, 1, 99)},
-         {100, zlog::MultiStripe("p", 1, 20, 30, 100, 2, 1299)},
-         {1300, zlog::MultiStripe("p", 3, 5, 6, 1300, 3, 1389)}},
+        {{0, zlog::MultiStripe(0, 10, 10, 0, 1, 99)},
+         {100, zlog::MultiStripe(1, 20, 30, 100, 2, 1299)},
+         {1300, zlog::MultiStripe(3, 5, 6, 1300, 3, 1389)}},
         0);
     om.stripe_by_id(7);
   }, "stripe_id <= it->second.max_stripe_id.+failed");
@@ -129,7 +129,7 @@ TEST(ObjectMapDeathTest, ExpandMapping) {
     zlog::Options options;
     options.stripe_slots = 0;
     auto om = zlog::ObjectMap(0, {}, 0);
-    om.expand_mapping("p", 0, options);
+    om.expand_mapping(0, options);
   }, "slots_ > 0.+failed");
 }
 
@@ -148,7 +148,7 @@ TEST(ObjectMapTest, MapEmpty) {
 
 TEST(ObjectMapTest, MapA) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         1,   // width
         1,   // slots
@@ -164,14 +164,14 @@ TEST(ObjectMapTest, MapA) {
 
   ASSERT_TRUE(om.map(0).first);
   ASSERT_TRUE(om.map(0).second);
-  ASSERT_EQ(*om.map(0).first, "p.0.0");
+  ASSERT_EQ(*om.map(0).first, "0.0");
   ASSERT_FALSE(om.map(1).first);
   ASSERT_FALSE(om.map(2).first);
 }
 
 TEST(ObjectMapTest, MapB) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         20,   // slots
@@ -188,14 +188,14 @@ TEST(ObjectMapTest, MapB) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_TRUE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(111).first, "p.0.1");
+  ASSERT_EQ(*om.map(111).first, "0.1");
   ASSERT_FALSE(om.map(200).first);
   ASSERT_FALSE(om.map(201).first);
 }
 
 TEST(ObjectMapTest, MapC) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         20,   // slots
@@ -212,38 +212,38 @@ TEST(ObjectMapTest, MapC) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(111).first, "p.0.1");
+  ASSERT_EQ(*om.map(111).first, "0.1");
   for (uint64_t p = 200; p < 400; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(312).first, "p.1.2");
+  ASSERT_EQ(*om.map(312).first, "1.2");
   for (uint64_t p = 400; p < 600; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_TRUE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(412).first, "p.2.2");
+  ASSERT_EQ(*om.map(412).first, "2.2");
   ASSERT_FALSE(om.map(600).first);
   ASSERT_FALSE(om.map(601).first);
 }
 
 TEST(ObjectMapTest, MapD) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         10,   // slots
         0,   // min position
         1,   // instances
         99)); // max position
-  stripes.emplace(100, zlog::MultiStripe("p",
+  stripes.emplace(100, zlog::MultiStripe(
         1,   // base id
         20,   // width
         30,   // slots
         100,   // min position
         2,   // instances
         1299)); // max position
-  stripes.emplace(1300, zlog::MultiStripe("p",
+  stripes.emplace(1300, zlog::MultiStripe(
         3,   // base id
         5,   // width
         6,   // slots
@@ -261,48 +261,48 @@ TEST(ObjectMapTest, MapD) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(75).first, "p.0.5");
+  ASSERT_EQ(*om.map(75).first, "0.5");
 
   for (uint64_t p = 100; p < 700; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(105).first, "p.1.5");
-  ASSERT_EQ(*om.map(698).first, "p.1.18");
-  ASSERT_EQ(*om.map(699).first, "p.1.19");
+  ASSERT_EQ(*om.map(105).first, "1.5");
+  ASSERT_EQ(*om.map(698).first, "1.18");
+  ASSERT_EQ(*om.map(699).first, "1.19");
 
   for (uint64_t p = 700; p < 1300; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(709).first, "p.2.9");
-  ASSERT_EQ(*om.map(1297).first, "p.2.17");
-  ASSERT_EQ(*om.map(1299).first, "p.2.19");
+  ASSERT_EQ(*om.map(709).first, "2.9");
+  ASSERT_EQ(*om.map(1297).first, "2.17");
+  ASSERT_EQ(*om.map(1299).first, "2.19");
 
   for (uint64_t p = 1300; p < 1330; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(1300).first, "p.3.0");
-  ASSERT_EQ(*om.map(1327).first, "p.3.2");
-  ASSERT_EQ(*om.map(1329).first, "p.3.4");
+  ASSERT_EQ(*om.map(1300).first, "3.0");
+  ASSERT_EQ(*om.map(1327).first, "3.2");
+  ASSERT_EQ(*om.map(1329).first, "3.4");
 
   for (uint64_t p = 1330; p < 1360; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_FALSE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(1330).first, "p.4.0");
-  ASSERT_EQ(*om.map(1331).first, "p.4.1");
-  ASSERT_EQ(*om.map(1332).first, "p.4.2");
-  ASSERT_EQ(*om.map(1359).first, "p.4.4");
+  ASSERT_EQ(*om.map(1330).first, "4.0");
+  ASSERT_EQ(*om.map(1331).first, "4.1");
+  ASSERT_EQ(*om.map(1332).first, "4.2");
+  ASSERT_EQ(*om.map(1359).first, "4.4");
 
   for (uint64_t p = 1360; p < 1390; p++) {
     ASSERT_TRUE(om.map(p).first);
     ASSERT_TRUE(om.map(p).second);
   }
-  ASSERT_EQ(*om.map(1360).first, "p.5.0");
-  ASSERT_EQ(*om.map(1377).first, "p.5.2");
-  ASSERT_EQ(*om.map(1389).first, "p.5.4");
+  ASSERT_EQ(*om.map(1360).first, "5.0");
+  ASSERT_EQ(*om.map(1377).first, "5.2");
+  ASSERT_EQ(*om.map(1389).first, "5.4");
 
   ASSERT_FALSE(om.map(1390).first);
   ASSERT_FALSE(om.map(1391).first);
@@ -319,7 +319,7 @@ TEST(ObjectMapTest, ExpandMappingFromEmptyA) {
   options.stripe_width = 33;
   options.stripe_slots = 7;
 
-  auto maybe_om = om.expand_mapping("p", 0, options);
+  auto maybe_om = om.expand_mapping(0, options);
   ASSERT_TRUE(maybe_om);
   om = *maybe_om;
   ASSERT_TRUE(om.valid());
@@ -329,7 +329,7 @@ TEST(ObjectMapTest, ExpandMappingFromEmptyA) {
   ASSERT_EQ(stripe.width(), 33u);
   ASSERT_EQ(stripe.max_position(), 230u);
 
-  maybe_om = om.expand_mapping("p", 231, options);
+  maybe_om = om.expand_mapping(231, options);
   ASSERT_TRUE(maybe_om);
   om = *maybe_om;
   ASSERT_TRUE(om.valid());
@@ -350,7 +350,7 @@ TEST(ObjectMapTest, ExpandMappingFromEmptyB) {
   options.stripe_width = 97;
   options.stripe_slots = 17;
 
-  auto maybe_om = om.expand_mapping("p", 4940, options);
+  auto maybe_om = om.expand_mapping(4940, options);
   ASSERT_TRUE(maybe_om);
   om = *maybe_om;
   ASSERT_TRUE(om.valid());
@@ -361,7 +361,7 @@ TEST(ObjectMapTest, ExpandMappingFromEmptyB) {
   ASSERT_EQ(stripe.width(), 97u);
   ASSERT_EQ(stripe.max_position(), 1648u);
 
-  maybe_om = om.expand_mapping("p", 6595, options);
+  maybe_om = om.expand_mapping(6595, options);
   ASSERT_TRUE(maybe_om);
   om = *maybe_om;
   ASSERT_TRUE(om.valid());
@@ -375,21 +375,21 @@ TEST(ObjectMapTest, ExpandMappingFromEmptyB) {
 
 TEST(ObjectMapTest, ExpandMapping) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         10,   // slots
         0,   // min position
         1,   // instances
         99)); // max position
-  stripes.emplace(100, zlog::MultiStripe("p",
+  stripes.emplace(100, zlog::MultiStripe(
         1,   // base id
         20,   // width
         30,   // slots
         100,   // min position
         2,   // instances
         1299)); // max position
-  stripes.emplace(1300, zlog::MultiStripe("p",
+  stripes.emplace(1300, zlog::MultiStripe(
         3,   // base id
         5,   // width
         6,   // slots
@@ -401,29 +401,29 @@ TEST(ObjectMapTest, ExpandMapping) {
 
   zlog::Options options;
   for (uint64_t p = 0; p < 1390; p++) {
-    ASSERT_FALSE(om.expand_mapping("p", p, options));
+    ASSERT_FALSE(om.expand_mapping(p, options));
   }
 
-  auto maybe_om = om.expand_mapping("p", 1390, options);
+  auto maybe_om = om.expand_mapping(1390, options);
   ASSERT_TRUE(maybe_om);
   om = *maybe_om;
   ASSERT_TRUE(om.valid());
 
   for (uint64_t p = 1390; p < 1420; p++) {
-    ASSERT_FALSE(om.expand_mapping("p", p, options));
+    ASSERT_FALSE(om.expand_mapping(p, options));
   }
 
-  maybe_om = om.expand_mapping("p", 1430, options);
+  maybe_om = om.expand_mapping(1430, options);
   ASSERT_TRUE(maybe_om);
   om = *maybe_om;
   ASSERT_TRUE(om.valid());
 
   for (uint64_t p = 1420; p < 1450; p++) {
-    ASSERT_FALSE(om.expand_mapping("p", p, options));
+    ASSERT_FALSE(om.expand_mapping(p, options));
   }
 
   for (uint64_t p = 0; p < 1450; p++) {
-    ASSERT_FALSE(om.expand_mapping("p", p, options));
+    ASSERT_FALSE(om.expand_mapping(p, options));
     ASSERT_TRUE(om.map(p).first);
   }
   ASSERT_FALSE(om.map(1450).first);
@@ -431,7 +431,7 @@ TEST(ObjectMapTest, ExpandMapping) {
 
 TEST(ObjectMapTest, AdvanceMinPosition) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         20,   // slots
@@ -480,7 +480,7 @@ TEST(ObjectMapTest, Range) {
 
     // first multistripe
     auto res = stripes.emplace(min_position,
-        zlog::MultiStripe("p", base_id, width, slots, min_position,
+        zlog::MultiStripe(base_id, width, slots, min_position,
           instances, (min_position + instances * width * slots - 1)));
 
     base_id += instances;
@@ -494,7 +494,7 @@ TEST(ObjectMapTest, Range) {
       auto slots_tmp = slots * xx;
 
       res = stripes.emplace(min_position,
-          zlog::MultiStripe("p", base_id, width_tmp, slots_tmp, min_position,
+          zlog::MultiStripe(base_id, width_tmp, slots_tmp, min_position,
             instances_tmp, (min_position + instances_tmp * width_tmp * slots_tmp - 1)));
 
       base_id += instances_tmp;
@@ -509,18 +509,18 @@ TEST(ObjectMapTest, Range) {
     zlog::Options options;
     auto max_pos = om.max_position();
     for (auto expand_to = max_pos - 50; expand_to <= max_pos; expand_to++) {
-      auto maybe_om = om.expand_mapping("p", expand_to, options);
+      auto maybe_om = om.expand_mapping(expand_to, options);
       ASSERT_FALSE(maybe_om);
     }
     ASSERT_EQ(om.max_position(), max_pos);
 
-    auto maybe_om = om.expand_mapping("p", max_pos+1, options);
+    auto maybe_om = om.expand_mapping(max_pos+1, options);
     ASSERT_TRUE(maybe_om);
     om = *maybe_om;
     ASSERT_TRUE(om.valid());
     ASSERT_NE(om.max_position(), max_pos);
 
-    maybe_om = om.expand_mapping("p", om.max_position()+50, options);
+    maybe_om = om.expand_mapping(om.max_position()+50, options);
     ASSERT_TRUE(maybe_om);
     om = *maybe_om;
     ASSERT_TRUE(om.valid());
@@ -537,7 +537,7 @@ TEST(ObjectMapTest, Range) {
 
 TEST(ObjectMapTest, StripeByIdA) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         1,   // width
         1,   // slots
@@ -548,26 +548,26 @@ TEST(ObjectMapTest, StripeByIdA) {
   ASSERT_TRUE(om.valid());
 
   ASSERT_EQ(om.stripe_by_id(0),
-      zlog::Stripe("p", 0, 1, 0, 0));
+      zlog::Stripe(0, 1, 0, 0));
 }
 
 TEST(ObjectMapTest, StripeByIdB) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         10,   // slots
         0,   // min position
         1,   // instances
         99)); // max position
-  stripes.emplace(100, zlog::MultiStripe("p",
+  stripes.emplace(100, zlog::MultiStripe(
         1,   // base id
         20,   // width
         30,   // slots
         100,   // min position
         2,   // instances
         1299)); // max position
-  stripes.emplace(1300, zlog::MultiStripe("p",
+  stripes.emplace(1300, zlog::MultiStripe(
         3,   // base id
         5,   // width
         6,   // slots
@@ -578,27 +578,27 @@ TEST(ObjectMapTest, StripeByIdB) {
   ASSERT_TRUE(om.valid());
 
   ASSERT_EQ(om.stripe_by_id(0),
-      zlog::Stripe("p", 0, 10, 0, 99));
+      zlog::Stripe(0, 10, 0, 99));
 
   ASSERT_EQ(om.stripe_by_id(1),
-      zlog::Stripe("p", 1, 20, 100, 699));
+      zlog::Stripe(1, 20, 100, 699));
 
   ASSERT_EQ(om.stripe_by_id(2),
-      zlog::Stripe("p", 2, 20, 700, 1299));
+      zlog::Stripe(2, 20, 700, 1299));
 
   ASSERT_EQ(om.stripe_by_id(3),
-      zlog::Stripe("p", 3, 5, 1300, 1329));
+      zlog::Stripe(3, 5, 1300, 1329));
 
   ASSERT_EQ(om.stripe_by_id(4),
-      zlog::Stripe("p", 4, 5, 1330, 1359));
+      zlog::Stripe(4, 5, 1330, 1359));
 
   ASSERT_EQ(om.stripe_by_id(5),
-      zlog::Stripe("p", 5, 5, 1360, 1389));
+      zlog::Stripe(5, 5, 1360, 1389));
 }
 
 TEST(ObjectMapTest, MapStripeA) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         1,   // width
         1,   // slots
@@ -609,28 +609,28 @@ TEST(ObjectMapTest, MapStripeA) {
   ASSERT_TRUE(om.valid());
 
   ASSERT_TRUE(om.map_stripe(0));
-  ASSERT_EQ(*om.map_stripe(0), zlog::Stripe("p", 0, 1, 0, 0));
+  ASSERT_EQ(*om.map_stripe(0), zlog::Stripe(0, 1, 0, 0));
 
   ASSERT_FALSE(om.map_stripe(1));
 }
 
 TEST(ObjectMapTest, MapStripeB) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         10,   // slots
         0,   // min position
         1,   // instances
         99)); // max position
-  stripes.emplace(100, zlog::MultiStripe("p",
+  stripes.emplace(100, zlog::MultiStripe(
         1,   // base id
         20,   // width
         30,   // slots
         100,   // min position
         2,   // instances
         1299)); // max position
-  stripes.emplace(1300, zlog::MultiStripe("p",
+  stripes.emplace(1300, zlog::MultiStripe(
         3,   // base id
         5,   // width
         6,   // slots
@@ -642,32 +642,32 @@ TEST(ObjectMapTest, MapStripeB) {
 
   for (uint64_t p = 0; p < 100; p++) {
     ASSERT_TRUE(om.map_stripe(p));
-    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe("p", 0, 10, 0, 99));
+    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe(0, 10, 0, 99));
   }
 
   for (uint64_t p = 100; p < 700; p++) {
     ASSERT_TRUE(om.map_stripe(p));
-    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe("p", 1, 20, 100, 699));
+    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe(1, 20, 100, 699));
   }
 
   for (uint64_t p = 700; p < 1300; p++) {
     ASSERT_TRUE(om.map_stripe(p));
-    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe("p", 2, 20, 700, 1299));
+    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe(2, 20, 700, 1299));
   }
 
   for (uint64_t p = 1300; p < 1330; p++) {
     ASSERT_TRUE(om.map_stripe(p));
-    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe("p", 3, 5, 1300, 1329));
+    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe(3, 5, 1300, 1329));
   }
 
   for (uint64_t p = 1330; p < 1360; p++) {
     ASSERT_TRUE(om.map_stripe(p));
-    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe("p", 4, 5, 1330, 1359));
+    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe(4, 5, 1330, 1359));
   }
 
   for (uint64_t p = 1360; p < 1390; p++) {
     ASSERT_TRUE(om.map_stripe(p));
-    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe("p", 5, 5, 1360, 1389));
+    ASSERT_EQ(*om.map_stripe(p), zlog::Stripe(5, 5, 1360, 1389));
   }
 }
 
@@ -687,7 +687,7 @@ TEST(ObjectMapTest, MapToEmpty) {
 
 TEST(ObjectMapTest, MapToSmall) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         1,   // width
         1,   // slots
@@ -704,7 +704,7 @@ TEST(ObjectMapTest, MapToSmall) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", true),
+      std::make_pair("0.0", true),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -719,21 +719,21 @@ TEST(ObjectMapTest, MapToSmall) {
 
 TEST(ObjectMapTest, MapTo) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
+  stripes.emplace(0, zlog::MultiStripe(
         0,   // base id
         10,   // width
         10,   // slots
         0,   // min position
         1,   // instances
         99)); // max position
-  stripes.emplace(100, zlog::MultiStripe("p",
+  stripes.emplace(100, zlog::MultiStripe(
         1,   // base id
         20,   // width
         30,   // slots
         100,   // min position
         2,   // instances
         1299)); // max position
-  stripes.emplace(1300, zlog::MultiStripe("p",
+  stripes.emplace(1300, zlog::MultiStripe(
         3,   // base id
         5,   // width
         6,   // slots
@@ -770,7 +770,7 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_FALSE(done);
 
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", false)
+      std::make_pair("0.0", false)
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -826,8 +826,8 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", false),
-      std::make_pair("p.0.1", false)
+      std::make_pair("0.0", false),
+      std::make_pair("0.1", false)
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -846,16 +846,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", false),
-      std::make_pair("p.0.1", false),
-      std::make_pair("p.0.2", false),
-      std::make_pair("p.0.3", false),
-      std::make_pair("p.0.4", false),
-      std::make_pair("p.0.5", false),
-      std::make_pair("p.0.6", false),
-      std::make_pair("p.0.7", false),
-      std::make_pair("p.0.8", false),
-      std::make_pair("p.0.9", false),
+      std::make_pair("0.0", false),
+      std::make_pair("0.1", false),
+      std::make_pair("0.2", false),
+      std::make_pair("0.3", false),
+      std::make_pair("0.4", false),
+      std::make_pair("0.5", false),
+      std::make_pair("0.6", false),
+      std::make_pair("0.7", false),
+      std::make_pair("0.8", false),
+      std::make_pair("0.9", false),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -874,16 +874,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", false),
-      std::make_pair("p.0.1", false),
-      std::make_pair("p.0.2", false),
-      std::make_pair("p.0.3", false),
-      std::make_pair("p.0.4", false),
-      std::make_pair("p.0.5", false),
-      std::make_pair("p.0.6", false),
-      std::make_pair("p.0.7", false),
-      std::make_pair("p.0.8", false),
-      std::make_pair("p.0.9", false),
+      std::make_pair("0.0", false),
+      std::make_pair("0.1", false),
+      std::make_pair("0.2", false),
+      std::make_pair("0.3", false),
+      std::make_pair("0.4", false),
+      std::make_pair("0.5", false),
+      std::make_pair("0.6", false),
+      std::make_pair("0.7", false),
+      std::make_pair("0.8", false),
+      std::make_pair("0.9", false),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -902,16 +902,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", false),
-      std::make_pair("p.0.1", false),
-      std::make_pair("p.0.2", false),
-      std::make_pair("p.0.3", false),
-      std::make_pair("p.0.4", false),
-      std::make_pair("p.0.5", false),
-      std::make_pair("p.0.6", false),
-      std::make_pair("p.0.7", false),
-      std::make_pair("p.0.8", false),
-      std::make_pair("p.0.9", false),
+      std::make_pair("0.0", false),
+      std::make_pair("0.1", false),
+      std::make_pair("0.2", false),
+      std::make_pair("0.3", false),
+      std::make_pair("0.4", false),
+      std::make_pair("0.5", false),
+      std::make_pair("0.6", false),
+      std::make_pair("0.7", false),
+      std::make_pair("0.8", false),
+      std::make_pair("0.9", false),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -930,16 +930,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", true),
-      std::make_pair("p.0.1", false),
-      std::make_pair("p.0.2", false),
-      std::make_pair("p.0.3", false),
-      std::make_pair("p.0.4", false),
-      std::make_pair("p.0.5", false),
-      std::make_pair("p.0.6", false),
-      std::make_pair("p.0.7", false),
-      std::make_pair("p.0.8", false),
-      std::make_pair("p.0.9", false),
+      std::make_pair("0.0", true),
+      std::make_pair("0.1", false),
+      std::make_pair("0.2", false),
+      std::make_pair("0.3", false),
+      std::make_pair("0.4", false),
+      std::make_pair("0.5", false),
+      std::make_pair("0.6", false),
+      std::make_pair("0.7", false),
+      std::make_pair("0.8", false),
+      std::make_pair("0.9", false),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -958,16 +958,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", true),
-      std::make_pair("p.0.1", true),
-      std::make_pair("p.0.2", true),
-      std::make_pair("p.0.3", true),
-      std::make_pair("p.0.4", true),
-      std::make_pair("p.0.5", true),
-      std::make_pair("p.0.6", false),
-      std::make_pair("p.0.7", false),
-      std::make_pair("p.0.8", false),
-      std::make_pair("p.0.9", false),
+      std::make_pair("0.0", true),
+      std::make_pair("0.1", true),
+      std::make_pair("0.2", true),
+      std::make_pair("0.3", true),
+      std::make_pair("0.4", true),
+      std::make_pair("0.5", true),
+      std::make_pair("0.6", false),
+      std::make_pair("0.7", false),
+      std::make_pair("0.8", false),
+      std::make_pair("0.9", false),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -986,16 +986,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected{
-      std::make_pair("p.0.0", true),
-      std::make_pair("p.0.1", true),
-      std::make_pair("p.0.2", true),
-      std::make_pair("p.0.3", true),
-      std::make_pair("p.0.4", true),
-      std::make_pair("p.0.5", true),
-      std::make_pair("p.0.6", true),
-      std::make_pair("p.0.7", true),
-      std::make_pair("p.0.8", true),
-      std::make_pair("p.0.9", true),
+      std::make_pair("0.0", true),
+      std::make_pair("0.1", true),
+      std::make_pair("0.2", true),
+      std::make_pair("0.3", true),
+      std::make_pair("0.4", true),
+      std::make_pair("0.5", true),
+      std::make_pair("0.6", true),
+      std::make_pair("0.7", true),
+      std::make_pair("0.8", true),
+      std::make_pair("0.9", true),
     };
     ASSERT_EQ(*objs, expected);
     ASSERT_EQ(stripe_id, 1u);
@@ -1014,16 +1014,16 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected0{
-      std::make_pair("p.0.0", true),
-      std::make_pair("p.0.1", true),
-      std::make_pair("p.0.2", true),
-      std::make_pair("p.0.3", true),
-      std::make_pair("p.0.4", true),
-      std::make_pair("p.0.5", true),
-      std::make_pair("p.0.6", true),
-      std::make_pair("p.0.7", true),
-      std::make_pair("p.0.8", true),
-      std::make_pair("p.0.9", true),
+      std::make_pair("0.0", true),
+      std::make_pair("0.1", true),
+      std::make_pair("0.2", true),
+      std::make_pair("0.3", true),
+      std::make_pair("0.4", true),
+      std::make_pair("0.5", true),
+      std::make_pair("0.6", true),
+      std::make_pair("0.7", true),
+      std::make_pair("0.8", true),
+      std::make_pair("0.9", true),
     };
     ASSERT_EQ(*objs, expected0);
     ASSERT_EQ(stripe_id, 1u);
@@ -1033,7 +1033,7 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected1{
-      std::make_pair("p.1.0", false),
+      std::make_pair("1.0", false),
     };
     ASSERT_EQ(*objs, expected1);
     ASSERT_EQ(stripe_id, 2u);
@@ -1046,26 +1046,26 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected0{
-      std::make_pair("p.2.0", true),
-      std::make_pair("p.2.1", true),
-      std::make_pair("p.2.2", true),
-      std::make_pair("p.2.3", true),
-      std::make_pair("p.2.4", true),
-      std::make_pair("p.2.5", true),
-      std::make_pair("p.2.6", true),
-      std::make_pair("p.2.7", true),
-      std::make_pair("p.2.8", true),
-      std::make_pair("p.2.9", true),
-      std::make_pair("p.2.10", true),
-      std::make_pair("p.2.11", true),
-      std::make_pair("p.2.12", true),
-      std::make_pair("p.2.13", true),
-      std::make_pair("p.2.14", true),
-      std::make_pair("p.2.15", true),
-      std::make_pair("p.2.16", true),
-      std::make_pair("p.2.17", true),
-      std::make_pair("p.2.18", true),
-      std::make_pair("p.2.19", false),
+      std::make_pair("2.0", true),
+      std::make_pair("2.1", true),
+      std::make_pair("2.2", true),
+      std::make_pair("2.3", true),
+      std::make_pair("2.4", true),
+      std::make_pair("2.5", true),
+      std::make_pair("2.6", true),
+      std::make_pair("2.7", true),
+      std::make_pair("2.8", true),
+      std::make_pair("2.9", true),
+      std::make_pair("2.10", true),
+      std::make_pair("2.11", true),
+      std::make_pair("2.12", true),
+      std::make_pair("2.13", true),
+      std::make_pair("2.14", true),
+      std::make_pair("2.15", true),
+      std::make_pair("2.16", true),
+      std::make_pair("2.17", true),
+      std::make_pair("2.18", true),
+      std::make_pair("2.19", false),
     };
     ASSERT_EQ(*objs, expected0);
     ASSERT_EQ(stripe_id, 3u);
@@ -1079,26 +1079,26 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected0{
-      std::make_pair("p.2.0", true),
-      std::make_pair("p.2.1", true),
-      std::make_pair("p.2.2", true),
-      std::make_pair("p.2.3", true),
-      std::make_pair("p.2.4", true),
-      std::make_pair("p.2.5", true),
-      std::make_pair("p.2.6", true),
-      std::make_pair("p.2.7", true),
-      std::make_pair("p.2.8", true),
-      std::make_pair("p.2.9", true),
-      std::make_pair("p.2.10", true),
-      std::make_pair("p.2.11", true),
-      std::make_pair("p.2.12", true),
-      std::make_pair("p.2.13", true),
-      std::make_pair("p.2.14", true),
-      std::make_pair("p.2.15", true),
-      std::make_pair("p.2.16", true),
-      std::make_pair("p.2.17", true),
-      std::make_pair("p.2.18", true),
-      std::make_pair("p.2.19", true),
+      std::make_pair("2.0", true),
+      std::make_pair("2.1", true),
+      std::make_pair("2.2", true),
+      std::make_pair("2.3", true),
+      std::make_pair("2.4", true),
+      std::make_pair("2.5", true),
+      std::make_pair("2.6", true),
+      std::make_pair("2.7", true),
+      std::make_pair("2.8", true),
+      std::make_pair("2.9", true),
+      std::make_pair("2.10", true),
+      std::make_pair("2.11", true),
+      std::make_pair("2.12", true),
+      std::make_pair("2.13", true),
+      std::make_pair("2.14", true),
+      std::make_pair("2.15", true),
+      std::make_pair("2.16", true),
+      std::make_pair("2.17", true),
+      std::make_pair("2.18", true),
+      std::make_pair("2.19", true),
     };
     ASSERT_EQ(*objs, expected0);
     ASSERT_EQ(stripe_id, 3u);
@@ -1108,8 +1108,8 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected1{
-      std::make_pair("p.3.0", false),
-      std::make_pair("p.3.1", false),
+      std::make_pair("3.0", false),
+      std::make_pair("3.1", false),
     };
     ASSERT_EQ(*objs, expected1);
     ASSERT_EQ(stripe_id, 4u);
@@ -1122,26 +1122,26 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected0{
-      std::make_pair("p.2.0", true),
-      std::make_pair("p.2.1", true),
-      std::make_pair("p.2.2", true),
-      std::make_pair("p.2.3", true),
-      std::make_pair("p.2.4", true),
-      std::make_pair("p.2.5", true),
-      std::make_pair("p.2.6", true),
-      std::make_pair("p.2.7", true),
-      std::make_pair("p.2.8", true),
-      std::make_pair("p.2.9", true),
-      std::make_pair("p.2.10", true),
-      std::make_pair("p.2.11", true),
-      std::make_pair("p.2.12", true),
-      std::make_pair("p.2.13", true),
-      std::make_pair("p.2.14", true),
-      std::make_pair("p.2.15", true),
-      std::make_pair("p.2.16", true),
-      std::make_pair("p.2.17", true),
-      std::make_pair("p.2.18", true),
-      std::make_pair("p.2.19", true),
+      std::make_pair("2.0", true),
+      std::make_pair("2.1", true),
+      std::make_pair("2.2", true),
+      std::make_pair("2.3", true),
+      std::make_pair("2.4", true),
+      std::make_pair("2.5", true),
+      std::make_pair("2.6", true),
+      std::make_pair("2.7", true),
+      std::make_pair("2.8", true),
+      std::make_pair("2.9", true),
+      std::make_pair("2.10", true),
+      std::make_pair("2.11", true),
+      std::make_pair("2.12", true),
+      std::make_pair("2.13", true),
+      std::make_pair("2.14", true),
+      std::make_pair("2.15", true),
+      std::make_pair("2.16", true),
+      std::make_pair("2.17", true),
+      std::make_pair("2.18", true),
+      std::make_pair("2.19", true),
     };
     ASSERT_EQ(*objs, expected0);
     ASSERT_EQ(stripe_id, 3u);
@@ -1152,11 +1152,11 @@ TEST(ObjectMapTest, MapTo) {
     ASSERT_TRUE(objs);
     ASSERT_FALSE(done);
     std::vector<std::pair<std::string, bool>> expected1{
-      std::make_pair("p.5.0", true),
-      std::make_pair("p.5.1", true),
-      std::make_pair("p.5.2", true),
-      std::make_pair("p.5.3", true),
-      std::make_pair("p.5.4", false),
+      std::make_pair("5.0", true),
+      std::make_pair("5.1", true),
+      std::make_pair("5.2", true),
+      std::make_pair("5.3", true),
+      std::make_pair("5.4", false),
     };
     ASSERT_EQ(*objs, expected1);
     ASSERT_EQ(stripe_id, 6u);
