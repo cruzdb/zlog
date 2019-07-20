@@ -27,3 +27,6 @@ you are looking for ways to get started, we use the
 and
 [E-intermediate](https://github.com/cruzdb/zlog/issues?q=is%3Aissue+is%3Aopen+label%3AE-intermediate)
 labels to tag issues that are good candidates for new contributors.
+
+Initial funding for development of ZLog came from the [Center for Research in
+Open Source Software](https://cross.ucsc.edu/).
