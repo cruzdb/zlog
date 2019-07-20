@@ -17,6 +17,21 @@ int handle_log(std::vector<std::string>, std::shared_ptr<zlog::Backend>, std::st
 
 namespace zlog {
 
+static int print_log(LogImpl& log)
+{
+  nlohmann::json j;
+
+  j["metadata"]["name"] = log.name;
+  j["metadata"]["hoid"] = log.backend->hoid();
+  j["metadata"]["prefix"] = log.backend->prefix();
+  j["instance"]["secret"] = log.backend->secret();
+  j["backend"] = log.backend->backend()->meta();
+
+  std::cout << j.dump(2) << std::endl;
+
+  return 0;
+}
+
 static int print_views(LogImpl& log)
 {
   auto j = nlohmann::json::array();
@@ -166,6 +181,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           { "trim", "zlog log trim <log name> <position>" },
           { "fill", "zlog log fill <log name> <position>" },
           { "views", "zlog log views <log name>" },
+          { "get", "zlog log get <log name>" },
   };
 
   if (command.size() > 0 && usages.find(command[0]) == usages.end()) {
@@ -262,6 +278,8 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
     }
   } else if (command[0] == "views") {
     return print_views(*log.get());
+  } else if (command[0] == "get") {
+    return print_log(*log.get());
   } else if (command[0] == "dump") {
     if (command.size() != 2) { // dump <log name>
       std::cerr << usages.at("dump") << std::endl;
