@@ -44,3 +44,5 @@ ${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log fill testlog 30
 
 ${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log trim testlog 2
 
+${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log views testlog
+${CLI_CMD} --backend lmdb --db-path ${LMDB_DIR} log get testlog
