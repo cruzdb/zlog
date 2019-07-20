@@ -83,7 +83,20 @@ int create_or_open(const Options& options, const std::string& name,
     break;
   }
 
-  log_backend_out = std::make_shared<LogBackend>(backend, hoid, prefix);
+  uint64_t unique_id;
+  int ret = backend->uniqueId(hoid, &unique_id);
+  if (ret) {
+    return ret;
+  }
+
+  std::stringstream secret;
+  secret << "zlog.secret."
+         << name << "." << hoid << "."
+         << boost::asio::ip::host_name() << "."
+         << unique_id;
+
+  log_backend_out = std::make_shared<LogBackend>(backend, hoid, prefix,
+      secret.str());
 
   return 0;
 }
@@ -100,29 +113,16 @@ int Log::Open(const Options& options,
   }
   assert(log_backend);
 
-  uint64_t unique_id;
-  ret = log_backend->uniqueId(&unique_id);
-  if (ret) {
-    return ret;
-  }
-
-  std::stringstream secret;
-  secret << "zlog.secret."
-         << name << "." << log_backend->hoid() << "."
-         << boost::asio::ip::host_name() << "."
-         << unique_id;
-
-  auto view_reader = std::unique_ptr<ViewReader>(new ViewReader(
-        log_backend, secret.str(), options));
-
   // initialize the reader with the latest view
+  auto view_reader = std::unique_ptr<ViewReader>(
+      new ViewReader(log_backend, options));
   view_reader->refresh_view();
   if (!view_reader->view()) {
     return -EIO;
   }
 
   auto striper = std::unique_ptr<Striper>(new Striper(log_backend,
-        std::move(view_reader), secret.str(), options));
+        std::move(view_reader), options));
 
   // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {

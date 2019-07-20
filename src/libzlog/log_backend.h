@@ -10,11 +10,18 @@ class LogBackend final {
  public:
   LogBackend(std::shared_ptr<Backend> backend,
       const std::string& hoid,
-      const std::string& prefix) :
+      const std::string& prefix,
+      const std::string& secret) :
     backend_(backend),
     hoid_(hoid),
-    prefix_(prefix)
-  {}
+    prefix_(prefix),
+    secret_(secret)
+  {
+    assert(backend);
+    assert(!hoid_.empty());
+    assert(!prefix_.empty());
+    assert(!secret_.empty());
+  }
 
  public:
   std::shared_ptr<Backend> backend() const {
@@ -29,6 +36,10 @@ class LogBackend final {
     return prefix_;
   }
 
+  std::string secret() const {
+    return secret_;
+  }
+
  public:
   int ReadViews(uint64_t epoch, uint32_t max_views,
       std::map<uint64_t, std::string> *views_out) const {
@@ -37,10 +48,6 @@ class LogBackend final {
 
   int ProposeView(uint64_t epoch, const std::string& view) const {
     return backend_->ProposeView(hoid_, epoch, view);
-  }
-
-  int uniqueId(uint64_t *id_out) const {
-    return backend_->uniqueId(hoid_, id_out);
   }
 
   int Read(const std::string& oid, uint64_t epoch, uint64_t position,
@@ -94,6 +101,7 @@ class LogBackend final {
   const std::shared_ptr<Backend> backend_;
   const std::string hoid_;
   const std::string prefix_;
+  const std::string secret_;
 };
 
 }

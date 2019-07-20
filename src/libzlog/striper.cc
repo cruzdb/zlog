@@ -75,17 +75,14 @@ namespace zlog {
 
 Striper::Striper(std::shared_ptr<LogBackend> backend,
     std::unique_ptr<ViewReader> view_reader,
-    const std::string& secret,
     const Options& options) :
   shutdown_(false),
   backend_(backend),
-  secret_(secret),
   options_(options),
   view_reader_(std::move(view_reader)),
   expand_pos_(boost::none)
 {
   assert(backend_);
-  assert(!secret_.empty());
   assert(view_reader_);
 
   // startup viewreader
@@ -355,7 +352,7 @@ int Striper::propose_sequencer()
   // on copy, or breaking out into different data structures?
   SequencerConfig seq_config(
       next_epoch,
-      secret_,
+      backend_->secret(),
       empty ? 0 : (max_pos + 1));
 
   // modify: the view by setting a new sequencer configuration

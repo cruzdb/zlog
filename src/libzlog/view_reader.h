@@ -22,7 +22,6 @@ class ViewReader final {
  public:
   ViewReader(
     const std::shared_ptr<LogBackend> backend,
-    const std::string& secret,
     const Options& options);
 
   ViewReader(const ViewReader& other) = delete;
@@ -73,7 +72,6 @@ class ViewReader final {
   mutable std::mutex lock_;
   bool shutdown_;
   const std::shared_ptr<LogBackend> backend_;
-  const std::string secret_;
   const Options options_;
 
   std::shared_ptr<const VersionedView> view_;

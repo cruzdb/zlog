@@ -42,7 +42,6 @@ class Striper final {
  public:
   Striper(std::shared_ptr<LogBackend> backend,
     std::unique_ptr<ViewReader> view_reader,
-    const std::string& secret,
     const Options& options);
 
   Striper(const Striper& other) = delete;
@@ -100,7 +99,6 @@ class Striper final {
   mutable std::mutex lock_;
   bool shutdown_;
   const std::shared_ptr<LogBackend> backend_;
-  const std::string secret_;
   const Options options_;
 
   const std::unique_ptr<ViewReader> view_reader_;

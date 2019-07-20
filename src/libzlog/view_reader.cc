@@ -12,11 +12,9 @@ namespace zlog {
 
 ViewReader::ViewReader(
     const std::shared_ptr<LogBackend> backend,
-    const std::string& secret,
     const Options& options) :
   shutdown_(false),
   backend_(backend),
-  secret_(secret),
   options_(options),
   view_(nullptr),
   refresh_thread_(std::thread(&ViewReader::refresh_entry_, this))
@@ -172,7 +170,7 @@ void ViewReader::refresh_view()
   // if the latest view has a sequencer config and secret that matches this log
   // client instance, then we will become a sequencer / exclusive writer.
   if (latest_view->seq_config() &&
-      latest_view->seq_config()->secret() == secret_) {
+      latest_view->seq_config()->secret() == backend_->secret()) {
 
     // there are two cases for initializing the new view's sequencer:
     //
@@ -196,7 +194,7 @@ void ViewReader::refresh_view()
     //
     if (view_ &&
         view_->seq_config() &&
-        view_->seq_config()->secret() == secret_ &&
+        view_->seq_config()->secret() == backend_->secret() &&
         view_->seq_config()->epoch() == latest_view->seq_config()->epoch()) {
       //
       // note about thread safety. here we copy the pointer to the existing
