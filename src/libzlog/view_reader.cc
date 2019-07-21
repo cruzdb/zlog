@@ -145,17 +145,17 @@ void ViewReader::refresh_view()
     }
   }
 
-  // if the latest view has a sequencer config and secret that matches this log
+  // if the latest view has a sequencer config and token that matches this log
   // client instance, then we will become a sequencer / exclusive writer.
   if (latest_view->seq_config() &&
-      latest_view->seq_config()->secret() == backend_->secret()) {
+      latest_view->seq_config()->token() == backend_->token()) {
 
     // there are two cases for initializing the new view's sequencer:
     //
     //   1) reuse sequencer from previous view
     //   2) create a new sequencer instance
     //
-    // if a previous view has a sequencer with the same secret, then we might be
+    // if a previous view has a sequencer with the same token, then we might be
     // able to reuse it. however, if the previous view that we have and the
     // latest view are separated by views with _other_ sequencers in the log,
     // but which we haven't observed, then we need to take that into account.
@@ -166,13 +166,13 @@ void ViewReader::refresh_view()
     // the sequencer config in a view either copied or a new sequencer config is
     // proposed. whenver a sequencer config is successfully proposed, it's
     // initialization epoch will be unique (even for different proposals from
-    // the same log client). so, if the secret and the initialization epoch are
+    // the same log client). so, if the token and the initialization epoch are
     // equal, then we can be assured that the sequencer hasn't changed and we
     // can reuse the state.
     //
     if (view_ &&
         view_->seq_config() &&
-        view_->seq_config()->secret() == backend_->secret() &&
+        view_->seq_config()->token() == backend_->token() &&
         view_->seq_config()->epoch() == latest_view->seq_config()->epoch()) {
       //
       // note about thread safety. here we copy the pointer to the existing

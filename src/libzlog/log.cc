@@ -83,14 +83,15 @@ int create_or_open(const Options& options, const std::string& name,
     return ret;
   }
 
-  std::stringstream secret;
-  secret << "zlog.secret."
-         << name << "." << hoid << "."
+  std::stringstream token;
+  token << "zlog.token."
+         << name << "."
+         << hoid << "."
          << boost::asio::ip::host_name() << "."
          << unique_id;
 
   log_backend_out = std::make_shared<LogBackend>(backend, hoid, prefix,
-      secret.str());
+      token.str());
 
   return 0;
 }

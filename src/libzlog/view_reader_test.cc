@@ -18,7 +18,7 @@ TEST_F(ViewReaderTest, GetLatestView) {
   // when we call get latest view, then no view should be returned.
   {
     auto log_backend = std::make_shared<zlog::LogBackend>(
-        backend, "hoid", "prefix", "secret");
+        backend, "hoid", "prefix", "token");
     zlog::ViewReader vr(options, log_backend);
     ASSERT_EQ(vr.get_latest_view(), nullptr);
     ASSERT_EQ(vr.view(), nullptr);
@@ -61,7 +61,7 @@ TEST_F(ViewReaderTest, RefreshView) {
   // when we call refresh view, then no view should be read
   {
     auto log_backend = std::make_shared<zlog::LogBackend>(
-        backend, "hoid", "prefix", "secret");
+        backend, "hoid", "prefix", "token");
     zlog::ViewReader vr(options, log_backend);
     vr.refresh_view();
     ASSERT_EQ(vr.view(), nullptr);

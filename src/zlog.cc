@@ -24,7 +24,7 @@ static int print_log(LogImpl& log)
   j["metadata"]["name"] = log.name;
   j["metadata"]["hoid"] = log.backend->hoid();
   j["metadata"]["prefix"] = log.backend->prefix();
-  j["instance"]["secret"] = log.backend->secret();
+  j["instance"]["token"] = log.backend->token();
   j["backend"] = log.backend->backend()->meta();
 
   std::cout << j.dump(2) << std::endl;

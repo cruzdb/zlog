@@ -11,16 +11,16 @@ class LogBackend final {
   LogBackend(std::shared_ptr<Backend> backend,
       const std::string& hoid,
       const std::string& prefix,
-      const std::string& secret) :
+      const std::string& token) :
     backend_(backend),
     hoid_(hoid),
     prefix_(prefix),
-    secret_(secret)
+    token_(token)
   {
     assert(backend);
     assert(!hoid_.empty());
     assert(!prefix_.empty());
-    assert(!secret_.empty());
+    assert(!token_.empty());
   }
 
  public:
@@ -36,8 +36,8 @@ class LogBackend final {
     return prefix_;
   }
 
-  std::string secret() const {
-    return secret_;
+  std::string token() const {
+    return token_;
   }
 
  public:
@@ -101,7 +101,7 @@ class LogBackend final {
   const std::shared_ptr<Backend> backend_;
   const std::string hoid_;
   const std::string prefix_;
-  const std::string secret_;
+  const std::string token_;
 };
 
 }
