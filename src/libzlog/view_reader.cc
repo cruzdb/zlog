@@ -19,6 +19,7 @@ ViewReader::ViewReader(
   view_(nullptr),
   refresh_thread_(std::thread(&ViewReader::refresh_entry_, this))
 {
+  assert(backend);
 }
 
 ViewReader::~ViewReader()
