@@ -16,8 +16,8 @@ else
     ${DOCS_DIR} ${INSTALL_DIR}" EXIT
 
   # build documentation
-  ${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
-  test -r ${DOCS_DIR}/output/html/index.html
+  #${ZLOG_DIR}/doc/build.sh ${DOCS_DIR}
+  #test -r ${DOCS_DIR}/output/html/index.html
 
   # build and install zlog
   CMAKE_BUILD_TYPE=Debug
