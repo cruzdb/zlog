@@ -1,13 +1,6 @@
 #include "gtest/gtest.h"
 #include "libzlog/stripe.h"
 
-// TODO
-//
-// Stripe
-// MultiStripe
-//  - test private members
-//  - test encode/decode
-
 TEST(StripeDeathTest, Constructor) {
   // width == 0
   ASSERT_DEATH({

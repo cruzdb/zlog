@@ -6,8 +6,6 @@
 #include "libzlog/view_reader.h"
 #include "libzlog/test_libzlog.h"
 
-// TODO: create test for wait_for_newer_view
-
 TEST(ViewReaderDeathTest, Constructor) {
   zlog::Options options;
   ASSERT_DEATH({

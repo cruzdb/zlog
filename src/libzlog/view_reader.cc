@@ -3,11 +3,6 @@
 #include "log_backend.h"
 #include <iostream>
 
-// TODO: client requests that see a nullptr sequencer shoudl block and wait for
-// updates
-// TODO: use a smarter index for epoch waiters
-// TODO build a log's initial view for exclusive sequencers
-
 namespace zlog {
 
 ViewReader::ViewReader(

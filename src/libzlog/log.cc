@@ -10,12 +10,6 @@
 #include "log_impl.h"
 
 // TODO
-//  - it might be useful to create a wrapper to hold state like hoid, prefix,
-//  etc.. and pass that around rather than each individual piece of state. since
-//  we are building up the class hierachy from the bottom now, it's more
-//  annoying to pass that state downward. but lets hold off, because it might
-//  end up being the case that there isn't much sharing after the restructuring.
-//
 //  - become sequencer if relevant when the log instance is first created
 //  instead of waiting for an appender. might even be worth while adding it to
 //  the very first view.
