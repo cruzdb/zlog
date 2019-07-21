@@ -10,12 +10,6 @@
 #include "log_impl.h"
 
 // TODO
-//  - it might be useful to create a wrapper to hold state like hoid, prefix,
-//  etc.. and pass that around rather than each individual piece of state. since
-//  we are building up the class hierachy from the bottom now, it's more
-//  annoying to pass that state downward. but lets hold off, because it might
-//  end up being the case that there isn't much sharing after the restructuring.
-//
 //  - become sequencer if relevant when the log instance is first created
 //  instead of waiting for an appender. might even be worth while adding it to
 //  the very first view.
@@ -89,14 +83,15 @@ int create_or_open(const Options& options, const std::string& name,
     return ret;
   }
 
-  std::stringstream secret;
-  secret << "zlog.secret."
-         << name << "." << hoid << "."
+  std::stringstream token;
+  token << "zlog.token."
+         << name << "."
+         << hoid << "."
          << boost::asio::ip::host_name() << "."
          << unique_id;
 
   log_backend_out = std::make_shared<LogBackend>(backend, hoid, prefix,
-      secret.str());
+      token.str());
 
   return 0;
 }
@@ -115,7 +110,7 @@ int Log::Open(const Options& options,
 
   // initialize the reader with the latest view
   auto view_reader = std::unique_ptr<ViewReader>(
-      new ViewReader(log_backend, options));
+      new ViewReader(options, log_backend));
   view_reader->refresh_view();
   if (!view_reader->view()) {
     return -EIO;

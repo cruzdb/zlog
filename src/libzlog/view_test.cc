@@ -2,23 +2,6 @@
 #include "include/zlog/options.h"
 #include "libzlog/view.h"
 
-#if 0
-  std::map<uint64_t, zlog::MultiStripe> stripes;
-  stripes.emplace(0, zlog::MultiStripe("p",
-        0,   // base id
-        1,   // width
-        1,   // slots
-        0,   // min position
-        1,   // instances
-        0)); // max position
-  auto om = zlog::ObjectMap(1, stripes, 0);
-  ASSERT_TRUE(om.valid());
-  ASSERT_EQ(om.next_stripe_id(), 1u);
-  ASSERT_EQ(om.max_position(), 0u);
-  ASSERT_FALSE(om.empty());
-  ASSERT_EQ(om.num_stripes(), 1u);
-#endif
-
 TEST(ViewTest, ExpandMapping) {
   std::map<uint64_t, zlog::MultiStripe> stripes;
   auto om = zlog::ObjectMap(0, stripes, 0);

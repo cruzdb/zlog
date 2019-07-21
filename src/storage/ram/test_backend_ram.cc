@@ -3,6 +3,16 @@
 #include "include/zlog/backend/ram.h"
 #include "port/stack_trace.h"
 
+void ViewReaderTest::SetUp()
+{
+  backend = std::make_shared<zlog::storage::ram::RAMBackend>();
+}
+
+void ViewReaderTest::TearDown()
+{
+  backend.reset();
+}
+
 std::unique_ptr<zlog::Backend> BackendTest::create_minimal_backend()
 {
   return std::unique_ptr<zlog::storage::ram::RAMBackend>(
