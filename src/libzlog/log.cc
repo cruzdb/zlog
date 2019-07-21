@@ -109,7 +109,7 @@ int Log::Open(const Options& options,
 
   // initialize the reader with the latest view
   auto view_reader = std::unique_ptr<ViewReader>(
-      new ViewReader(log_backend, options));
+      new ViewReader(options, log_backend));
   view_reader->refresh_view();
   if (!view_reader->view()) {
     return -EIO;

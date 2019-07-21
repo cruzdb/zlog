@@ -6,8 +6,8 @@
 namespace zlog {
 
 ViewReader::ViewReader(
-    const std::shared_ptr<LogBackend> backend,
-    const Options& options) :
+    const Options& options,
+    const std::shared_ptr<LogBackend> backend) :
   shutdown_(false),
   backend_(backend),
   options_(options),

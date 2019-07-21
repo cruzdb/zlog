@@ -21,8 +21,8 @@ class LogBackend;
 class ViewReader final {
  public:
   ViewReader(
-    const std::shared_ptr<LogBackend> backend,
-    const Options& options);
+    const Options& options,
+    const std::shared_ptr<LogBackend> backend);
 
   ViewReader(const ViewReader& other) = delete;
   ViewReader(ViewReader&& other) = delete;

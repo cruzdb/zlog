@@ -9,7 +9,7 @@
 TEST(ViewReaderDeathTest, Constructor) {
   zlog::Options options;
   ASSERT_DEATH({
-    zlog::ViewReader(nullptr, options);
+    zlog::ViewReader(options, nullptr);
   }, "backend.+failed");
 }
 
@@ -19,7 +19,7 @@ TEST_F(ViewReaderTest, GetLatestView) {
   {
     auto log_backend = std::make_shared<zlog::LogBackend>(
         backend, "hoid", "prefix", "secret");
-    zlog::ViewReader vr(log_backend, options);
+    zlog::ViewReader vr(options, log_backend);
     ASSERT_EQ(vr.get_latest_view(), nullptr);
     ASSERT_EQ(vr.view(), nullptr);
   }
@@ -37,7 +37,7 @@ TEST_F(ViewReaderTest, GetLatestView) {
   ASSERT_TRUE(created);
 
   // the latest view should be epoch 1
-  zlog::ViewReader vr(log_backend, options);
+  zlog::ViewReader vr(options, log_backend);
   const auto view1 = vr.get_latest_view();
   ASSERT_TRUE(view1);
   ASSERT_EQ(view1->epoch(), 1u);
@@ -62,7 +62,7 @@ TEST_F(ViewReaderTest, RefreshView) {
   {
     auto log_backend = std::make_shared<zlog::LogBackend>(
         backend, "hoid", "prefix", "secret");
-    zlog::ViewReader vr(log_backend, options);
+    zlog::ViewReader vr(options, log_backend);
     vr.refresh_view();
     ASSERT_EQ(vr.view(), nullptr);
   }
@@ -80,7 +80,7 @@ TEST_F(ViewReaderTest, RefreshView) {
   ASSERT_TRUE(created);
 
   // the latest view should be epoch 1
-  zlog::ViewReader vr(log_backend, options);
+  zlog::ViewReader vr(options, log_backend);
   vr.refresh_view();
   const auto view1 = vr.view();
   ASSERT_TRUE(view1);
