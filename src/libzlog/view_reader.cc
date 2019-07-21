@@ -78,32 +78,16 @@ void ViewReader::refresh_entry_()
       continue;
     }
 
-    std::list<RefreshWaiter*> waiters;
-    {
-      std::lock_guard<std::mutex> lk(lock_);
-      waiters.swap(refresh_waiters_);
-    }
-
-    for (auto it = waiters.begin(); it != waiters.end();) {
-      const auto waiter = *it;
-      // trying to make this locking fine grained to avoid blocking clients
-      // is admirable, but really we probably just need a finger grained lock
-      // to protect the waiters list rather than lock/unlock/lock/unlock/...
-      std::lock_guard<std::mutex> lk(lock_);
+    std::lock_guard<std::mutex> lk(lock_);
+    for (auto it = refresh_waiters_.begin(); it != refresh_waiters_.end();) {
+      auto waiter = *it;
       if (current_view->epoch() > waiter->epoch) {
         waiter->done = true;
         waiter->cond.notify_one();
-        it = waiters.erase(it);
+        it = refresh_waiters_.erase(it);
       } else {
         it++;
       }
-    }
-
-    // add any waiters that weren't notified back into the master list. don't
-    // naively replace the list as other waiters may have shown up recently.
-    if (!waiters.empty()) {
-      std::lock_guard<std::mutex> lk(lock_);
-      refresh_waiters_.splice(refresh_waiters_.begin(), waiters);
     }
   }
 }
@@ -120,11 +104,9 @@ void ViewReader::wait_for_newer_view(const uint64_t epoch)
   if (shutdown_) {
     return;
   }
+  // TODO: is it necessary to hold the lock while initializing the waiter object
+  // that will be read by the refresher thread?
   RefreshWaiter waiter(epoch);
-  // XXX: is it necessary to hold the lock here to ensure that the epoch set
-  // above in waiter is always seen by by the refresh thread, even though the
-  // refresh thread will always grab the lock too to discover the waiter?  need
-  // to go do a quick refresher on the memory consistency semantics.
   refresh_waiters_.emplace_back(&waiter);
   refresh_cond_.notify_one();
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
