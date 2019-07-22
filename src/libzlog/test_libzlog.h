@@ -4,6 +4,19 @@
 #include "zlog/log.h"
 #include "zlog/capi.h"
 
+// TODO: unify with BackendTest. Very similar setup.
+class ViewReaderTest : public ::testing::Test {
+ protected:
+  struct Context;
+  zlog::Options options;
+
+  void SetUp() override;
+  Context *context = nullptr;
+  std::shared_ptr<zlog::Backend> backend;
+
+  void TearDown() override;
+};
+
 // C++ API
 class ZLogTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
  protected:

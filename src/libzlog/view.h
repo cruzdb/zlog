@@ -66,7 +66,6 @@ class View {
   boost::optional<SequencerConfig> seq_config_;
 };
 
-// TODO: give seq the const treatment
 class VersionedView : public View {
  public:
   VersionedView(const uint64_t epoch,

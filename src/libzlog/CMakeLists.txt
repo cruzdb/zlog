@@ -53,7 +53,8 @@ add_library(test_libzlog OBJECT
     stripe_test.cc
     object_map_test.cc
     view_test.cc
-    log_backend_test.cc)
+    log_backend_test.cc
+    view_reader_test.cc)
 target_include_directories(test_libzlog
   PUBLIC ${Boost_INCLUDE_DIRS}
   # TODO: flatbuffers should be included from libzlog. if we can fix that, we

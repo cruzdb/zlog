@@ -21,8 +21,8 @@ class LogBackend;
 class ViewReader final {
  public:
   ViewReader(
-    const std::shared_ptr<LogBackend> backend,
-    const Options& options);
+    const Options& options,
+    const std::shared_ptr<LogBackend> backend);
 
   ViewReader(const ViewReader& other) = delete;
   ViewReader(ViewReader&& other) = delete;
@@ -42,6 +42,9 @@ class ViewReader final {
   //   2) Call `refresh_view()`
   //   3) If `view()` returns a view, then the ViewReader can be used by a
   //      consumer that assumes `view()` always returns a valid view.
+  //
+  // Note that `refresh_view()` isn't required to be called. When the refresh
+  // worker thread runs it will also attempt to read and set the first view.
   std::shared_ptr<const VersionedView> view() const;
 
   // Ensure that the current view is up to date.
@@ -53,7 +56,7 @@ class ViewReader final {
   // and the caller should retrieve the latest view.
   void wait_for_newer_view(uint64_t epoch);
 
- private:
+  // read the latest view from storage
   std::unique_ptr<VersionedView> get_latest_view() const;
 
  private:

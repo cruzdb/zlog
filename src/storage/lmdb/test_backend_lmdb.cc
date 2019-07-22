@@ -22,6 +22,27 @@ struct DBPathContext {
   }
 };
 
+struct ViewReaderTest::Context : public DBPathContext {
+};
+
+void ViewReaderTest::SetUp() {
+  context = new Context;
+
+  context->dbpath = strdup("/tmp/zlog.db.XXXXXX");
+  ASSERT_NE(mkdtemp(context->dbpath), nullptr);
+  ASSERT_GT(strlen(context->dbpath), (unsigned)0);
+
+  auto be = std::shared_ptr<zlog::storage::lmdb::LMDBBackend>(
+      new zlog::storage::lmdb::LMDBBackend());
+  be->Init(context->dbpath);
+  backend = std::move(be);
+}
+
+void ViewReaderTest::TearDown() {
+  if (context)
+    delete context;
+}
+
 struct BackendTest::Context : public DBPathContext {
 };
 

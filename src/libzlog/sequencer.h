@@ -33,10 +33,10 @@ class Sequencer {
 
 class SequencerConfig {
  public:
-  SequencerConfig(uint64_t epoch, const std::string& secret,
+  SequencerConfig(uint64_t epoch, const std::string& token,
       uint64_t position) :
     epoch_(epoch),
-    secret_(secret),
+    token_(token),
     position_(position)
   {}
 
@@ -54,8 +54,8 @@ class SequencerConfig {
     return epoch_;
   }
 
-  std::string secret() const {
-    return secret_;
+  std::string token() const {
+    return token_;
   }
 
   uint64_t position() const {
@@ -65,13 +65,13 @@ class SequencerConfig {
   bool operator==(const SequencerConfig& other) const {
     return
       epoch_ == other.epoch_ &&
-      secret_ == other.secret_ &&
+      token_ == other.token_ &&
       position_ == other.position_;
   }
 
  private:
   uint64_t epoch_;
-  std::string secret_;
+  std::string token_;
   uint64_t position_;
 };
 

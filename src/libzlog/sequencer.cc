@@ -8,12 +8,12 @@ boost::optional<SequencerConfig> SequencerConfig::decode(
 {
   if (seq) {
     assert(seq->epoch() > 0);
-    const auto secret = flatbuffers::GetString(seq->secret());
-    assert(!secret.empty());
+    const auto token = flatbuffers::GetString(seq->token());
+    assert(!token.empty());
 
     SequencerConfig conf(
         seq->epoch(),
-        secret,
+        token,
         seq->position());
 
     return conf;
@@ -28,7 +28,7 @@ flatbuffers::Offset<zlog::fbs::Sequencer> SequencerConfig::encode(
 {
   return zlog::fbs::CreateSequencerDirect(fbb,
       epoch_,
-      secret_.c_str(),
+      token_.c_str(),
       position_);
 }
 
@@ -36,7 +36,7 @@ nlohmann::json SequencerConfig::dump() const
 {
   nlohmann::json j;
   j["epoch"] = epoch_;
-  j["secret"] = secret_;
+  j["token"] = token_;
   j["position"] = position_;
   return j;
 }

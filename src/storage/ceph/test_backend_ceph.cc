@@ -8,6 +8,8 @@
 #include "zlog/backend/ceph.h"
 #include "port/stack_trace.h"
 
+// avoid creating a new pool for each test
+
 struct UniquePoolContext {
   rados_t cluster = nullptr;
   rados_ioctx_t ioctx = nullptr;
@@ -67,6 +69,37 @@ struct ZLogTest::Context : public UniquePoolContext {
     }
   }
 };
+
+struct ViewReaderTest::Context : public UniquePoolContext {
+  librados::IoCtx ioctxpp;
+
+  void Init() {
+    ASSERT_NO_FATAL_FAILURE(UniquePoolContext::Init());
+    librados::IoCtx::from_rados_ioctx_t(ioctx, ioctxpp);
+  }
+
+  ~Context() {
+    ioctxpp.close();
+  }
+};
+
+void ViewReaderTest::SetUp()
+{
+  context = new Context;
+  ASSERT_NO_FATAL_FAILURE(context->Init());
+
+  auto be = std::shared_ptr<zlog::storage::ceph::CephBackend>(
+      new zlog::storage::ceph::CephBackend());
+  int ret = be->Initialize(&context->ioctxpp);
+  ASSERT_EQ(ret, 0);
+  backend = std::move(be);
+}
+
+void ViewReaderTest::TearDown()
+{
+  if (context)
+    delete context;
+}
 
 std::unique_ptr<zlog::Backend> BackendTest::create_minimal_backend()
 {

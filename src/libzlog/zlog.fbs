@@ -34,7 +34,7 @@ table ObjectMap {
 
 table Sequencer {
   epoch:uint64;
-  secret:string;
+  token:string;
   position:uint64;
 }
 

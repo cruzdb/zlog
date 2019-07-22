@@ -292,7 +292,7 @@ int Striper::propose_sequencer()
   // on copy, or breaking out into different data structures?
   SequencerConfig seq_config(
       next_epoch,
-      backend_->secret(),
+      backend_->token(),
       empty ? 0 : (max_pos + 1));
 
   // modify: the view by setting a new sequencer configuration
