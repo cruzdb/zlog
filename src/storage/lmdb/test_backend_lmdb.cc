@@ -182,27 +182,26 @@ void LibZLogCAPITest::SetUp() {
 
   ASSERT_FALSE(lowlevel());
 
-  std::string host = "";
-  std::string port = "";
-  if (exclusive()) {
-  } else {
-    host = "localhost";
-    port = "5678";
-  }
+  options = zlog_options_create();
+  zlog_options_set_backend_name(options, "lmdb");
+  zlog_options_set_backend_option(options, "path", context->dbpath);
+  zlog_options_set_create_if_missing(options, 1);
+  zlog_options_set_error_if_exists(options, 1);
 
-  const char *keys[] = {"path"};
-  const char *vals[] = {context->dbpath};
-  int ret = zlog_create(&options, "lmdb", "c_mylog",
-      keys, vals, 1, host.c_str(), port.c_str(), &log);
+  int ret = zlog_open(options, "log", &log);
   ASSERT_EQ(ret, 0);
 }
 
 void LibZLogCAPITest::TearDown() {
-  if (log)
+  if (log) {
     zlog_destroy(log);
-
-  if (context)
+  }
+  if (options) {
+    zlog_options_destroy(options);
+  }
+  if (context) {
     delete context;
+  }
 }
 
 INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
@@ -215,10 +214,10 @@ INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
       std::make_tuple(true, true),
       std::make_tuple(false, true)));
 
-//INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-//    ::testing::Values(
-//      std::make_tuple(false, true),
-//      std::make_tuple(false, false)));
+INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
+    ::testing::Values(
+      std::make_tuple(false, true),
+      std::make_tuple(false, false)));
 
 int main(int argc, char **argv)
 {

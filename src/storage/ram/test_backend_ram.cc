@@ -70,17 +70,22 @@ void LibZLogCAPITest::SetUp() {
   ASSERT_FALSE(lowlevel());
   ASSERT_TRUE(exclusive());
 
-  std::string host = "";
-  std::string port = "";
+  options = zlog_options_create();
+  zlog_options_set_backend_name(options, "ram");
+  zlog_options_set_create_if_missing(options, 1);
+  zlog_options_set_error_if_exists(options, 1);
 
-  int ret = zlog_create(&options, "ram", "c_mylog",
-      NULL, NULL, 0, host.c_str(), port.c_str(), &log);
+  int ret = zlog_open(options, "log", &log);
   ASSERT_EQ(ret, 0);
 }
 
 void LibZLogCAPITest::TearDown() {
-  if (log)
+  if (log) {
     zlog_destroy(log);
+  }
+  if (options) {
+    zlog_options_destroy(options);
+  }
 }
 
 INSTANTIATE_TEST_CASE_P(Level, ZLogTest,
@@ -93,9 +98,9 @@ INSTANTIATE_TEST_CASE_P(Level, LibZLogTest,
       std::make_tuple(true, true),
       std::make_tuple(false, true)));
 
-//INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
-//    ::testing::Values(
-//      std::make_tuple(false, true)));
+INSTANTIATE_TEST_CASE_P(LevelCAPI, LibZLogCAPITest,
+    ::testing::Values(
+      std::make_tuple(false, true)));
 
 int main(int argc, char **argv)
 {

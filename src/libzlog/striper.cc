@@ -11,66 +11,6 @@
 // TODO
 //  - add primitive for getting latest view
 
-// How does a client learn about available sequencers?
-//
-//   - a dns entry with multiple records
-//   - environment variables
-//   - command line arguments
-//   - configuration file
-//   - etc...
-//
-// Once a sequencer is chosen, it should be added to the latest view. This is
-// because when a new client is created it should be able to play nicely by
-// using whatever was already configured.
-//
-// After a sequencer is chosen by a client (either from the log, or from some
-// other source) it will send a message to this sequencer requesting service for
-// the log being opened.
-//
-//   A sequencer will always try to become the active sequencer when asked. This
-//   is a simple policy of last attempt wins. And this is ok in most cases since
-//   new clients will attempt to contact the already configured sequencer.
-//
-// A sequencer becomes active for a log by adding itself to the new, latest
-// view and then becoming active. It will seal the log during this process to
-// box out other sequencers, and to find the maximum log position.
-//
-//   NOTE: we can seal all stripes, or optimize by tracking the maximum position
-//   and then only sealing those which could be affected. This is an
-//   optimization step we can add a GH issue for.
-//
-// A sequencer will add a unique value to the view so that clients can detect
-// frauds.
-
-// dns can point to a set of sequencer servers
-// these sequencer servers _could_ organize to balance load
-// when a sequencer server starts serving a log it adds its id to the view
-// or the set of sequencer could be provided on a comamnd line or in a config
-// file or added to a special log. initially, just have an environmetn variable
-// with a single entry.
-//
-// pick a seqencer and request it for the log
-// then after that its registered in the log for other clents to find
-// or can be automatically moved between seqnecers for balancing, and the choice
-// communicated throught he log
-//
-// seqeuncer should use hoid instead of log name
-//
-// a new log is created w/o a sequencer server specified
-// created with a server
-// opened
-// reconfigured sequencer
-// dns
-// env vars
-// created or changed into exclusive mode
-//
-// cli command creates a new log
-
-// Log open in seq should use hoid
-
-////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////
-
 namespace zlog {
 
 Striper::Striper(std::shared_ptr<LogBackend> backend,
