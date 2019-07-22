@@ -2057,7 +2057,6 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
   }
 }
 
-#if 0
 TEST_P(LibZLogCAPITest, Trim) {
   // can trim empty spot
   int ret = zlog_trim(log, 55);
@@ -2084,41 +2083,10 @@ TEST_P(LibZLogCAPITest, Trim) {
   ASSERT_EQ(ret, 0);
 }
 
-//TEST_P(LibZLogCAPITest, Create) {
-//  zlog_log_t log2;
-//
-//  int ret = zlog_create(c_backend, "", NULL, &log2);
-//  ASSERT_EQ(ret, -EINVAL);
-//
-//  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
-//  ASSERT_EQ(ret, 0);
-//
-//  ret = zlog_destroy(log2);
-//  ASSERT_EQ(ret, 0);
-//
-//  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
-//  ASSERT_EQ(ret, -EEXIST);
-//}
-//
-//TEST_P(LibZLogCAPITest, Open) {
-//  zlog_log_t log2;
-//
-//  int ret = zlog_open(c_backend, "", NULL, &log2);
-//  ASSERT_EQ(ret, -EINVAL);
-//
-//  ret = zlog_open(c_backend, "dne", NULL, &log2);
-//  ASSERT_EQ(ret, -ENOENT);
-//
-//  ret = zlog_create(c_backend, "mylog3", NULL, &log2);
-//  ASSERT_EQ(ret, 0);
-//  ret = zlog_destroy(log2);
-//  ASSERT_EQ(ret, 0);
-//
-//  ret = zlog_open(c_backend, "mylog3", NULL, &log2);
-//  ASSERT_EQ(ret, 0);
-//  ret = zlog_destroy(log2);
-//  ASSERT_EQ(ret, 0);
-//}
+TEST_P(LibZLogCAPITest, TrimTo) {
+  int ret = zlog_trim_to(log, 55);
+  ASSERT_EQ(ret, 0);
+}
 
 TEST_P(LibZLogCAPITest, CheckTail) {
   uint64_t pos;
@@ -2236,4 +2204,3 @@ TEST_P(LibZLogCAPITest, Read) {
   ret = zlog_read(log, pos, data2, sizeof(data2));
   ASSERT_EQ(ret, -ENODATA);
 }
-#endif

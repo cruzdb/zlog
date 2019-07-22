@@ -36,19 +36,17 @@ class LibZLogTest : public ZLogTest {
   }
 };
 
-#if 0
-
 // C API
 class LibZLogCAPITest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
  protected:
   struct Context;
+  Context *context = nullptr;
 
   void SetUp() override;
   void TearDown() override;
 
-  zlog_log_t log = nullptr;
-  Context *context = nullptr;
-  zlog::Options options;
+  zlog_log_t *log = nullptr;
+  zlog_options_t *options = nullptr;
 
   bool lowlevel() {
     return std::get<0>(GetParam());
@@ -58,5 +56,3 @@ class LibZLogCAPITest : public ::testing::TestWithParam<std::tuple<bool, bool>> 
     return std::get<1>(GetParam());
   }
 };
-
-#endif
