@@ -8,8 +8,8 @@
 #include "include/zlog/statistics.h"
 #include "libseq/libseqr.h"
 #include "include/zlog/backend.h"
-#include "striper.h"
 #include "log_backend.h"
+#include "view_manager.h"
 
 #define DEFAULT_STRIPE_SIZE 100
 

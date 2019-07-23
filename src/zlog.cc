@@ -7,7 +7,7 @@
 #include "zlog/backend.h"
 #include "zlog/log.h"
 #include "zlog/options.h"
-#include "libzlog/striper.h"
+#include "libzlog/view_manager.h"
 #include "libzlog/log_impl.h"
 #include <nlohmann/json.hpp>
 

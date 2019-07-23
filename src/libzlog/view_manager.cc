@@ -1,4 +1,4 @@
-#include "striper.h"
+#include "view_manager.h"
 #include "log_impl.h"
 #include <iterator>
 #include <numeric>

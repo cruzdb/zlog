@@ -15,8 +15,6 @@
 #include "include/zlog/backend.h"
 #include "include/zlog/cache.h"
 
-#include "striper.h"
-
 namespace zlog {
 
 LogImpl::LogImpl(std::shared_ptr<LogBackend> backend,
