@@ -1,5 +1,14 @@
 # Pending
 
+# v0.7.0
+
+* updated and fixed the C api
+* created cli action to dump log metadata
+* added a backend wrapper to manage log metadata
+* create view reader to manage log playback
+* allow latest view to be read directly (no scanning required)
+* avoid spinning when waiting for new views
+
 # v0.6.0
 
 * separate view and epoch-versioned-view abstractions
