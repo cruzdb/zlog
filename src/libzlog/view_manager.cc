@@ -13,9 +13,9 @@
 
 namespace zlog {
 
-ViewManager::ViewManager(std::shared_ptr<LogBackend> backend,
-    std::unique_ptr<ViewReader> view_reader,
-    const Options& options) :
+ViewManager::ViewManager(const Options& options,
+    std::shared_ptr<LogBackend> backend,
+    std::unique_ptr<ViewReader> view_reader) :
   shutdown_(false),
   backend_(backend),
   options_(options),

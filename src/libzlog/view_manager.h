@@ -16,9 +16,9 @@ class LogImpl;
 
 class ViewManager final {
  public:
-  ViewManager(std::shared_ptr<LogBackend> backend,
-    std::unique_ptr<ViewReader> view_reader,
-    const Options& options);
+  ViewManager(const Options& options,
+      std::shared_ptr<LogBackend> backend,
+    std::unique_ptr<ViewReader> view_reader);
 
   ViewManager(const ViewManager& other) = delete;
   ViewManager(ViewManager&& other) = delete;
