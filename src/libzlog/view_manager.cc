@@ -13,7 +13,7 @@
 
 namespace zlog {
 
-Striper::Striper(std::shared_ptr<LogBackend> backend,
+ViewManager::ViewManager(std::shared_ptr<LogBackend> backend,
     std::unique_ptr<ViewReader> view_reader,
     const Options& options) :
   shutdown_(false),
@@ -26,11 +26,11 @@ Striper::Striper(std::shared_ptr<LogBackend> backend,
   assert(view_reader_);
 
   // startup viewreader
-  expander_thread_ = std::thread(&Striper::expander_entry_, this);
-  stripe_init_thread_ = std::thread(&Striper::stripe_init_entry_, this);
+  expander_thread_ = std::thread(&ViewManager::expander_entry_, this);
+  stripe_init_thread_ = std::thread(&ViewManager::stripe_init_entry_, this);
 }
 
-Striper::~Striper()
+ViewManager::~ViewManager()
 {
   {
     std::lock_guard<std::mutex> lk(lock_);
@@ -40,7 +40,7 @@ Striper::~Striper()
   assert(!stripe_init_thread_.joinable());
 }
 
-void Striper::shutdown()
+void ViewManager::shutdown()
 {
   {
     std::lock_guard<std::mutex> lk(lock_);
@@ -59,13 +59,13 @@ void Striper::shutdown()
 }
 
 boost::optional<std::vector<std::pair<std::string, bool>>>
-Striper::map_to(const std::shared_ptr<const View>& view, const uint64_t position,
+ViewManager::map_to(const std::shared_ptr<const View>& view, const uint64_t position,
     uint64_t& stripe_id, bool& done) const
 {
   return view->object_map().map_to(position, stripe_id, done);
 }
 
-boost::optional<std::string> Striper::map(
+boost::optional<std::string> ViewManager::map(
     const std::shared_ptr<const View>& view,
     const uint64_t position)
 {
@@ -108,7 +108,7 @@ boost::optional<std::string> Striper::map(
   // expanding.
 }
 
-int Striper::try_expand_view(const uint64_t position)
+int ViewManager::try_expand_view(const uint64_t position)
 {
   // read: the current view
   auto curr_view = view();
@@ -161,7 +161,7 @@ int Striper::try_expand_view(const uint64_t position)
   return ret;
 }
 
-int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
+int ViewManager::seal_stripe(const Stripe& stripe, uint64_t epoch,
     uint64_t *pposition, bool *pempty) const
 {
   auto& oids = stripe.oids();
@@ -207,7 +207,7 @@ int Striper::seal_stripe(const Stripe& stripe, uint64_t epoch,
   return 0;
 }
 
-int Striper::advance_min_valid_position(const uint64_t position)
+int ViewManager::advance_min_valid_position(const uint64_t position)
 {
   // read: the current view
   auto curr_view = view();
@@ -230,7 +230,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   return ret;
 }
 
-int Striper::propose_sequencer()
+int ViewManager::propose_sequencer()
 {
   // read: the current view
   auto curr_view = view();
@@ -314,14 +314,14 @@ int Striper::propose_sequencer()
 // stripe. later if/when we try to optimize for the rare case of the stripe
 // creator crashing before finishing initialization, we _might_ run into a case
 // where we want to deduplicate the stripe init jobs.
-void Striper::async_init_stripe(uint64_t position)
+void ViewManager::async_init_stripe(uint64_t position)
 {
   std::lock_guard<std::mutex> lk(lock_);
   stripe_init_pos_.push_back(position);
   stripe_init_cond_.notify_one();
 }
 
-void Striper::stripe_init_entry_()
+void ViewManager::stripe_init_entry_()
 {
   while (true) {
     uint64_t position;
@@ -362,7 +362,7 @@ void Striper::stripe_init_entry_()
   }
 }
 
-void Striper::expander_entry_()
+void ViewManager::expander_entry_()
 {
   while (true) {
     std::unique_lock<std::mutex> lk(lock_);
@@ -395,7 +395,7 @@ void Striper::expander_entry_()
   }
 }
 
-void Striper::async_expand_view(uint64_t position)
+void ViewManager::async_expand_view(uint64_t position)
 {
   std::unique_lock<std::mutex> lk(lock_);
   if (!expand_pos_ || position > *expand_pos_) {

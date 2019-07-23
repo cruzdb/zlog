@@ -116,7 +116,7 @@ int Log::Open(const Options& options,
     return -EIO;
   }
 
-  auto striper = std::unique_ptr<Striper>(new Striper(log_backend,
+  auto striper = std::unique_ptr<ViewManager>(new ViewManager(log_backend,
         std::move(view_reader), options));
 
   // kick start initialization of the objects in the first stripe

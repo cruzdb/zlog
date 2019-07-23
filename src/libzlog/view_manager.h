@@ -9,49 +9,25 @@
 #include "stripe.h"
 #include "libzlog/view.h"
 
-// TODO
-//  - ViewReader - log replay
-//  - ViewManager - Striper
-
-  // don't want to expand mappings on an empty object map (like the zero state)
-  // need to figure that out. as it stands map would send caller to
-  // ensure_mapping which woudl expand a objectmap with no stripes. it's a weird
-  // edge case we should consider.
-  //
-  // maybe having view allowed to be null is ok?
-  // wrap calls to view and check for epoch = 0?
-  //
-  //
-  // the zero value of these structures might make initialization eassy too.
-  // like stripe id starting at 0 makes sense. for ensure mapping it would just
-  // add using default width, then correctly propose epoch 1.
-  //
-  // i like that zero value version. we could say ok if you don't want some
-  // default width to be used then don't call append or whatever right after
-  // making the log / log instance. instead, call something like wait_for_init.
-  //
-  // i think the other really good option is to just define object map to always
-  // be initialized from a proto view from the log.
-
 namespace zlog {
 
 class LogBackend;
 class LogImpl;
 
-class Striper final {
+class ViewManager final {
  public:
-  Striper(std::shared_ptr<LogBackend> backend,
+  ViewManager(std::shared_ptr<LogBackend> backend,
     std::unique_ptr<ViewReader> view_reader,
     const Options& options);
 
-  Striper(const Striper& other) = delete;
-  Striper(Striper&& other) = delete;
-  Striper& operator=(const Striper& other) = delete;
-  Striper& operator=(Striper&& other) = delete;
+  ViewManager(const ViewManager& other) = delete;
+  ViewManager(ViewManager&& other) = delete;
+  ViewManager& operator=(const ViewManager& other) = delete;
+  ViewManager& operator=(ViewManager&& other) = delete;
 
   void shutdown();
 
-  ~Striper();
+  ~ViewManager();
 
  public:
   std::shared_ptr<const VersionedView> view() const {

@@ -175,7 +175,7 @@ class LogImpl : public Log {
 
   LogImpl(std::shared_ptr<LogBackend> backend,
       const std::string& name,
-      std::unique_ptr<Striper> striper,
+      std::unique_ptr<ViewManager> view_mgr,
       const Options& opts);
 
   ~LogImpl();
@@ -235,7 +235,7 @@ class LogImpl : public Log {
 
   const std::string name;
 
-  const std::unique_ptr<Striper> striper;
+  const std::unique_ptr<ViewManager> view_mgr;
 
   std::string exclusive_cookie;
   uint64_t exclusive_position;
