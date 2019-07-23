@@ -1,3 +1,9 @@
+zlog (0.7.0-1) experimental; urgency=low
+
+  * New upstream release
+
+ -- Noah Watkins <noahwatkins@gmail.com>  Thu, 22 Jul 2019 16:20:00 -0800
+
 zlog (0.6.0-1) experimental; urgency=low
 
   * New upstream release
