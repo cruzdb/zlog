@@ -58,8 +58,8 @@ class Striper final {
     return view_reader_->view();
   }
 
-  void update_current_view(uint64_t epoch) {
-    return view_reader_->wait_for_newer_view(epoch);
+  void update_current_view(uint64_t epoch, bool wakeup = false) {
+    return view_reader_->wait_for_newer_view(epoch, wakeup);
   }
 
  public:

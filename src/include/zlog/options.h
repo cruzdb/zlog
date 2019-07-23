@@ -40,6 +40,9 @@ struct Options {
 
   uint32_t max_inflight_ops = 1024;
 
+  int min_refresh_timeout_ms = 125;
+  int max_refresh_timeout_ms = 5000;
+
   ///////////////////////////////////////////////////////////////////
 
   // number of I/O threads

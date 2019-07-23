@@ -135,7 +135,7 @@ int Striper::try_expand_view(const uint64_t position)
   const auto next_epoch = curr_view->epoch() + 1;
   int ret = backend_->ProposeView(next_epoch, data);
   if (!ret || ret == -ESPIPE) {
-    update_current_view(curr_view->epoch());
+    update_current_view(curr_view->epoch(), true);
     if (!ret) {
       // we successfully proposed the new stripe, so schedule an initialization
       // job for the objects in the new stripe. it's possible that in the case
@@ -223,7 +223,7 @@ int Striper::advance_min_valid_position(const uint64_t position)
   const auto next_epoch = curr_view->epoch() + 1;
   int ret = backend_->ProposeView(next_epoch, data);
   if (!ret || ret == -ESPIPE) {
-    update_current_view(curr_view->epoch());
+    update_current_view(curr_view->epoch(), true);
     return 0;
   }
 
@@ -253,7 +253,7 @@ int Striper::propose_sequencer()
     int ret = seal_stripe(stripe, next_epoch, &max_pos, &empty);
     if (ret < 0) {
       if (ret == -ESPIPE) {
-        update_current_view(curr_view->epoch());
+        update_current_view(curr_view->epoch(), true);
         return 0;
       }
       return ret;
@@ -277,7 +277,7 @@ int Striper::propose_sequencer()
     int ret = seal_stripe(stripe, next_epoch, nullptr, nullptr);
     if (ret < 0) {
       if (ret == -ESPIPE) {
-        update_current_view(curr_view->epoch());
+        update_current_view(curr_view->epoch(), true);
         return 0;
       }
       return ret;
@@ -302,7 +302,7 @@ int Striper::propose_sequencer()
   auto data = new_view.encode();
   int ret = backend_->ProposeView(next_epoch, data);
   if (!ret || ret == -ESPIPE) {
-    update_current_view(curr_view->epoch());
+    update_current_view(curr_view->epoch(), true);
     return 0;
   }
 

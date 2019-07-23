@@ -12,6 +12,7 @@ ViewReader::ViewReader(
   backend_(backend),
   options_(options),
   view_(nullptr),
+  refresh_timeout_(std::chrono::milliseconds(options_.max_refresh_timeout_ms)),
   refresh_thread_(std::thread(&ViewReader::refresh_entry_, this))
 {
   assert(backend);
@@ -52,9 +53,23 @@ void ViewReader::refresh_entry_()
     {
       std::unique_lock<std::mutex> lk(lock_);
 
-      refresh_cond_.wait(lk, [&] {
-        return !refresh_waiters_.empty() || shutdown_;
-      });
+      std::chrono::milliseconds timeout;
+      if (refresh_waiters_.empty()) {
+        // no waiters: jump directly to a long delay. when a new waiter arrives
+        // they'll signal the thread immediately. there are no waiters when the
+        // log object is intially created, but that case is handled by doing a
+        // manual refresh during setup.
+        timeout = std::chrono::milliseconds(options_.max_refresh_timeout_ms);
+      } else {
+        timeout = std::min(refresh_timeout_,
+            std::chrono::milliseconds(options_.max_refresh_timeout_ms));
+      }
+
+      const auto status = refresh_cond_.wait_for(lk, timeout);
+
+      if (status == std::cv_status::timeout) {
+        refresh_timeout_ = std::chrono::milliseconds(timeout.count() * 2);
+      }
 
       if (shutdown_) {
         for (auto waiter : refresh_waiters_) {
@@ -93,7 +108,7 @@ std::shared_ptr<const VersionedView> ViewReader::view() const
   return view_;
 }
 
-void ViewReader::wait_for_newer_view(const uint64_t epoch)
+void ViewReader::wait_for_newer_view(const uint64_t epoch, bool wakeup)
 {
   std::unique_lock<std::mutex> lk(lock_);
   if (shutdown_) {
@@ -102,8 +117,13 @@ void ViewReader::wait_for_newer_view(const uint64_t epoch)
   // TODO: is it necessary to hold the lock while initializing the waiter object
   // that will be read by the refresher thread?
   RefreshWaiter waiter(epoch);
+  wakeup = wakeup || refresh_waiters_.empty();
   refresh_waiters_.emplace_back(&waiter);
-  refresh_cond_.notify_one();
+  if (wakeup) {
+    refresh_timeout_ = std::chrono::milliseconds(
+        options_.min_refresh_timeout_ms);
+    refresh_cond_.notify_one();
+  }
   waiter.cond.wait(lk, [&waiter] { return waiter.done; });
 }
 
