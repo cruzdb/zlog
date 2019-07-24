@@ -84,11 +84,10 @@ class LogBackend final {
     return backend_->Seal(prefixed_oid.str(), epoch);
   }
 
-  int MaxPos(const std::string& oid, uint64_t epoch, uint64_t *pos_out,
-      bool *empty_out) const {
+  int MaxPos(const std::string& oid, uint64_t *pos_out, bool *empty_out) const {
     std::stringstream prefixed_oid;
     prefixed_oid << prefix_ << "." << oid;
-    return backend_->MaxPos(prefixed_oid.str(), epoch, pos_out, empty_out);
+    return backend_->MaxPos(prefixed_oid.str(), pos_out, empty_out);
   }
 
   int Stat(const std::string& oid, size_t *size) const {

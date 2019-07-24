@@ -77,7 +77,6 @@ table SealOp {
 }
 
 table ReadMaxPosOp {
-  epoch:uint64;
 }
 
 table ReadMaxPosReply {

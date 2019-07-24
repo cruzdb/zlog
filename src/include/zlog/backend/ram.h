@@ -60,8 +60,7 @@ class RAMBackend : public Backend {
   int Seal(const std::string& oid,
       uint64_t epoch) override;
 
-  int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos, bool *empty) override;
+  int MaxPos(const std::string& oid, uint64_t *pos, bool *empty) override;
 
   int Stat(const std::string& oid, size_t *size) override;
 

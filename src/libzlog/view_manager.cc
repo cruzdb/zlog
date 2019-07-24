@@ -181,7 +181,7 @@ int ViewManager::seal_stripe(const Stripe& stripe, uint64_t epoch,
   for (auto& oid : oids) {
     bool empty;
     uint64_t max_pos;
-    int ret = backend_->MaxPos(oid, epoch, &max_pos, &empty);
+    int ret = backend_->MaxPos(oid, &max_pos, &empty);
     if (ret < 0) {
       return ret;
     }

@@ -62,10 +62,10 @@ void cls_zlog_seal(librados::ObjectWriteOperation& op, uint64_t epoch,
   op.exec("zlog", "entry_seal", bl);
 }
 
-void cls_zlog_max_position(librados::ObjectReadOperation& op, uint64_t epoch)
+void cls_zlog_max_position(librados::ObjectReadOperation& op)
 {
   flatbuffers::FlatBufferBuilder fbb;
-  auto call = cls_zlog::fbs::CreateReadMaxPosOp(fbb, epoch);
+  auto call = cls_zlog::fbs::CreateReadMaxPosOp(fbb);
   fbb.Finish(call);
 
   ceph::bufferlist bl;

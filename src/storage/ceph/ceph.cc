@@ -538,15 +538,14 @@ int CephBackend::Seal(const std::string& oid, uint64_t epoch)
   return ioctx_->operate(oid, &op);
 }
 
-int CephBackend::MaxPos(const std::string& oid, uint64_t epoch,
-    uint64_t *position_out, bool *empty_out)
+int CephBackend::MaxPos(const std::string& oid, uint64_t *position_out, bool *empty_out)
 {
   if (oid.empty()) {
     return -EINVAL;
   }
 
   librados::ObjectReadOperation op;
-  cls_zlog_client::cls_zlog_max_position(op, epoch);
+  cls_zlog_client::cls_zlog_max_position(op);
 
   ::ceph::bufferlist bl;
   int ret = ioctx_->operate(oid, &op, &bl);
