@@ -116,20 +116,20 @@ int Log::Open(const Options& options,
     return -EIO;
   }
 
-  auto striper = std::unique_ptr<ViewManager>(
+  auto view_mgr = std::unique_ptr<ViewManager>(
       new ViewManager(options, log_backend, std::move(view_reader)));
 
   // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {
     // is there actually is a stripe? this is controlled by the
     // create_init_view_stripes option
-    if (!striper->view()->object_map().empty()) {
-      striper->async_init_stripe(0);
+    if (!view_mgr->view()->object_map().empty()) {
+      view_mgr->async_init_stripe(0);
     }
   }
 
   auto impl = std::unique_ptr<LogImpl>(new LogImpl(log_backend, name,
-        std::move(striper), options));
+        std::move(view_mgr), options));
 
   *logpp = impl.release();
 
