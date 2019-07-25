@@ -58,18 +58,18 @@ class ViewManager final {
   // schedule initialization of the stripe that maps the position.
   void async_init_stripe(uint64_t position);
 
-  // proposes a new view with this log instance configured as the active
-  // sequencer. this method waits until the propsoed view (or a newer view) is
-  // made active. on success, caller should check the sequencer of the current
-  // view and propose again if necessary.
-  int propose_sequencer();
-
   // updates the current view's minimum valid position to be _at least_
   // position. note that this also may expand the range of invalid entries. this
   // method is used for trimming the log in the range [0, position-1]. this
   // method will be return success immediately if the proposed position is <=
   // the current minimum.
   int advance_min_valid_position(uint64_t position);
+
+ public:
+  // propose a view with a new sequencer. when success (0) is returned the
+  // proposal was successful, but the caller should still verify that the
+  // sequencer is configured as expected.
+  int propose_sequencer();
 
  private:
   mutable std::mutex lock_;
@@ -82,8 +82,8 @@ class ViewManager final {
  private:
   // seals the given stripe with the given epoch. on success, *pempty will be
   // set to true if the stripe is empty (no positions have been written, filled,
-  // etc...), and if the stripe is non-empty, *pposition will be set to the
-  // maximum position written. otherwise it is left unmodified.
+  // etc...). if the stripe is non-empty, *pposition will be set to the maximum
+  // position written. otherwise it is left unmodified.
   int seal_stripe(const Stripe& stripe, uint64_t epoch,
       uint64_t *pposition, bool *pempty) const;
 
