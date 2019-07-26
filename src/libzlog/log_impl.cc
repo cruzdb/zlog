@@ -65,11 +65,7 @@ int TailOp::run()
       position_ = view->seq->check_tail(increment_);
       return 0;
     } else {
-      int ret = log_->view_mgr->propose_sequencer();
-      if (ret) {
-        return ret;
-      }
-      continue;
+      return -EIO;
     }
   }
 }
@@ -227,12 +223,7 @@ int AppendOp::run()
       assert(*position_epoch_ > 0);
       assert(*position_epoch_ == view->seq->epoch());
     } else {
-      log_->append_propose_sequencer++;
-      int ret = log_->view_mgr->propose_sequencer();
-      if (ret) {
-        return ret;
-      }
-      continue;
+      return -EIO;
     }
 
     const auto oid = log_->view_mgr->map(view, position_);
