@@ -63,6 +63,12 @@ class Log {
   static int Open(const Options& options,
       const std::string& name, Log **log);
 
+  // Same as Log::Open but calls that mutate the log return errors. XXX: it may
+  // be beneficial to expose the fill interface since it is useful for making
+  // read-only progress on a log.
+  static int OpenReadOnly(const Options& options,
+      const std::string& name, Log **log);
+
  private:
   Log(const Log&);
   void operator=(const Log&);

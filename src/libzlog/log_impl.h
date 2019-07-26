@@ -248,9 +248,62 @@ class LogImpl : public Log {
   const Options options;
 };
 
+class ReadOnlyLogImpl : public LogImpl {
+ public:
+  ReadOnlyLogImpl(const ReadOnlyLogImpl&) = delete;
+  ReadOnlyLogImpl(const ReadOnlyLogImpl&&) = delete;
+  ReadOnlyLogImpl& operator=(const ReadOnlyLogImpl&) = delete;
+  ReadOnlyLogImpl& operator=(const ReadOnlyLogImpl&&) = delete;
+
+  ReadOnlyLogImpl(std::shared_ptr<LogBackend> backend,
+      const std::string& name,
+      std::unique_ptr<ViewManager> view_mgr,
+      const Options& opts) :
+    LogImpl(backend, name, std::move(view_mgr), opts)
+  {}
+
+  ~ReadOnlyLogImpl() {}
+
+  int Append(const std::string& data, uint64_t *pposition) override {
+    return -EROFS;
+  }
+
+  int appendAsync(const std::string& data,
+      std::function<void(int, uint64_t position)> cb) override {
+    return -EROFS;
+  }
+
+  int Fill(uint64_t position) override {
+    return -EROFS;
+  }
+
+  int fillAsync(uint64_t position, std::function<void(int)> cb) override {
+    return -EROFS;
+  }
+
+  int Trim(uint64_t position) override {
+    return -EROFS;
+  }
+
+  int trimAsync(uint64_t position, std::function<void(int)> cb) override {
+    return -EROFS;
+  }
+
+  int trimTo(uint64_t position) override {
+    return -EROFS;
+  }
+
+  int trimToAsync(uint64_t position, std::function<void(int)> cb) override {
+    return -EROFS;
+  }
+};
+
 int create_or_open(const Options& options,
     const std::string& name,
     std::shared_ptr<LogBackend>& log_backend_out,
     bool& created_out);
 
+template<typename L>
+int build_log_impl(const Options& options,
+    const std::string& name, Log **logpp);
 }

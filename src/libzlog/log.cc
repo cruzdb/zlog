@@ -96,7 +96,8 @@ int create_or_open(const Options& options, const std::string& name,
   return 0;
 }
 
-int Log::Open(const Options& options,
+template<typename L>
+int build_log_impl(const Options& options,
     const std::string& name, Log **logpp)
 {
   // create or open the log -> log backend
@@ -133,12 +134,24 @@ int Log::Open(const Options& options,
     }
   }
 
-  auto impl = std::unique_ptr<LogImpl>(new LogImpl(log_backend, name,
+  auto impl = std::unique_ptr<L>(new L(log_backend, name,
         std::move(view_mgr), options));
 
   *logpp = impl.release();
 
   return 0;
+}
+
+int Log::Open(const Options& options,
+    const std::string& name, Log **logpp)
+{
+  return build_log_impl<LogImpl>(options, name, logpp);
+}
+
+int Log::OpenReadOnly(const Options& options,
+    const std::string& name, Log **logpp)
+{
+  return build_log_impl<LogImpl>(options, name, logpp);
 }
 
 }
