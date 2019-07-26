@@ -279,7 +279,7 @@ int ViewManager::propose_sequencer()
         (empty ? uint64_t(0) : (max_pos + 1)));
 
     // build the new view that'll be proposed
-    const auto new_view = curr_view->set_sequencer_config(seq_config);
+    const auto new_view = curr_view->with_sequencer_config(seq_config);
 
     // propose the next view
     const auto data = new_view.encode();
