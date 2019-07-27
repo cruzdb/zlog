@@ -39,24 +39,6 @@ class ViewManager final {
   }
 
  public:
-  boost::optional<std::string> map(const std::shared_ptr<const View>& view,
-      uint64_t position);
-
-  boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
-      const std::shared_ptr<const View>& view, const uint64_t position,
-      uint64_t& stripe_id, bool& done) const;
-
-  // schedule initialization of the stripe that maps the position.
-  void async_init_stripe(uint64_t position);
-
-  // updates the current view's minimum valid position to be _at least_
-  // position. note that this also may expand the range of invalid entries. this
-  // method is used for trimming the log in the range [0, position-1]. this
-  // method will be return success immediately if the proposed position is <=
-  // the current minimum.
-  int advance_min_valid_position(uint64_t position);
-
- public:
   // propose a view with a new sequencer. when success (0) is returned the
   // proposal was successful, but the caller should still verify that the
   // sequencer is configured as expected.
@@ -69,6 +51,23 @@ class ViewManager final {
   // verify that the position has been mapped, and retry if it is still missing.
   int try_expand_view(uint64_t position);
   void async_expand_view(uint64_t position);
+
+  boost::optional<std::string> map(const std::shared_ptr<const View>& view,
+      uint64_t position);
+
+  // schedule initialization of the stripe that maps the position.
+  void async_init_stripe(uint64_t position);
+
+  // updates the current view's minimum valid position to be _at least_
+  // position. note that this also may expand the range of invalid entries. this
+  // method is used for trimming the log in the range [0, position-1]. this
+  // method will be return success immediately if the proposed position is <=
+  // the current minimum.
+  int advance_min_valid_position(uint64_t position);
+
+  boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
+      const std::shared_ptr<const View>& view, const uint64_t position,
+      uint64_t& stripe_id, bool& done) const;
 
  private:
   mutable std::mutex lock_;

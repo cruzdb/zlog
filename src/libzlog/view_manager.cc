@@ -23,7 +23,6 @@ ViewManager::ViewManager(const Options& options,
   assert(view_reader_);
   assert(view_reader_->view());
 
-  // startup viewreader
   expander_thread_ = std::thread(&ViewManager::expander_entry_, this);
   stripe_init_thread_ = std::thread(&ViewManager::stripe_init_entry_, this);
 }
