@@ -9,11 +9,6 @@
 #include "zlog/backend.h"
 #include "log_impl.h"
 
-// TODO
-//  - become sequencer if relevant when the log instance is first created
-//  instead of waiting for an appender. might even be worth while adding it to
-//  the very first view.
-
 namespace zlog {
 
 Log::~Log() {}

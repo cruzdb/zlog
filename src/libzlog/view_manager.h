@@ -39,7 +39,6 @@ class ViewManager final {
   }
 
  public:
-  // TODO versioned view?
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
       uint64_t position);
 
