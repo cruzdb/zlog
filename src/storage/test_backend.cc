@@ -329,27 +329,27 @@ TEST_F(BackendTest, Write_MaxPos) {
   uint64_t pos;
   ASSERT_EQ(backend->Seal("a", 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_TRUE(empty);
 
   ASSERT_EQ(backend->Write("a", "", 1, 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 1u);
 
   ASSERT_EQ(backend->Write("a", "", 1, 5), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5u);
 
   ASSERT_EQ(backend->Write("a", "", 1, 5000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 
   ASSERT_EQ(backend->Write("a", "", 1, 4000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 }
@@ -553,27 +553,27 @@ TEST_F(BackendTest, Fill_MaxPos) {
   uint64_t pos;
   ASSERT_EQ(backend->Seal("a", 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_TRUE(empty);
 
   ASSERT_EQ(backend->Fill("a", 1, 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 1u);
 
   ASSERT_EQ(backend->Fill("a", 1, 5), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5u);
 
   ASSERT_EQ(backend->Fill("a", 1, 5000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 
   ASSERT_EQ(backend->Fill("a", 1, 4000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 }
@@ -848,37 +848,37 @@ TEST_F(BackendTest, Trim_MaxPos) {
   uint64_t pos;
   ASSERT_EQ(backend->Seal("a", 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_TRUE(empty);
 
   ASSERT_EQ(backend->Trim("a", 1, 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 1u);
 
   ASSERT_EQ(backend->Trim("a", 1, 5), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5u);
 
   ASSERT_EQ(backend->Trim("a", 1, 5000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 
   ASSERT_EQ(backend->Trim("a", 1, 4000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 
   ASSERT_EQ(backend->Write("a", "lala", 1, 10000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 10000u);
 
   ASSERT_EQ(backend->Trim("a", 1, 10002), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 10002u);
 }
@@ -888,37 +888,37 @@ TEST_F(BackendTest, TrimLimit_MaxPos) {
   uint64_t pos;
   ASSERT_EQ(backend->Seal("a", 1), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_TRUE(empty);
 
   ASSERT_EQ(backend->Trim("a", 1, 1, true), 0);
 
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 1u);
 
   ASSERT_EQ(backend->Trim("a", 1, 5, true), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5u);
 
   ASSERT_EQ(backend->Trim("a", 1, 5000, true), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 
   ASSERT_EQ(backend->Trim("a", 1, 4000, true), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 5000u);
 
   ASSERT_EQ(backend->Write("a", "lala", 1, 10000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 10000u);
 
   ASSERT_EQ(backend->Trim("a", 1, 10002, true), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 10002u);
 }
@@ -976,38 +976,17 @@ TEST_F(BackendTest, Seal) {
 TEST_F(BackendTest, MaxPos_Args) {
   bool empty;
   uint64_t pos;
-  ASSERT_EQ(backend->MaxPos("", 1, &pos, &empty), -EINVAL);
-  ASSERT_EQ(backend->Seal("a", 1), 0);
-  ASSERT_EQ(backend->MaxPos("a", 0, &pos, &empty), -EINVAL);
+  ASSERT_EQ(backend->MaxPos("", &pos, &empty), -EINVAL);
 }
 
 TEST_F(BackendTest, MaxPos_NoInit) {
   bool empty;
   uint64_t pos;
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), -ENOENT);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), -ENOENT);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), -ENOENT);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), -ENOENT);
   ASSERT_EQ(backend->Seal("a", 1), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
-}
-
-TEST_F(BackendTest, MaxPos_InvalidEpoch) {
-  bool empty;
-  uint64_t pos;
-  ASSERT_EQ(backend->Seal("a", 1), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
-  ASSERT_EQ(backend->MaxPos("a", 2, &pos, &empty), -ESPIPE);
-  ASSERT_EQ(backend->MaxPos("a", 3, &pos, &empty), -ESPIPE);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
-  ASSERT_EQ(backend->MaxPos("a", 2, &pos, &empty), -ESPIPE);
-
-  ASSERT_EQ(backend->Seal("a", 3), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), -ESPIPE);
-  ASSERT_EQ(backend->MaxPos("a", 2, &pos, &empty), -ESPIPE);
-  ASSERT_EQ(backend->MaxPos("a", 4, &pos, &empty), -ESPIPE);
-  ASSERT_EQ(backend->MaxPos("a", 3, &pos, &empty), 0);
-  ASSERT_EQ(backend->MaxPos("a", 4, &pos, &empty), -ESPIPE);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), -ESPIPE);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
 }
 
 TEST_F(BackendTest, MaxPos) {
@@ -1016,39 +995,39 @@ TEST_F(BackendTest, MaxPos) {
   ASSERT_EQ(backend->Seal("a", 1), 0);
 
   pos = 99999;
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_TRUE(empty);
   ASSERT_EQ(pos, 99999u);
 
   ASSERT_EQ(backend->Write("a", "", 1, 1), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 1u);
 
   ASSERT_EQ(backend->Write("a", "", 1, 20), 0);
-  ASSERT_EQ(backend->MaxPos("a", 1, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 20u);
 
   ASSERT_EQ(backend->Seal("a", 19), 0);
 
   ASSERT_EQ(backend->Write("a", "", 19, 200000000), 0);
-  ASSERT_EQ(backend->MaxPos("a", 19, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 200000000u);
 
   ASSERT_EQ(backend->Write("a", "", 19, 30), 0);
-  ASSERT_EQ(backend->MaxPos("a", 19, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 200000000u);
 
   ASSERT_EQ(backend->Write("a", "", 19, 16), 0);
-  ASSERT_EQ(backend->MaxPos("a", 19, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 200000000u);
 
   ASSERT_EQ(backend->Write("a", "", 19, 200000001), 0);
-  ASSERT_EQ(backend->MaxPos("a", 19, &pos, &empty), 0);
+  ASSERT_EQ(backend->MaxPos("a", &pos, &empty), 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, 200000001u);
 }

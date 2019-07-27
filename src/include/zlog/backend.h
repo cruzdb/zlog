@@ -245,17 +245,14 @@ class Backend {
    * the object is still reported as non-empty.
    *
    * @param oid
-   * @param epoch
    * @param pos_out
    * @param empty_out
    *
    * @return 0 or non-zero
    * -EINVAL bad input params
    * -ENOENT object doesn't exist / needs init
-   * -ESPIPE epoch equality failed
    */
-  virtual int MaxPos(const std::string& oid, uint64_t epoch,
-      uint64_t *pos_out, bool *empty_out) = 0;
+  virtual int MaxPos(const std::string& oid, uint64_t *pos_out, bool *empty_out) = 0;
 
   /**
    * Return the size of an object in bytes.

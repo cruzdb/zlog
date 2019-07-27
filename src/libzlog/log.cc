@@ -9,11 +9,6 @@
 #include "zlog/backend.h"
 #include "log_impl.h"
 
-// TODO
-//  - become sequencer if relevant when the log instance is first created
-//  instead of waiting for an appender. might even be worth while adding it to
-//  the very first view.
-
 namespace zlog {
 
 Log::~Log() {}
@@ -96,7 +91,8 @@ int create_or_open(const Options& options, const std::string& name,
   return 0;
 }
 
-int Log::Open(const Options& options,
+template<typename L>
+int build_log_impl(const Options& options,
     const std::string& name, Log **logpp)
 {
   // create or open the log -> log backend
@@ -116,24 +112,41 @@ int Log::Open(const Options& options,
     return -EIO;
   }
 
-  auto striper = std::unique_ptr<Striper>(new Striper(log_backend,
-        std::move(view_reader), options));
+  auto view_mgr = std::unique_ptr<ViewManager>(
+      new ViewManager(options, log_backend, std::move(view_reader)));
+
+  ret = view_mgr->propose_sequencer();
+  if (ret) {
+    return ret;
+  }
 
   // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {
-    // is there actually is a stripe? this is controlled by the
+    // is there actually a stripe? this is controlled by the
     // create_init_view_stripes option
-    if (!striper->view()->object_map().empty()) {
-      striper->async_init_stripe(0);
+    if (!view_mgr->view()->object_map().empty()) {
+      view_mgr->async_init_stripe(0);
     }
   }
 
-  auto impl = std::unique_ptr<LogImpl>(new LogImpl(log_backend, name,
-        std::move(striper), options));
+  auto impl = std::unique_ptr<L>(new L(log_backend, name,
+        std::move(view_mgr), options));
 
   *logpp = impl.release();
 
   return 0;
+}
+
+int Log::Open(const Options& options,
+    const std::string& name, Log **logpp)
+{
+  return build_log_impl<LogImpl>(options, name, logpp);
+}
+
+int Log::OpenReadOnly(const Options& options,
+    const std::string& name, Log **logpp)
+{
+  return build_log_impl<LogImpl>(options, name, logpp);
 }
 
 }

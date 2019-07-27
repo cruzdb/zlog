@@ -510,24 +510,20 @@ int RAMBackend::Seal(const std::string& oid, uint64_t epoch)
   return 0;
 }
 
-int RAMBackend::MaxPos(const std::string& oid, uint64_t epoch,
-    uint64_t *pos, bool *empty)
+int RAMBackend::MaxPos(const std::string& oid, uint64_t *pos, bool *empty)
 {
   if (oid.empty()) {
     return -EINVAL;
   }
 
-  if (epoch == 0) {
-    return -EINVAL;
-  }
-
   std::lock_guard<std::mutex> lk(lock_);
 
-  LogObject *lobj = nullptr;
-  int ret = CheckEpoch(epoch, oid, true, lobj);
-  if (ret) {
-    return ret;
+  auto it = objects_.find(oid);
+  if (it == objects_.end()) {
+    return -ENOENT;
   }
+
+  LogObject *lobj = &boost::get<LogObject>(it->second);
 
   if (lobj) {
     bool is_empty = lobj->entries.empty();

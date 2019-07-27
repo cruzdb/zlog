@@ -843,29 +843,18 @@ int LMDBBackend::CheckEpoch(Transaction& txn, uint64_t epoch,
   return 0;
 }
 
-int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
-    uint64_t *pos, bool *empty)
+int LMDBBackend::MaxPos(const std::string& oid, uint64_t *pos, bool *empty)
 {
   if (oid.empty()) {
     return -EINVAL;
   }
 
-  if (epoch == 0) {
-    return -EINVAL;
-  }
-
   auto txn = NewTransaction(true);
-
-  int ret = CheckEpoch(txn, epoch, oid, true);
-  if (ret) {
-    txn.Abort();
-    return ret;
-  }
 
   LogObject lobj;
   {
     MDB_val val;
-    ret = txn.Get(oid, val);
+    int ret = txn.Get(oid, val);
     if (ret) {
       txn.Abort();
       return ret;
@@ -877,7 +866,7 @@ int LMDBBackend::MaxPos(const std::string& oid, uint64_t epoch,
 
   MDB_val val;
   auto key = MaxPosKey(oid);
-  ret = txn.Get(key, val);
+  int ret = txn.Get(key, val);
   if (ret < 0) {
     if (ret == -ENOENT) {
       if (lobj.trim_limit >= 0) {

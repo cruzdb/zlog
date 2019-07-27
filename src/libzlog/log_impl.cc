@@ -15,23 +15,21 @@
 #include "include/zlog/backend.h"
 #include "include/zlog/cache.h"
 
-#include "striper.h"
-
 namespace zlog {
 
 LogImpl::LogImpl(std::shared_ptr<LogBackend> backend,
     const std::string& name,
-    std::unique_ptr<Striper> striper,
+    std::unique_ptr<ViewManager> view_mgr,
     const Options& opts) :
   shutdown(false),
   backend(backend),
   name(name),
-  striper(std::move(striper)),
+  view_mgr(std::move(view_mgr)),
   num_inflight_ops_(0),
   options(opts)
 {
   assert(!this->name.empty());
-  assert(this->striper);
+  assert(this->view_mgr);
 
   for (int i = 0; i < options.finisher_threads; i++) {
     finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
@@ -56,22 +54,18 @@ LogImpl::~LogImpl()
     finisher.join();
   }
 
-  striper->shutdown();
+  view_mgr->shutdown();
 }
 
 int TailOp::run()
 {
   while (true) {
-    const auto view = log_->striper->view();
+    const auto view = log_->view_mgr->view();
     if (view->seq) {
       position_ = view->seq->check_tail(increment_);
       return 0;
     } else {
-      int ret = log_->striper->propose_sequencer();
-      if (ret) {
-        return ret;
-      }
-      continue;
+      return -EIO;
     }
   }
 }
@@ -123,10 +117,10 @@ int LogImpl::CheckTail(uint64_t *position_out)
 int ReadOp::run()
 {
   while (true) {
-    const auto view = log_->striper->view();
-    const auto oid = log_->striper->map(view, position_);
+    const auto view = log_->view_mgr->view();
+    const auto oid = log_->view_mgr->map(view, position_);
     if (!oid) {
-      int ret = log_->striper->try_expand_view(position_);
+      int ret = log_->view_mgr->try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -136,7 +130,7 @@ int ReadOp::run()
     int ret = log_->backend->Read(*oid, view->epoch(), position_, &data_);
 
     if (ret == -ESPIPE) {
-      log_->striper->update_current_view(view->epoch());
+      log_->view_mgr->update_current_view(view->epoch());
       continue;
     }
 
@@ -211,7 +205,7 @@ int LogImpl::readAsync(uint64_t position,
 int AppendOp::run()
 {
   while (true) {
-    const auto view = log_->striper->view();
+    const auto view = log_->view_mgr->view();
 
     if (view->seq) {
       // avoid obtaining a new append position when the view has been updated
@@ -229,18 +223,13 @@ int AppendOp::run()
       assert(*position_epoch_ > 0);
       assert(*position_epoch_ == view->seq->epoch());
     } else {
-      log_->append_propose_sequencer++;
-      int ret = log_->striper->propose_sequencer();
-      if (ret) {
-        return ret;
-      }
-      continue;
+      return -EIO;
     }
 
-    const auto oid = log_->striper->map(view, position_);
+    const auto oid = log_->view_mgr->map(view, position_);
     if (!oid) {
       log_->append_expand_view++;
-      int ret = log_->striper->try_expand_view(position_);
+      int ret = log_->view_mgr->try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -278,7 +267,7 @@ int AppendOp::run()
         break;
       } else if (ret == -ESPIPE) {
         log_->append_stale_view++;
-        log_->striper->update_current_view(view->epoch());
+        log_->view_mgr->update_current_view(view->epoch());
         break;
       } else if (ret == -EROFS) {
         log_->append_read_only++;
@@ -338,10 +327,10 @@ int LogImpl::appendAsync(const std::string& data,
 int FillOp::run()
 {
   while (true) {
-    const auto view = log_->striper->view();
-    const auto oid = log_->striper->map(view, position_);
+    const auto view = log_->view_mgr->view();
+    const auto oid = log_->view_mgr->map(view, position_);
     if (!oid) {
-      int ret = log_->striper->try_expand_view(position_);
+      int ret = log_->view_mgr->try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -351,7 +340,7 @@ int FillOp::run()
     int ret = log_->backend->Fill(*oid, view->epoch(), position_);
 
     if (ret == -ESPIPE) {
-      log_->striper->update_current_view(view->epoch());
+      log_->view_mgr->update_current_view(view->epoch());
       continue;
     }
 
@@ -405,10 +394,10 @@ int LogImpl::fillAsync(uint64_t position, std::function<void(int)> cb)
 int TrimOp::run()
 {
   while (true) {
-    const auto view = log_->striper->view();
-    const auto oid = log_->striper->map(view, position_);
+    const auto view = log_->view_mgr->view();
+    const auto oid = log_->view_mgr->map(view, position_);
     if (!oid) {
-      int ret = log_->striper->try_expand_view(position_);
+      int ret = log_->view_mgr->try_expand_view(position_);
       if (ret) {
         return ret;
       }
@@ -419,7 +408,7 @@ int TrimOp::run()
         false, false);
 
     if (ret == -ESPIPE) {
-      log_->striper->update_current_view(view->epoch());
+      log_->view_mgr->update_current_view(view->epoch());
       continue;
     }
 
@@ -473,12 +462,12 @@ int LogImpl::trimAsync(uint64_t position, std::function<void(int)> cb)
 int TrimToOp::run()
 {
   while (true) {
-    const auto view = log_->striper->view();
+    const auto view = log_->view_mgr->view();
     // note that we are invalidating the range [0, position_], inclusive. this
     // results in a _valid_ range of [_position+1, ...) which is why we _advance
     // the valid position_ to position_ + 1.
     if (position_ >= view->object_map().min_valid_position()) {
-      int ret = log_->striper->advance_min_valid_position(position_ + 1);
+      int ret = log_->view_mgr->advance_min_valid_position(position_ + 1);
       if (ret) {
         return ret;
       }
@@ -493,7 +482,7 @@ int TrimToOp::run()
     while (true) {
       // get all objects that map positions in the trim range
       // TODO: would be good to skip objects already processed
-      const auto objects = log_->striper->map_to(view, position_, stripe_id, done);
+      const auto objects = log_->view_mgr->map_to(view, position_, stripe_id, done);
       if (done) {
         break;
       }
@@ -504,7 +493,7 @@ int TrimToOp::run()
         // has a lot of ineffiencies and this can be address in a later revision
         // that will address the problem of trimming/space reclaiming/object
         // deletion/view trimming more completely.
-        int ret = log_->striper->try_expand_view(position_);
+        int ret = log_->view_mgr->try_expand_view(position_);
         if (ret) {
           return ret;
         }
@@ -521,7 +510,7 @@ int TrimToOp::run()
             true, trim_full);
 
         if (ret == -ESPIPE) {
-          log_->striper->update_current_view(view->epoch());
+          log_->view_mgr->update_current_view(view->epoch());
           // restart after view update. wildly inefficient :(
           restart = true;
           break;

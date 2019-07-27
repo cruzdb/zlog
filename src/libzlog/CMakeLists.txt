@@ -2,7 +2,7 @@ build_flatbuffers("zlog.fbs" "" zlog_schemas "" "${CMAKE_CURRENT_BINARY_DIR}" ""
 
 set(libzlog_sources
   log_impl.cc
-  striper.cc
+  view_manager.cc
   capi.cc
   log.cc
   backend.cc

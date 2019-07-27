@@ -273,16 +273,6 @@ static int log_entry_max_position(cls_method_context_t hctx,
     return ret;
   }
 
-  if (op->epoch() < 1) {
-    CLS_ERR("ERROR: log_entry_max_position(): invalid epoch");
-    return -EINVAL;
-  } else if (op->epoch() != header.epoch()) {
-    CLS_LOG(10, "log_entry_max_position(): op epoch %llu != %llu (hdr)",
-        (unsigned long long)op->epoch(),
-        (unsigned long long)header.epoch());
-    return -ESPIPE;
-  }
-
   auto max_pos = header.max_pos();
 
   flatbuffers::FlatBufferBuilder fbb;

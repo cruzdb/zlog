@@ -101,7 +101,7 @@ TEST(ViewTest, SetSequencerConfig) {
   ASSERT_EQ(view.object_map(), om);
 
   zlog::SequencerConfig seqconf(22, "asdf", 33);
-  view = view.set_sequencer_config(seqconf);
+  view = view.with_sequencer_config(seqconf);
   ASSERT_TRUE(view.seq_config());
   ASSERT_EQ(*view.seq_config(), seqconf);
   ASSERT_EQ(view.object_map(), om);

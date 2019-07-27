@@ -70,10 +70,10 @@ class ClsZlogTest : public ::testing::Test {
     return ioctx.operate(oid, &op);
   }
 
-  int entry_maxpos(uint64_t epoch, uint64_t *position_out,
+  int entry_maxpos(uint64_t *position_out,
       bool *empty_out, const std::string& oid = "obj") {
     librados::ObjectReadOperation op;
-    cls_zlog_client::cls_zlog_max_position(op, epoch);
+    cls_zlog_client::cls_zlog_max_position(op);
 
     ceph::bufferlist bl;
     int ret = ioctx.operate(oid, &op, &bl);
@@ -941,7 +941,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_BadInput) {
 TEST_F(ClsZlogTest, MaxPosEntry_Dne) {
   uint64_t pos;
   bool empty;
-  int ret = entry_maxpos(1, &pos, &empty);
+  int ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, -ENOENT);
 }
 
@@ -951,7 +951,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_MissingHeader) {
 
   uint64_t pos;
   bool empty;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, -EIO);
 }
 
@@ -966,48 +966,8 @@ TEST_F(ClsZlogTest, MaxPosEntry_CorruptHeader) {
 
   uint64_t pos;
   bool empty;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, -EIO);
-}
-
-TEST_F(ClsZlogTest, MaxPosEntry_InvalidEpoch) {
-  int ret = entry_seal(1);
-  ASSERT_EQ(ret, 0);
-
-  uint64_t pos;
-  bool empty;
-  ret = entry_maxpos(0, &pos, &empty);
-  ASSERT_EQ(ret, -EINVAL);
-}
-
-TEST_F(ClsZlogTest, MaxPosEntry_StaleEpoch) {
-  int ret = entry_seal(2);
-  ASSERT_EQ(ret, 0);
-
-  uint64_t pos;
-  bool empty;
-  ret = entry_maxpos(1, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
-  ret = entry_maxpos(2, &pos, &empty);
-  ASSERT_EQ(ret, 0);
-  ret = entry_maxpos(3, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
-
-  ret = entry_seal(5);
-  ASSERT_EQ(ret, 0);
-
-  ret = entry_maxpos(1, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
-  ret = entry_maxpos(2, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
-  ret = entry_maxpos(3, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
-  ret = entry_maxpos(4, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
-  ret = entry_maxpos(5, &pos, &empty);
-  ASSERT_EQ(ret, 0);
-  ret = entry_maxpos(6, &pos, &empty);
-  ASSERT_EQ(ret, -ESPIPE);
 }
 
 TEST_F(ClsZlogTest, MaxPosEntry_Empty) {
@@ -1016,7 +976,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Empty) {
 
   uint64_t pos;
   bool empty = false;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_TRUE(empty);
   // pos undefined if empty
@@ -1028,7 +988,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write) {
 
   uint64_t pos;
   bool empty = false;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_TRUE(empty);
   // pos undefined if empty
@@ -1040,7 +1000,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)0);
@@ -1050,7 +1010,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)160);
@@ -1060,7 +1020,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(4, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)160);
@@ -1072,7 +1032,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write2) {
 
   uint64_t pos;
   bool empty = false;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_TRUE(empty);
   // pos undefined if empty
@@ -1084,7 +1044,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Write2) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)11);
@@ -1096,7 +1056,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
 
   uint64_t pos;
   bool empty = false;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_TRUE(empty);
   // pos undefined if empty
@@ -1106,7 +1066,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)160);
@@ -1116,7 +1076,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)160);
@@ -1126,7 +1086,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)170);
@@ -1138,7 +1098,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)171);
@@ -1148,7 +1108,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_InvalidateLimit) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)1170);
@@ -1160,7 +1120,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
 
   uint64_t pos;
   bool empty = false;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_TRUE(empty);
   // pos undefined if empty
@@ -1172,7 +1132,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)0);
@@ -1182,7 +1142,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)160);
@@ -1192,7 +1152,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)170);
@@ -1202,7 +1162,7 @@ TEST_F(ClsZlogTest, MaxPosEntry_Invalidate) {
 
   pos = 1;
   empty = true;
-  ret = entry_maxpos(1, &pos, &empty);
+  ret = entry_maxpos(&pos, &empty);
   ASSERT_EQ(ret, 0);
   ASSERT_FALSE(empty);
   ASSERT_EQ(pos, (unsigned)170);

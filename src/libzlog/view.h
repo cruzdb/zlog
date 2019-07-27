@@ -51,7 +51,7 @@ class View {
   virtual boost::optional<View> advance_min_valid_position(
       uint64_t position) const;
 
-  View set_sequencer_config(SequencerConfig seq_config) const;
+  View with_sequencer_config(SequencerConfig seq_config) const;
 
   const ObjectMap& object_map() const {
     return object_map_;

@@ -94,7 +94,7 @@ boost::optional<View> View::advance_min_valid_position(uint64_t position) const
   return boost::none;
 }
 
-View View::set_sequencer_config(SequencerConfig seq_config) const
+View View::with_sequencer_config(SequencerConfig seq_config) const
 {
   return View(object_map_, seq_config);
 }
