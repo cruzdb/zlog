@@ -39,21 +39,13 @@ class ViewManager final {
   }
 
  public:
-  // versioned view?
+  // TODO versioned view?
   boost::optional<std::string> map(const std::shared_ptr<const View>& view,
       uint64_t position);
 
   boost::optional<std::vector<std::pair<std::string, bool>>> map_to(
       const std::shared_ptr<const View>& view, const uint64_t position,
       uint64_t& stripe_id, bool& done) const;
-
-  // proposes a new log view as a copy of the current view that has been
-  // expanded to map the position. no proposal is made if the current view maps
-  // the position. if a proposal is made this method doesn't return until the
-  // new view (or a newer view) is made active. on success, callers should
-  // verify that the position has been mapped, and retry if it is still missing.
-  int try_expand_view(uint64_t position);
-  void async_expand_view(uint64_t position);
 
   // schedule initialization of the stripe that maps the position.
   void async_init_stripe(uint64_t position);
@@ -70,6 +62,14 @@ class ViewManager final {
   // proposal was successful, but the caller should still verify that the
   // sequencer is configured as expected.
   int propose_sequencer();
+
+  // proposes a new log view as a copy of the current view that has been
+  // expanded to map the position. no proposal is made if the current view maps
+  // the position. if a proposal is made this method doesn't return until the
+  // new view (or a newer view) is made active. on success, callers should
+  // verify that the position has been mapped, and retry if it is still missing.
+  int try_expand_view(uint64_t position);
+  void async_expand_view(uint64_t position);
 
  private:
   mutable std::mutex lock_;

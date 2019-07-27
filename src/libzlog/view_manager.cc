@@ -108,33 +108,26 @@ boost::optional<std::string> ViewManager::map(
 
 int ViewManager::try_expand_view(const uint64_t position)
 {
-  // read: the current view
-  auto curr_view = view();
+  int retries = 7;
+  std::chrono::milliseconds delay(125);
 
-  // TODO: what is the initial state of the view/object_map for brand new logs?
-  // there is a view created in stable storage for new logs, but it doesn't
-  // appear the actualy log instance has it loaded initially. are we just
-  // getting lucky that it's read up before hitting this?
+  while (true) {
+    // read the current view
+    const auto curr_view = view();
+    const auto next_epoch = curr_view->epoch() + 1;
 
-  // modify: a new view that maps the position
-  auto new_view = curr_view->expand_mapping(position, options_);
-  if (!new_view) {
-    return 0;
-  }
+    // build a new view that maps the target position
+    const auto new_view = curr_view->expand_mapping(position, options_);
+    if (!new_view) {
+      return 0;
+    }
 
-  // TODO: it would be good track information that let us identify scenarios
-  // when lots of threads or async ops are producing a thundering herd to
-  // propose a new view. if this is occuring then we can optimize by
-  // deduplicating the requests. this shouldn't be an issue when double
-  // buffering view creation is working well.
+    // write the new view as the next epoch
+    const auto data = new_view->encode();
+    int ret = backend_->ProposeView(next_epoch, data);
 
-  // write: the new view as the next epoch
-  auto data = new_view->encode();
-  const auto next_epoch = curr_view->epoch() + 1;
-  int ret = backend_->ProposeView(next_epoch, data);
-  if (!ret || ret == -ESPIPE) {
-    update_current_view(curr_view->epoch(), true);
     if (!ret) {
+      update_current_view(curr_view->epoch(), true);
       // we successfully proposed the new stripe, so schedule an initialization
       // job for the objects in the new stripe. it's possible that in the case
       // of ESPIPE (out-of-date epoch) that another proposer process (or the
@@ -148,15 +141,30 @@ int ViewManager::try_expand_view(const uint64_t position)
       if (options_.init_stripe_on_create) {
         async_init_stripe(position);
       }
+      return 0;
     }
-    return 0;
+
+    // we could have lost the proposal to a sequencer proposal or some other
+    // view proposal. keep trying, but backoff first.
+    if (ret == -ESPIPE) {
+      update_current_view(curr_view->epoch(), true);
+      if (--retries == 0) {
+        // caller will look at the view again
+        return 0;
+      }
+      {
+        std::lock_guard<std::mutex> lk(lock_);
+        if (shutdown_) {
+          return -ESHUTDOWN;
+        }
+      }
+      std::this_thread::sleep_for(delay);
+      delay *= 2;
+      continue;
+    }
+
+    return ret;
   }
-
-  // ret == -ENOENT: this would imply that the hoid doesn't exist or isn't
-  // initialized, which should have occurred when the log was created. this is
-  // an error that should not be caught or handled.
-
-  return ret;
 }
 
 int ViewManager::seal_stripe(const Stripe& stripe, uint64_t epoch,
@@ -396,6 +404,10 @@ void ViewManager::expander_entry_()
     const auto v = view();
     const auto mapping = v->object_map().map(position);
     if (!mapping.first) {
+      // TODO: in the revampped version of the io path, we want to avoid
+      // spinning. try expand view uses a retry with backoff, but uncaught
+      // errors like other io errors or something would cause this thread to
+      // spin.
       try_expand_view(position);
       continue;
     }
