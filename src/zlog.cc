@@ -248,9 +248,9 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
 
   if (command[0] == "append") {
     uint64_t tail;
-    int ret = log->CheckTail(&tail);
+    int ret = log->tail(&tail);
     if (ret != 0) {
-      std::cerr << "log::CheckTail " << ret << std::endl;
+      std::cerr << "log::tail " << ret << std::endl;
       return ret;
     }
     if (command.size() == 2 && filename != "") { // append <log name> with input file
@@ -261,15 +261,15 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       }
       std::string content( (std::istreambuf_iterator<char>(ifs) ),
                            (std::istreambuf_iterator<char>()    ) );
-      int ret = log->Append(content, &tail);
+      int ret = log->append(content, &tail);
       if (ret != 0) {
-        std::cerr << "log::Append " << ret << std::endl;
+        std::cerr << "log::append " << ret << std::endl;
       }
       return ret;
     } else if (command.size() == 3) { // append <log name> <string>
-      int ret = log->Append(command[2], &tail);
+      int ret = log->append(command[2], &tail);
       if (ret != 0) {
-        std::cerr << "log::Append " << ret << std::endl;
+        std::cerr << "log::append " << ret << std::endl;
       }
       return ret;
     } else {
@@ -286,14 +286,14 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       return 1;
     }
     uint64_t tail;
-    int ret = log->CheckTail(&tail);
+    int ret = log->tail(&tail);
     if (ret != 0) {
-      std::cerr << "log::CheckTail " << ret << std::endl;
+      std::cerr << "log::tail " << ret << std::endl;
       return ret;
     }
     std::string data;
     for (uint64_t i = 0; i < tail; ++i) {
-      int ret = log->Read(i, &data);
+      int ret = log->read(i, &data);
       switch (ret) {
         case 0:
           break;
@@ -304,7 +304,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
           std::cerr << i << ": free" << std::endl;
           continue;
         default:
-          std::cerr << "log::Read " << ret << std::endl;
+          std::cerr << "log::read " << ret << std::endl;
           return ret;
       }
       std::cout << i << ": ";
@@ -327,7 +327,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       return 1;
     }
     std::string data;
-    int ret = log->Read(pos, &data);
+    int ret = log->read(pos, &data);
     switch (ret) {
       case 0:
         break;
@@ -338,7 +338,7 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
         std::cerr << "free" << std::endl;
         return ret;
       default:
-        std::cerr << "log::Read " << ret << std::endl;
+        std::cerr << "log::read " << ret << std::endl;
         return ret;
     }
     for (char c : data) {
@@ -358,9 +358,9 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << e.what() << std::endl;
       return 1;
     }
-    int ret = log->Trim(pos);
+    int ret = log->trim(pos);
     if (ret != 0) {
-      std::cerr << "log::Trim " << ret << std::endl;
+      std::cerr << "log::trim " << ret << std::endl;
     }
     return ret;
   } else if (command[0] == "fill") {
@@ -375,9 +375,9 @@ int handle_log(std::vector<std::string> command, std::shared_ptr<zlog::Backend> 
       std::cerr << e.what() << std::endl;
       return 1;
     }
-    int ret = log->Fill(pos);
+    int ret = log->fill(pos);
     if (ret != 0) {
-      std::cerr << "log::Fill " << ret << std::endl;
+      std::cerr << "log::fill " << ret << std::endl;
     }
     return ret;
   }

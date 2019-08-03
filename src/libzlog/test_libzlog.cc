@@ -18,7 +18,7 @@ TEST_P(LibZLogTest, OpenClose) {
   const std::string input = "oh the input";
 
   uint64_t pos;
-  int ret = log->Append(input, &pos);
+  int ret = log->append(input, &pos);
   ASSERT_EQ(ret, 0);
 
   // TODO: after the append, if a position was faulted into a new view it means
@@ -33,18 +33,18 @@ TEST_P(LibZLogTest, OpenClose) {
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
-  ret = log->CheckTail(&tail);
+  ret = log->tail(&tail);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(tail, pos+1);
 
   std::string output;
-  ret = log->Read(tail - 1, &output);
+  ret = log->read(tail - 1, &output);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(tail - 1, &output);
+  ret = log->read(tail - 1, &output);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(tail - 1, &output);
+  ret = log->read(tail - 1, &output);
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(input, output);
@@ -102,17 +102,17 @@ TEST_P(LibZLogTest, OpenClose) {
 
 TEST_P(LibZLogTest, CheckTail) {
   uint64_t pos;
-  int ret = log->CheckTail(&pos);
+  int ret = log->tail(&pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 
-  ret = log->CheckTail(&pos);
+  ret = log->tail(&pos);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(pos, (unsigned)0);
 }
 
 TEST_P(LibZLogTest, TrimPastEnd) {
-  int ret = log->Trim(1000);
+  int ret = log->trim(1000);
   ASSERT_EQ(ret, 0);
 }
 
@@ -130,126 +130,126 @@ TEST_P(LibZLogTest, Append) {
   // actually while the appends are occuring any time a stripe fills up this can
   // occur. so really the test needs to be a bit more robust.
   uint64_t pos;
-  int ret = log->Append(std::string(), &pos);
+  int ret = log->append(std::string(), &pos);
   ASSERT_EQ(ret, 0);
 
   uint64_t tail;
-  ret = log->CheckTail(&tail);
+  ret = log->tail(&tail);
   ASSERT_EQ(ret, 0);
 
   for (int i = 0; i < 30; i++) {
-    ret = log->Append(std::string(), &pos);
+    ret = log->append(std::string(), &pos);
     ASSERT_EQ(ret, 0);
 
     ASSERT_EQ(pos, tail);
 
-    ret = log->CheckTail(&tail);
+    ret = log->tail(&tail);
     ASSERT_EQ(ret, 0);
   }
 
   uint64_t pos2;
-  ret = log->CheckTail(&pos);
+  ret = log->tail(&pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Trim(pos);
+  ret = log->trim(pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Append(std::string(), &pos2);
+  ret = log->append(std::string(), &pos2);
   ASSERT_EQ(ret, 0);
   ASSERT_GT(pos2, pos);
 }
 
 TEST_P(LibZLogTest, Fill) {
-  int ret = log->Fill(0);
+  int ret = log->fill(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Fill(232);
+  ret = log->fill(232);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Fill(232);
+  ret = log->fill(232);
   ASSERT_EQ(ret, 0);
 
   uint64_t pos;
-  ret = log->Append(std::string(), &pos);
+  ret = log->append(std::string(), &pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Fill(pos);
+  ret = log->fill(pos);
   ASSERT_EQ(ret, -EROFS);
 
   // ok to fill a trimmed position
-  ret = log->Trim(pos);
+  ret = log->trim(pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Fill(pos);
+  ret = log->fill(pos);
   ASSERT_EQ(ret, 0);
 }
 
 TEST_P(LibZLogTest, Read) {
   std::string entry;
-  int ret = log->Read(0, &entry);
+  int ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = log->Fill(0);
+  ret = log->fill(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(0, &entry);
+  ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
 
-  ret = log->Read(232, &entry);
+  ret = log->read(232, &entry);
   ASSERT_EQ(ret, -ENOENT);
 
-  ret = log->Fill(232);
+  ret = log->fill(232);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(232, &entry);
+  ret = log->read(232, &entry);
   ASSERT_EQ(ret, -ENODATA);
 
   const char *input = "asdfasdfasdf";
   uint64_t pos;
-  ret = log->Append(input, &pos);
+  ret = log->append(input, &pos);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(pos, &entry);
+  ret = log->read(pos, &entry);
   ASSERT_EQ(ret, 0);
 
   ASSERT_TRUE(input == entry);
 
   // trim a written position
-  ret = log->Trim(pos);
+  ret = log->trim(pos);
   ASSERT_EQ(ret, 0);
-  ret = log->Read(pos, &entry);
+  ret = log->read(pos, &entry);
   ASSERT_EQ(ret, -ENODATA);
 
   // same for unwritten position
   pos = 456;
-  ret = log->Trim(pos);
+  ret = log->trim(pos);
   ASSERT_EQ(ret, 0);
-  ret = log->Read(pos, &entry);
+  ret = log->read(pos, &entry);
   ASSERT_EQ(ret, -ENODATA);
 }
 
 TEST_P(LibZLogTest, Trim) {
   // can trim empty spot
-  int ret = log->Trim(55);
+  int ret = log->trim(55);
   ASSERT_EQ(ret, 0);
 
   // can trim filled spot
-  ret = log->Fill(60);
+  ret = log->fill(60);
   ASSERT_EQ(ret, 0);
-  ret = log->Trim(60);
+  ret = log->trim(60);
   ASSERT_EQ(ret, 0);
 
   // can trim written spot
   uint64_t pos;
-  ret = log->Append(std::string(), &pos);
+  ret = log->append(std::string(), &pos);
   ASSERT_EQ(ret, 0);
-  ret = log->Trim(pos);
+  ret = log->trim(pos);
   ASSERT_EQ(ret, 0);
 
   // can trim trimmed spot
-  ret = log->Trim(70);
+  ret = log->trim(70);
   ASSERT_EQ(ret, 0);
-  ret = log->Trim(70);
+  ret = log->trim(70);
   ASSERT_EQ(ret, 0);
 }
 
@@ -263,13 +263,13 @@ TEST_P(ZLogTest, TrimTo_EmptyA) {
   ASSERT_EQ(ret, 0);
 
   std::string entry;
-  ret = log->Read(0, &entry);
+  ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
   ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
-  ret = log->Fill(0);
+  ret = log->fill(0);
   ASSERT_EQ(ret, 0);
-  ret = log->Trim(0);
+  ret = log->trim(0);
   ASSERT_EQ(ret, 0);
 }
 
@@ -284,20 +284,20 @@ TEST_P(ZLogTest, TrimTo_EmptyB) {
 
   for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 5; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -314,20 +314,20 @@ TEST_P(ZLogTest, TrimTo_EmptyC) {
 
   for (unsigned i = 0; i <= 95; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 96; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -344,20 +344,20 @@ TEST_P(ZLogTest, TrimTo_EmptyD) {
 
   for (unsigned i = 0; i <= 99; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 100; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -374,20 +374,20 @@ TEST_P(ZLogTest, TrimTo_EmptyE) {
 
   for (unsigned i = 0; i <= 100; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 101; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -404,20 +404,20 @@ TEST_P(ZLogTest, TrimTo_EmptyF) {
 
   for (unsigned i = 0; i <= 104; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 105; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -434,20 +434,20 @@ TEST_P(ZLogTest, TrimTo_EmptyG) {
 
   for (unsigned i = 0; i <= 195; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 196; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -464,20 +464,20 @@ TEST_P(ZLogTest, TrimTo_EmptyH) {
 
   for (unsigned i = 0; i <= 199; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 200; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -494,20 +494,20 @@ TEST_P(ZLogTest, TrimTo_EmptyI) {
 
   for (unsigned i = 0; i <= 200; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 201; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -524,20 +524,20 @@ TEST_P(ZLogTest, TrimTo_EmptyJ) {
 
   for (unsigned i = 0; i <= 3; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 4; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -554,20 +554,20 @@ TEST_P(ZLogTest, TrimTo_EmptyK) {
 
   for (unsigned i = 0; i <= 38; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 39; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -582,7 +582,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA) {
 
   for (unsigned i = 0; i < 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -599,16 +599,16 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA) {
   ASSERT_EQ(ret, 0);
 
   std::string entry;
-  ret = log->Read(0, &entry);
+  ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
   ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
-  ret = log->Fill(0);
+  ret = log->fill(0);
   ASSERT_EQ(ret, 0);
-  ret = log->Trim(0);
+  ret = log->trim(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(1, &entry);
+  ret = log->read(1, &entry);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(entry, "asdf");
 
@@ -631,7 +631,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -649,27 +649,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
 
   for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 5; i <= 42; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 43; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENOENT);
   }
 
@@ -692,7 +692,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -710,20 +710,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
 
   for (unsigned i = 0; i <= 95; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 96; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -752,7 +752,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -770,20 +770,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
 
   for (unsigned i = 0; i <= 99; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 100; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -808,7 +808,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -826,20 +826,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
 
   for (unsigned i = 0; i <= 100; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 101; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -864,7 +864,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -882,20 +882,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
 
   for (unsigned i = 0; i <= 104; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 105; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -920,7 +920,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -938,20 +938,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
 
   for (unsigned i = 0; i <= 195; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 196; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -976,7 +976,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -994,20 +994,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH) {
 
   for (unsigned i = 0; i <= 199; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 200; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1032,7 +1032,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1050,20 +1050,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
 
   for (unsigned i = 0; i <= 200; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 201; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1088,7 +1088,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1106,27 +1106,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
 
   for (unsigned i = 0; i <= 3; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 4; i <= 42; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 43; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1150,7 +1150,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
 
   for (unsigned i = 0; i <= 42; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1168,27 +1168,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
 
   for (unsigned i = 0; i <= 37; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 38; i <= 42; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 43; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1212,7 +1212,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
 
   for (unsigned i = 0; i < 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1238,16 +1238,16 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
   ASSERT_EQ(ret, 0);
 
   std::string entry;
-  ret = log->Read(0, &entry);
+  ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
   ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
-  ret = log->Fill(0);
+  ret = log->fill(0);
   ASSERT_EQ(ret, 0);
-  ret = log->Trim(0);
+  ret = log->trim(0);
   ASSERT_EQ(ret, 0);
 
-  ret = log->Read(1, &entry);
+  ret = log->read(1, &entry);
   ASSERT_EQ(ret, 0);
   ASSERT_EQ(entry, "asdf");
 
@@ -1279,7 +1279,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1306,27 +1306,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
 
   for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 5; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1358,7 +1358,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1385,27 +1385,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
 
   for (unsigned i = 0; i <= 95; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 96; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1443,7 +1443,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1470,27 +1470,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
 
   for (unsigned i = 0; i <= 99; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 100; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1523,7 +1523,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1550,27 +1550,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
 
   for (unsigned i = 0; i <= 100; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 101; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1603,7 +1603,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1630,27 +1630,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
 
   for (unsigned i = 0; i <= 104; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 105; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1683,7 +1683,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1710,20 +1710,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
 
   for (unsigned i = 0; i <= 195; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 196; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1760,7 +1760,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1787,20 +1787,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
 
   for (unsigned i = 0; i <= 199; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 200; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1833,7 +1833,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1860,20 +1860,20 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
 
   for (unsigned i = 0; i <= 200; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 201; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1906,7 +1906,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -1933,27 +1933,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
 
   for (unsigned i = 0; i <= 3; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 4; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }
@@ -1986,7 +1986,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
 
   for (unsigned i = 0; i <= 142; i++) {
     std::string entry = "asdf";
-    int ret = log->Append(entry, nullptr);
+    int ret = log->append(entry, nullptr);
     ASSERT_EQ(ret, 0);
   }
 
@@ -2013,27 +2013,27 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
 
   for (unsigned i = 0; i <= 37; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
-    ret = log->Fill(i);
+    ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
-    ret = log->Trim(i);
+    ret = log->trim(i);
     ASSERT_EQ(ret, 0);
   }
 
   for (unsigned i = 38; i <= 142; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     ASSERT_EQ(ret, 0);
     ASSERT_EQ(entry, "asdf");
   }
 
   for (unsigned i = 143; i < 300; i++) {
     std::string entry;
-    ret = log->Read(i, &entry);
+    ret = log->read(i, &entry);
     // TODO: this is related to reading past eol
     ASSERT_EQ(ret, -ENOENT);
   }

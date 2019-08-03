@@ -35,14 +35,28 @@ class LogImpl : public Log {
   ~LogImpl();
 
  public:
-  int CheckTail(uint64_t *pposition) override;
-  int CheckTail(uint64_t *pposition, bool increment);
+  int tail(uint64_t *pposition) override;
+  int tailAsync(std::function<void(int, uint64_t)> cb) override;
+
+  int read(uint64_t position, std::string *data) override;
+  int readAsync(uint64_t position,
+      std::function<void(int, std::string&)> cb) override;
+
+  int append(const std::string& data, uint64_t *pposition) override;
+  int appendAsync(const std::string& data,
+      std::function<void(int, uint64_t position)> cb) override;
+
+  int fill(uint64_t position) override;
+  int fillAsync(uint64_t position, std::function<void(int)> cb) override;
+
+  int trim(uint64_t position) override;
+  int trimAsync(uint64_t position, std::function<void(int)> cb) override;
+
+  int trimTo(uint64_t position) override;
+  int trimToAsync(uint64_t position, std::function<void(int)> cb) override;
 
  public:
-  int Read(uint64_t position, std::string *data) override;
-  int Append(const std::string& data, uint64_t *pposition) override;
-  int Fill(uint64_t position) override;
-  int Trim(uint64_t position) override;
+  int tail(uint64_t *pposition, bool increment);
 
  public:
   void finisher_entry_();
@@ -52,19 +66,6 @@ class LogImpl : public Log {
   void queue_op(std::unique_ptr<PositionOp> op);
   void try_op(PositionOp& op);
   void run_op(std::unique_ptr<PositionOp> op);
-
-  int tailAsync(std::function<void(int, uint64_t)> cb) override;
-  int appendAsync(const std::string& data,
-      std::function<void(int, uint64_t position)> cb) override;
-  int readAsync(uint64_t position,
-      std::function<void(int, std::string&)> cb) override;
-  int fillAsync(uint64_t position, std::function<void(int)> cb) override;
-  int trimAsync(uint64_t position, std::function<void(int)> cb) override;
-  int trimTo(uint64_t position) override;
-  int trimToAsync(uint64_t position, std::function<void(int)> cb) override;
-
- public:
-
 
  public:
   bool shutdown;
@@ -104,7 +105,7 @@ class ReadOnlyLogImpl : public LogImpl {
 
   ~ReadOnlyLogImpl() {}
 
-  int Append(const std::string& data, uint64_t *pposition) override {
+  int append(const std::string& data, uint64_t *pposition) override {
     return -EROFS;
   }
 
@@ -113,7 +114,7 @@ class ReadOnlyLogImpl : public LogImpl {
     return -EROFS;
   }
 
-  int Fill(uint64_t position) override {
+  int fill(uint64_t position) override {
     return -EROFS;
   }
 
@@ -121,7 +122,7 @@ class ReadOnlyLogImpl : public LogImpl {
     return -EROFS;
   }
 
-  int Trim(uint64_t position) override {
+  int trim(uint64_t position) override {
     return -EROFS;
   }
 

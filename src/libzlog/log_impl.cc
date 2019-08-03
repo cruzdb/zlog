@@ -75,7 +75,7 @@ int LogImpl::tailAsync(std::function<void(int, uint64_t)> cb)
   return 0;
 }
 
-int LogImpl::CheckTail(uint64_t *position_out)
+int LogImpl::tail(uint64_t *position_out)
 {
   struct {
     int ret;
@@ -120,7 +120,7 @@ int LogImpl::readAsync(uint64_t position,
   return 0;
 }
 
-int LogImpl::Read(const uint64_t position, std::string *data_out)
+int LogImpl::read(const uint64_t position, std::string *data_out)
 {
   struct {
     int ret;
@@ -164,7 +164,7 @@ int LogImpl::appendAsync(const std::string& data,
   return 0;
 }
 
-int LogImpl::Append(const std::string& data, uint64_t *pposition)
+int LogImpl::append(const std::string& data, uint64_t *pposition)
 {
   struct {
     int ret;
@@ -207,7 +207,7 @@ int LogImpl::fillAsync(uint64_t position, std::function<void(int)> cb)
   return 0;
 }
 
-int LogImpl::Fill(const uint64_t position)
+int LogImpl::fill(const uint64_t position)
 {
   struct {
     int ret;
@@ -242,7 +242,7 @@ int LogImpl::trimAsync(uint64_t position, std::function<void(int)> cb)
   return 0;
 }
 
-int LogImpl::Trim(const uint64_t position)
+int LogImpl::trim(const uint64_t position)
 {
   struct {
     int ret;

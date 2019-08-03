@@ -37,18 +37,18 @@ void zlog_destroy(zlog_log_t *log)
 
 int zlog_checktail(zlog_log_t *log, uint64_t *pposition)
 {
-  return log->rep->CheckTail(pposition);
+  return log->rep->tail(pposition);
 }
 
 int zlog_append(zlog_log_t *log, const char *data, size_t len, uint64_t *pposition)
 {
-  return log->rep->Append(std::string(data, len), pposition);
+  return log->rep->append(std::string(data, len), pposition);
 }
 
 ssize_t zlog_read(zlog_log_t *log, uint64_t position, char *data, size_t len)
 {
   std::string blob;
-  int ret = log->rep->Read(position, &blob);
+  int ret = log->rep->read(position, &blob);
   if (ret) {
     return ret;
   }
@@ -62,12 +62,12 @@ ssize_t zlog_read(zlog_log_t *log, uint64_t position, char *data, size_t len)
 
 int zlog_fill(zlog_log_t *log, uint64_t position)
 {
-  return log->rep->Fill(position);
+  return log->rep->fill(position);
 }
 
 int zlog_trim(zlog_log_t *log, uint64_t position)
 {
-  return log->rep->Trim(position);
+  return log->rep->trim(position);
 }
 
 int zlog_trim_to(zlog_log_t *log, uint64_t position)

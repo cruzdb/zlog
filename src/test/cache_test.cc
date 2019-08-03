@@ -81,7 +81,7 @@ int main(int argc, char** argv){
    // for(int i = 0; i < TEST_SIZE; ++i){
     int i = 0;
     while(true){
-        ret = log->Read(test_vector[i], &output);
+        ret = log->read(test_vector[i], &output);
         i = (i + 1) % TEST_SIZE;
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
