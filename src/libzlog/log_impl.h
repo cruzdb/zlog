@@ -64,13 +64,7 @@ class LogImpl : public Log {
   int trimToAsync(uint64_t position, std::function<void(int)> cb) override;
 
  public:
-  std::atomic<uint64_t> append_propose_sequencer;
-  std::atomic<uint64_t> append_expand_view;
-  std::atomic<uint64_t> append_seal;
-  std::atomic<uint64_t> append_stale_view;
-  std::atomic<uint64_t> append_read_only;
 
-  void PrintStats() override;
 
  public:
   bool shutdown;

@@ -35,12 +35,6 @@ LogImpl::LogImpl(std::shared_ptr<LogBackend> backend,
   for (int i = 0; i < options.finisher_threads; i++) {
     finishers_.push_back(std::thread(&LogImpl::finisher_entry_, this));
   }
-
-  append_propose_sequencer = 0;
-  append_expand_view = 0;
-  append_seal = 0;
-  append_stale_view = 0;
-  append_read_only = 0;
 }
 
 LogImpl::~LogImpl()
@@ -369,17 +363,6 @@ void LogImpl::finisher_entry_()
       queue_op_waiters_.back().second->notify_one();
     }
   }
-}
-
-void LogImpl::PrintStats()
-{
-  std::cout << "==== stats ===========================" << std::endl;
-  std::cout << "append_propose_sequencer = " << append_propose_sequencer << std::endl;
-  std::cout << "append_expand_view = " << append_expand_view << std::endl;
-  std::cout << "append_seal = " << append_seal << std::endl;
-  std::cout << "append_stale_view = " << append_stale_view << std::endl;
-  std::cout << "append_read_only = " << append_read_only << std::endl;
-  std::cout << "======================================" << std::endl;
 }
 
 }
