@@ -54,9 +54,6 @@ class Log {
   virtual int trimToAsync(uint64_t position, std::function<void(int)> cb) = 0;
 
  public:
-  virtual int StripeWidth() = 0;
-
- public:
   virtual void PrintStats() = 0;
 
  public:

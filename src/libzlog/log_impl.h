@@ -64,13 +64,6 @@ class LogImpl : public Log {
   int trimToAsync(uint64_t position, std::function<void(int)> cb) override;
 
  public:
-  int StripeWidth() override {
-    assert(0);
-    // FIXME
-    return -EINVAL;
-  }
-
- public:
   std::atomic<uint64_t> append_propose_sequencer;
   std::atomic<uint64_t> append_expand_view;
   std::atomic<uint64_t> append_seal;
