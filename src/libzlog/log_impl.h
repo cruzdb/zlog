@@ -89,7 +89,7 @@ class LogImpl : public Log {
   const Options options;
 };
 
-class ReadOnlyLogImpl : public LogImpl {
+class ReadOnlyLogImpl final : public LogImpl {
  public:
   ReadOnlyLogImpl(const ReadOnlyLogImpl&) = delete;
   ReadOnlyLogImpl(const ReadOnlyLogImpl&&) = delete;
@@ -111,14 +111,6 @@ class ReadOnlyLogImpl : public LogImpl {
 
   int appendAsync(const std::string& data,
       std::function<void(int, uint64_t position)> cb) override {
-    return -EROFS;
-  }
-
-  int fill(uint64_t position) override {
-    return -EROFS;
-  }
-
-  int fillAsync(uint64_t position, std::function<void(int)> cb) override {
     return -EROFS;
   }
 
