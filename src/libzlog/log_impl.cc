@@ -305,6 +305,91 @@ int LogImpl::trimToAsync(uint64_t position, std::function<void(int)> cb)
   return 0;
 }
 
+// TODO: would be good to skip objects already processed
+int LogImpl::gc()
+{
+  while (true) {
+    const auto view = view_mgr->view();
+
+    if (view->object_map().min_valid_position() == 0) {
+      return 0;
+    }
+
+    const auto max_invalid_position =
+      view->object_map().min_valid_position() - 1;
+
+    uint64_t stripe_id = 0;
+    bool done = false;
+    bool restart = false;
+
+    while (true) {
+      const auto objects = view_mgr->map_to(view, max_invalid_position,
+          stripe_id, done);
+      if (done) {
+        break;
+      }
+
+      if (!objects) {
+        // expand view may also attempt to initialize new stripes. this is
+        // correct, but inefficient. however, trimming/space reclaiming right now
+        // has a lot of ineffiencies and this can be address in a later revision
+        // that will address the problem of trimming/space reclaiming/object
+        // deletion/view trimming more completely.
+        int ret = view_mgr->try_expand_view(max_invalid_position);
+        if (ret) {
+          return ret;
+        }
+        restart = true;
+        break;
+      }
+
+      for (auto obj : *objects) {
+        const auto oid = obj.first;
+        const auto trim_full = obj.second;
+
+        // handles setting up range trim and omap/bytestream space reclaim etc..
+        int ret = backend->Trim(oid, view->epoch(), max_invalid_position,
+            true, trim_full);
+
+        if (ret == -ESPIPE) {
+          view_mgr->update_current_view(view->epoch());
+          restart = true;
+          break;
+        }
+
+        if (ret == -ENOENT) {
+          int ret = backend->Seal(oid, view->epoch());
+          if (ret && ret != -ESPIPE) {
+            return ret;
+          }
+
+          // part of trimming here means we may create objects that are
+          // immediately trimmed (holes, past eol). i suspect that there are an
+          // optimization here, but for now when we create a new object we'll
+          // restart the trim process and treat it like any other object. this is
+          // clearly, wildly, inefficient.
+          restart = true;
+          break;
+        }
+
+        if (ret != 0) {
+          return ret;
+        }
+      }
+
+      if (restart)
+        break;
+    }
+
+    if (restart)
+      continue;
+
+    break;
+  }
+
+  return 0;
+}
+
 void LogImpl::queue_op(std::unique_ptr<PositionOp> op)
 {
   std::unique_lock<std::mutex> lk(lock);

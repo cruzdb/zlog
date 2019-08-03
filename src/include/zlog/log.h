@@ -53,6 +53,11 @@ class Log {
   virtual int trimTo(uint64_t position) = 0;
   virtual int trimToAsync(uint64_t position, std::function<void(int)> cb) = 0;
 
+  /**
+   *
+   */
+  virtual int gc() = 0;
+
  public:
   static int Open(const Options& options,
       const std::string& name, Log **log);

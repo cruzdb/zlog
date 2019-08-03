@@ -55,6 +55,8 @@ class LogImpl : public Log {
   int trimTo(uint64_t position) override;
   int trimToAsync(uint64_t position, std::function<void(int)> cb) override;
 
+  int gc() override;
+
  public:
   int tail(uint64_t *pposition, bool increment);
 
@@ -127,6 +129,10 @@ class ReadOnlyLogImpl final : public LogImpl {
   }
 
   int trimToAsync(uint64_t position, std::function<void(int)> cb) override {
+    return -EROFS;
+  }
+
+  int gc() override {
     return -EROFS;
   }
 };

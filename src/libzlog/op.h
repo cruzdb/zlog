@@ -183,78 +183,15 @@ class TrimToOp final : public PositionOp {
   {}
 
  public:
-  // TODO
-  //  - skip over parts of the log already processed
-  //  - move GC portion into a separate method
   void run() override {
     // we are invalidating the range [0, position_] (inclusive). this results in
     // a _valid range_ of [_position+1, ...) which is why we advance the valid
     // position to position_ + 1.
     if (*position_ >= view_->object_map().min_valid_position()) {
       int ret = log_->view_mgr->advance_min_valid_position(*position_ + 1);
-      if (ret) {
-        complete(ret);
-      }
-      return;
-    }
-
-    uint64_t stripe_id = 0;
-    bool done = false;
-
-    // drives the iterator over the map_to range
-    while (true) {
-      // get all objects that map positions in the trim range
-      const auto objects = log_->view_mgr->map_to(view_, *position_, stripe_id, done);
-      if (done) {
-        complete(0);
-        return;
-      }
-
-      if (!objects) {
-        // expand view may also attempt to initialize new stripes. this is
-        // correct, but inefficient. however, trimming/space reclaiming right now
-        // has a lot of ineffiencies and this can be address in a later revision
-        // that will address the problem of trimming/space reclaiming/object
-        // deletion/view trimming more completely.
-        int ret = log_->view_mgr->try_expand_view(*position_);
-        if (ret) {
-          complete(ret);
-        }
-        return;
-      }
-
-      for (auto obj : *objects) {
-        const auto oid = obj.first;
-        const auto trim_full = obj.second;
-
-        // handles setting up range trim and omap/bytestream space reclaim etc..
-        int ret = log_->backend->Trim(oid, view_->epoch(), *position_,
-            true, trim_full);
-
-        if (ret == -ESPIPE) {
-          log_->view_mgr->update_current_view(view_->epoch());
-          return;
-        }
-
-        if (ret == -ENOENT) {
-          int ret = log_->backend->Seal(oid, view_->epoch());
-          if (ret && ret != -ESPIPE) {
-            complete(ret);
-          }
-
-          // part of trimming here means we may create objects that are
-          // immediately trimmed (holes, past eol). i suspect that there are an
-          // optimization here, but for now when we create a new object we'll
-          // restart the trim process and treat it like any other object. this is
-          // clearly, wildly, inefficient.
-          return;
-        }
-
-        if (ret != 0) {
-          complete(ret);
-          return;
-        }
-      }
+      complete(ret);
+    } else {
+      complete(0);
     }
   }
 

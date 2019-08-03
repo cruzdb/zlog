@@ -261,12 +261,14 @@ TEST_P(ZLogTest, TrimTo_EmptyA) {
 
   int ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   std::string entry;
   ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
   ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
   ret = log->fill(0);
   ASSERT_EQ(ret, 0);
   ret = log->trim(0);
@@ -281,6 +283,7 @@ TEST_P(ZLogTest, TrimTo_EmptyB) {
 
   int ret = log->trimTo(4);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
@@ -288,6 +291,7 @@ TEST_P(ZLogTest, TrimTo_EmptyB) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -311,6 +315,7 @@ TEST_P(ZLogTest, TrimTo_EmptyC) {
 
   int ret = log->trimTo(95);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 95; i++) {
     std::string entry;
@@ -318,6 +323,7 @@ TEST_P(ZLogTest, TrimTo_EmptyC) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -341,6 +347,7 @@ TEST_P(ZLogTest, TrimTo_EmptyD) {
 
   int ret = log->trimTo(99);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 99; i++) {
     std::string entry;
@@ -348,6 +355,7 @@ TEST_P(ZLogTest, TrimTo_EmptyD) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -371,6 +379,7 @@ TEST_P(ZLogTest, TrimTo_EmptyE) {
 
   int ret = log->trimTo(100);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 100; i++) {
     std::string entry;
@@ -378,6 +387,7 @@ TEST_P(ZLogTest, TrimTo_EmptyE) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -401,6 +411,7 @@ TEST_P(ZLogTest, TrimTo_EmptyF) {
 
   int ret = log->trimTo(104);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 104; i++) {
     std::string entry;
@@ -408,6 +419,7 @@ TEST_P(ZLogTest, TrimTo_EmptyF) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -431,6 +443,7 @@ TEST_P(ZLogTest, TrimTo_EmptyG) {
 
   int ret = log->trimTo(195);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 195; i++) {
     std::string entry;
@@ -438,6 +451,7 @@ TEST_P(ZLogTest, TrimTo_EmptyG) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -461,6 +475,7 @@ TEST_P(ZLogTest, TrimTo_EmptyH) {
 
   int ret = log->trimTo(199);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 199; i++) {
     std::string entry;
@@ -468,6 +483,7 @@ TEST_P(ZLogTest, TrimTo_EmptyH) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -491,6 +507,7 @@ TEST_P(ZLogTest, TrimTo_EmptyI) {
 
   int ret = log->trimTo(200);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 200; i++) {
     std::string entry;
@@ -498,6 +515,7 @@ TEST_P(ZLogTest, TrimTo_EmptyI) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -521,6 +539,7 @@ TEST_P(ZLogTest, TrimTo_EmptyJ) {
 
   int ret = log->trimTo(3);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 3; i++) {
     std::string entry;
@@ -528,6 +547,7 @@ TEST_P(ZLogTest, TrimTo_EmptyJ) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -551,6 +571,7 @@ TEST_P(ZLogTest, TrimTo_EmptyK) {
 
   int ret = log->trimTo(38);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 38; i++) {
     std::string entry;
@@ -558,6 +579,7 @@ TEST_P(ZLogTest, TrimTo_EmptyK) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -597,12 +619,14 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA) {
 
   int ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   std::string entry;
   ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
   ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
   ret = log->fill(0);
   ASSERT_EQ(ret, 0);
   ret = log->trim(0);
@@ -646,6 +670,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
 
   int ret = log->trimTo(4);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
@@ -653,6 +678,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -707,6 +733,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
 
   int ret = log->trimTo(95);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 95; i++) {
     std::string entry;
@@ -714,6 +741,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -767,6 +795,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
 
   int ret = log->trimTo(99);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 99; i++) {
     std::string entry;
@@ -774,6 +803,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -823,6 +853,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
 
   int ret = log->trimTo(100);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 100; i++) {
     std::string entry;
@@ -830,6 +861,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -879,6 +911,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
 
   int ret = log->trimTo(104);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 104; i++) {
     std::string entry;
@@ -886,6 +919,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -935,6 +969,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
 
   int ret = log->trimTo(195);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 195; i++) {
     std::string entry;
@@ -942,6 +977,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -991,12 +1027,14 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH) {
 
   int ret = log->trimTo(199);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 199; i++) {
     std::string entry;
     ret = log->read(i, &entry);
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
+    ASSERT_EQ(0, log->gc());
     ASSERT_EQ(ret, 0);
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
@@ -1047,6 +1085,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
 
   int ret = log->trimTo(200);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 200; i++) {
     std::string entry;
@@ -1054,6 +1093,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1103,6 +1143,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
 
   int ret = log->trimTo(3);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 3; i++) {
     std::string entry;
@@ -1110,6 +1151,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1165,6 +1207,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
 
   int ret = log->trimTo(37);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 37; i++) {
     std::string entry;
@@ -1172,6 +1215,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1236,11 +1280,13 @@ TEST_P(ZLogTest, TrimTo_NonEmptyA_A) {
 
   int ret = log->trimTo(0);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   std::string entry;
   ret = log->read(0, &entry);
   ASSERT_EQ(ret, -ENODATA);
   ret = log->trimTo(0);
+  ASSERT_EQ(0, log->gc());
   ASSERT_EQ(ret, 0);
   ret = log->fill(0);
   ASSERT_EQ(ret, 0);
@@ -1303,6 +1349,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
 
   int ret = log->trimTo(4);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 4; i++) {
     std::string entry;
@@ -1310,6 +1357,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyB_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1382,6 +1430,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
 
   int ret = log->trimTo(95);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 95; i++) {
     std::string entry;
@@ -1389,6 +1438,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyC_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1467,6 +1517,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
 
   int ret = log->trimTo(99);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 99; i++) {
     std::string entry;
@@ -1474,6 +1525,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyD_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1547,6 +1599,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
 
   int ret = log->trimTo(100);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 100; i++) {
     std::string entry;
@@ -1554,6 +1607,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyE_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1627,6 +1681,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
 
   int ret = log->trimTo(104);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 104; i++) {
     std::string entry;
@@ -1634,6 +1689,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyF_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1707,6 +1763,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
 
   int ret = log->trimTo(195);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 195; i++) {
     std::string entry;
@@ -1714,6 +1771,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyG_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1784,6 +1842,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
 
   int ret = log->trimTo(199);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 199; i++) {
     std::string entry;
@@ -1791,6 +1850,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyH_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1857,6 +1917,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
 
   int ret = log->trimTo(200);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 200; i++) {
     std::string entry;
@@ -1864,6 +1925,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyI_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -1930,6 +1992,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
 
   int ret = log->trimTo(3);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 3; i++) {
     std::string entry;
@@ -1937,6 +2000,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyJ_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
@@ -2010,6 +2074,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
 
   int ret = log->trimTo(37);
   ASSERT_EQ(ret, 0);
+  ASSERT_EQ(0, log->gc());
 
   for (unsigned i = 0; i <= 37; i++) {
     std::string entry;
@@ -2017,6 +2082,7 @@ TEST_P(ZLogTest, TrimTo_NonEmptyK_A) {
     ASSERT_EQ(ret, -ENODATA);
     ret = log->trimTo(i);
     ASSERT_EQ(ret, 0);
+    ASSERT_EQ(0, log->gc());
     ret = log->fill(i);
     ASSERT_EQ(ret, 0);
     // TODO: are we short circuting this without I/O?
