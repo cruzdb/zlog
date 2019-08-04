@@ -12,6 +12,7 @@ set(libzlog_sources
   view.cc
   sequencer.cc
   view_reader.cc
+  sequencer_proposer.cc
   ../eviction/lru.cc
   ../eviction/arc.cc
   ../port/stack_trace.cc

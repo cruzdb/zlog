@@ -1,4 +1,5 @@
 #pragma once
+#include <cassert>
 #include <iostream>
 #include <sstream>
 #include "include/zlog/backend.h"

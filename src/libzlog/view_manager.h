@@ -39,11 +39,6 @@ class ViewManager final {
   }
 
  public:
-  // propose a view with a new sequencer. when success (0) is returned the
-  // proposal was successful, but the caller should still verify that the
-  // sequencer is configured as expected.
-  int propose_sequencer();
-
   // proposes a new log view as a copy of the current view that has been
   // expanded to map the position. no proposal is made if the current view maps
   // the position. if a proposal is made this method doesn't return until the
@@ -76,14 +71,6 @@ class ViewManager final {
   const Options options_;
 
   const std::unique_ptr<ViewReader> view_reader_;
-
- private:
-  // seals the given stripe with the given epoch. on success, *pempty will be
-  // set to true if the stripe is empty (no positions have been written, filled,
-  // etc...). if the stripe is non-empty, *pposition will be set to the maximum
-  // position written. otherwise it is left unmodified.
-  int seal_stripe(const Stripe& stripe, uint64_t epoch,
-      uint64_t *pposition, bool *pempty) const;
 
  private:
   // async view expansion

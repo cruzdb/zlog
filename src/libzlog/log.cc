@@ -7,7 +7,8 @@
 #include "zlog/log.h"
 #include "zlog/cache.h"
 #include "zlog/backend.h"
-#include "log_impl.h"
+#include "libzlog/log_impl.h"
+#include "libzlog/sequencer_proposer.h"
 
 namespace zlog {
 
@@ -112,13 +113,14 @@ int build_log_impl(const Options& options,
     return -EIO;
   }
 
-  auto view_mgr = std::unique_ptr<ViewManager>(
-      new ViewManager(options, log_backend, std::move(view_reader)));
-
-  ret = view_mgr->propose_sequencer();
+  SequencerProposer seqr_proposer(log_backend.get(), view_reader.get());
+  ret = seqr_proposer.propose();
   if (ret) {
     return ret;
   }
+
+  auto view_mgr = std::unique_ptr<ViewManager>(
+      new ViewManager(options, log_backend, std::move(view_reader)));
 
   // kick start initialization of the objects in the first stripe
   if (options.init_stripe_on_create && created) {
@@ -146,6 +148,7 @@ int Log::Open(const Options& options,
 int Log::OpenReadOnly(const Options& options,
     const std::string& name, Log **logpp)
 {
+  // TODO: does not need to propose sequencer
   return build_log_impl<LogImpl>(options, name, logpp);
 }
 
